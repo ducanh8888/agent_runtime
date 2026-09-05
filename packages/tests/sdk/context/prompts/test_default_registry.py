@@ -170,10 +170,10 @@ def test_memory_section_body_switches_on_memory_enabled(
     assert "Use `AGENTS.md` under the repository root" in default
     assert ".openhands/memory/" not in default
 
-    # Without OH_PERSISTENCE_DIR the user-tier bullet stays a literal tilde so
+    # Without AGENTRT_PERSISTENCE_DIR the user-tier bullet stays a literal tilde so
     # the static block leaks no per-user home path (cache-shared, machine
     # independent). The path is inlined here, not in a separate dynamic section.
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     enabled = section.render(_ctx(memory_enabled=True)) or ""
     assert "persistent memory that survives across sessions" in enabled
     assert "`.openhands/memory/`" in enabled
@@ -185,10 +185,10 @@ def test_memory_section_body_switches_on_memory_enabled(
 def test_memory_section_names_persistence_dir_when_set(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """When OH_PERSISTENCE_DIR is set the user-tier bullet points at its
+    """When AGENTRT_PERSISTENCE_DIR is set the user-tier bullet points at its
     resolved ``<base>/memory/`` directory (matching load_memory's read path),
-    not the ephemeral ``~/.openhands`` home."""
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path / "persistent"))
+    not the ephemeral ``~/.agentrt`` home."""
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persistent"))
     enabled = MemorySection().render(_ctx(memory_enabled=True)) or ""
     # Slash-separated on every platform, so the agent never sees a mixed path.
     expected = to_posix_path(tmp_path / "persistent" / "memory")

@@ -217,7 +217,7 @@ async def save_profile(
     Overwrites an existing profile of the same name. Returns 409 if creating
     a new profile would exceed ``MAX_PROFILES``.
 
-    When ``OH_SECRET_KEY`` is configured, secrets are encrypted at rest.
+    When ``AGENTRT_SECRET_KEY`` is configured, secrets are encrypted at rest.
     Clients can submit cipher-encrypted secrets which will be decrypted
     server-side before re-encrypting with the storage cipher.
     """

@@ -446,9 +446,9 @@ def test_local_agent_server_mode_session_key_from_env(monkeypatch):
 
 
 def test_local_agent_server_mode_session_key_fallback(monkeypatch):
-    """Falls back to OH_SESSION_API_KEYS_0 if SESSION_API_KEY is unset."""
+    """Falls back to AGENTRT_SESSION_API_KEYS_0 if SESSION_API_KEY is unset."""
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
-    monkeypatch.setenv("OH_SESSION_API_KEYS_0", "oh-key-xyz")
+    monkeypatch.setenv("AGENTRT_SESSION_API_KEYS_0", "oh-key-xyz")
     workspace = _make_local_workspace()
 
     assert workspace._session_api_key == "oh-key-xyz"

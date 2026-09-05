@@ -27,7 +27,7 @@ def temp_user_skills_dir():
         agents_dir.mkdir(parents=True)
 
         # Create .openhands/skills directory
-        skills_dir = root / ".openhands" / "skills"
+        skills_dir = root / ".agentrt" / "skills"
         skills_dir.mkdir(parents=True)
 
         yield root, agents_dir, skills_dir
@@ -40,7 +40,7 @@ def temp_microagents_dir():
         root = Path(temp_dir)
 
         # Create .openhands/microagents directory
-        microagents_dir = root / ".openhands" / "microagents"
+        microagents_dir = root / ".agentrt" / "microagents"
         microagents_dir.mkdir(parents=True)
 
         yield root, microagents_dir
@@ -142,8 +142,8 @@ def test_load_user_skills_with_microagents_directory(temp_microagents_dir):
 def test_load_user_skills_priority_order(tmp_path):
     """Test precedence .agents/skills > .openhands/skills > microagents."""
     agents_dir = tmp_path / ".agents" / "skills"
-    skills_dir = tmp_path / ".openhands" / "skills"
-    microagents_dir = tmp_path / ".openhands" / "microagents"
+    skills_dir = tmp_path / ".agentrt" / "skills"
+    microagents_dir = tmp_path / ".agentrt" / "microagents"
     agents_dir.mkdir(parents=True)
     skills_dir.mkdir(parents=True)
     microagents_dir.mkdir(parents=True)
@@ -176,8 +176,8 @@ def test_load_user_skills_merges_all_directories(tmp_path):
     microagents.
     """
     agents_dir = tmp_path / ".agents" / "skills"
-    skills_dir = tmp_path / ".openhands" / "skills"
-    microagents_dir = tmp_path / ".openhands" / "microagents"
+    skills_dir = tmp_path / ".agentrt" / "skills"
+    microagents_dir = tmp_path / ".agentrt" / "microagents"
     agents_dir.mkdir(parents=True)
     skills_dir.mkdir(parents=True)
     microagents_dir.mkdir(parents=True)

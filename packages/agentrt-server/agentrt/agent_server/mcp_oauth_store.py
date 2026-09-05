@@ -357,7 +357,7 @@ def create_settings_backed_mcp_tool_provider(
     if config.secret_key is None:
         logger.warning(
             "Saving MCP OAuth state without encryption "
-            "(no OH_SECRET_KEY configured). Configure OH_SECRET_KEY for "
+            "(no AGENTRT_SECRET_KEY configured). Configure AGENTRT_SECRET_KEY for "
             "production deployments."
         )
     return SettingsBackedMCPToolProvider()

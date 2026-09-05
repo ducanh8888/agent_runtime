@@ -19,7 +19,7 @@ from agentrt.sdk.utils.redact import is_secret_key
 
 logger = get_logger(__name__)
 
-_INTERNAL_SERVER_URL_ENV = "OH_INTERNAL_SERVER_URL"
+_INTERNAL_SERVER_URL_ENV = "AGENTRT_INTERNAL_SERVER_URL"
 _DEFAULT_INTERNAL_SERVER_URL = "http://127.0.0.1:8000"
 
 

@@ -2472,14 +2472,14 @@ class ACPAgent(AgentBase):
         if state.persistence_dir:
             root = Path(state.persistence_dir) / "acp" / subdir
         else:
-            root = Path(state.workspace.working_dir) / ".openhands" / "acp" / subdir
+            root = Path(state.workspace.working_dir) / ".agentrt" / "acp" / subdir
         return Path(os.path.abspath(root))
 
     def _acp_npm_cache_dir(self, state: ConversationState) -> Path:
         if state.persistence_dir:
             root = Path(state.persistence_dir).parent
         else:
-            root = Path(state.workspace.working_dir) / ".openhands"
+            root = Path(state.workspace.working_dir) / ".agentrt"
         cache_dir = root / "npm-cache"
         cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         return Path(os.path.abspath(cache_dir))

@@ -7,7 +7,7 @@ Skill Sources:
 - Public skills: registered marketplace plugins or GitHub OpenHands/extensions
 - User skills: ~/.openhands/skills/ and ~/.openhands/microagents/
 - Project skills: {workspace}/.openhands/skills/, .cursorrules, agents.md
-- Organization skills: {org}/.openhands or {org}/openhands-config
+- Organization skills: {org}/.agentrt or {org}/openhands-config
 - Sandbox skills: Exposed URLs from sandbox environment
 
 Precedence (later overrides earlier):
@@ -124,7 +124,7 @@ def load_org_skills_from_url(
     all_skills: list[Skill] = []
 
     # Determine a unique temporary directory for cloning. Two repos can share
-    # the same org_name (e.g. {login}/.openhands and {login}/.agents), and
+    # the same org_name (e.g. {login}/.agentrt and {login}/.agents), and
     # concurrent conversations may clone the same org, so the directory must be
     # unique per call rather than derived solely from org_name.
     if working_dir:

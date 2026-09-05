@@ -119,7 +119,7 @@ def test_keyword_skill_does_not_match_paths() -> None:
 def test_path_rule_loads_from_skills_dir(tmp_path: Path) -> None:
     """A path rule is just a skill with ``paths:`` frontmatter in a skills dir."""
     _write_rule(
-        tmp_path / ".openhands" / "skills",
+        tmp_path / ".agentrt" / "skills",
         "api.md",
         'paths:\n  - "src/api/**/*.ts"',
         "API rule",

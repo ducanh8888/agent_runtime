@@ -223,7 +223,7 @@ class TestLoadOrgSkillsFromUrl:
             mock_run.side_effect = Exception("Git not found")
 
             result = load_org_skills_from_url(
-                org_repo_url="https://github.com/org/.openhands",
+                org_repo_url="https://github.com/org/.agentrt",
                 org_name="test-org",
             )
 
@@ -240,7 +240,7 @@ class TestLoadOrgSkillsFromUrl:
             )
 
             result = load_org_skills_from_url(
-                org_repo_url="https://github.com/org/.openhands",
+                org_repo_url="https://github.com/org/.agentrt",
                 org_name="test-org",
             )
 
@@ -257,7 +257,7 @@ class TestLoadOrgSkillsFromUrl:
             )
 
             result = load_org_skills_from_url(
-                org_repo_url="https://github.com/org/.openhands",
+                org_repo_url="https://github.com/org/.agentrt",
                 org_name="test-org",
             )
 
@@ -275,7 +275,7 @@ class TestLoadOrgSkillsFromUrl:
                 )
 
                 result = load_org_skills_from_url(
-                    org_repo_url="https://github.com/org/.openhands",
+                    org_repo_url="https://github.com/org/.agentrt",
                     org_name="test-org",
                     working_dir=tmpdir,
                 )
@@ -700,14 +700,14 @@ class TestLoadAllSkills:
                     load_project=False,
                     load_org=True,
                     org_repos=[
-                        ("https://git/hieptl/.openhands", "hieptl"),
+                        ("https://git/hieptl/.agentrt", "hieptl"),
                         ("https://git/hieptl/.agents", "hieptl"),
                     ],
                 )
 
         assert result.sources["org"] == 2
         assert [c.kwargs["org_repo_url"] for c in mock_org.call_args_list] == [
-            "https://git/hieptl/.openhands",
+            "https://git/hieptl/.agentrt",
             "https://git/hieptl/.agents",
         ]
 
@@ -727,7 +727,7 @@ class TestLoadAllSkills:
                     load_project=False,
                     load_org=True,
                     org_repos=[
-                        ("https://git/hieptl/.openhands", "hieptl"),
+                        ("https://git/hieptl/.agentrt", "hieptl"),
                         ("https://git/hieptl/.agents", "hieptl"),
                     ],
                 )

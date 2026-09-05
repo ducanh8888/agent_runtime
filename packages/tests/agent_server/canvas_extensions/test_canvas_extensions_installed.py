@@ -32,7 +32,7 @@ from .conftest import write_extension as _write_extension
 
 def test_default_installed_dir_layout():
     parts = get_installed_canvas_extensions_dir().parts
-    assert parts[-3:] == (".openhands", "canvas-extensions", "installed")
+    assert parts[-3:] == (".agentrt", "canvas-extensions", "installed")
 
 
 def test_fresh_install_lands_disabled(extension_dir: Path, installed_dir: Path):

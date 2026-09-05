@@ -263,7 +263,7 @@ def get_skills(request: SkillsRequest, http_request: Request) -> SkillsResponse:
     1. Sandbox skills (lowest) - Exposed URLs from sandbox
     2. Public skills - From GitHub OpenHands/extensions repository
     3. User skills - From ~/.openhands/skills/
-    4. Organization skills - From {org}/.openhands or equivalent
+    4. Organization skills - From {org}/.agentrt or equivalent
     5. Project skills (highest) - From {workspace}/.openhands/skills/
 
     Args:

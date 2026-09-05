@@ -30,7 +30,7 @@ def _clean_telemetry_env(monkeypatch):
     monkeypatch.delenv(DO_NOT_TRACK_ENV, raising=False)
     monkeypatch.delenv(CONSENT_ENV, raising=False)
     monkeypatch.delenv(CONSENT_MODE_ENV, raising=False)
-    monkeypatch.delenv("OH_TELEMETRY", raising=False)
+    monkeypatch.delenv("AGENTRT_TELEMETRY", raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -44,14 +44,14 @@ def _reset_sink():
 def temp_persistence_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         reset_stores()
-        old_val = os.environ.get("OH_PERSISTENCE_DIR")
-        os.environ["OH_PERSISTENCE_DIR"] = tmpdir
+        old_val = os.environ.get("AGENTRT_PERSISTENCE_DIR")
+        os.environ["AGENTRT_PERSISTENCE_DIR"] = tmpdir
         yield Path(tmpdir)
         reset_stores()
         if old_val is not None:
-            os.environ["OH_PERSISTENCE_DIR"] = old_val
+            os.environ["AGENTRT_PERSISTENCE_DIR"] = old_val
         else:
-            os.environ.pop("OH_PERSISTENCE_DIR", None)
+            os.environ.pop("AGENTRT_PERSISTENCE_DIR", None)
 
 
 @pytest.fixture

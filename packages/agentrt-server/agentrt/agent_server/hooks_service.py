@@ -33,7 +33,7 @@ def load_hooks_from_workspace(project_dir: str | None = None) -> HookConfig | No
         logger.debug("No project_dir provided, skipping hooks loading")
         return None
 
-    hooks_path = Path(project_dir) / ".openhands" / "hooks.json"
+    hooks_path = Path(project_dir) / ".agentrt" / "hooks.json"
 
     if not hooks_path.exists():
         logger.debug(f"No hooks.json found at {hooks_path}")

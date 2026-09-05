@@ -22,7 +22,7 @@ from agentrt.agent_server.config import Config
 
 @pytest.fixture(autouse=True)
 def clear_web_url_env(monkeypatch):
-    monkeypatch.delenv("OH_WEB_URL", raising=False)
+    monkeypatch.delenv("AGENTRT_WEB_URL", raising=False)
     monkeypatch.delenv("RUNTIME_URL", raising=False)
     monkeypatch.delenv("TMUX_TMPDIR", raising=False)
 
@@ -470,8 +470,8 @@ class TestConfigWebUrl:
             assert config.web_url is None
 
     def test_web_url_reads_from_oh_web_url_env(self):
-        """Test that web_url reads from the canonical OH_WEB_URL env var."""
-        with patch.dict("os.environ", {"OH_WEB_URL": "https://test.example.com/path"}):
+        """Test that web_url reads from the canonical AGENTRT_WEB_URL env var."""
+        with patch.dict("os.environ", {"AGENTRT_WEB_URL": "https://test.example.com/path"}):
             config = Config()
             assert config.web_url == "https://test.example.com/path"
 
@@ -483,11 +483,11 @@ class TestConfigWebUrl:
         assert config.web_url is None
 
     def test_web_url_reads_oh_web_url_when_runtime_url_is_also_set(self):
-        """Test that OH_WEB_URL remains authoritative."""
+        """Test that AGENTRT_WEB_URL remains authoritative."""
         with patch.dict(
             "os.environ",
             {
-                "OH_WEB_URL": "https://preferred.example.com/path",
+                "AGENTRT_WEB_URL": "https://preferred.example.com/path",
                 "RUNTIME_URL": "https://legacy.example.com/path",
             },
         ):
@@ -500,7 +500,7 @@ class TestConfigWebUrl:
         with patch.dict(
             "os.environ",
             {
-                "OH_WEB_URL": "https://env.example.com/oh",
+                "AGENTRT_WEB_URL": "https://env.example.com/oh",
                 "RUNTIME_URL": "https://env.example.com/runtime",
             },
         ):

@@ -19,15 +19,15 @@ logger = get_logger(__name__)
 # the SDK's Python process.
 #
 # - ``SESSION_API_KEY``: legacy (V0) session key name.
-# - ``OH_SECRET_KEY``: cipher key that decrypts persisted conversation/provider
+# - ``AGENTRT_SECRET_KEY``: cipher key that decrypts persisted conversation/provider
 #   secrets; leaking it is at least as damaging as leaking the session key.
 # See ``agentrt.agent_server.config`` for where these are read from the env.
-_SENSITIVE_ENV_VARS = frozenset({"SESSION_API_KEY", "OH_SECRET_KEY"})
+_SENSITIVE_ENV_VARS = frozenset({"SESSION_API_KEY", "AGENTRT_SECRET_KEY"})
 
-# Session keys are also delivered as an indexed list ``OH_SESSION_API_KEYS_0``,
-# ``OH_SESSION_API_KEYS_1``, ... (V1). Strip every slot by prefix so a rename or
+# Session keys are also delivered as an indexed list ``AGENTRT_SESSION_API_KEYS_0``,
+# ``AGENTRT_SESSION_API_KEYS_1``, ... (V1). Strip every slot by prefix so a rename or
 # an added rotation key cannot silently re-expose the credential to subprocesses.
-_SENSITIVE_ENV_PREFIXES: tuple[str, ...] = ("OH_SESSION_API_KEYS_",)
+_SENSITIVE_ENV_PREFIXES: tuple[str, ...] = ("AGENTRT_SESSION_API_KEYS_",)
 _AI_AGENT_ENV_VAR: Final[str] = "AI_AGENT"
 
 
@@ -58,7 +58,7 @@ def sanitized_env(
     for key in _SENSITIVE_ENV_VARS:
         base_env.pop(key, None)
 
-    # Strip indexed / prefixed credential slots (e.g. OH_SESSION_API_KEYS_0..N).
+    # Strip indexed / prefixed credential slots (e.g. AGENTRT_SESSION_API_KEYS_0..N).
     for key in [
         k
         for k in base_env

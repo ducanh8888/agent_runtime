@@ -271,7 +271,7 @@ class TestHookConfig:
             # Create .openhands/hooks.json in the working directory
             import os
 
-            hooks_dir = os.path.join(tmpdir, ".openhands")
+            hooks_dir = os.path.join(tmpdir, ".agentrt")
             os.makedirs(hooks_dir)
             hooks_file = os.path.join(hooks_dir, "hooks.json")
             with open(hooks_file, "w") as f:

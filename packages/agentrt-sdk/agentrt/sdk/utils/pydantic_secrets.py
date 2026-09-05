@@ -72,7 +72,7 @@ def serialize_secret(v: SecretStr | None, info):
         if cipher is None:
             raise MissingCipherError(
                 "Cannot encrypt secret: no cipher configured. "
-                "Set OH_SECRET_KEY environment variable."
+                "Set AGENTRT_SECRET_KEY environment variable."
             )
         raw = v.get_secret_value()
         if raw.startswith(FERNET_TOKEN_PREFIX) and cipher.try_decrypt_str(raw):

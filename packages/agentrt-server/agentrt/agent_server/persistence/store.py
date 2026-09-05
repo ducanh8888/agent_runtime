@@ -238,7 +238,7 @@ def _atomic_write_json(path: Path, data: dict) -> None:
 
 
 # Default storage directory (relative to working directory)
-DEFAULT_PERSISTENCE_DIR = Path("workspace/.openhands")
+DEFAULT_PERSISTENCE_DIR = Path("workspace/.agentrt")
 
 
 class SettingsStore(ABC):
@@ -377,7 +377,7 @@ class FileSettingsStore(SettingsStore):
             if settings.has_any_secret:
                 logger.warning(
                     "Saving settings with secrets in PLAINTEXT (no cipher configured). "
-                    "Configure OH_SECRET_KEY for production deployments."
+                    "Configure AGENTRT_SECRET_KEY for production deployments."
                 )
 
         data = settings.model_dump(mode="json", context=context)
@@ -437,7 +437,7 @@ class FileSecretsStore(SecretsStore):
     Note:
         On Windows, the 0o600 file permissions are not enforced by the
         filesystem. If storing secrets without encryption (cipher=None),
-        they may be readable by other local users. Configure OH_SECRET_KEY
+        they may be readable by other local users. Configure AGENTRT_SECRET_KEY
         to enable encryption for secure storage on all platforms.
     """
 
@@ -459,7 +459,7 @@ class FileSecretsStore(SecretsStore):
         if sys.platform == "win32" and not cipher:
             logger.warning(
                 "Storing secrets without encryption on Windows. "
-                "File permissions are not enforced. Configure OH_SECRET_KEY "
+                "File permissions are not enforced. Configure AGENTRT_SECRET_KEY "
                 "for secure storage."
             )
 
@@ -546,7 +546,7 @@ class FileSecretsStore(SecretsStore):
             if secrets.has_any_secret:
                 logger.warning(
                     "Saving secrets in PLAINTEXT (no cipher configured). "
-                    "Configure OH_SECRET_KEY for production deployments."
+                    "Configure AGENTRT_SECRET_KEY for production deployments."
                 )
 
         data = secrets.model_dump(mode="json", context=context)
@@ -801,9 +801,9 @@ _store_lock = threading.Lock()
 
 def _get_persistence_dir(config: Config | None = None) -> Path:
     """Get the persistence directory from config or default."""
-    # Absent OH_PERSISTENCE_DIR, fall back to config's conversations_path parent.
+    # Absent AGENTRT_PERSISTENCE_DIR, fall back to config's conversations_path parent.
     default = (
-        config.conversations_path.parent / ".openhands"
+        config.conversations_path.parent / ".agentrt"
         if config is not None
         else DEFAULT_PERSISTENCE_DIR
     )
@@ -814,7 +814,7 @@ def _get_profile_persistence_dir() -> Path:
     """Get the base dir for LLM/agent profile stores.
 
     Profiles can hold credentials (LLM API keys), so absent
-    ``OH_PERSISTENCE_DIR`` they fall back to the user's ``~/.openhands``
+    ``AGENTRT_PERSISTENCE_DIR`` they fall back to the user's ``~/.agentrt``
     rather than the workspace-relative agent-server default, keeping bare
     local profile secrets in the expected user config directory.
     """
@@ -836,7 +836,7 @@ def get_settings_store(config: Config | None = None) -> FileSettingsStore:
         Subsequent calls return the existing instance regardless of config.
 
     Warning:
-        The cipher key (OH_SECRET_KEY) must NOT change during runtime.
+        The cipher key (AGENTRT_SECRET_KEY) must NOT change during runtime.
         The store singleton caches the cipher from first initialization.
         If the cipher key changes:
         - New data may be encrypted with a stale key
@@ -868,7 +868,7 @@ def get_secrets_store(config: Config | None = None) -> FileSecretsStore:
         Subsequent calls return the existing instance regardless of config.
 
     Warning:
-        The cipher key (OH_SECRET_KEY) must NOT change during runtime.
+        The cipher key (AGENTRT_SECRET_KEY) must NOT change during runtime.
         The store singleton caches the cipher from first initialization.
         If the cipher key changes:
         - New data may be encrypted with a stale key
@@ -935,8 +935,8 @@ def get_workspaces_store(config: Config | None = None) -> FileWorkspacesStore:
 def get_llm_profile_store() -> LLMProfileStore:
     """Get the global ``LLMProfileStore`` instance (thread-safe).
 
-    Stored at ``<dir>/profiles`` where ``<dir>`` is ``OH_PERSISTENCE_DIR``
-    when set, else ``~/.openhands``. This honors isolated agent-server
+    Stored at ``<dir>/profiles`` where ``<dir>`` is ``AGENTRT_PERSISTENCE_DIR``
+    when set, else ``~/.agentrt``. This honors isolated agent-server
     instances while keeping bare local profile secrets in the user's
     config directory (never workspace-relative). See
     :func:`_get_profile_persistence_dir`.

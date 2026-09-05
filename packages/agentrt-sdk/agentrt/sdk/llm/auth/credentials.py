@@ -22,7 +22,7 @@ def get_credentials_dir() -> Path:
     """Get the directory for storing credentials.
 
     Returns the ``auth`` subdirectory of the user persistence directory:
-    ``OH_PERSISTENCE_DIR/auth`` when ``OH_PERSISTENCE_DIR`` is set, otherwise
+    ``AGENTRT_PERSISTENCE_DIR/auth`` when ``AGENTRT_PERSISTENCE_DIR`` is set, otherwise
     ``~/.openhands/auth``.
     """
     return get_user_persistence_dir() / "auth"
@@ -55,7 +55,7 @@ class CredentialStore:
         Args:
             credentials_dir: Optional custom directory for storing credentials.
                            Defaults to the ``auth`` subdirectory of the user
-                           persistence directory (``OH_PERSISTENCE_DIR/auth``
+                           persistence directory (``AGENTRT_PERSISTENCE_DIR/auth``
                            when set, otherwise ``~/.openhands/auth``).
         """
         self._credentials_dir = credentials_dir or get_credentials_dir()

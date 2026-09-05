@@ -176,10 +176,10 @@ FROM ${BASE_IMAGE} AS base-image-minimal
 ARG USERNAME UID GID PORT
 
 
-ARG OPENHANDS_BUILD_GIT_SHA=unknown
-ARG OPENHANDS_BUILD_GIT_REF=unknown
-ENV OPENHANDS_BUILD_GIT_SHA=${OPENHANDS_BUILD_GIT_SHA}
-ENV OPENHANDS_BUILD_GIT_REF=${OPENHANDS_BUILD_GIT_REF}
+ARG AGENTRT_BUILD_GIT_SHA=unknown
+ARG AGENTRT_BUILD_GIT_REF=unknown
+ENV AGENTRT_BUILD_GIT_SHA=${AGENTRT_BUILD_GIT_SHA}
+ENV AGENTRT_BUILD_GIT_REF=${AGENTRT_BUILD_GIT_REF}
 
 # Install base packages and create user
 RUN set -eux; \
@@ -286,7 +286,7 @@ ENV LANG=C.UTF-8
 ENV LOG_JSON=true
 # The ACP CLIs run without the user's host home here, so OpenHands supplies the
 # managed skill catalog they cannot read for themselves (#4019).
-ENV OH_ACP_SKILL_SOURCING=openhands_managed
+ENV AGENTRT_ACP_SKILL_SOURCING=openhands_managed
 EXPOSE ${PORT}
 
 ####################################################################################
@@ -448,7 +448,7 @@ WORKDIR /
 ENV LOG_JSON=true
 # The ACP CLIs run without the user's host home here, so OpenHands supplies the
 # managed skill catalog they cannot read for themselves (#4019).
-ENV OH_ACP_SKILL_SOURCING=openhands_managed
+ENV AGENTRT_ACP_SKILL_SOURCING=openhands_managed
 EXPOSE ${PORT}
 
 

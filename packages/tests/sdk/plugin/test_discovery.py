@@ -85,7 +85,7 @@ def test_load_user_plugins_does_not_load_installed_store_as_plugin(
 ):
     # Arrange: a user plugins dir holding a real plugin AND the install store as
     # a child directory named "installed".
-    openhands_plugins = tmp_path / ".openhands" / "plugins"
+    openhands_plugins = tmp_path / ".agentrt" / "plugins"
     _make_plugin(openhands_plugins / "real-plugin", "real-plugin", "rs", "Real.")
     install_store = openhands_plugins / "installed"
     install_store.mkdir(parents=True)

@@ -49,7 +49,7 @@ def run_agent_server(port, api_key):
     #
     # Use both the V1 indexed env var and the legacy V0 var to keep this test
     # stable across different config parsing behaviors.
-    os.environ["OH_SESSION_API_KEYS_0"] = api_key
+    os.environ["AGENTRT_SESSION_API_KEYS_0"] = api_key
     os.environ["SESSION_API_KEY"] = api_key
     sys.argv = ["agent-server", "--port", str(port)]
     from agentrt.agent_server.__main__ import main

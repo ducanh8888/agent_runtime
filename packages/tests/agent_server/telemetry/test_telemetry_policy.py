@@ -184,5 +184,5 @@ def test_do_not_track_ignores_falsey_values(value):
 
 
 def test_the_redundant_alias_is_gone():
-    """OH_TELEMETRY_DISABLED was dropped in favour of DO_NOT_TRACK alone."""
-    assert kill_switch_engaged({"OH_TELEMETRY_DISABLED": "1"}) is False
+    """AGENTRT_TELEMETRY_DISABLED was dropped in favour of DO_NOT_TRACK alone."""
+    assert kill_switch_engaged({"AGENTRT_TELEMETRY_DISABLED": "1"}) is False

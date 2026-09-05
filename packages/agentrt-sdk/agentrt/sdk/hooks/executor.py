@@ -471,11 +471,11 @@ class HookExecutor:
 
         # Prepare environment
         hook_env = sanitized_env()
-        hook_env["OPENHANDS_PROJECT_DIR"] = self.working_dir
-        hook_env["OPENHANDS_SESSION_ID"] = event.session_id or ""
-        hook_env["OPENHANDS_EVENT_TYPE"] = event.event_type
+        hook_env["AGENTRT_PROJECT_DIR"] = self.working_dir
+        hook_env["AGENTRT_SESSION_ID"] = event.session_id or ""
+        hook_env["AGENTRT_EVENT_TYPE"] = event.event_type
         if event.tool_name:
-            hook_env["OPENHANDS_TOOL_NAME"] = event.tool_name
+            hook_env["AGENTRT_TOOL_NAME"] = event.tool_name
 
         if env:
             hook_env.update(env)

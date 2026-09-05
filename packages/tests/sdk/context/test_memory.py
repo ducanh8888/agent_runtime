@@ -16,14 +16,14 @@ def isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Point the user memory tier (``~/.openhands/memory/``) at a temp home.
 
     USERPROFILE is what ``Path.home()`` reads on Windows, where HOME is a no-op.
-    ``OH_PERSISTENCE_DIR`` is cleared too: it overrides the home-relative base,
+    ``AGENTRT_PERSISTENCE_DIR`` is cleared too: it overrides the home-relative base,
     so a developer with it exported would otherwise run different tests.
     """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     return home
 
 
@@ -176,13 +176,13 @@ def _memory_agent() -> Agent:
 def test_instructed_write_path_matches_loader_read_path_with_persistence_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """With OH_PERSISTENCE_DIR set, the directory the agent is told to write to
+    """With AGENTRT_PERSISTENCE_DIR set, the directory the agent is told to write to
     is exactly where ``load_memory`` looks -- so user memory survives resume."""
     persistence = tmp_path / "persistent"
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(persistence))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(persistence))
 
     write_dir = _advertised_user_memory_dir(_memory_agent())
-    # The instruction points into OH_PERSISTENCE_DIR, not the ephemeral $HOME.
+    # The instruction points into AGENTRT_PERSISTENCE_DIR, not the ephemeral $HOME.
     assert write_dir == persistence / "memory"
     assert str(tmp_path / "home") not in str(write_dir)
 
@@ -201,11 +201,11 @@ def test_instructed_write_path_matches_loader_read_path_with_persistence_dir(
 def test_instructed_write_path_matches_loader_read_path_home_fallback(
     isolated_home: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Without OH_PERSISTENCE_DIR, both halves fall back to ~/.openhands/memory."""
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    """Without AGENTRT_PERSISTENCE_DIR, both halves fall back to ~/.openhands/memory."""
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
 
     write_dir = _advertised_user_memory_dir(_memory_agent())
-    assert write_dir == isolated_home / ".openhands" / "memory"
+    assert write_dir == isolated_home / ".agentrt" / "memory"
 
     memory_md = write_dir / "MEMORY.md"
     memory_md.parent.mkdir(parents=True)
@@ -219,11 +219,11 @@ def test_instructed_write_path_matches_loader_read_path_home_fallback(
 def test_load_memory_user_header_reflects_persistence_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """With OH_PERSISTENCE_DIR set, the loaded user-tier header names the real
+    """With AGENTRT_PERSISTENCE_DIR set, the loaded user-tier header names the real
     read path -- not the stale ``~/.openhands/memory/`` -- so it matches the
     write location advertised in the <MEMORY> guidance."""
     persistence = tmp_path / "persistent"
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(persistence))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(persistence))
     user_memory = persistence / "memory"
     user_memory.mkdir(parents=True)
     (user_memory / "MEMORY.md").write_text("- prefers ruff\n")
@@ -239,9 +239,9 @@ def test_load_memory_user_header_reflects_persistence_dir(
 def test_load_memory_user_header_uses_tilde_without_persistence_dir(
     isolated_home: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Without OH_PERSISTENCE_DIR the header keeps the plain-tilde form and never
+    """Without AGENTRT_PERSISTENCE_DIR the header keeps the plain-tilde form and never
     leaks the expanded per-user home path."""
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     _write_index(isolated_home, "- prefers uv over pip\n")
 
     loaded = load_memory(tmp_path / "workspace")
@@ -255,7 +255,7 @@ def test_user_memory_line_absent_when_memory_disabled(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """No user-memory directory is advertised unless memory is enabled."""
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path / "persistent"))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persistent"))
     agent = Agent(
         llm=LLM(model="claude-sonnet-4-5", usage_id="memory-off"),
         tools=[],
@@ -267,12 +267,12 @@ def test_user_memory_line_absent_when_memory_disabled(
 def test_instructed_write_path_resolved_at_call_time(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The path is resolved per render, so setting OH_PERSISTENCE_DIR after the
+    """The path is resolved per render, so setting AGENTRT_PERSISTENCE_DIR after the
     agent is constructed is still honored (matches get_user_persistence_dir)."""
     agent = _memory_agent()
 
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path / "late"))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "late"))
     assert _advertised_user_memory_dir(agent) == tmp_path / "late" / "memory"
 
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path / "later"))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "later"))
     assert _advertised_user_memory_dir(agent) == tmp_path / "later" / "memory"

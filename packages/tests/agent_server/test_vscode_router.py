@@ -51,7 +51,7 @@ async def test_get_vscode_url_default_uses_configured_port(mock_vscode_service):
 
     The service builds ``http://localhost:{self.port}`` when base_url is None,
     so clients that don't know the deployment topology receive the port the
-    server actually binds (e.g. OH_VSCODE_PORT) rather than a fixed default.
+    server actually binds (e.g. AGENTRT_VSCODE_PORT) rather than a fixed default.
     """
     mock_vscode_service.get_vscode_url.return_value = (
         "http://localhost:19000/?tkn=test-token&folder=workspace"

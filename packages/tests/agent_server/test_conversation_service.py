@@ -3481,11 +3481,11 @@ class TestAutoTitle:
             )
 
         # Point the agent-server profile store singleton at our tmp dir via
-        # OH_PERSISTENCE_DIR so the real _load_title_llm code path finds our
+        # AGENTRT_PERSISTENCE_DIR so the real _load_title_llm code path finds our
         # on-disk profile under `{tmp_path}/profiles`.
         from agentrt.agent_server.persistence import reset_stores
 
-        monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path))
         reset_stores()
         # Clear the singleton at teardown even if an assertion raises, so the
         # stale store (pointing at the soon-deleted tmp_path) can't leak.
@@ -3579,7 +3579,7 @@ class TestAutoTitle:
 
         from agentrt.agent_server.persistence import reset_stores
 
-        monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path))
         reset_stores()
         # Clear the singleton at teardown even if an assertion raises, so the
         # stale store (pointing at the soon-deleted tmp_path) can't leak.

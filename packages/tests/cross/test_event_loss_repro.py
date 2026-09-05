@@ -50,7 +50,7 @@ def server_env_for_repro(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
-    monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg_file))
+    monkeypatch.setenv("AGENTRT_AGENT_SERVER_CONFIG_PATH", str(cfg_file))
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
 
     from agentrt.agent_server.api import create_app

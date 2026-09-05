@@ -914,9 +914,9 @@ def build_with_telemetry(opts: BuildOptions) -> BuildResult:
         "--build-arg",
         f"BASE_IMAGE={opts.base_image}",
         "--build-arg",
-        f"OPENHANDS_BUILD_GIT_SHA={opts.git_sha}",
+        f"AGENTRT_BUILD_GIT_SHA={opts.git_sha}",
         "--build-arg",
-        f"OPENHANDS_BUILD_GIT_REF={opts.git_ref}",
+        f"AGENTRT_BUILD_GIT_REF={opts.git_ref}",
         "--build-arg",
         f"INSTALL_ACP_PROVIDERS={opts.install_acp_providers}",
         "--build-arg",
@@ -938,10 +938,10 @@ def build_with_telemetry(opts: BuildOptions) -> BuildResult:
     # Cache export mode: "max" (default), "min", or "off"
     # Default to "max" to preserve existing behavior; set to "off" in batch builds
     # to avoid contention when building many images in parallel
-    cache_export_mode = os.environ.get("OPENHANDS_BUILDKIT_CACHE_MODE", "max").lower()
+    cache_export_mode = os.environ.get("AGENTRT_BUILDKIT_CACHE_MODE", "max").lower()
     if cache_export_mode not in ("off", "max", "min"):
         logger.warning(
-            f"[build] Invalid OPENHANDS_BUILDKIT_CACHE_MODE='{cache_export_mode}', "
+            f"[build] Invalid AGENTRT_BUILDKIT_CACHE_MODE='{cache_export_mode}', "
             "defaulting to 'max'"
         )
         cache_export_mode = "max"

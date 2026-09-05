@@ -23,7 +23,7 @@ from agentrt.agent_server.persistence import reset_stores
 def client(monkeypatch):
     with tempfile.TemporaryDirectory() as tmpdir:
         reset_stores()
-        monkeypatch.setenv("OH_PERSISTENCE_DIR", str(Path(tmpdir) / "persist"))
+        monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(Path(tmpdir) / "persist"))
         config = Config(static_files_path=None, session_api_keys=[], secret_key=None)
         app = create_app(config)
         yield TestClient(app)
@@ -38,7 +38,7 @@ def client_with_auth(monkeypatch):
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         reset_stores()
-        monkeypatch.setenv("OH_PERSISTENCE_DIR", str(Path(tmpdir) / "persist"))
+        monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(Path(tmpdir) / "persist"))
         config = Config(
             static_files_path=None,
             session_api_keys=["test-key-123"],
@@ -147,7 +147,7 @@ def test_workspaces_survive_across_requests_via_disk_persistence(client):
 
     # Act: confirm it's on disk, then reset the in-memory singleton (simulating
     # a server restart) and re-read.
-    persist_dir = Path(os.environ["OH_PERSISTENCE_DIR"])
+    persist_dir = Path(os.environ["AGENTRT_PERSISTENCE_DIR"])
     assert (persist_dir / "workspaces.json").exists()
 
     reset_stores()
@@ -259,7 +259,7 @@ def test_unset_parent_path_is_omitted_from_response_and_on_disk_json(client):
 
     # Act
     listed = client.get("/api/workspaces").json()
-    on_disk_path = Path(os.environ["OH_PERSISTENCE_DIR"]) / "workspaces.json"
+    on_disk_path = Path(os.environ["AGENTRT_PERSISTENCE_DIR"]) / "workspaces.json"
     on_disk = json.loads(on_disk_path.read_text(encoding="utf-8"))
 
     # Assert: wire format
@@ -290,7 +290,7 @@ def test_list_workspaces_returns_409_when_persisted_file_is_corrupted(client):
         "/api/workspaces",
         json={"workspaces": [{"id": "/a", "name": "a", "path": "/a"}]},
     )
-    persist_dir = Path(os.environ["OH_PERSISTENCE_DIR"])
+    persist_dir = Path(os.environ["AGENTRT_PERSISTENCE_DIR"])
     (persist_dir / "workspaces.json").write_text("{not valid json", encoding="utf-8")
     # Force the next request to re-read from disk rather than the in-memory store.
     reset_stores()

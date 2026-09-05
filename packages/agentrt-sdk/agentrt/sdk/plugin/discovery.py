@@ -37,7 +37,7 @@ USER_PLUGINS_DIRS = [
 # Project-level plugin subdirectories scanned under each search root.
 PROJECT_PLUGINS_SUBDIRS = [
     Path(".agents") / "plugins",
-    Path(".openhands") / "plugins",
+    Path(".agentrt") / "plugins",
 ]
 
 

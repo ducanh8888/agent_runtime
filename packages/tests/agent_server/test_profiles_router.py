@@ -52,7 +52,7 @@ def client(temp_profiles_dir, temp_agent_profiles_dir, temp_settings_dir, monkey
     reset_stores()
 
     # Set environment variable for persistence directory
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(temp_settings_dir))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(temp_settings_dir))
 
     # Explicitly disable cipher by setting secret_key to None
     config = Config(static_files_path=None, session_api_keys=[], secret_key=None)
@@ -1068,7 +1068,7 @@ def client_with_cipher(
     reset_stores()
 
     # Set environment variable for persistence directory
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(temp_settings_dir))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(temp_settings_dir))
 
     config = Config(
         static_files_path=None,
@@ -1264,7 +1264,7 @@ def test_get_profile_encrypted_without_cipher_returns_503(client, store):
     body = response.json()
     # 503 errors use "exception" field to avoid leaking internal details
     error_text = body.get("detail", "") + body.get("exception", "")
-    assert "OH_SECRET_KEY" in error_text
+    assert "AGENTRT_SECRET_KEY" in error_text
 
 
 def test_save_without_cipher_stores_plaintext_for_backward_compat(client, store):

@@ -278,7 +278,7 @@ def test_lookup_secret_author_header_not_redacted():
 
 
 def test_lookup_secret_relative_url_uses_current_server(monkeypatch):
-    monkeypatch.setenv("OH_INTERNAL_SERVER_URL", "http://127.0.0.1:4321")
+    monkeypatch.setenv("AGENTRT_INTERNAL_SERVER_URL", "http://127.0.0.1:4321")
 
     secret = LookupSecret(url="/api/settings/secrets/OPENAI_API_KEY")
 
@@ -286,7 +286,7 @@ def test_lookup_secret_relative_url_uses_current_server(monkeypatch):
 
 
 def test_lookup_secret_get_value_resolves_relative_url(monkeypatch):
-    monkeypatch.setenv("OH_INTERNAL_SERVER_URL", "http://127.0.0.1:4321")
+    monkeypatch.setenv("AGENTRT_INTERNAL_SERVER_URL", "http://127.0.0.1:4321")
     response = Mock(text="resolved-secret")
     response.raise_for_status = Mock()
 

@@ -27,13 +27,13 @@ def _clean_env(monkeypatch):
     """The agent-server pulls config from env at import time in places;
     null these out so each test starts from a clean slate."""
     for key in (
-        "OH_DEFERRED_INIT",
-        "OH_WEB_URL",
+        "AGENTRT_DEFERRED_INIT",
+        "AGENTRT_WEB_URL",
         "RUNTIME_URL",
         "TMUX_TMPDIR",
         "SESSION_API_KEY",
-        "OH_SESSION_API_KEYS_0",
-        "OH_SECRET_KEY",
+        "AGENTRT_SESSION_API_KEYS_0",
+        "AGENTRT_SECRET_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -443,7 +443,7 @@ class TestEndToEndOverLifespan:
                 # on the *config object*, but the FastAPI session-key
                 # dependency was bound to the original (dormant) config when
                 # the routes were mounted. Documenting this trade-off:
-                # in production, set OH_SESSION_API_KEYS_0 at pod start so
+                # in production, set AGENTRT_SESSION_API_KEYS_0 at pod start so
                 # auth is in place from the moment routes go live, and use
                 # /api/init only to deliver workspace + per-user runtime config.
                 # The dormant gate ensures no traffic reaches gated routes

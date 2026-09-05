@@ -292,7 +292,7 @@ class HookConfig(BaseModel):
             # Search for hooks.json in standard locations
             base_dir = Path(working_dir) if working_dir else Path.cwd()
             search_paths = [
-                base_dir / ".openhands" / "hooks.json",
+                base_dir / ".agentrt" / "hooks.json",
                 get_user_persistence_dir() / "hooks.json",
             ]
             for search_path in search_paths:

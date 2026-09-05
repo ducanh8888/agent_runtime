@@ -439,13 +439,13 @@ def test_get_env_parser_model_type():
 def test_config_class_parsing(clean_env):
     """Test parsing the Config class with nested attributes and webhook specs."""
     # Test basic config parsing
-    os.environ["OH_SESSION_API_KEYS_0"] = "key1"
-    os.environ["OH_SESSION_API_KEYS_1"] = "key2"
-    os.environ["OH_ALLOW_CORS_ORIGINS_0"] = "http://localhost:3000"
-    os.environ["OH_ALLOW_CORS_ORIGIN_REGEX"] = r"https://.*\.example\.com"
-    os.environ["OH_CONVERSATIONS_PATH"] = "/custom/conversations"
-    os.environ["OH_WORKSPACE_PATH"] = "/custom/workspace"
-    os.environ["OH_ENABLE_VSCODE"] = "false"
+    os.environ["AGENTRT_SESSION_API_KEYS_0"] = "key1"
+    os.environ["AGENTRT_SESSION_API_KEYS_1"] = "key2"
+    os.environ["AGENTRT_ALLOW_CORS_ORIGINS_0"] = "http://localhost:3000"
+    os.environ["AGENTRT_ALLOW_CORS_ORIGIN_REGEX"] = r"https://.*\.example\.com"
+    os.environ["AGENTRT_CONVERSATIONS_PATH"] = "/custom/conversations"
+    os.environ["AGENTRT_WORKSPACE_PATH"] = "/custom/workspace"
+    os.environ["AGENTRT_ENABLE_VSCODE"] = "false"
 
     config = from_env(Config, "OH")
 
@@ -494,8 +494,8 @@ def test_config_file_parsing_with_env_override(tmp_path, clean_env):
             }
         )
     )
-    os.environ["OH_ALLOW_CORS_ORIGINS_0"] = "https://env.example.com"
-    os.environ["OH_ALLOW_CORS_ORIGIN_REGEX"] = r"https://env\\..+"
+    os.environ["AGENTRT_ALLOW_CORS_ORIGINS_0"] = "https://env.example.com"
+    os.environ["AGENTRT_ALLOW_CORS_ORIGIN_REGEX"] = r"https://env\\..+"
 
     config = load_config(config_path)
 
@@ -522,7 +522,7 @@ def test_config_webhook_specs_parsing(clean_env):
             "flush_delay": 60.0,
         },
     ]
-    os.environ["OH_WEBHOOKS"] = json.dumps(webhook_data)
+    os.environ["AGENTRT_WEBHOOKS"] = json.dumps(webhook_data)
 
     config = from_env(Config, "OH")
 
@@ -546,14 +546,14 @@ def test_config_webhook_specs_parsing(clean_env):
 def test_config_webhook_specs_sequential_parsing(clean_env):
     """Test parsing webhook specs using sequential environment variables."""
     # Test with sequential webhook environment variables
-    os.environ["OH_WEBHOOKS_0_BASE_URL"] = "https://webhook1.example.com"
-    os.environ["OH_WEBHOOKS_0_EVENT_BUFFER_SIZE"] = "15"
-    os.environ["OH_WEBHOOKS_0_FLUSH_DELAY"] = "25.5"
-    os.environ["OH_WEBHOOKS_0_HEADERS"] = json.dumps({"Auth": "token1"})
+    os.environ["AGENTRT_WEBHOOKS_0_BASE_URL"] = "https://webhook1.example.com"
+    os.environ["AGENTRT_WEBHOOKS_0_EVENT_BUFFER_SIZE"] = "15"
+    os.environ["AGENTRT_WEBHOOKS_0_FLUSH_DELAY"] = "25.5"
+    os.environ["AGENTRT_WEBHOOKS_0_HEADERS"] = json.dumps({"Auth": "token1"})
 
-    os.environ["OH_WEBHOOKS_1_BASE_URL"] = "https://webhook2.example.com"
-    os.environ["OH_WEBHOOKS_1_NUM_RETRIES"] = "5"
-    os.environ["OH_WEBHOOKS_1_RETRY_DELAY"] = "10"
+    os.environ["AGENTRT_WEBHOOKS_1_BASE_URL"] = "https://webhook2.example.com"
+    os.environ["AGENTRT_WEBHOOKS_1_NUM_RETRIES"] = "5"
+    os.environ["AGENTRT_WEBHOOKS_1_RETRY_DELAY"] = "10"
 
     config = from_env(Config, "OH")
 
@@ -577,11 +577,11 @@ def test_config_mixed_webhook_parsing(clean_env):
             "event_buffer_size": 10,
         }
     ]
-    os.environ["OH_WEBHOOKS"] = json.dumps(base_webhooks)
+    os.environ["AGENTRT_WEBHOOKS"] = json.dumps(base_webhooks)
 
     # Override specific fields
-    os.environ["OH_WEBHOOKS_0_FLUSH_DELAY"] = "45.0"
-    os.environ["OH_WEBHOOKS_0_HEADERS"] = json.dumps({"Override": "header"})
+    os.environ["AGENTRT_WEBHOOKS_0_FLUSH_DELAY"] = "45.0"
+    os.environ["AGENTRT_WEBHOOKS_0_HEADERS"] = json.dumps({"Override": "header"})
 
     config = from_env(Config, "OH")
 
@@ -1396,6 +1396,6 @@ def test_config_lease_ttl_seconds_default(clean_env):
 
 
 def test_config_lease_ttl_seconds_env_var(clean_env):
-    os.environ["OH_LEASE_TTL_SECONDS"] = "0"
+    os.environ["AGENTRT_LEASE_TTL_SECONDS"] = "0"
     config = from_env(Config, "OH")
     assert config.lease_ttl_seconds == 0.0

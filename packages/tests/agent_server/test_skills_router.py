@@ -95,9 +95,9 @@ class TestGetSkillsEndpoint:
                     "load_org": True,
                     "org_configs": [
                         {
-                            "repository": "hieptl/.openhands",
+                            "repository": "hieptl/.agentrt",
                             "provider": "github",
-                            "org_repo_url": "https://github.com/hieptl/.openhands",
+                            "org_repo_url": "https://github.com/hieptl/.agentrt",
                             "org_name": "hieptl",
                         },
                         {
@@ -113,7 +113,7 @@ class TestGetSkillsEndpoint:
             assert response.status_code == 200
             mock_load.assert_called_once()
             assert mock_load.call_args[1]["org_repos"] == [
-                ("https://github.com/hieptl/.openhands", "hieptl"),
+                ("https://github.com/hieptl/.agentrt", "hieptl"),
                 ("https://github.com/hieptl/.agents", "hieptl"),
             ]
 
@@ -472,7 +472,7 @@ class TestPydanticModels:
                         {
                             "repository": "org/repo",
                             "provider": "github",
-                            "org_repo_url": "https://github.com/org/.openhands",
+                            "org_repo_url": "https://github.com/org/.agentrt",
                             "org_name": "org",
                         }
                     ]

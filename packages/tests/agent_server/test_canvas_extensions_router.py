@@ -3,7 +3,7 @@
 
 Drives the endpoints through a TestClient against a temp install store (the
 default install dir is redirected), so nothing touches the real
-~/.openhands.
+~/.agentrt.
 """
 
 from pathlib import Path

@@ -291,7 +291,7 @@ def register_file_agents(work_dir: str | Path) -> list[str]:
     directories.
 
     Project-level definitions take priority over user-level ones, and within
-    each level `.agents/` takes priority over `.openhands/`.
+    each level `.agents/` takes priority over `.agentrt/`.
 
     Does not overwrite agents already registered programmatically or by plugins.
 

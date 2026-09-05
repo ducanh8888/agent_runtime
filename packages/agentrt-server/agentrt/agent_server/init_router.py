@@ -223,7 +223,7 @@ class InitService:
             new_config = _build_initialized_config(self._base_config, req)
             if req.env:
                 # Setting env vars before services boot lets things like
-                # the cipher pick up OH_SECRET_KEY-style overrides, and
+                # the cipher pick up AGENTRT_SECRET_KEY-style overrides, and
                 # tools pick up credentials.
                 for key, value in req.env.items():
                     os.environ[key] = value

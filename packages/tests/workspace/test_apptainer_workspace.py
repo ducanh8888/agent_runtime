@@ -91,7 +91,7 @@ def test_apptainer_workspace_gpu_passthrough_flag(
 
 def test_apptainer_workspace_extra_bind_mounts(mock_apptainer_workspace, monkeypatch):
     """Test that explicit and environment-provided bind mounts reach Apptainer."""
-    monkeypatch.setenv("OPENHANDS_APPTAINER_EXTRA_BINDS", "/env/src:/env/dst:ro")
+    monkeypatch.setenv("AGENTRT_APPTAINER_EXTRA_BINDS", "/env/src:/env/dst:ro")
     workspace, _ = mock_apptainer_workspace(
         extra_bind_mounts=["/host/tokenizer:/host/tokenizer:ro"]
     )

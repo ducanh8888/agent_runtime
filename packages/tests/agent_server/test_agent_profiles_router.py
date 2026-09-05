@@ -49,7 +49,7 @@ def temp_settings_dir():
 def client(temp_agent_profiles_dir, temp_settings_dir, monkeypatch):
     """Test client with isolated agent-profile/settings dirs, no cipher."""
     reset_stores()
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(temp_settings_dir))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(temp_settings_dir))
     config = Config(static_files_path=None, session_api_keys=[], secret_key=None)
     app = create_app(config)
     with patch(
@@ -68,7 +68,7 @@ def store(temp_agent_profiles_dir):
 @pytest.fixture
 def default_llm_profile_store(temp_settings_dir):
     """The real (unpatched) LLM profile store the ``client`` fixture's
-    ``get_llm_profile_store()`` resolves to, given ``OH_PERSISTENCE_DIR`` —
+    ``get_llm_profile_store()`` resolves to, given ``AGENTRT_PERSISTENCE_DIR`` —
     see ``_get_profile_persistence_dir`` (``<dir>/profiles``)."""
     return LLMProfileStore(base_dir=temp_settings_dir / "profiles")
 
@@ -837,7 +837,7 @@ def client_with_llm_store(
 ):
     """Test client with isolated agent-profile/settings/llm-profile dirs, no cipher."""
     reset_stores()
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(temp_settings_dir))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(temp_settings_dir))
     config = Config(static_files_path=None, session_api_keys=[], secret_key=None)
     app = create_app(config)
     with (

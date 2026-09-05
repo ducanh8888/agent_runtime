@@ -13,7 +13,7 @@ the same image is not re-downloaded on every conversation turn.
 Security: requests are validated against an SSRF block-list of loopback,
 private, link-local, multicast and otherwise reserved IP ranges, and
 redirects are followed manually so each hop is revalidated. Set
-``OH_INLINE_IMAGE_ALLOW_PRIVATE_HOSTS=1`` only in tests/dev to bypass.
+``AGENTRT_INLINE_IMAGE_ALLOW_PRIVATE_HOSTS=1`` only in tests/dev to bypass.
 """
 
 from __future__ import annotations
@@ -40,19 +40,19 @@ logger = get_logger(__name__)
 # Mirrors LiteLLM's MAX_IMAGE_URL_DOWNLOAD_SIZE_MB default.
 DEFAULT_MAX_IMAGE_DOWNLOAD_MB = 20
 MAX_IMAGE_DOWNLOAD_MB: int = int(
-    os.environ.get("OH_INLINE_IMAGE_MAX_MB", DEFAULT_MAX_IMAGE_DOWNLOAD_MB)
+    os.environ.get("AGENTRT_INLINE_IMAGE_MAX_MB", DEFAULT_MAX_IMAGE_DOWNLOAD_MB)
 )
 
 # Cap how much memory the in-process cache may hold across all inlined images.
 DEFAULT_CACHE_MAX_BYTES = 64 * 1024 * 1024  # 64 MB
 CACHE_MAX_BYTES: int = int(
-    os.environ.get("OH_INLINE_IMAGE_CACHE_BYTES", DEFAULT_CACHE_MAX_BYTES)
+    os.environ.get("AGENTRT_INLINE_IMAGE_CACHE_BYTES", DEFAULT_CACHE_MAX_BYTES)
 )
 
 # Per-image fetch timeout (seconds). Override via env for slow networks.
 DEFAULT_FETCH_TIMEOUT_S = 30.0
 FETCH_TIMEOUT_S: float = float(
-    os.environ.get("OH_INLINE_IMAGE_FETCH_TIMEOUT_S", DEFAULT_FETCH_TIMEOUT_S)
+    os.environ.get("AGENTRT_INLINE_IMAGE_FETCH_TIMEOUT_S", DEFAULT_FETCH_TIMEOUT_S)
 )
 
 # Maximum number of HTTP redirects we will follow manually.
@@ -60,7 +60,7 @@ MAX_REDIRECTS = 5
 
 # Opt-out switch for the SSRF check; intended for tests/dev only.
 _ALLOW_PRIVATE_HOSTS = os.environ.get(
-    "OH_INLINE_IMAGE_ALLOW_PRIVATE_HOSTS", ""
+    "AGENTRT_INLINE_IMAGE_ALLOW_PRIVATE_HOSTS", ""
 ).lower() in {"1", "true", "yes"}
 
 _EXT_TO_MIME = {

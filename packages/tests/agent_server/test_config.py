@@ -15,7 +15,7 @@ def test_load_config_reads_registered_marketplaces_from_env(monkeypatch, tmp_pat
     config_path = tmp_path / "missing.json"
     monkeypatch.setenv(CONFIG_PATH_ENV, str(config_path))
     monkeypatch.setenv(
-        "OH_REGISTERED_MARKETPLACES",
+        "AGENTRT_REGISTERED_MARKETPLACES",
         json.dumps(
             [
                 {
@@ -43,7 +43,7 @@ def test_load_config_reads_registered_marketplaces_from_env(monkeypatch, tmp_pat
 def test_load_config_reads_telemetry_deployment_kind_from_env(monkeypatch, tmp_path):
     config_path = tmp_path / "missing.json"
     monkeypatch.setenv(CONFIG_PATH_ENV, str(config_path))
-    monkeypatch.setenv("OH_TELEMETRY_DEPLOYMENT_KIND", "remote")
+    monkeypatch.setenv("AGENTRT_TELEMETRY_DEPLOYMENT_KIND", "remote")
 
     assert load_config().telemetry.deployment_kind == "remote"
 
@@ -60,7 +60,7 @@ def test_conversation_idle_ttl_can_be_disabled_and_overridden(monkeypatch, tmp_p
 
     assert load_config().conversation_idle_ttl_seconds is None
 
-    monkeypatch.setenv("OH_CONVERSATION_IDLE_TTL_SECONDS", "300")
+    monkeypatch.setenv("AGENTRT_CONVERSATION_IDLE_TTL_SECONDS", "300")
     assert load_config().conversation_idle_ttl_seconds == 300.0
 
 

@@ -7,7 +7,7 @@ from typing import Any, Literal
 from litellm import get_supported_openai_params
 from litellm.utils import supports_vision as litellm_supports_vision
 
-from agentrt.sdk.llm.utils.openhands_provider import OPENHANDS_PROVIDER_PREFIX
+from agentrt.sdk.llm.utils.openhands_provider import AGENTRT_PROVIDER_PREFIX
 
 
 def model_matches(model: str | None, patterns: Iterable[str]) -> bool:
@@ -77,7 +77,7 @@ def _normalize_model_for_litellm(model: str | None) -> str | None:
         return None
 
     normalized = model.strip().lower()
-    for provider_prefix in (LITELLM_PROXY_PREFIX, OPENHANDS_PROVIDER_PREFIX):
+    for provider_prefix in (LITELLM_PROXY_PREFIX, AGENTRT_PROVIDER_PREFIX):
         if normalized.startswith(provider_prefix):
             normalized = normalized.removeprefix(provider_prefix)
             break

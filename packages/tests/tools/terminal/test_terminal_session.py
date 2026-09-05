@@ -258,7 +258,7 @@ def test_environment_variable_persistence(terminal_type):
 def test_environment_variable_inheritance_from_parent(terminal_type):
     """Test that environment variables from parent process are inherited."""
     # Set an environment variable in the current process
-    test_var_name = "OPENHANDS_TEST_INHERITANCE_VAR"
+    test_var_name = "AGENTRT_TEST_INHERITANCE_VAR"
     test_var_value = "inherited_from_parent_12345"
     original_value = os.environ.get(test_var_name)
 

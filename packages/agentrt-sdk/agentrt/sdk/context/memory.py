@@ -72,10 +72,10 @@ def load_memory(
     if user_index is not None:
         # Name the tier by the path it was actually read from so it matches the
         # write location advertised in the <MEMORY> guidance. The unexpanded
-        # ``~/.openhands`` fallback keeps the per-user home path out of the
+        # ``~/.agentrt`` fallback keeps the per-user home path out of the
         # prompt, exactly as MemorySection._user_memory_line does.
         user_header_path = to_posix_path(
-            get_user_persistence_dir(Path("~/.openhands")) / "memory" / "MEMORY.md"
+            get_user_persistence_dir(Path("~/.agentrt")) / "memory" / "MEMORY.md"
         )
         tiers.append((f"# User memory ({user_header_path})", user_index))
     project_index = _read_index(Path(working_dir) / MEMORY_INDEX_RELPATH)

@@ -1250,7 +1250,7 @@ def test_cache_export_modes(
     expect_cache_to: bool,
     expect_mode_value: str | None,
 ):
-    """Test cache export behavior for different OPENHANDS_BUILDKIT_CACHE_MODE values."""
+    """Test cache export behavior for different AGENTRT_BUILDKIT_CACHE_MODE values."""
     from agentrt.agent_server.docker.build import (
         BuildOptions,
         _default_sdk_project_root,
@@ -1279,7 +1279,7 @@ def test_cache_export_modes(
     )
 
     with (
-        patch.dict(os.environ, {"OPENHANDS_BUILDKIT_CACHE_MODE": mode}, clear=False),
+        patch.dict(os.environ, {"AGENTRT_BUILDKIT_CACHE_MODE": mode}, clear=False),
         patch(
             "agentrt.agent_server.docker.build._make_build_context",
             return_value=ctx,

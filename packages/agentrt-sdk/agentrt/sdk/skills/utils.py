@@ -519,7 +519,7 @@ def get_skills_cache_dir() -> Path:
 
     Returns:
         Path to the ``cache/skills`` subdirectory of the user persistence
-        directory (``~/.openhands/cache/skills`` absent OH_PERSISTENCE_DIR).
+        directory (``~/.openhands/cache/skills`` absent AGENTRT_PERSISTENCE_DIR).
     """
     cache_dir = get_user_persistence_dir() / "cache" / "skills"
     cache_dir.mkdir(parents=True, exist_ok=True)

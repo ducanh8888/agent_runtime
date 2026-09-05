@@ -28,7 +28,7 @@ def _write_repo_with_vendor_files(root: Path, baseline_source: str) -> None:
                         or "agents_md" (AGENTS.md in repo root)
     """
     if baseline_source == "repo_md":
-        skills_dir = root / ".openhands" / "skills"
+        skills_dir = root / ".agentrt" / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
         (skills_dir / "repo.md").write_text(_REPO_BASELINE_TEXT)
     elif baseline_source == "agents_md":

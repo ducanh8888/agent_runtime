@@ -535,15 +535,15 @@ def test_reuses_single_client_across_multiple_urls():
 
 
 def test_fetch_timeout_is_env_configurable(monkeypatch: pytest.MonkeyPatch):
-    """``OH_INLINE_IMAGE_FETCH_TIMEOUT_S`` overrides the default timeout."""
-    monkeypatch.setenv("OH_INLINE_IMAGE_FETCH_TIMEOUT_S", "7.5")
+    """``AGENTRT_INLINE_IMAGE_FETCH_TIMEOUT_S`` overrides the default timeout."""
+    monkeypatch.setenv("AGENTRT_INLINE_IMAGE_FETCH_TIMEOUT_S", "7.5")
     import importlib
 
     reloaded = importlib.reload(image_inline)
     try:
         assert reloaded.FETCH_TIMEOUT_S == 7.5
     finally:
-        monkeypatch.delenv("OH_INLINE_IMAGE_FETCH_TIMEOUT_S", raising=False)
+        monkeypatch.delenv("AGENTRT_INLINE_IMAGE_FETCH_TIMEOUT_S", raising=False)
         importlib.reload(image_inline)
 
 

@@ -1,7 +1,7 @@
 """Startup banner for OpenHands SDK.
 
 Prints a welcome message with helpful links when the SDK is first imported.
-Can be suppressed by setting the OPENHANDS_SUPPRESS_BANNER environment variable.
+Can be suppressed by setting the AGENTRT_SUPPRESS_BANNER environment variable.
 """
 
 import os
@@ -17,7 +17,7 @@ def _print_banner(version: str) -> None:
     global _BANNER_PRINTED
 
     # Check if banner should be suppressed (check this first, before setting flag)
-    suppress = os.environ.get("OPENHANDS_SUPPRESS_BANNER", "").lower() in {
+    suppress = os.environ.get("AGENTRT_SUPPRESS_BANNER", "").lower() in {
         "1",
         "true",
         "yes",
@@ -37,7 +37,7 @@ def _print_banner(version: str) -> None:
 |  Get help: openhands.dev/joinslack                                   |
 |  Scale up: openhands.dev/product/sdk                                 |
 |                                                                      |
-|  Set OPENHANDS_SUPPRESS_BANNER=1 to hide this message                |
+|  Set AGENTRT_SUPPRESS_BANNER=1 to hide this message                |
 +----------------------------------------------------------------------+
 """
     print(banner, file=sys.stderr)

@@ -749,7 +749,7 @@ def test_default_provider_store_is_sibling_of_base_dir(tmp_path: Path) -> None:
     Regression: the default ProviderConnectionStore must be derived from
     ``base_dir`` (a sibling ``provider-connections`` directory), not from
     ``$HOME``. Otherwise a custom-directory profile store reads profiles from
-    ``base_dir`` but credentials from ``~/.openhands`` — the wrong source.
+    ``base_dir`` but credentials from ``~/.agentrt`` — the wrong source.
     """
     from agentrt.sdk.llm.provider_connection_store import (
         ProviderConnection,

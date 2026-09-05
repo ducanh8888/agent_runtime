@@ -61,7 +61,7 @@ def live_server_env(
 ) -> Generator[dict]:
     """Launch a real FastAPI server backed by temp workspace and conversations.
 
-    We set OPENHANDS_AGENT_SERVER_CONFIG_PATH before creating the app so that
+    We set AGENTRT_AGENT_SERVER_CONFIG_PATH before creating the app so that
     routers pick up the correct default config and in-memory services.
     """
 
@@ -106,7 +106,7 @@ def live_server_env(
     cfg_file.write_text(json.dumps(cfg))
 
     # Ensure default config uses our file and disable any env key override
-    monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg_file))
+    monkeypatch.setenv("AGENTRT_AGENT_SERVER_CONFIG_PATH", str(cfg_file))
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
 
     if import_modules is not None:
@@ -285,7 +285,7 @@ def test_remote_conversation_websocket_first_message_auth(
     authenticated_server_env,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("OPENHANDS_REMOTE_WS_READY_TIMEOUT", "2")
+    monkeypatch.setenv("AGENTRT_REMOTE_WS_READY_TIMEOUT", "2")
     agent = Agent(
         llm=LLM(model="gpt-4o-mini", api_key=SecretStr("test")),
         tools=[],
@@ -689,7 +689,7 @@ def test_openai_chat_completions_gateway_over_real_server(
 
     monkeypatch.setattr(config_module, "_default_config", None)
     monkeypatch.setattr(service_module, "_conversation_service", None)
-    monkeypatch.delenv("OH_WEBHOOKS_0_BASE_URL", raising=False)
+    monkeypatch.delenv("AGENTRT_WEBHOOKS_0_BASE_URL", raising=False)
 
     profiles_dir = tmp_path / "profiles"
     store = LLMProfileStore(base_dir=profiles_dir)
@@ -840,7 +840,7 @@ def test_openai_gateway_replays_frozen_llm_fixtures(
 
     monkeypatch.setattr(config_module, "_default_config", None)
     monkeypatch.setattr(service_module, "_conversation_service", None)
-    monkeypatch.delenv("OH_WEBHOOKS_0_BASE_URL", raising=False)
+    monkeypatch.delenv("AGENTRT_WEBHOOKS_0_BASE_URL", raising=False)
 
     fixtures_dir = Path(__file__).parents[1] / "fixtures" / "openai_gateway"
     fixtures = [

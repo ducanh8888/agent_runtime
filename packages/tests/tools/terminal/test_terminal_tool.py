@@ -116,12 +116,12 @@ def test_bash_tool_to_openai_tool():
 def test_terminal_tool_client_env_is_session_scoped_and_schema_hidden(monkeypatch):
     """Test that client env config reaches the shell without becoming action input."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        monkeypatch.setenv("OH_CLIENT_ENV_TEST", "parent-value")
+        monkeypatch.setenv("AGENTRT_CLIENT_ENV_TEST", "parent-value")
         conv_state = _create_test_conv_state(temp_dir)
         tools = TerminalTool.create(
             conv_state,
             terminal_type="subprocess",
-            env={"OH_CLIENT_ENV_TEST": "client-value"},
+            env={"AGENTRT_CLIENT_ENV_TEST": "client-value"},
         )
         tool = tools[0]
         assert tool.executor is not None
@@ -129,7 +129,7 @@ def test_terminal_tool_client_env_is_session_scoped_and_schema_hidden(monkeypatc
         properties = tool.action_type.model_json_schema()["properties"]
         assert "env" not in properties
 
-        action = TerminalAction(command='printf "%s" "$OH_CLIENT_ENV_TEST"')
+        action = TerminalAction(command='printf "%s" "$AGENTRT_CLIENT_ENV_TEST"')
         result = tool(action)
         assert isinstance(result, TerminalObservation)
         assert "client-value" in result.text

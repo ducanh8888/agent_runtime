@@ -38,8 +38,8 @@ def test_server_workflow_passes_git_metadata_build_args() -> None:
     """The published agent-server images should embed git metadata."""
     workflow_text = SERVER_WORKFLOW.read_text(encoding="utf-8")
 
-    assert "OPENHANDS_BUILD_GIT_SHA=${{ env.SDK_SHA }}" in workflow_text
-    assert "OPENHANDS_BUILD_GIT_REF=${{ env.SDK_REF }}" in workflow_text
+    assert "AGENTRT_BUILD_GIT_SHA=${{ env.SDK_SHA }}" in workflow_text
+    assert "AGENTRT_BUILD_GIT_REF=${{ env.SDK_REF }}" in workflow_text
 
 
 def test_server_workflow_contains_install_acp_providers_expression() -> None:

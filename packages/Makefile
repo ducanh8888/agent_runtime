@@ -89,10 +89,10 @@ test-server-schema: check-uv-version
 	@set -euo pipefail; \
 		OPENAPI_TMP_DIR="$$(mktemp -d)"; \
 		trap 'rm -r "$$OPENAPI_TMP_DIR"' EXIT; \
-		OPENHANDS_SUPPRESS_BANNER=1 uv run python \
+		AGENTRT_SUPPRESS_BANNER=1 uv run python \
 			.github/scripts/export_agent_server_openapi.py \
 			--output "$$OPENAPI_TMP_DIR/openapi.json"; \
-		OPENHANDS_SUPPRESS_BANNER=1 uv run python \
+		AGENTRT_SUPPRESS_BANNER=1 uv run python \
 			.github/scripts/export_agent_server_openapi.py \
 			--output "$$OPENAPI_TMP_DIR/openapi-second.json"; \
 		cmp "$$OPENAPI_TMP_DIR/openapi.json" \

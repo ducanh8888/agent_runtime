@@ -14,7 +14,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 
-os.environ.setdefault("OPENHANDS_SUPPRESS_BANNER", "1")
+os.environ.setdefault("AGENTRT_SUPPRESS_BANNER", "1")
 
 
 def _load_script_module(name: str):

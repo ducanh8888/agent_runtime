@@ -1303,10 +1303,10 @@ def test_build_prompt_handles_missing_fields():
 def test_openhands_headers_requires_api_key(monkeypatch):
     module = load_module("issue_duplicate_check_openhands.py")
 
-    monkeypatch.delenv("OPENHANDS_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTRT_API_KEY", raising=False)
 
     with pytest.raises(
-        RuntimeError, match="OPENHANDS_API_KEY environment variable is required"
+        RuntimeError, match="AGENTRT_API_KEY environment variable is required"
     ):
         module.openhands_headers()
 
@@ -1340,11 +1340,11 @@ def test_app_conversation_helpers_preserve_raw_ids(monkeypatch):
 
     assert requested_paths == [
         (
-            module.OPENHANDS_BASE_URL,
+            module.AGENTRT_BASE_URL,
             "/api/v1/app-conversations?ids=conv:123",
         ),
         (
-            module.OPENHANDS_BASE_URL,
+            module.AGENTRT_BASE_URL,
             f"/api/v1/conversation/conv:123/events/search?limit={module.EVENT_SEARCH_LIMIT}",
         ),
         (

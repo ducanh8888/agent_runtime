@@ -7,13 +7,13 @@
 #   - Outputting JSON: {"decision": "deny", "additionalContext": "feedback message"}
 #
 # Environment variables available:
-#   OPENHANDS_PROJECT_DIR - Project directory
-#   OPENHANDS_SESSION_ID - Session ID
+#   AGENTRT_PROJECT_DIR - Project directory
+#   AGENTRT_SESSION_ID - Session ID
 #   GITHUB_TOKEN - GitHub API token (if available)
 
 set -o pipefail
 
-PROJECT_DIR="${OPENHANDS_PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="${AGENTRT_PROJECT_DIR:-$(pwd)}"
 cd "$PROJECT_DIR" || exit 1
 
 # Collect all issues to report back to the agent

@@ -51,18 +51,18 @@ The server can be configured using environment variables or a JSON configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENHANDS_AGENT_SERVER_CONFIG_PATH` | Path to JSON configuration file | `workspace/openhands_agent_server_config.json` |
+| `AGENTRT_AGENT_SERVER_CONFIG_PATH` | Path to JSON configuration file | `workspace/openhands_agent_server_config.json` |
 | `SESSION_API_KEY` | API key for authentication (optional) | None |
-| `OH_SECRET_KEY` | Secret key for encrypting sensitive data (LLM API keys, secrets) in stored conversations. **Required for persistence across restarts.** | None |
-| `OH_ALLOW_CORS_ORIGIN_REGEX` | Regular expression for additional allowed CORS origins. Use `https?://.+` to allow any HTTP(S) origin while echoing the concrete origin. | None |
-| `OH_TELEMETRY_EXPORTER` | Where events go: `none`, `posthog`, or `http`. See [Telemetry](#telemetry). | `none` |
-| `OH_TELEMETRY_POSTHOG_API_KEY` | PostHog project API key. Required by the `posthog` exporter. | None |
-| `OH_TELEMETRY_POSTHOG_HOST` | PostHog ingestion host. | `https://us.i.posthog.com` |
-| `OH_TELEMETRY_HTTP_ENDPOINT` | Endpoint the `http` exporter POSTs sanitized batches to. | None |
-| `OH_TELEMETRY_HTTP_TOKEN` | Bearer token for the `http` exporter, if required. | None |
-| `OH_TELEMETRY_CONSENT` | `granted` or `denied`. Seeds or overrides the persisted consent value. | Unset |
-| `OH_TELEMETRY_CONSENT_MODE` | `seed` (applies only while consent is `unset`) or `override` (wins over settings). | `seed` |
-| `OH_TELEMETRY_SALT` | Key used to pseudonymize conversation ids. Falls back to `OH_SECRET_KEY`, then to a per-process random salt. | None |
+| `AGENTRT_SECRET_KEY` | Secret key for encrypting sensitive data (LLM API keys, secrets) in stored conversations. **Required for persistence across restarts.** | None |
+| `AGENTRT_ALLOW_CORS_ORIGIN_REGEX` | Regular expression for additional allowed CORS origins. Use `https?://.+` to allow any HTTP(S) origin while echoing the concrete origin. | None |
+| `AGENTRT_TELEMETRY_EXPORTER` | Where events go: `none`, `posthog`, or `http`. See [Telemetry](#telemetry). | `none` |
+| `AGENTRT_TELEMETRY_POSTHOG_API_KEY` | PostHog project API key. Required by the `posthog` exporter. | None |
+| `AGENTRT_TELEMETRY_POSTHOG_HOST` | PostHog ingestion host. | `https://us.i.posthog.com` |
+| `AGENTRT_TELEMETRY_HTTP_ENDPOINT` | Endpoint the `http` exporter POSTs sanitized batches to. | None |
+| `AGENTRT_TELEMETRY_HTTP_TOKEN` | Bearer token for the `http` exporter, if required. | None |
+| `AGENTRT_TELEMETRY_CONSENT` | `granted` or `denied`. Seeds or overrides the persisted consent value. | Unset |
+| `AGENTRT_TELEMETRY_CONSENT_MODE` | `seed` (applies only while consent is `unset`) or `override` (wins over settings). | `seed` |
+| `AGENTRT_TELEMETRY_SALT` | Key used to pseudonymize conversation ids. Falls back to `AGENTRT_SECRET_KEY`, then to a per-process random salt. | None |
 | `DO_NOT_TRACK` | Set to `1` to force telemetry off, overriding consent and env. | Unset |
 
 ### Configuration File
@@ -140,11 +140,11 @@ free and needs no settings schema change.
 Precedence, highest first:
 
 1. `DO_NOT_TRACK=1` — operator kill switch, overrides everything.
-2. `OH_TELEMETRY_CONSENT` when `OH_TELEMETRY_CONSENT_MODE=override`.
+2. `AGENTRT_TELEMETRY_CONSENT` when `AGENTRT_TELEMETRY_CONSENT_MODE=override`.
 3. `misc_settings.telemetry.consent`.
 4. The legacy `misc_settings.app_preferences.user_consents_to_analytics` key,
    read only as a fallback so existing users are not reset. Never written.
-5. `OH_TELEMETRY_CONSENT` as a seed (the default mode) — applies only while the
+5. `AGENTRT_TELEMETRY_CONSENT` as a seed (the default mode) — applies only while the
    persisted value is `unset`, so an operator default never silently overrules
    an explicit choice.
 6. Otherwise `unset`, which is **not** consent.
@@ -154,20 +154,20 @@ anything already queued is **discarded**, not flushed.
 
 #### Exporters
 
-`OH_TELEMETRY_EXPORTER` selects the transport:
+`AGENTRT_TELEMETRY_EXPORTER` selects the transport:
 
 - **`none`** (default) — nothing is delivered. This is what library and headless
   consumers get, and it requires no vendor dependency.
-- **`posthog`** — requires `OH_TELEMETRY_POSTHOG_API_KEY` and the optional
+- **`posthog`** — requires `AGENTRT_TELEMETRY_POSTHOG_API_KEY` and the optional
   `[posthog]` extra. Without either, telemetry logs one line and stays inactive.
-- **`http`** — POSTs sanitized batches to `OH_TELEMETRY_HTTP_ENDPOINT`. Intended
+- **`http`** — POSTs sanitized batches to `AGENTRT_TELEMETRY_HTTP_ENDPOINT`. Intended
   to front a backend that revalidates auth and consent before forwarding onward,
   so no vendor credentials need to live in the sandbox. Payload shape:
 
 ```
 POST <endpoint>
 Content-Type: application/json
-Authorization: Bearer <OH_TELEMETRY_HTTP_TOKEN>   # only when configured
+Authorization: Bearer <AGENTRT_TELEMETRY_HTTP_TOKEN>   # only when configured
 
 {
   "schema_version": 1,
@@ -250,35 +250,35 @@ normally.
 
 ### Secret Encryption
 
-The server encrypts sensitive data (such as LLM API keys and conversation secrets) when storing conversations to disk. To enable this encryption and ensure secrets persist across server restarts, you **must** set the `OH_SECRET_KEY` environment variable.
+The server encrypts sensitive data (such as LLM API keys and conversation secrets) when storing conversations to disk. To enable this encryption and ensure secrets persist across server restarts, you **must** set the `AGENTRT_SECRET_KEY` environment variable.
 
-#### Setting OH_SECRET_KEY
+#### Setting AGENTRT_SECRET_KEY
 
 ```bash
 # Generate a secure random key (recommended)
-export OH_SECRET_KEY=$(openssl rand -hex 32)
+export AGENTRT_SECRET_KEY=$(openssl rand -hex 32)
 
 # Or set a custom key
-export OH_SECRET_KEY="your-secret-key-here"
+export AGENTRT_SECRET_KEY="your-secret-key-here"
 ```
 
 **Important Security Notes:**
 - Use a strong, randomly generated key with at least 256 bits of entropy
 - Store this key securely (e.g., in a secrets manager or environment variable)
 - **If you change this key, previously encrypted secrets cannot be decrypted**
-- Without `OH_SECRET_KEY`, secrets will be redacted (not encrypted) and will be lost on restart
+- Without `AGENTRT_SECRET_KEY`, secrets will be redacted (not encrypted) and will be lost on restart
 
 #### What Gets Encrypted
 
-The following fields are encrypted when `OH_SECRET_KEY` is set:
+The following fields are encrypted when `AGENTRT_SECRET_KEY` is set:
 - LLM API keys (`agent.llm.api_key`)
 - AWS credentials (`agent.llm.aws_access_key_id`, `agent.llm.aws_secret_access_key`)
 - Conversation secrets (from the `secrets` field in conversation requests)
 
-#### Behavior Without OH_SECRET_KEY
+#### Behavior Without AGENTRT_SECRET_KEY
 
-If `OH_SECRET_KEY` is not set:
-- The server will log a warning: `⚠️ OH_SECRET_KEY was not defined. Secrets will not be persisted between restarts.`
+If `AGENTRT_SECRET_KEY` is not set:
+- The server will log a warning: `⚠️ AGENTRT_SECRET_KEY was not defined. Secrets will not be persisted between restarts.`
 - Secrets will be redacted (masked) in stored conversations
 - When the server restarts, encrypted secrets cannot be decrypted and will be `None`
 - Conversations will need to be recreated with fresh API keys
@@ -376,7 +376,7 @@ uv run pytest tests/agent_server/ --cov=agentrt.agent_server
 ## Security Considerations
 
 - **Authentication**: Use `session_api_key` in production environments
-- **Secret Encryption**: Always set `OH_SECRET_KEY` in production to encrypt sensitive data
+- **Secret Encryption**: Always set `AGENTRT_SECRET_KEY` in production to encrypt sensitive data
 - **CORS**: Configure `allow_cors_origins` appropriately for your use case
 - **Network**: The server binds to `0.0.0.0` by default - restrict access as needed
 - **File System**: The server has full access to the configured workspace directory
@@ -387,9 +387,9 @@ uv run pytest tests/agent_server/ --cov=agentrt.agent_server
 
 1. **Port already in use**: Change the port using `--port` option
 2. **Permission denied**: Ensure the user has write access to the workspace directory
-3. **Configuration not found**: Check the `OPENHANDS_AGENT_SERVER_CONFIG_PATH` environment variable
+3. **Configuration not found**: Check the `AGENTRT_AGENT_SERVER_CONFIG_PATH` environment variable
 4. **CORS errors**: Add your frontend domain to `allow_cors_origins`
-5. **LLM API keys are None after restart**: This happens when `OH_SECRET_KEY` is not set or has changed. Set `OH_SECRET_KEY` before starting the server to encrypt and persist secrets. Note: If you change the key, previously encrypted secrets cannot be decrypted.
+5. **LLM API keys are None after restart**: This happens when `AGENTRT_SECRET_KEY` is not set or has changed. Set `AGENTRT_SECRET_KEY` before starting the server to encrypt and persist secrets. Note: If you change the key, previously encrypted secrets cannot be decrypted.
 
 ### Logs
 

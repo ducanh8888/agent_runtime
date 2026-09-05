@@ -21,9 +21,9 @@ from agentrt.sdk.utils.cipher import Cipher
 
 # Environment variable constants
 V0_SESSION_API_KEY_ENV = "SESSION_API_KEY"
-V1_SESSION_API_KEY_ENV = "OH_SESSION_API_KEYS_0"
-ENVIRONMENT_VARIABLE_PREFIX = "OH"
-CONFIG_PATH_ENV = "OPENHANDS_AGENT_SERVER_CONFIG_PATH"
+V1_SESSION_API_KEY_ENV = "AGENTRT_SESSION_API_KEYS_0"
+ENVIRONMENT_VARIABLE_PREFIX = "AGENTRT"
+CONFIG_PATH_ENV = "AGENTRT_AGENT_SERVER_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path("workspace/openhands_agent_server_config.json")
 # 20 minutes, matching the idle timeout used by OpenHands Cloud.
 DEFAULT_CONVERSATION_IDLE_TTL_SECONDS: Final[float] = 20 * 60.0
@@ -47,7 +47,7 @@ def _default_session_api_keys():
 
 def _default_secret_key() -> SecretStr | None:
     """
-    If the OH_SECRET_KEY environment variable is present, it is read by the EnvParser
+    If the AGENTRT_SECRET_KEY environment variable is present, it is read by the EnvParser
     and this function is never called. Otherwise, we fall back to using the first
     available session_api_key - which we read from the environment.
     We check both the V0 and V1 variables for this.
@@ -62,7 +62,7 @@ def _default_secret_key() -> SecretStr | None:
 
 
 def _default_web_url() -> str | None:
-    web_url = os.getenv("OH_WEB_URL")
+    web_url = os.getenv("AGENTRT_WEB_URL")
     if web_url:
         return web_url
 
@@ -140,7 +140,7 @@ class TelemetrySpec(BaseModel):
     This carries transport plus the non-identifying deployment tag. Whether
     telemetry may be delivered is resolved from consent
     (``misc_settings.telemetry.consent``, optionally seeded or overridden by
-    ``OH_TELEMETRY_CONSENT``).
+    ``AGENTRT_TELEMETRY_CONSENT``).
     """
 
     deployment_kind: DeploymentKind = Field(
@@ -364,7 +364,7 @@ class Config(BaseModel):
         default_factory=list,
         description=(
             "Default marketplace registrations for plugin and skill loading. "
-            "Can be configured with OH_REGISTERED_MARKETPLACES as a JSON list."
+            "Can be configured with AGENTRT_REGISTERED_MARKETPLACES as a JSON list."
         ),
     )
     deferred_init: bool = Field(
@@ -419,7 +419,7 @@ class Config(BaseModel):
         if cipher is None:
             if self.secret_key is None:
                 _logger.warning(
-                    "⚠️ OH_SECRET_KEY was not defined. Secrets will not "
+                    "⚠️ AGENTRT_SECRET_KEY was not defined. Secrets will not "
                     "be persisted between restarts."
                 )
                 cipher = None
@@ -444,7 +444,7 @@ def _read_config_file(path: Path) -> dict[str, Any]:
 def load_config(config_path: Path | None = None) -> Config:
     """Load agent-server config from JSON file and environment variables.
 
-    Values from ``OH_*`` environment variables override values from the JSON
+    Values from ``AGENTRT_*`` environment variables override values from the JSON
     config file so deployment-specific environment overrides keep working.
     """
     resolved_path = config_path

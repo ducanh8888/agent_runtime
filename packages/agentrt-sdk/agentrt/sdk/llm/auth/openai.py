@@ -633,7 +633,7 @@ class OpenAISubscriptionAuth:
                         "OAuth callback server port "
                         f"{self._oauth_port} is already in use. "
                         "Please free the port or set a different one via "
-                        "OPENHANDS_OAUTH_PORT."
+                        "AGENTRT_OAUTH_PORT."
                     ) from exc
                 raise
 

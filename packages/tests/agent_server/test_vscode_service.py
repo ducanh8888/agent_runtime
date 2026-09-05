@@ -490,7 +490,7 @@ def test_vscode_port_configuration():
     assert config.vscode_port == 8001
 
     # Test environment variable override
-    with patch.dict(os.environ, {"OH_VSCODE_PORT": "9999"}):
+    with patch.dict(os.environ, {"AGENTRT_VSCODE_PORT": "9999"}):
         config = from_env(Config, "OH")
         assert config.vscode_port == 9999
 
@@ -506,6 +506,6 @@ def test_vscode_base_path_configuration():
     assert config.vscode_base_path is None
 
     # Test environment variable override
-    with patch.dict(os.environ, {"OH_VSCODE_BASE_PATH": "/runtime-abc/vscode"}):
+    with patch.dict(os.environ, {"AGENTRT_VSCODE_BASE_PATH": "/runtime-abc/vscode"}):
         config = from_env(Config, "OH")
         assert config.vscode_base_path == "/runtime-abc/vscode"

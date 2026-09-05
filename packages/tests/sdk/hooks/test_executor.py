@@ -85,8 +85,8 @@ class TestHookExecutor:
         hook = HookDefinition(
             command=python_command(
                 "import os; "
-                "print(f\"SESSION={os.environ['OPENHANDS_SESSION_ID']}\"); "
-                "print(f\"TOOL={os.environ['OPENHANDS_TOOL_NAME']}\")"
+                "print(f\"SESSION={os.environ['AGENTRT_SESSION_ID']}\"); "
+                "print(f\"TOOL={os.environ['AGENTRT_TOOL_NAME']}\")"
             )
         )
 

@@ -180,13 +180,13 @@ def test_operation_metadata_reaches_the_exported_llm_span() -> None:
     # name is the wire contract downstream consumers hard-code.
     assert (
         title_llm["attributes"][
-            "lmnr.association.properties.metadata.openhands.operation"
+            "lmnr.association.properties.metadata.agentrt.operation"
         ]
         == "title_generation"
     )
     assert (
         ask_llm["attributes"][
-            "lmnr.association.properties.metadata.openhands.operation"
+            "lmnr.association.properties.metadata.agentrt.operation"
         ]
         == "ask_agent"
     )

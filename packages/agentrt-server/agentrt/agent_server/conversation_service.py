@@ -1738,7 +1738,7 @@ class ConversationService:
             if self.cipher is None:
                 raise ValueError(
                     "Cannot decrypt secrets: cipher not configured. "
-                    "Set OH_SECRET_KEY environment variable."
+                    "Set AGENTRT_SECRET_KEY environment variable."
                 )
             stored = StoredConversation.model_validate(
                 {

@@ -1,11 +1,11 @@
-"""Per-call-site coverage for ``OH_PERSISTENCE_DIR``.
+"""Per-call-site coverage for ``AGENTRT_PERSISTENCE_DIR``.
 
-Every module that reads or writes user-level ``~/.openhands`` state must route
+Every module that reads or writes user-level ``~/.agentrt`` state must route
 through :func:`agentrt.sdk.utils.path.get_user_persistence_dir`, so that an
-enterprise ephemeral sandbox pointing ``OH_PERSISTENCE_DIR`` at a persistent
+enterprise ephemeral sandbox pointing ``AGENTRT_PERSISTENCE_DIR`` at a persistent
 volume keeps its data across a resume. This module asserts that contract at
 *each* call site rather than trusting the shared helper alone, which guards
-against a future edit reintroducing a bare ``Path.home() / ".openhands"``.
+against a future edit reintroducing a bare ``Path.home() / ".agentrt"``.
 
 Two flavours of call site exist:
 
@@ -66,7 +66,7 @@ def _subprocess_env(**overrides: str) -> dict[str, str]:
     """Env for a child interpreter that stays importable with a fake ``HOME``."""
     env = dict(os.environ)
     env.update(overrides)
-    env["OPENHANDS_SUPPRESS_BANNER"] = "1"
+    env["AGENTRT_SUPPRESS_BANNER"] = "1"
     existing = env.get("PYTHONPATH", "")
     parts = _IMPORT_ROOTS + ([existing] if existing else [])
     env["PYTHONPATH"] = os.pathsep.join(parts)
@@ -144,7 +144,7 @@ _IMPORT_TIME_CALL_SITES: dict[str, tuple[str, str, str]] = {
 
 # Call sites that intentionally keep a ``~/.agents`` entry ahead of the
 # persistence-dir entry. Verified to still point at ``~/.agents`` regardless of
-# ``OH_PERSISTENCE_DIR``.
+# ``AGENTRT_PERSISTENCE_DIR``.
 _AGENTS_DIR_CALL_SITES: dict[str, tuple[str, str, str]] = {
     "skills_user_dirs_agents": (
         "agentrt.sdk.skills.skill",
@@ -162,7 +162,7 @@ _AGENTS_DIR_CALL_SITES: dict[str, tuple[str, str, str]] = {
 def _probe_constants_in_subprocess(env: dict[str, str]) -> dict[str, str]:
     """Import each call site's module in a subprocess and return its path.
 
-    Runs under ``env`` so import-time resolution of ``OH_PERSISTENCE_DIR`` /
+    Runs under ``env`` so import-time resolution of ``AGENTRT_PERSISTENCE_DIR`` /
     ``HOME`` happens exactly as it would on a real process start.
     """
     all_sites = {**_IMPORT_TIME_CALL_SITES, **_AGENTS_DIR_CALL_SITES}
@@ -198,7 +198,7 @@ def _probe_constants_in_subprocess(env: dict[str, str]) -> dict[str, str]:
 def constants_with_persistence_env() -> Iterator[dict[str, str]]:
     with tempfile.TemporaryDirectory() as tmpdir:
         home = str(Path(tmpdir) / "unused-home")
-        env = _subprocess_env(OH_PERSISTENCE_DIR=tmpdir, HOME=home)
+        env = _subprocess_env(AGENTRT_PERSISTENCE_DIR=tmpdir, HOME=home)
         paths = _probe_constants_in_subprocess(env)
         paths["__root__"] = tmpdir
         paths["HOME"] = home
@@ -209,7 +209,7 @@ def constants_with_persistence_env() -> Iterator[dict[str, str]]:
 def constants_with_home_fallback() -> Iterator[dict[str, str]]:
     with tempfile.TemporaryDirectory() as tmpdir:
         env = _subprocess_env(HOME=tmpdir)
-        env.pop("OH_PERSISTENCE_DIR", None)
+        env.pop("AGENTRT_PERSISTENCE_DIR", None)
         paths = _probe_constants_in_subprocess(env)
         paths["__root__"] = tmpdir
         yield paths
@@ -230,7 +230,7 @@ def test_import_time_constant_falls_back_to_home(
 ) -> None:
     home = Path(constants_with_home_fallback["__root__"])
     _mod, _attr, subpath = _IMPORT_TIME_CALL_SITES[name]
-    assert Path(constants_with_home_fallback[name]) == home / ".openhands" / subpath
+    assert Path(constants_with_home_fallback[name]) == home / ".agentrt" / subpath
 
 
 @pytest.mark.parametrize("name", sorted(_AGENTS_DIR_CALL_SITES))
@@ -243,7 +243,7 @@ def test_agents_dir_call_sites_ignore_persistence_env(
     resolved = Path(constants_with_persistence_env[name])
     # Anchored at $HOME/.agents/..., never redirected into the persistence dir.
     assert resolved == home / subpath
-    assert ".openhands" not in resolved.parts
+    assert ".agentrt" not in resolved.parts
 
 
 # --------------------------------------------------------------------------- #
@@ -253,9 +253,9 @@ def test_agents_dir_call_sites_ignore_persistence_env(
 
 @pytest.fixture
 def persistence_dir(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """``OH_PERSISTENCE_DIR`` pointed at a clean tempdir for call-time sites."""
+    """``AGENTRT_PERSISTENCE_DIR`` pointed at a clean tempdir for call-time sites."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        monkeypatch.setenv("OH_PERSISTENCE_DIR", tmpdir)
+        monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", tmpdir)
         yield Path(tmpdir)
 
 
@@ -375,7 +375,7 @@ def test_default_llm_profile_store_survives_resume() -> None:
     ``base_dir``) uses the import-time default, so each run happens in its own
     subprocess to exercise that resolution honestly. Run 1 writes with a
     throwaway HOME; the HOME is then deleted and a fresh empty HOME is used for
-    run 2, which must still read the profile back from ``OH_PERSISTENCE_DIR``.
+    run 2, which must still read the profile back from ``AGENTRT_PERSISTENCE_DIR``.
     """
     import shutil
 
@@ -393,14 +393,14 @@ def test_default_llm_profile_store_survives_resume() -> None:
         )
         r1 = subprocess.run(
             [sys.executable, "-c", write],
-            env=_subprocess_env(OH_PERSISTENCE_DIR=persist, HOME=str(home1)),
+            env=_subprocess_env(AGENTRT_PERSISTENCE_DIR=persist, HOME=str(home1)),
             capture_output=True,
             text=True,
             timeout=180,
         )
         assert r1.returncode == 0, r1.stderr
         assert (Path(persist) / "profiles" / "prod.json").is_file()
-        assert not (home1 / ".openhands").exists()
+        assert not (home1 / ".agentrt").exists()
 
         # Resume: destroy the ephemeral HOME, hand run 2 a brand-new empty one.
         shutil.rmtree(home1)
@@ -413,7 +413,7 @@ def test_default_llm_profile_store_survives_resume() -> None:
         )
         r2 = subprocess.run(
             [sys.executable, "-c", read],
-            env=_subprocess_env(OH_PERSISTENCE_DIR=persist, HOME=str(home2)),
+            env=_subprocess_env(AGENTRT_PERSISTENCE_DIR=persist, HOME=str(home2)),
             capture_output=True,
             text=True,
             timeout=180,

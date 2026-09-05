@@ -252,7 +252,7 @@ class TestRemoteConversation:
         mock_ws_instance = Mock()
         mock_ws_instance.wait_until_ready.return_value = False
         mock_ws_client.return_value = mock_ws_instance
-        monkeypatch.setenv("OPENHANDS_REMOTE_WS_READY_REQUIRED", "false")
+        monkeypatch.setenv("AGENTRT_REMOTE_WS_READY_REQUIRED", "false")
 
         conversation = RemoteConversation(agent=self.agent, workspace=self.workspace)
 

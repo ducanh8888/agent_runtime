@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 
-OPERATION_ATTRIBUTE = "lmnr.association.properties.metadata.openhands.operation"
+OPERATION_ATTRIBUTE = "lmnr.association.properties.metadata.agentrt.operation"
 
 
 def _probe_auto_title_spans() -> dict[str, Any]:

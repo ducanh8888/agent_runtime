@@ -17,8 +17,8 @@ from agentrt.sdk.logger import DEBUG, get_logger
 logger = get_logger(__name__)
 
 
-_INTERNAL_SERVER_URL_ENV = "OH_INTERNAL_SERVER_URL"
-_EXTRA_PYTHON_PATH_ENV = "OH_EXTRA_PYTHON_PATH"
+_INTERNAL_SERVER_URL_ENV = "AGENTRT_INTERNAL_SERVER_URL"
+_EXTRA_PYTHON_PATH_ENV = "AGENTRT_EXTRA_PYTHON_PATH"
 
 # Hosts that bind to every network interface. Binding to one of these without
 # authentication exposes the (otherwise unauthenticated) agent server to the
@@ -30,7 +30,7 @@ _LOOPBACK_HOST = "127.0.0.1"
 def _auth_enabled() -> bool:
     """Return True when at least one session API key is configured.
 
-    Keys may come from the ``SESSION_API_KEY`` / ``OH_SESSION_API_KEYS_0``
+    Keys may come from the ``SESSION_API_KEY`` / ``AGENTRT_SESSION_API_KEYS_0``
     environment variables or from the agent-server config file, so we resolve
     the effective config rather than checking a single source.
     """
@@ -76,7 +76,7 @@ def extend_python_path(extra_paths: str | None) -> None:
     external custom-tool modules — even when running from a PyInstaller binary.
 
     Paths are read from *extra_paths* (``--extra-python-path`` CLI arg) **and**
-    the ``OH_EXTRA_PYTHON_PATH`` environment variable.  Both use the
+    the ``AGENTRT_EXTRA_PYTHON_PATH`` environment variable.  Both use the
     platform path separator (``':'`` on POSIX, ``';'`` on Windows).
 
     Non-existent directories are skipped with a warning; duplicates and paths
@@ -218,7 +218,7 @@ def main() -> None:
         help=(
             "Host to bind to. Defaults to 127.0.0.1 (loopback) when no session "
             "API key is configured, or 0.0.0.0 when authentication is enabled via "
-            "SESSION_API_KEY / OH_SESSION_API_KEYS_0."
+            "SESSION_API_KEY / AGENTRT_SESSION_API_KEYS_0."
         ),
     )
     parser.add_argument(
@@ -287,7 +287,7 @@ def main() -> None:
         logger.warning(
             "Binding to all interfaces (%s) without a session API key: the "
             "agent server will be unauthenticated and reachable from the "
-            "network. Set SESSION_API_KEY (or OH_SESSION_API_KEYS_0) to "
+            "network. Set SESSION_API_KEY (or AGENTRT_SESSION_API_KEYS_0) to "
             "require authentication, or bind to a loopback address with "
             "--host.",
             host,

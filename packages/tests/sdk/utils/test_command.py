@@ -19,19 +19,19 @@ def test_sanitized_env_strips_sensitive_credentials():
     must never reach subprocesses, while ordinary vars are preserved."""
     env = {
         "SESSION_API_KEY": "v0-session",
-        "OH_SECRET_KEY": "cipher-secret",
-        "OH_SESSION_API_KEYS_0": "v1-session-0",
-        "OH_SESSION_API_KEYS_1": "v1-session-1",
-        "OH_WEB_URL": "https://example.test",
+        "AGENTRT_SECRET_KEY": "cipher-secret",
+        "AGENTRT_SESSION_API_KEYS_0": "v1-session-0",
+        "AGENTRT_SESSION_API_KEYS_1": "v1-session-1",
+        "AGENTRT_WEB_URL": "https://example.test",
         "FOO": "bar",
     }
     result = sanitized_env(env)
     assert "SESSION_API_KEY" not in result
-    assert "OH_SECRET_KEY" not in result
-    assert "OH_SESSION_API_KEYS_0" not in result
-    assert "OH_SESSION_API_KEYS_1" not in result
-    # Non-sensitive vars (including other OH_* config) are preserved.
-    assert result["OH_WEB_URL"] == "https://example.test"
+    assert "AGENTRT_SECRET_KEY" not in result
+    assert "AGENTRT_SESSION_API_KEYS_0" not in result
+    assert "AGENTRT_SESSION_API_KEYS_1" not in result
+    # Non-sensitive vars (including other AGENTRT_* config) are preserved.
+    assert result["AGENTRT_WEB_URL"] == "https://example.test"
     assert result["FOO"] == "bar"
 
 

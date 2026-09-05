@@ -14,7 +14,7 @@ into a runnable :class:`~agentrt.sdk.llm.llm.LLM` — named-profile activation
 *and* the default/seed launch path — resolves identically.
 
 The credential is encrypted at rest with the same cipher machinery LLM profiles
-use, so the connection file never holds a plaintext key when ``OH_SECRET_KEY``
+use, so the connection file never holds a plaintext key when ``AGENTRT_SECRET_KEY``
 is configured.
 """
 
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from agentrt.sdk.utils.cipher import Cipher
 
 
-_DEFAULT_DIR: Final[Path] = Path.home() / ".openhands" / "provider-connections"
+_DEFAULT_DIR: Final[Path] = Path.home() / ".agentrt" / "provider-connections"
 _FILENAME: Final[str] = "provider_connections.json"
 _LOCK_TIMEOUT_SECONDS: Final[float] = 30.0
 
@@ -120,7 +120,7 @@ class ProviderConnection(BaseModel):
             if decrypted is None:
                 raise ValueError(
                     "api_key is encrypted but cannot be decrypted with the current "
-                    "cipher. Verify that OH_SECRET_KEY matches the key used when "
+                    "cipher. Verify that AGENTRT_SECRET_KEY matches the key used when "
                     "this connection was saved."
                 )
             return decrypted

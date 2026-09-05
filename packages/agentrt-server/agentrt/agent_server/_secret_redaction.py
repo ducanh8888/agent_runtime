@@ -26,7 +26,7 @@ def _is_secret_value(key: object, value: object) -> bool:
     if not isinstance(value, str) or value in ("", REDACTED_SECRET_VALUE):
         return False
     # Any Fernet token in a persisted conversation is ciphertext produced with
-    # the server's OH_SECRET_KEY (e.g. custom secrets in
+    # the server's AGENTRT_SECRET_KEY (e.g. custom secrets in
     # ``secret_registry.secret_sources``) and therefore recoverable secret
     # material, regardless of which field carries it.
     if value.startswith(FERNET_TOKEN_PREFIX):
@@ -39,7 +39,7 @@ def redact_secrets_in_obj(obj: object) -> bool:
 
     Returns ``True`` if anything was changed. Both plaintext and encrypted
     (Fernet) secret material are masked, so the guarantee holds regardless of
-    whether ``OH_SECRET_KEY`` was configured when the conversation was
+    whether ``AGENTRT_SECRET_KEY`` was configured when the conversation was
     persisted.
     """
     changed = False

@@ -40,8 +40,8 @@ from agentrt.sdk.event.types import ROOT_PARENT_ID
 from agentrt.sdk.llm import LLM
 from agentrt.sdk.llm.utils.openhands_provider import (
     LITELLM_PROXY_PREFIX,
-    OPENHANDS_LLM_PROXY_BASE_URL,
-    OPENHANDS_PROVIDER_PREFIX,
+    AGENTRT_LLM_PROXY_BASE_URL,
+    AGENTRT_PROVIDER_PREFIX,
 )
 from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
 from agentrt.sdk.security.risk import SecurityRisk
@@ -205,10 +205,10 @@ def _tool_call_response(
 def _rewrite_openhands_llms_to_legacy_proxy(value: Any) -> None:
     if isinstance(value, dict):
         model = value.get("model")
-        if isinstance(model, str) and model.startswith(OPENHANDS_PROVIDER_PREFIX):
-            model_name = model.removeprefix(OPENHANDS_PROVIDER_PREFIX)
+        if isinstance(model, str) and model.startswith(AGENTRT_PROVIDER_PREFIX):
+            model_name = model.removeprefix(AGENTRT_PROVIDER_PREFIX)
             value["model"] = f"{LITELLM_PROXY_PREFIX}{model_name}"
-            value["base_url"] = OPENHANDS_LLM_PROXY_BASE_URL
+            value["base_url"] = AGENTRT_LLM_PROXY_BASE_URL
         for child in value.values():
             _rewrite_openhands_llms_to_legacy_proxy(child)
         return
@@ -702,7 +702,7 @@ def test_openhands_provider_restore_writes_public_model_shape(mock_completion):
         assert captured_completion_kwargs[-1]["model"] == "claude-opus-4-8"
         assert captured_completion_kwargs[-1]["custom_llm_provider"] == "litellm_proxy"
         assert (
-            captured_completion_kwargs[-1]["api_base"] == OPENHANDS_LLM_PROXY_BASE_URL
+            captured_completion_kwargs[-1]["api_base"] == AGENTRT_LLM_PROXY_BASE_URL
         )
 
 
@@ -769,7 +769,7 @@ def test_conversation_restore_rewrites_legacy_openhands_proxy_snapshot(
             )
             assert (
                 captured_completion_kwargs[-1]["api_base"]
-                == OPENHANDS_LLM_PROXY_BASE_URL
+                == AGENTRT_LLM_PROXY_BASE_URL
             )
         finally:
             restored.close()

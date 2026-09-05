@@ -16,29 +16,29 @@ from agentrt.sdk.utils.path import (
 def test_get_user_persistence_dir_defaults_to_home_openhands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     fake_home = Path("/fake/home")
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
-    assert get_user_persistence_dir() == fake_home / ".openhands"
+    assert get_user_persistence_dir() == fake_home / ".agentrt"
 
 
 def test_get_user_persistence_dir_honors_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path))
     assert get_user_persistence_dir() == tmp_path
 
 
 def test_get_user_persistence_dir_resolved_at_call_time(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     fake_home = tmp_path / "home"
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
-    assert get_user_persistence_dir() == fake_home / ".openhands"
+    assert get_user_persistence_dir() == fake_home / ".agentrt"
 
     override = tmp_path / "persist"
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(override))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(override))
     assert get_user_persistence_dir() == override
 
 
@@ -49,7 +49,7 @@ def test_get_user_persistence_dir_expands_tilde_in_env(
     # expanduser() reads HOME/USERPROFILE, not Path.home's patched classmethod.
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("USERPROFILE", str(fake_home))
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", "~/persist")
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", "~/persist")
     assert get_user_persistence_dir() == fake_home / "persist"
 
 
@@ -62,7 +62,7 @@ def test_get_user_persistence_dir_anchors_relative_env(
     anchor = tmp_path / "anchor"
     anchor.mkdir()
     monkeypatch.setattr(path_module, "_INITIAL_CWD", anchor)
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", "persist")
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", "persist")
     assert get_user_persistence_dir() == anchor / "persist"
 
     elsewhere = tmp_path / "elsewhere"
@@ -74,12 +74,12 @@ def test_get_user_persistence_dir_anchors_relative_env(
 def test_get_user_persistence_dir_default_overrides_home_fallback(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.delenv("OH_PERSISTENCE_DIR", raising=False)
+    monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     fallback = tmp_path / "fallback"
     assert get_user_persistence_dir(fallback) == fallback
 
     override = tmp_path / "persist"
-    monkeypatch.setenv("OH_PERSISTENCE_DIR", str(override))
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(override))
     assert get_user_persistence_dir(fallback) == override
 
 
@@ -111,7 +111,7 @@ def test_is_local_path_source_detects_backslash_path_syntax():
 def test_is_local_path_source_detects_dot_paths():
     assert is_local_path_source(".")
     assert is_local_path_source("..")
-    assert is_local_path_source(".openhands")
+    assert is_local_path_source(".agentrt")
 
 
 def test_is_absolute_path_source_detects_posix_and_windows_paths():

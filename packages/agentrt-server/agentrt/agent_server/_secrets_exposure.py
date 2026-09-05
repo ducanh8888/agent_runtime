@@ -30,7 +30,7 @@ def get_config(request: Request):
 
 
 def get_cipher(request: Request) -> Cipher | None:
-    """Get the configured cipher (``None`` when ``OH_SECRET_KEY`` is unset)."""
+    """Get the configured cipher (``None`` when ``AGENTRT_SECRET_KEY`` is unset)."""
     return get_config(request).cipher
 
 
@@ -116,7 +116,7 @@ def translate_missing_cipher() -> Iterator[None]:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
-                    "Encryption not available: OH_SECRET_KEY is not configured. "
+                    "Encryption not available: AGENTRT_SECRET_KEY is not configured. "
                     "Cannot return encrypted secrets."
                 ),
             )

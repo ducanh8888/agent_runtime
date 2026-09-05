@@ -49,7 +49,7 @@ class TelemetryConsent(StrEnum):
 
 
 class ConsentMode(StrEnum):
-    """How ``OH_TELEMETRY_CONSENT`` interacts with the persisted value."""
+    """How ``AGENTRT_TELEMETRY_CONSENT`` interacts with the persisted value."""
 
     SEED = "seed"
     OVERRIDE = "override"
@@ -67,8 +67,8 @@ LEGACY_MISC_NAMESPACE: Final[str] = "app_preferences"
 LEGACY_CONSENT_KEY: Final[str] = "user_consents_to_analytics"
 
 DO_NOT_TRACK_ENV: Final[str] = "DO_NOT_TRACK"
-CONSENT_ENV: Final[str] = "OH_TELEMETRY_CONSENT"
-CONSENT_MODE_ENV: Final[str] = "OH_TELEMETRY_CONSENT_MODE"
+CONSENT_ENV: Final[str] = "AGENTRT_TELEMETRY_CONSENT"
+CONSENT_MODE_ENV: Final[str] = "AGENTRT_TELEMETRY_CONSENT_MODE"
 
 _TRUTHY: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
 

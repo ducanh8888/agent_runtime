@@ -35,15 +35,15 @@ def temp_persistence_dir():
         # Reset global store singletons before test
         reset_stores()
         # Set environment variable for persistence directory
-        old_val = os.environ.get("OH_PERSISTENCE_DIR")
-        os.environ["OH_PERSISTENCE_DIR"] = tmpdir
+        old_val = os.environ.get("AGENTRT_PERSISTENCE_DIR")
+        os.environ["AGENTRT_PERSISTENCE_DIR"] = tmpdir
         yield Path(tmpdir)
         # Cleanup: reset stores and restore environment
         reset_stores()
         if old_val is not None:
-            os.environ["OH_PERSISTENCE_DIR"] = old_val
+            os.environ["AGENTRT_PERSISTENCE_DIR"] = old_val
         else:
-            os.environ.pop("OH_PERSISTENCE_DIR", None)
+            os.environ.pop("AGENTRT_PERSISTENCE_DIR", None)
 
 
 @pytest.fixture
@@ -1847,7 +1847,7 @@ def test_concurrent_patch_updates_preserve_data(client_with_settings):
 def test_get_settings_encrypted_mode_without_cipher_returns_503(temp_persistence_dir):
     """GET /api/settings with X-Expose-Secrets: encrypted without cipher returns 503.
 
-    When OH_SECRET_KEY is not set, config.cipher is None and requesting
+    When AGENTRT_SECRET_KEY is not set, config.cipher is None and requesting
     encrypted mode should fail fast with a clear error (503 Service Unavailable).
     """
     # Create a config WITHOUT secret_key (cipher will be None)
@@ -1873,7 +1873,7 @@ def test_get_settings_encrypted_mode_without_cipher_returns_503(temp_persistence
     body = response.json()
     # Error message may be in 'detail' or 'exception' depending on error handler config
     error_text = body.get("detail", "") + body.get("exception", "")
-    assert "OH_SECRET_KEY" in error_text
+    assert "AGENTRT_SECRET_KEY" in error_text
 
 
 def test_patch_settings_corrupted_file_returns_409(

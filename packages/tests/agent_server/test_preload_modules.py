@@ -291,7 +291,7 @@ class TestMainCheckBrowserOrdering:
             mock_preload.assert_not_called()
 
     def test_main_sets_internal_server_url(self, monkeypatch):
-        monkeypatch.delenv("OH_INTERNAL_SERVER_URL", raising=False)
+        monkeypatch.delenv("AGENTRT_INTERNAL_SERVER_URL", raising=False)
         # An explicit wildcard bind requires auth to be enabled; set a key so
         # the bind-host guard allows 0.0.0.0 and we still exercise the wildcard
         # → loopback rewrite for the internal server URL.
@@ -310,7 +310,7 @@ class TestMainCheckBrowserOrdering:
                 main()
 
         assert exc_info.value.code == 0
-        assert os.environ["OH_INTERNAL_SERVER_URL"] == "http://127.0.0.1:4321"
+        assert os.environ["AGENTRT_INTERNAL_SERVER_URL"] == "http://127.0.0.1:4321"
 
 
 class TestMainBindHostGuard:
@@ -318,10 +318,10 @@ class TestMainBindHostGuard:
 
     def _no_key_env(self, monkeypatch, tmp_path):
         monkeypatch.delenv("SESSION_API_KEY", raising=False)
-        monkeypatch.delenv("OH_SESSION_API_KEYS_0", raising=False)
+        monkeypatch.delenv("AGENTRT_SESSION_API_KEYS_0", raising=False)
         cfg = tmp_path / "empty_config.json"
         cfg.write_text("{}")
-        monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg))
+        monkeypatch.setenv("AGENTRT_AGENT_SERVER_CONFIG_PATH", str(cfg))
 
     def test_default_host_is_loopback_without_key(self, monkeypatch, tmp_path):
         """With no session API key, the default bind host is 127.0.0.1."""
@@ -462,8 +462,8 @@ def test_auth_enabled_reads_config_keys(monkeypatch, tmp_path):
 
     cfg = tmp_path / "config.json"
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
-    monkeypatch.delenv("OH_SESSION_API_KEYS_0", raising=False)
-    monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg))
+    monkeypatch.delenv("AGENTRT_SESSION_API_KEYS_0", raising=False)
+    monkeypatch.setenv("AGENTRT_AGENT_SERVER_CONFIG_PATH", str(cfg))
 
     cfg.write_text("{}")
     assert _auth_enabled() is False
@@ -477,7 +477,7 @@ def test_auth_enabled_reads_env_key(monkeypatch, tmp_path):
 
     cfg = tmp_path / "config.json"
     cfg.write_text("{}")
-    monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg))
-    monkeypatch.delenv("OH_SESSION_API_KEYS_0", raising=False)
+    monkeypatch.setenv("AGENTRT_AGENT_SERVER_CONFIG_PATH", str(cfg))
+    monkeypatch.delenv("AGENTRT_SESSION_API_KEYS_0", raising=False)
     monkeypatch.setenv("SESSION_API_KEY", "from-env")
     assert _auth_enabled() is True

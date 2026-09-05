@@ -14,7 +14,7 @@ Directory convention (in priority order):
                 security-expert.md  # Agent definition
 
     {project}/
-        .openhands/
+        .agentrt/
             agents/
                 code-reviewer.md
 
@@ -22,7 +22,7 @@ Directory convention (in priority order):
         agents/
             my-global-agent.md
 
-    ~/.openhands/               # User-level, legacy (lowest file priority)
+    ~/.agentrt/               # User-level, legacy (lowest file priority)
         agents/
             my-global-agent.md
 
@@ -99,10 +99,10 @@ def _user_agents_dir(relative: str) -> Path:
     """Map a file-based agents dir onto its user-level base.
 
     ``.openhands/agents`` goes under the persistence dir, which replaces the
-    ``~/.openhands`` base; every other entry stays home-relative.
+    ``~/.agentrt`` base; every other entry stays home-relative.
     """
     base, _, rest = relative.partition("/")
-    if base == ".openhands":
+    if base == ".agentrt":
         return get_user_persistence_dir() / rest
     return Path.home() / relative
 

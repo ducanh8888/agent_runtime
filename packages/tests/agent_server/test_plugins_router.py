@@ -1,7 +1,7 @@
 """Tests for the installed-plugin management router (plugins_router).
 
 Drives the endpoints through a TestClient against a temp install store (the SDK
-default install dir is redirected), so nothing touches the real ~/.openhands.
+default install dir is redirected), so nothing touches the real ~/.agentrt.
 """
 
 import json

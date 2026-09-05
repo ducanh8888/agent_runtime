@@ -115,11 +115,11 @@ class MemorySection(_StaticTextSection):
 * For more information about skills, see: https://docs.openhands.dev/overview/skills"""
 
     # The user-tier bullet is filled in by ``_user_memory_line`` so the resolved
-    # location (honoring OH_PERSISTENCE_DIR, matching load_memory()'s read path)
+    # location (honoring AGENTRT_PERSISTENCE_DIR, matching load_memory()'s read path)
     # is what the agent is told to write to. When the env var is unset the line
     # is the literal ``~/.openhands/memory/`` -- a plain tilde, never the expanded
     # home path -- so the block stays cache-shared and machine-independent, and
-    # the OH_PERSISTENCE_DIR value that does appear is a deployment-constant mount
+    # the AGENTRT_PERSISTENCE_DIR value that does appear is a deployment-constant mount
     # (see test_static_block_has_no_dynamic_content).
     _TWO_TIER_GUIDANCE = """\
 You have persistent memory that survives across sessions, in two tiers:
@@ -141,12 +141,12 @@ Maintenance habits:
         """The user-tier bullet, naming the directory the agent should write to.
 
         Resolved via ``get_user_persistence_dir()`` so the instructed write path
-        matches what ``load_memory`` reads. When ``OH_PERSISTENCE_DIR`` is set the
+        matches what ``load_memory`` reads. When ``AGENTRT_PERSISTENCE_DIR`` is set the
         line carries its concrete ``<base>/memory/`` directory (a deployment mount
         that is constant within any warm-cache window); otherwise the unexpanded
-        ``~/.openhands`` fallback keeps the per-user home path out of the block.
+        ``~/.agentrt`` fallback keeps the per-user home path out of the block.
         """
-        user_memory_dir = get_user_persistence_dir(Path("~/.openhands")) / "memory"
+        user_memory_dir = get_user_persistence_dir(Path("~/.agentrt")) / "memory"
         location = f"`{to_posix_path(user_memory_dir)}/`"
         return (
             f"* User memory: {location} — knowledge and preferences that apply "

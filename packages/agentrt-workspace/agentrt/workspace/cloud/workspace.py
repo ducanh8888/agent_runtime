@@ -78,7 +78,7 @@ class OpenHandsCloudWorkspace(RemoteWorkspace):
         workspace = OpenHandsCloudWorkspace(
             local_agent_server_mode=True,
             cloud_api_url="https://app.all-hands.dev",
-            cloud_api_key=os.environ["OPENHANDS_API_KEY"],
+            cloud_api_key=os.environ["AGENTRT_API_KEY"],
         )
     """
 
@@ -230,7 +230,7 @@ class OpenHandsCloudWorkspace(RemoteWorkspace):
           ``AUTOMATION_CALLBACK_URL``   — completion callback endpoint (optional)
           ``AUTOMATION_RUN_ID``         — run ID for callback payload (optional)
 
-        Falls back to ``OH_SESSION_API_KEYS_0`` (set by the runtime)
+        Falls back to ``AGENTRT_SESSION_API_KEYS_0`` (set by the runtime)
         if ``SESSION_API_KEY`` is not present.
         """
         port = os.environ.get("AGENT_SERVER_PORT", str(self.agent_server_port))
@@ -242,7 +242,7 @@ class OpenHandsCloudWorkspace(RemoteWorkspace):
         # Discover sandbox identity from env vars
         self._sandbox_id = self.sandbox_id or os.environ.get("SANDBOX_ID")
         self._session_api_key = os.environ.get(
-            "SESSION_API_KEY", os.environ.get("OH_SESSION_API_KEYS_0")
+            "SESSION_API_KEY", os.environ.get("AGENTRT_SESSION_API_KEYS_0")
         )
 
         # Automation callback settings from env vars

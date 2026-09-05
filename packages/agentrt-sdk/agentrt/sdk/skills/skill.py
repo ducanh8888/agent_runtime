@@ -1103,8 +1103,8 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
     for root in search_roots:
         project_skills_dirs = [
             root / ".agents" / "skills",
-            root / ".openhands" / "skills",
-            root / ".openhands" / "microagents",  # Legacy support
+            root / ".agentrt" / "skills",
+            root / ".agentrt" / "microagents",  # Legacy support
         ]
 
         _load_and_merge_from_dirs(

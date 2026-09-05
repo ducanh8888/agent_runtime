@@ -11,7 +11,7 @@ def reset_banner_state(monkeypatch):
     import agentrt.sdk.banner as banner_module
 
     # Remove suppress env var if set (e.g., from CI)
-    monkeypatch.delenv("OPENHANDS_SUPPRESS_BANNER", raising=False)
+    monkeypatch.delenv("AGENTRT_SUPPRESS_BANNER", raising=False)
 
     original_state = banner_module._BANNER_PRINTED
     banner_module._BANNER_PRINTED = False
@@ -28,7 +28,7 @@ def test_banner_prints_to_stderr(reset_banner_state, capsys):
     assert "github.com/OpenHands/software-agent-sdk/issues" in captured.err
     assert "openhands.dev/joinslack" in captured.err
     assert "openhands.dev/product/sdk" in captured.err
-    assert "OPENHANDS_SUPPRESS_BANNER=1" in captured.err
+    assert "AGENTRT_SUPPRESS_BANNER=1" in captured.err
     assert captured.out == ""
 
 
@@ -43,8 +43,8 @@ def test_banner_prints_only_once(reset_banner_state, capsys):
 
 
 def test_banner_suppressed_by_env_var(monkeypatch, reset_banner_state, capsys):
-    """Test that OPENHANDS_SUPPRESS_BANNER=1 suppresses the banner."""
-    monkeypatch.setenv("OPENHANDS_SUPPRESS_BANNER", "1")
+    """Test that AGENTRT_SUPPRESS_BANNER=1 suppresses the banner."""
+    monkeypatch.setenv("AGENTRT_SUPPRESS_BANNER", "1")
 
     _print_banner("1.0.0")
 
@@ -53,8 +53,8 @@ def test_banner_suppressed_by_env_var(monkeypatch, reset_banner_state, capsys):
 
 
 def test_banner_suppressed_by_env_var_true(monkeypatch, reset_banner_state, capsys):
-    """Test that OPENHANDS_SUPPRESS_BANNER=true suppresses the banner."""
-    monkeypatch.setenv("OPENHANDS_SUPPRESS_BANNER", "true")
+    """Test that AGENTRT_SUPPRESS_BANNER=true suppresses the banner."""
+    monkeypatch.setenv("AGENTRT_SUPPRESS_BANNER", "true")
 
     _print_banner("1.0.0")
 

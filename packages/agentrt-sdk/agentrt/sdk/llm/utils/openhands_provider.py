@@ -6,9 +6,9 @@ from urllib.parse import urlsplit, urlunsplit
 from agentrt.sdk.llm.utils.verified_models import VERIFIED_MODELS
 
 
-OPENHANDS_PROVIDER_PREFIX: Final[str] = "openhands/"
+AGENTRT_PROVIDER_PREFIX: Final[str] = "openhands/"
 LITELLM_PROXY_PREFIX: Final[str] = "litellm_proxy/"
-OPENHANDS_LLM_PROXY_BASE_URL: Final[str] = "https://llm-proxy.app.all-hands.dev"
+AGENTRT_LLM_PROXY_BASE_URL: Final[str] = "https://llm-proxy.app.all-hands.dev"
 
 
 class LiteLLMCallKwargs(TypedDict):
@@ -25,7 +25,7 @@ _OPENHANDS_PROXY_BASE_URLS: Final[frozenset[str]] = frozenset(
 
 
 def is_openhands_provider_model(model: str | None) -> bool:
-    return bool(model and model.startswith(OPENHANDS_PROVIDER_PREFIX))
+    return bool(model and model.startswith(AGENTRT_PROVIDER_PREFIX))
 
 
 def is_litellm_proxy_model(model: str | None) -> bool:
@@ -50,10 +50,10 @@ def _is_verified_openhands_model_name(model_name: str) -> bool:
 
 def litellm_call_kwargs(model: str, base_url: str | None) -> LiteLLMCallKwargs:
     if is_openhands_provider_model(model):
-        model_name = model.removeprefix(OPENHANDS_PROVIDER_PREFIX)
+        model_name = model.removeprefix(AGENTRT_PROVIDER_PREFIX)
         return {
             "model": f"{LITELLM_PROXY_PREFIX}{model_name}",
-            "api_base": base_url or OPENHANDS_LLM_PROXY_BASE_URL,
+            "api_base": base_url or AGENTRT_LLM_PROXY_BASE_URL,
         }
     return {"model": model, "api_base": base_url}
 
@@ -82,6 +82,6 @@ def canonicalize_openhands_llm_payload(payload: dict[str, Any]) -> dict[str, Any
     if not _is_verified_openhands_model_name(model_name):
         return migrated
 
-    migrated["model"] = f"{OPENHANDS_PROVIDER_PREFIX}{model_name}"
+    migrated["model"] = f"{AGENTRT_PROVIDER_PREFIX}{model_name}"
     migrated.pop("base_url", None)
     return migrated

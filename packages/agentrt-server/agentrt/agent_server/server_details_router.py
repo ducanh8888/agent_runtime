@@ -48,10 +48,10 @@ class ServerInfo(BaseModel):
     )
 
     build_git_sha: str = Field(
-        default_factory=lambda: os.environ.get("OPENHANDS_BUILD_GIT_SHA", "unknown")
+        default_factory=lambda: os.environ.get("AGENTRT_BUILD_GIT_SHA", "unknown")
     )
     build_git_ref: str = Field(
-        default_factory=lambda: os.environ.get("OPENHANDS_BUILD_GIT_REF", "unknown")
+        default_factory=lambda: os.environ.get("AGENTRT_BUILD_GIT_REF", "unknown")
     )
     python_version: str = Field(default_factory=lambda: sys.version)
     usable_tools: list[str] = Field(default_factory=lambda: list_usable_tools())

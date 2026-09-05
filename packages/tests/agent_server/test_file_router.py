@@ -385,7 +385,7 @@ def test_download_trajectory_redacts_llm_and_condenser_secrets(
 ):
     """A downloaded trajectory must never carry LLM/condenser API keys.
 
-    Covers both plaintext keys (no ``OH_SECRET_KEY`` configured) and encrypted
+    Covers both plaintext keys (no ``AGENTRT_SECRET_KEY`` configured) and encrypted
     Fernet blobs (cipher configured) — neither belongs in a shareable archive.
     """
     conversations_path = tmp_path / "conversations"

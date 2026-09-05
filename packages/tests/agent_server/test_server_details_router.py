@@ -88,7 +88,7 @@ def test_server_info_reports_runtime_timeout_cap(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """/server_info should expose the idle-derived terminal timeout cap."""
-    monkeypatch.setenv("OH_RUNTIME_IDLE_TIMEOUT_SECONDS", "1200")
+    monkeypatch.setenv("AGENTRT_RUNTIME_IDLE_TIMEOUT_SECONDS", "1200")
 
     response = client.get("/server_info")
 

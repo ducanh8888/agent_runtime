@@ -72,7 +72,7 @@ class ApptainerWorkspace(RemoteWorkspace):
         description="Port to bind the container to. If None, finds available port.",
     )
     forward_env: list[str] = Field(
-        default_factory=lambda: ["DEBUG", "SESSION_API_KEY", "OH_SESSION_API_KEYS_0"],
+        default_factory=lambda: ["DEBUG", "SESSION_API_KEY", "AGENTRT_SESSION_API_KEYS_0"],
         description=(
             "Environment variables to forward to the container. The session "
             "API key variables are forwarded so the sandboxed agent server can "
@@ -87,7 +87,7 @@ class ApptainerWorkspace(RemoteWorkspace):
         default_factory=list,
         description=(
             "Additional Apptainer bind mount specs to pass as --bind values. "
-            "Use src[:dest[:opts]] syntax. OPENHANDS_APPTAINER_EXTRA_BINDS can "
+            "Use src[:dest[:opts]] syntax. AGENTRT_APPTAINER_EXTRA_BINDS can "
             "also provide comma-separated bind specs."
         ),
     )
@@ -270,7 +270,7 @@ class ApptainerWorkspace(RemoteWorkspace):
             )
         env_extra_binds = [
             item.strip()
-            for item in os.getenv("OPENHANDS_APPTAINER_EXTRA_BINDS", "").split(",")
+            for item in os.getenv("AGENTRT_APPTAINER_EXTRA_BINDS", "").split(",")
             if item.strip()
         ]
         for bind_spec in [*self.extra_bind_mounts, *env_extra_binds]:
