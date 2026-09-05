@@ -38,11 +38,11 @@ recursive-include agentrt-server *.py
 recursive-include agentrt-server py.typed
 
 # Docker build files
-include agentrt-server/openhands/agent_server/docker/Dockerfile
-include agentrt-server/openhands/agent_server/docker/wallpaper.svg
+include agentrt-server/agentrt/agent_server/docker/Dockerfile
+include agentrt-server/agentrt/agent_server/docker/wallpaper.svg
 
 # PyInstaller spec
-include agentrt-server/openhands/agent_server/agent-server.spec
+include agentrt-server/agentrt/agent_server/agent-server.spec
 
 # VSCode extensions
-recursive-include agentrt-server/openhands/agent_server/vscode_extensions *
+recursive-include agentrt-server/agentrt/agent_server/vscode_extensions *

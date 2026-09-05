@@ -161,7 +161,7 @@ def test_agent_server_dockerfile_acp_stage_uses_install_catalog() -> None:
     dockerfile_text = AGENT_SERVER_DOCKERFILE.read_text(encoding="utf-8")
 
     assert (
-        "COPY agentrt-sdk/openhands/sdk/settings/acp_install_catalog.py "
+        "COPY agentrt-sdk/agentrt/sdk/settings/acp_install_catalog.py "
         "/tmp/acp_install_catalog.py" in dockerfile_text
     )
     assert "python3 /tmp/acp_install_catalog.py" in dockerfile_text

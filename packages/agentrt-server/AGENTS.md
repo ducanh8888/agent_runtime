@@ -11,7 +11,7 @@ This package lives in the monorepo root. Typical commands (run from repo root):
 
 ## PyInstaller data files
 
-When adding non-Python files (JS, templates, etc.) loaded at runtime, add them to `agentrt-server/openhands/agent_server/agent-server.spec` using `collect_data_files`.
+When adding non-Python files (JS, templates, etc.) loaded at runtime, add them to `agentrt-server/agentrt/agent_server/agent-server.spec` using `collect_data_files`.
 
 
 ## Stress / scale tests

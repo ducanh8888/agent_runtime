@@ -130,7 +130,7 @@ def _init_git_repo(tmp_path: Path) -> Path:
 
 
 def _write_repo_sdk_model(repo_root: Path, default: str) -> None:
-    pkg = repo_root / "agentrt-sdk" / "openhands" / "sdk"
+    pkg = repo_root / "agentrt-sdk" / "agentrt" / "sdk"
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg.parent / "__init__.py").write_text("")
     (pkg / "__init__.py").write_text(
@@ -1268,7 +1268,7 @@ def test_collect_field_default_changes_since_ref_is_quiet_for_structural_changes
     tmp_path, capsys
 ):
     repo_root = _init_git_repo(tmp_path)
-    pkg = repo_root / "agentrt-sdk" / "openhands" / "sdk"
+    pkg = repo_root / "agentrt-sdk" / "agentrt" / "sdk"
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg.parent / "__init__.py").write_text("")
     (pkg / "__init__.py").write_text(

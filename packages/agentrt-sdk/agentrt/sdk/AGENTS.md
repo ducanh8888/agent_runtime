@@ -4,9 +4,9 @@ See the [project root AGENTS.md](../../../AGENTS.md) for repository-wide policie
 
 ## Package Structure & Module Organization
 
-- This directory (`agentrt-sdk/openhands/sdk/`) contains the core Python SDK under the `agentrt.sdk.*` namespace.
+- This directory (`agentrt-sdk/agentrt/sdk/`) contains the core Python SDK under the `agentrt.sdk.*` namespace.
 - Keep new modules within the closest existing subpackage (e.g., `llm/`, `tool/`, `event/`, `agent/`) and follow local naming patterns.
-- Add/adjust unit tests under `tests/sdk/` mirroring the SDK path (for example, changes to `agentrt-sdk/openhands/sdk/tool/tool.py` should be covered in `tests/sdk/tool/test_tool.py`).
+- Add/adjust unit tests under `tests/sdk/` mirroring the SDK path (for example, changes to `agentrt-sdk/agentrt/sdk/tool/tool.py` should be covered in `tests/sdk/tool/test_tool.py`).
 
 ## Build, Test, and Development Commands
 

@@ -4,11 +4,11 @@ See the [project root AGENTS.md](../../../AGENTS.md) for repository-wide policie
 
 ## Package Structure & Module Organization
 
-- This directory (`agentrt-tools/openhands/tools/`) contains runtime tool implementations under the `agentrt.tools.*` namespace.
+- This directory (`agentrt-tools/agentrt/tools/`) contains runtime tool implementations under the `agentrt.tools.*` namespace.
 - Most tools live in dedicated subpackages (for example `terminal/`, `file_editor/`, `browser_use/`) and typically split:
   - `definition.py`: public schema/metadata/registration
   - `impl.py` / `core.py`: runtime implementation
-- Treat `agentrt-tools/openhands/tools/__init__.py` as the published surface for `agentrt-tools`; `__all__` is considered public API.
+- Treat `agentrt-tools/agentrt/tools/__init__.py` as the published surface for `agentrt-tools`; `__all__` is considered public API.
 
 ## Build, Test, and Development Commands
 

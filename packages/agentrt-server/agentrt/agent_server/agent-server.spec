@@ -70,7 +70,7 @@ PATHEX = [
 ]
 
 # Entry script for the agent server package (namespace: openhands/agent_server/__main__.py)
-ENTRY = str(project_root / "agentrt-server" / "openhands" / "agent_server" / "__main__.py")
+ENTRY = str(project_root / "agentrt-server" / "agentrt" / "agent_server" / "__main__.py")
 
 # Find fakeredis package location to get commands.json with correct path
 def get_fakeredis_data():

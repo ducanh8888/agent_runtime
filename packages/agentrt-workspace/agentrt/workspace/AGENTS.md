@@ -4,9 +4,9 @@ See the [project root AGENTS.md](../../../AGENTS.md) for repository-wide policie
 
 ## Package Structure & Module Organization
 
-- This directory (`agentrt-workspace/openhands/workspace/`) contains workspace implementations under the `agentrt.workspace.*` namespace (Docker, Apptainer, cloud, and API-remote).
+- This directory (`agentrt-workspace/agentrt/workspace/`) contains workspace implementations under the `agentrt.workspace.*` namespace (Docker, Apptainer, cloud, and API-remote).
 - Each backend lives in its own subpackage (e.g. `docker/`, `cloud/`) and typically exposes a `*Workspace` class from `workspace.py`.
-- The published import surface is `agentrt-workspace/openhands/workspace/__init__.py` (`__all__` is treated as public API). Keep imports lightweight so `import agentrt.workspace` does not pull in build-time dependencies.
+- The published import surface is `agentrt-workspace/agentrt/workspace/__init__.py` (`__all__` is treated as public API). Keep imports lightweight so `import agentrt.workspace` does not pull in build-time dependencies.
 - These classes should remain compatible with the SDK workspace interfaces and types (for example `agentrt.sdk.workspace.RemoteWorkspace`, `TargetType`, `PlatformType`).
 
 ## Build, Test, and Development Commands

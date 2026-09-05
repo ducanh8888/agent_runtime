@@ -23,7 +23,7 @@ Relevant implementation files:
 - `schema.py`: Markdown/YAML schema and parsing rules.
 - `registry.py`: registry API + “first registration wins” semantics.
 - `conversation/impl/local_conversation.py`: lazy plugin and file-agent registration.
-- `agentrt-tools/openhands/tools/preset/default.py`: built-in agent discovery and
+- `agentrt-tools/agentrt/tools/preset/default.py`: built-in agent discovery and
   registration.
 
 ## Invariant 1: discovery locations & file rules

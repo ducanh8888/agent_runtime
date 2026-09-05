@@ -8,7 +8,7 @@ image with no Agentrt package installed, so this file is COPYed into that
 stage on its own and executed with the system ``python3`` to render the ACP
 payload's npm-install/wrapper plan (see :func:`render_docker_install_plan` and
 the ``acp-providers`` stage in
-``agentrt-server/openhands/agent_server/docker/Dockerfile``). It must
+``agentrt-server/agentrt/agent_server/docker/Dockerfile``). It must
 keep working when imported (or run as a script) with nothing beyond the
 standard library on ``sys.path``.
 

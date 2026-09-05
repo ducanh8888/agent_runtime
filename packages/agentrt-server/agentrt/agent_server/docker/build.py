@@ -55,7 +55,7 @@ VALID_TARGETS = {
 # here so the empty-context fast path below (`is_base_only`) can stage just
 # this one file instead of pulling in the full SDK source tree.
 _ACP_INSTALL_CATALOG_RELPATH = Path(
-    "agentrt-sdk/openhands/sdk/settings/acp_install_catalog.py"
+    "agentrt-sdk/agentrt/sdk/settings/acp_install_catalog.py"
 )
 # Capability keys accepted by the Dockerfile's INSTALL_CAPABILITIES build arg
 # (the `base-image` stage's VSCode Web, browser, and Docker blocks). Kept
@@ -455,7 +455,7 @@ class BuildOptions(BaseModel):
         default=",".join(DEFAULT_PREINSTALLED_ACP_PROVIDERS),
         description=(
             "Comma-separated ACP provider keys (see ACP_PROVIDERS in "
-            "agentrt-sdk/openhands/sdk/settings/acp_providers.py) to bake "
+            "agentrt-sdk/agentrt/sdk/settings/acp_providers.py) to bake "
             "into the image. Empty string installs none."
         ),
     )
@@ -732,7 +732,7 @@ def _get_dockerfile_path(sdk_project_root: Path) -> Path:
     dockerfile_path = (
         sdk_project_root
         / "agentrt-server"
-        / "openhands"
+        / "agentrt"
         / "agent_server"
         / "docker"
         / "Dockerfile"

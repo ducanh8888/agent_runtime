@@ -21,7 +21,7 @@ shared substrate rather than an API surface enlargement.
 
 The ``Parser`` is constructed per call. ``Language`` is built once at
 import. This mirrors the convention in
-``agentrt-tools/openhands/tools/terminal/utils/command.py``: sharing
+``agentrt-tools/agentrt/tools/terminal/utils/command.py``: sharing
 one parser across calls risks interleaved state, while the language
 object is safely reusable.
 """
