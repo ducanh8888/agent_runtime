@@ -37,11 +37,11 @@ BUILDKIT_STDERR_SAMPLE = "\n".join(
 
 
 def _create_fake_sdist(tmp_path: Path) -> Path:
-    src_root = tmp_path / "openhands-sdk-test"
+    src_root = tmp_path / "agentrt-sdk-test"
     src_root.mkdir()
     (src_root / "README.md").write_text("fixture", encoding="utf-8")
 
-    tarball = tmp_path / "openhands-sdk-test.tar.gz"
+    tarball = tmp_path / "agentrt-sdk-test.tar.gz"
     with tarfile.open(tarball, "w:gz") as tar:
         tar.add(src_root, arcname=src_root.name)
 

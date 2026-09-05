@@ -2,7 +2,7 @@
 
 The injection seam reads the touched path from the action's ``path`` field
 (``local_conversation._touched_rule_path``). These tests use the actual
-``FileEditorAction`` / ``FileEditorObservation`` from openhands-tools so a
+``FileEditorAction`` / ``FileEditorObservation`` from agentrt-tools so a
 rename of that field (which would silently no-op the whole feature) is caught.
 """
 

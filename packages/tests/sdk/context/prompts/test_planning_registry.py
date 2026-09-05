@@ -19,7 +19,7 @@ SNAPSHOT_DIR: Final[Path] = Path(__file__).parent / "snapshots"
 REGEN: Final[bool] = os.environ.get("REGEN_PROMPT_SNAPSHOTS") == "1"
 
 # A representative plan_structure (the template's only substitution). Kept inline so the
-# SDK test does not depend on openhands-tools' format_plan_structure().
+# SDK test does not depend on agentrt-tools' format_plan_structure().
 PLAN_STRUCTURE: Final[str] = (
     "The plan must follow this structure exactly:\n\n"
     "1. OBJECTIVE\n   * Summarize the goal of the plan in one or two sentences.\n\n"

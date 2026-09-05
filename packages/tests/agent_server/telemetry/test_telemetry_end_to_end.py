@@ -152,7 +152,7 @@ async def test_opted_in_session_emits_sanitized_lifecycle_and_error_events():
     for payload in exporter.payloads:
         assert set(payload["properties"]) <= set(m.EXPECTED_PROPERTY_NAMES)
         assert payload["properties"]["schema_version"] == m.TELEMETRY_SCHEMA_VERSION
-        assert payload["properties"]["source"] == "openhands-agent-server"
+        assert payload["properties"]["source"] == "agentrt-server"
 
 
 async def test_opted_in_session_reports_useful_diagnostics():

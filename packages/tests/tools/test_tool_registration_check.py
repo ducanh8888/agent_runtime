@@ -7,7 +7,7 @@ def test_browser_definition_special_case_handles_platform_path_separator():
     repo_root = Path(__file__).parents[2]
     browser_definition = (
         repo_root
-        / "openhands-tools"
+        / "agentrt-tools"
         / "openhands"
         / "tools"
         / "browser_use"

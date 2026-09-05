@@ -28,4 +28,4 @@ def test_raises_with_install_hint_when_sdk_missing(
     monkeypatch.setattr(vertex_preflight, "_vertex_sdk_available", lambda: False)
     with pytest.raises(LLMBadRequestError) as excinfo:
         assert_vertex_sdk_available("vertex_ai")
-    assert "openhands-sdk[vertex]" in str(excinfo.value)
+    assert "agentrt-sdk[vertex]" in str(excinfo.value)

@@ -61,7 +61,7 @@ def test_list_bedrock_models_without_boto3(monkeypatch):
     assert result == []
     mock_logger.warning.assert_called_once_with(
         "boto3 is not installed. To use Bedrock models,"
-        "install with: openhands-sdk[boto3]"
+        "install with: agentrt-sdk[boto3]"
     )
 
 

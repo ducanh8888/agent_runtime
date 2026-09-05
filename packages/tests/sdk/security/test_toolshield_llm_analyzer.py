@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 # guard those tests fail with `ImportError: toolshield is not installed`.
 requires_toolshield = pytest.mark.skipif(
     importlib.util.find_spec("toolshield") is None,
-    reason="requires the [toolshield] extra (`pip install openhands-sdk[toolshield]`)",
+    reason="requires the [toolshield] extra (`pip install agentrt-sdk[toolshield]`)",
 )
 
 

@@ -33,7 +33,7 @@ def test_default_server_tmux_tmpdir_uses_current_pid(tmp_path, monkeypatch):
     )
 
     assert _default_server_tmux_tmpdir() == (
-        tmp_path / f"openhands-agent-server-{os.getpid()}"
+        tmp_path / f"agentrt-server-{os.getpid()}"
     )
 
 
@@ -45,7 +45,7 @@ def test_ensure_server_tmux_tmpdir_defaults_per_process_dir(tmp_path, monkeypatc
     tmux_tmpdir, was_defaulted = _ensure_server_tmux_tmpdir()
 
     assert was_defaulted is True
-    assert tmux_tmpdir == tmp_path / f"openhands-agent-server-{os.getpid()}"
+    assert tmux_tmpdir == tmp_path / f"agentrt-server-{os.getpid()}"
     assert tmux_tmpdir.is_dir()
     assert os.environ["TMUX_TMPDIR"] == str(tmux_tmpdir)
 
@@ -409,7 +409,7 @@ class TestServiceParallelization:
         ):
             mock_app = AsyncMock()
             mock_app.state = SimpleNamespace(config=Config())
-            expected_tmux_tmpdir = tmp_path / f"openhands-agent-server-{os.getpid()}"
+            expected_tmux_tmpdir = tmp_path / f"agentrt-server-{os.getpid()}"
 
             async with api_lifespan(mock_app):
                 assert os.environ["TMUX_TMPDIR"] == str(expected_tmux_tmpdir)

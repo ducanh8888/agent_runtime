@@ -20,8 +20,8 @@ from agentrt.sdk.llm import Message, TextContent
 from agentrt.sdk.testing import TestLLM
 
 
-# The trace's `terminal` tool actions need openhands-tools to deserialize their
-# kinds; skip in isolated openhands-sdk runs where it is not installed.
+# The trace's `terminal` tool actions need agentrt-tools to deserialize their
+# kinds; skip in isolated agentrt-sdk runs where it is not installed.
 pytest.importorskip("agentrt.tools.terminal")
 
 

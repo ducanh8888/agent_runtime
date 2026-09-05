@@ -263,8 +263,8 @@ def test_get_pypi_baseline_version_prefers_current_or_previous(monkeypatch) -> N
         },
     )
 
-    assert get_pypi_baseline_version("openhands-sdk", "1.1.0") == "1.1.0"
-    assert get_pypi_baseline_version("openhands-sdk", "1.2.0") == "1.1.0"
+    assert get_pypi_baseline_version("agentrt-sdk", "1.1.0") == "1.1.0"
+    assert get_pypi_baseline_version("agentrt-sdk", "1.2.0") == "1.1.0"
 
 
 def test_get_pypi_baseline_version_raises_on_metadata_failure(monkeypatch) -> None:
@@ -275,14 +275,14 @@ def test_get_pypi_baseline_version_raises_on_metadata_failure(monkeypatch) -> No
 
     with pytest.raises(
         PersistedSettingsCompatError,
-        match="Failed to fetch PyPI metadata for openhands-sdk",
+        match="Failed to fetch PyPI metadata for agentrt-sdk",
     ):
-        get_pypi_baseline_version("openhands-sdk", "1.2.0")
+        get_pypi_baseline_version("agentrt-sdk", "1.2.0")
 
 
 def test_validate_baseline_rejects_shape_change_without_version_bump() -> None:
     case = BaselinePayloadCase(
-        source="PyPI baseline openhands-sdk==1.0.0",
+        source="PyPI baseline agentrt-sdk==1.0.0",
         key="agent_settings/populated",
         surface_key="agent_settings",
         payload={
@@ -313,7 +313,7 @@ def test_validate_baseline_rejects_shape_change_without_version_bump() -> None:
 
 def test_validate_baseline_rejects_profile_field_removal_without_version_bump() -> None:
     case = BaselinePayloadCase(
-        source="PyPI baseline openhands-sdk==1.0.0",
+        source="PyPI baseline agentrt-sdk==1.0.0",
         key="agent_profile/default",
         surface_key="agent_profile",
         payload={
@@ -338,7 +338,7 @@ def test_validate_baseline_rejects_profile_field_removal_without_version_bump() 
 
 def test_validate_baseline_allows_shape_change_with_version_bump() -> None:
     case = BaselinePayloadCase(
-        source="PyPI baseline openhands-sdk==0.9.0",
+        source="PyPI baseline agentrt-sdk==0.9.0",
         key="agent_settings/populated",
         surface_key="agent_settings",
         payload={
@@ -362,7 +362,7 @@ def test_validate_baseline_allows_shape_change_with_version_bump() -> None:
 
 def test_validate_baseline_allows_additive_same_version_fields() -> None:
     case = BaselinePayloadCase(
-        source="PyPI baseline openhands-sdk==1.0.0",
+        source="PyPI baseline agentrt-sdk==1.0.0",
         key="agent_settings/default",
         surface_key="agent_settings",
         payload={
@@ -426,8 +426,8 @@ def test_generate_baseline_payloads_uses_uv_with_release_cutoff(monkeypatch) -> 
         "--quiet",
         "--exclude-newer",
         "2026-01-02T00:00:00Z",
-        "openhands-sdk==1.2.3",
-        "openhands-agent-server==1.2.3",
+        "agentrt-sdk==1.2.3",
+        "agentrt-server==1.2.3",
     ]
 
 

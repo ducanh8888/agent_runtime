@@ -44,7 +44,7 @@ def _import_roots() -> list[str]:
     repo_root = Path(__file__).resolve().parents[2]
     roots = [
         str(repo_root / pkg)
-        for pkg in ("openhands-sdk", "openhands-tools", "openhands-agent-server")
+        for pkg in ("agentrt-sdk", "agentrt-tools", "agentrt-server")
     ]
     roots += list(sys.path)
     roots.append(site.getusersitepackages())

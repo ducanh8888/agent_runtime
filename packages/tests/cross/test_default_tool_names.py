@@ -1,8 +1,8 @@
-"""Parity between the SDK's canonical default tool names and openhands-tools.
+"""Parity between the SDK's canonical default tool names and agentrt-tools.
 
 ``agentrt.sdk.tool.defaults`` owns the default tool *names* as data (the SDK
-cannot import ``openhands-tools``); the implementations and the historical
-``get_default_tools`` constructor live in ``openhands-tools``. These tests pin
+cannot import ``agentrt-tools``); the implementations and the historical
+``get_default_tools`` constructor live in ``agentrt-tools``. These tests pin
 the two together so a tool rename cannot silently drift the SDK-side defaults
 (the review concern on #3968, resolved per #3978).
 """

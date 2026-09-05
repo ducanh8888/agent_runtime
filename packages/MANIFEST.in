@@ -8,41 +8,41 @@ include pyproject.toml
 include uv.lock
 
 # ==============================================================================
-# openhands-sdk
+# agentrt-sdk
 # ==============================================================================
-include openhands-sdk/pyproject.toml
-recursive-include openhands-sdk *.py
-recursive-include openhands-sdk *.j2
-recursive-include openhands-sdk py.typed
+include agentrt-sdk/pyproject.toml
+recursive-include agentrt-sdk *.py
+recursive-include agentrt-sdk *.j2
+recursive-include agentrt-sdk py.typed
 
 # ==============================================================================
-# openhands-tools
+# agentrt-tools
 # ==============================================================================
-include openhands-tools/pyproject.toml
-recursive-include openhands-tools *.py
-recursive-include openhands-tools *.j2
-recursive-include openhands-tools py.typed
+include agentrt-tools/pyproject.toml
+recursive-include agentrt-tools *.py
+recursive-include agentrt-tools *.j2
+recursive-include agentrt-tools py.typed
 
 # ==============================================================================
-# openhands-workspace
+# agentrt-workspace
 # ==============================================================================
-include openhands-workspace/pyproject.toml
-recursive-include openhands-workspace *.py
-recursive-include openhands-workspace py.typed
+include agentrt-workspace/pyproject.toml
+recursive-include agentrt-workspace *.py
+recursive-include agentrt-workspace py.typed
 
 # ==============================================================================
-# openhands-agent-server
+# agentrt-server
 # ==============================================================================
-include openhands-agent-server/pyproject.toml
-recursive-include openhands-agent-server *.py
-recursive-include openhands-agent-server py.typed
+include agentrt-server/pyproject.toml
+recursive-include agentrt-server *.py
+recursive-include agentrt-server py.typed
 
 # Docker build files
-include openhands-agent-server/openhands/agent_server/docker/Dockerfile
-include openhands-agent-server/openhands/agent_server/docker/wallpaper.svg
+include agentrt-server/openhands/agent_server/docker/Dockerfile
+include agentrt-server/openhands/agent_server/docker/wallpaper.svg
 
 # PyInstaller spec
-include openhands-agent-server/openhands/agent_server/agent-server.spec
+include agentrt-server/openhands/agent_server/agent-server.spec
 
 # VSCode extensions
-recursive-include openhands-agent-server/openhands/agent_server/vscode_extensions *
+recursive-include agentrt-server/openhands/agent_server/vscode_extensions *

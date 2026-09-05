@@ -38,10 +38,10 @@ def _init_repo_with_versions(tmp_path: Path, version: str) -> Path:
     repo_root.mkdir()
 
     for package_dir in (
-        "openhands-sdk",
-        "openhands-tools",
-        "openhands-workspace",
-        "openhands-agent-server",
+        "agentrt-sdk",
+        "agentrt-tools",
+        "agentrt-workspace",
+        "agentrt-server",
     ):
         package_path = repo_root / package_dir
         package_path.mkdir()
@@ -82,8 +82,8 @@ def test_get_release_pr_version_rejects_mismatched_markers():
 def test_validate_version_changes_rejects_agent_server_bump_in_non_release_pr():
     changes = [
         VersionChange(
-            package="openhands-agent-server",
-            path=Path("openhands-agent-server/pyproject.toml"),
+            package="agentrt-server",
+            path=Path("agentrt-server/pyproject.toml"),
             previous_version="1.14.0",
             current_version="1.15.0",
         )
@@ -97,7 +97,7 @@ def test_validate_version_changes_rejects_agent_server_bump_in_non_release_pr():
 
     assert errors == [
         "Package version changes are only allowed in release PRs. Detected "
-        "changes: openhands-agent-server (1.14.0 -> 1.15.0). Use the Prepare "
+        "changes: agentrt-server (1.14.0 -> 1.15.0). Use the Prepare "
         "Release workflow so the PR title is 'Release vX.Y.Z' or the branch is "
         "'rel-X.Y.Z'."
     ]
@@ -106,8 +106,8 @@ def test_validate_version_changes_rejects_agent_server_bump_in_non_release_pr():
 def test_validate_version_changes_accepts_matching_release_version():
     changes = [
         VersionChange(
-            package="openhands-agent-server",
-            path=Path("openhands-agent-server/pyproject.toml"),
+            package="agentrt-server",
+            path=Path("agentrt-server/pyproject.toml"),
             previous_version="1.14.0",
             current_version="1.15.0",
         )
@@ -126,7 +126,7 @@ def test_validate_version_changes_accepts_matching_release_version():
 def test_find_version_changes_detects_agent_server_package(tmp_path: Path):
     repo_root = _init_repo_with_versions(tmp_path, "1.14.0")
     _write_version(
-        repo_root / "openhands-agent-server" / "pyproject.toml",
+        repo_root / "agentrt-server" / "pyproject.toml",
         "1.15.0",
     )
 
@@ -134,8 +134,8 @@ def test_find_version_changes_detects_agent_server_package(tmp_path: Path):
 
     assert changes == [
         VersionChange(
-            package="openhands-agent-server",
-            path=Path("openhands-agent-server/pyproject.toml"),
+            package="agentrt-server",
+            path=Path("agentrt-server/pyproject.toml"),
             previous_version="1.14.0",
             current_version="1.15.0",
         )
@@ -155,6 +155,6 @@ def test_validate_package_version_consistency_rejects_typescript_drift(tmp_path:
     )
 
     assert _prod.validate_package_version_consistency(repo_root) == [
-        "Package versions must match openhands-sdk (1.44.1); "
+        "Package versions must match agentrt-sdk (1.44.1); "
         "mismatched packages: typescript-client (1.39.0)."
     ]

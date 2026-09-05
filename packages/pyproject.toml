@@ -1,6 +1,6 @@
 # UV workspace configuration
 [tool.uv.workspace]
-members = ["openhands-sdk", "openhands-tools", "openhands-workspace", "openhands-agent-server"]
+members = ["agentrt-sdk", "agentrt-tools", "agentrt-workspace", "agentrt-server"]
 
 # Security: Apply workspace-wide dependency guardrails.
 [tool.uv]
@@ -20,10 +20,10 @@ constraint-dependencies = [
 
 # Workspace sources for intra-repo dependencies
 [tool.uv.sources]
-openhands-sdk = { workspace = true }
-openhands-tools = { workspace = true }
-openhands-workspace = { workspace = true }
-openhands-agent-server = { workspace = true }
+agentrt-sdk = { workspace = true }
+agentrt-tools = { workspace = true }
+agentrt-workspace = { workspace = true }
+agentrt-server = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -107,19 +107,19 @@ markers = [
 # This is needed for VSCode to properly resolve imports across multiple packages in the monorepo
 [tool.pyright]
 include = [
-    "openhands-sdk",
-    "openhands-tools",
-    "openhands-workspace",
-    "openhands-agent-server",
+    "agentrt-sdk",
+    "agentrt-tools",
+    "agentrt-workspace",
+    "agentrt-server",
     "examples",
     "tests",
     "scripts"
 ]
 extraPaths = [
-    "openhands-sdk",
-    "openhands-tools",
-    "openhands-workspace",
-    "openhands-agent-server"
+    "agentrt-sdk",
+    "agentrt-tools",
+    "agentrt-workspace",
+    "agentrt-server"
 ]
 venvPath = "."
 venv = ".venv"

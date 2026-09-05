@@ -8,7 +8,7 @@ command text. Regex cannot understand quoting, escaping, or command-name
 indirection -- the bypass classes encoded here exist by construction.
 
 Issue #2721 tracks the migration to ``tree-sitter-bash``. Phase 1 (replacing
-``bashlex`` in ``openhands-tools``) shipped as #3237. Phase 2 will move the
+``bashlex`` in ``agentrt-tools``) shipped as #3237. Phase 2 will move the
 security analyzers onto the same parser substrate, at which point each
 bypass below becomes structurally visible to the detector.
 

@@ -47,8 +47,8 @@ get_pypi_baseline_version = _prod.get_pypi_baseline_version
 # Reusable test config matching the _write_pkg_init helper
 _SDK_CFG = PackageConfig(
     package="agentrt.sdk",
-    distribution="openhands-sdk",
-    source_dir="openhands-sdk",
+    distribution="agentrt-sdk",
+    source_dir="agentrt-sdk",
 )
 
 
@@ -100,13 +100,13 @@ def _mock_pypi_releases(monkeypatch, releases: list[str]) -> None:
 def test_get_pypi_baseline_version_returns_current_when_published(monkeypatch):
     _mock_pypi_releases(monkeypatch, ["1.0.0", "1.1.0"])
 
-    assert get_pypi_baseline_version("openhands-sdk", "1.1.0") == "1.1.0"
+    assert get_pypi_baseline_version("agentrt-sdk", "1.1.0") == "1.1.0"
 
 
 def test_get_pypi_baseline_version_falls_back_to_previous(monkeypatch):
     _mock_pypi_releases(monkeypatch, ["1.0.0", "1.1.0"])
 
-    assert get_pypi_baseline_version("openhands-sdk", "1.2.0") == "1.1.0"
+    assert get_pypi_baseline_version("agentrt-sdk", "1.2.0") == "1.1.0"
 
 
 def _git(repo_root: Path, *args: str) -> str:
@@ -130,7 +130,7 @@ def _init_git_repo(tmp_path: Path) -> Path:
 
 
 def _write_repo_sdk_model(repo_root: Path, default: str) -> None:
-    pkg = repo_root / "openhands-sdk" / "openhands" / "sdk"
+    pkg = repo_root / "agentrt-sdk" / "openhands" / "sdk"
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg.parent / "__init__.py").write_text("")
     (pkg / "__init__.py").write_text(
@@ -533,8 +533,8 @@ def test_workspace_removed_export_is_breaking(tmp_path):
     """Breakage detection works for non-SDK packages (agentrt.workspace)."""
     ws_cfg = PackageConfig(
         package="agentrt.workspace",
-        distribution="openhands-workspace",
-        source_dir="openhands-workspace",
+        distribution="agentrt-workspace",
+        source_dir="agentrt-workspace",
     )
     _write_pkg_init(
         tmp_path, "old", ["Foo", "Bar"], module_parts=("openhands", "workspace")
@@ -569,8 +569,8 @@ def test_accepted_docker_mount_dir_member_removal_detection_is_exact():
 def test_accepted_docker_mount_dir_removal_is_not_breaking(tmp_path, capsys):
     ws_cfg = PackageConfig(
         package="agentrt.workspace",
-        distribution="openhands-workspace",
-        source_dir="openhands-workspace",
+        distribution="agentrt-workspace",
+        source_dir="agentrt-workspace",
     )
     old_pkg = _write_pkg_init(
         tmp_path,
@@ -625,8 +625,8 @@ def test_unresolved_alias_exports_do_not_crash_breakage_detection(tmp_path):
 
     ws_cfg = PackageConfig(
         package="agentrt.workspace",
-        distribution="openhands-workspace",
-        source_dir="openhands-workspace",
+        distribution="agentrt-workspace",
+        source_dir="agentrt-workspace",
     )
 
     def _write_workspace(root: str, *, include_method: bool) -> None:
@@ -1268,7 +1268,7 @@ def test_collect_field_default_changes_since_ref_is_quiet_for_structural_changes
     tmp_path, capsys
 ):
     repo_root = _init_git_repo(tmp_path)
-    pkg = repo_root / "openhands-sdk" / "openhands" / "sdk"
+    pkg = repo_root / "agentrt-sdk" / "openhands" / "sdk"
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg.parent / "__init__.py").write_text("")
     (pkg / "__init__.py").write_text(

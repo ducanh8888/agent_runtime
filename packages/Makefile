@@ -12,7 +12,7 @@ UNDERLINE := \033[4m
 
 # Required uv version
 REQUIRED_UV_VERSION := 0.8.13
-PKGS ?= openhands-sdk openhands-tools openhands-workspace openhands-agent-server
+PKGS ?= agentrt-sdk agentrt-tools agentrt-workspace agentrt-server
 
 .PHONY: build format lint clean help check-uv-version
 
@@ -82,7 +82,7 @@ help:
 
 build-server: check-uv-version
 	@$(ECHO) "$(CYAN)Building agent-server executable...$(RESET)"
-	@uv run pyinstaller openhands-agent-server/openhands/agent_server/agent-server.spec
+	@uv run pyinstaller agentrt-server/openhands/agent_server/agent-server.spec
 	@$(ECHO) "$(GREEN)Build complete! Executable is in dist/agent-server/$(RESET)"
 
 test-server-schema: check-uv-version
