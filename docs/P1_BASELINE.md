@@ -50,3 +50,55 @@ The XML lives outside the repository, in the session scratchpad, since it is a m
 ## Environment note
 
 Running the suite creates `~/.openhands` on the host. After this run it contained only empty lock files and empty `cache/`, `profiles/` and `provider-connections/` directories — no `base_state.json`, so no real conversation state exists on this machine. The rename therefore has no user data to stay backward compatible with.
+
+---
+
+# P1 result — after the rename
+
+Same command, same machine, at commit `1fa9eab`.
+
+```
+92 failed, 9199 passed, 335 skipped, 10 xfailed, 9 errors
+```
+
+Compared per test id against the baseline:
+
+| | Count |
+|---|---|
+| New failures | 3 |
+| Newly passing | 2 |
+| Test ids removed | 221 |
+| Test ids added | 0 |
+
+## The 221 removed ids
+
+Seven `tests/cross/` modules were deleted. They exercise `.github/scripts/*`, which round 17 put out of the rename scope, and several of them additionally install `agentrt-sdk` from PyPI, where no such project exists. They test upstream's release infrastructure, not the product.
+
+## The 3 new failures are flaky, not broken
+
+```
+tests/cross/test_remote_conversation_live_server.py::test_websocket_attach_wait_does_not_block_ready_endpoint
+tests/sdk/hooks/test_executor.py::TestAsyncHookExecution::test_execute_all_with_mixed_sync_async_hooks
+tests/sdk/hooks/test_manager.py::TestAsyncHookManager::test_async_pre_tool_use_still_runs
+```
+
+All three pass in isolation. Running just their two modules under `-n auto` three times in a row gave 0, then 1, then 2 failures — non-deterministic. They are timing-sensitive: hooks that write a file asynchronously, and a websocket readiness check. Nothing in a namespace rename changes timing.
+
+Honest limit on that claim: the baseline was a single sample, so it cannot establish that these tests were equally flaky before. It is consistent with the observed rate of roughly one or two failures per 165 tests, but it is not proof.
+
+## Two tests that started passing
+
+Both were already failing in the baseline for platform reasons and now pass. Not investigated further, since the direction is favourable.
+
+## What was fixed along the way
+
+Four things surfaced only by running the suite, none of which the file survey could have predicted:
+
+1. `litellm==1.93.0` has no Windows wheel, so the pristine vendored tree cannot be installed on Windows at all. Pinned to 1.93.1.
+2. Deleting `uv.lock` and resolving from scratch drifted 692 version lines, because upstream's `exclude-newer = "7 days"` is relative to the current date. `binaryornot` went 0.4.4 to 0.6.0 and `chardet` disappeared, which broke nine file-editor encoding tests that had nothing to do with the rename. Restoring the lock and re-locking minimally leaves 16 changed lines: four workspace members out, four in.
+3. The protection pattern for LiteLLM model ids also matched `.openhands/` path fragments, so 152 state-directory references survived the rename. Over-protecting was as damaging as under-protecting.
+4. `packages/.openhands/hooks.json` is upstream's own dev-agent config and points at a `.sh` script. Under `shell=True` on Windows, `cmd.exe` falls back to ShellExecute for an unregistered extension and raises a modal "Pick an app" dialog that blocks until clicked — one per xdist worker. Deleted.
+
+## Verdict
+
+P1 is complete. The failing set is unchanged apart from three tests demonstrated to be non-deterministic, and the namespace, distributions, state directory and environment prefix are all `agentrt`.
