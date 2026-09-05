@@ -1,4 +1,4 @@
-// Agentrt Settings extension - minimal CommonJS JS
+// OpenHands Settings extension - minimal CommonJS JS
 const vscode = require('vscode');
 
 function activate(context) {

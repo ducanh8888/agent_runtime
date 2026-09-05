@@ -120,7 +120,7 @@ def _prepare_mcp_config(
     mcp_oauth_token_storage: AsyncKeyValue | None = None,
     mcp_oauth_factory: MCPOAuthFactory | None = None,
 ) -> FastMCPConfig:
-    """Validate MCP config and apply explicit Agentrt runtime auth metadata."""
+    """Validate MCP config and apply explicit OpenHands runtime auth metadata."""
     prepared = FastMCPConfig.model_validate(to_fastmcp_mcp_config(mcp_config))
 
     for server_name, server_spec in mcp_config.items():
@@ -321,7 +321,7 @@ def create_mcp_tools(
     mcp_oauth_token_storage: AsyncKeyValue | None = None,
     mcp_oauth_factory: MCPOAuthFactory | None = None,
 ) -> MCPClient:
-    """Create MCP tools from Agentrt-native MCP server settings.
+    """Create MCP tools from OpenHands-native MCP server settings.
 
     Returns an MCPClient with tools populated. Use as a context manager:
 

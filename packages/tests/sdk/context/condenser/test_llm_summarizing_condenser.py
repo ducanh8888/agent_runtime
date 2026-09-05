@@ -67,7 +67,7 @@ def mock_llm() -> LLM:
 
     # Mock the required attributes that the LLM validator reads
     mock_llm.openrouter_site_url = "https://docs.all-hands.dev/"
-    mock_llm.openrouter_app_name = "Agentrt"
+    mock_llm.openrouter_app_name = "OpenHands"
     mock_llm.aws_access_key_id = None
     mock_llm.aws_secret_access_key = None
     mock_llm.aws_session_token = None

@@ -1,4 +1,4 @@
-"""Canonical default tool names for the standard Agentrt agent.
+"""Canonical default tool names for the standard OpenHands agent.
 
 Tool *names* are a wire contract: they are persisted in settings/profile JSON
 and sent by clients, independently of where the implementations live. Keeping
@@ -19,7 +19,7 @@ DEFAULT_EXEC_TOOL_NAMES: tuple[str, ...] = (
     "file_editor",
     "task_tracker",
 )
-"""Names of the standard exec tools every default Agentrt agent gets."""
+"""Names of the standard exec tools every default OpenHands agent gets."""
 
 BROWSER_TOOL_NAME = "browser_tool_set"
 """Name of the browser tool set.
@@ -40,7 +40,7 @@ def default_tool_specs(
     enable_sub_agents: bool = False,
     enable_browser: bool = False,
 ) -> list[Tool]:
-    """Default tool specs for an Agentrt agent whose settings carry no tools.
+    """Default tool specs for an OpenHands agent whose settings carry no tools.
 
     Deterministic: the same inputs yield the same specs on every runtime.
     Browser is off by default (see :data:`BROWSER_TOOL_NAME` — the serving

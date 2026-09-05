@@ -204,7 +204,7 @@ def test_update_nonexistent_plugin(installed_dir: Path) -> None:
 def test_install_from_github_with_repo_path(installed_dir: Path) -> None:
     try:
         info = install_plugin(
-            source="github:Agentrt/agent-sdk",
+            source="github:OpenHands/agent-sdk",
             repo_path=(
                 "examples/05_skills_and_plugins/"
                 "02_loading_plugins/example_plugins/code-quality"
@@ -213,7 +213,7 @@ def test_install_from_github_with_repo_path(installed_dir: Path) -> None:
         )
 
         assert info.name == "code-quality"
-        assert info.source == "github:Agentrt/agent-sdk"
+        assert info.source == "github:OpenHands/agent-sdk"
         assert info.resolved_ref is not None
         assert info.repo_path is not None
 
@@ -230,7 +230,7 @@ def test_install_from_github_with_repo_path(installed_dir: Path) -> None:
 def test_install_from_github_with_ref(installed_dir: Path) -> None:
     try:
         info = install_plugin(
-            source="github:Agentrt/agent-sdk",
+            source="github:OpenHands/agent-sdk",
             ref="main",
             repo_path=(
                 "examples/05_skills_and_plugins/"

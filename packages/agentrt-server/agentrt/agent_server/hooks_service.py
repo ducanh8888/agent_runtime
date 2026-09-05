@@ -1,4 +1,4 @@
-"""Hooks service for Agentrt Agent Server.
+"""Hooks service for OpenHands Agent Server.
 
 This module contains the business logic for loading hooks from the workspace,
 keeping the router clean and focused on HTTP concerns.

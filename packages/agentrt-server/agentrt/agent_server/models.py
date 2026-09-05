@@ -270,7 +270,7 @@ class _ConversationInfoBase(BaseModel):
             'claude-agent-acp\'s ``"default"``); match it against '
             "``available_models`` to get a display label. ``None`` for older "
             "ACP servers that don't surface the field, or while the agent is "
-            "still initializing. Native Agentrt agents leave this ``None`` — "
+            "still initializing. Native OpenHands agents leave this ``None`` — "
             "consumers should read ``agent.llm.model`` for those."
         ),
     )
@@ -284,7 +284,7 @@ class _ConversationInfoBase(BaseModel):
             "verbatim so clients can render a model picker and resolve "
             "``current_model_id`` to a display label themselves — the server "
             "does no name curation. Empty for ACP servers that don't surface "
-            "the (UNSTABLE) capability and for native Agentrt agents. "
+            "the (UNSTABLE) capability and for native OpenHands agents. "
             "Client contract: ``current_model_id`` is NOT guaranteed to be a "
             "member — a forced ``acp_model`` override may name a model absent "
             "from the list — so treat a miss as 'show the raw id'. Some "
@@ -303,7 +303,7 @@ class _ConversationInfoBase(BaseModel):
             "providers; ``False`` for unknown/custom ACP servers because their "
             "generic config writes are not guaranteed live-switch primitives. "
             "``False`` for native "
-            "Agentrt agents, for a known provider that declares no support, "
+            "OpenHands agents, for a known provider that declares no support, "
             "and before the conversation has started a session."
         ),
     )
@@ -368,7 +368,7 @@ def trim_conversation_response_skills(info: ConversationInfo) -> ConversationInf
     model_validator resolves the entire skill catalog (~40 entries in
     stock setups) and persists them inline. Every conversation fetch
     therefore carried ~260 KB of skill content that no known client
-    actually reads from the HTTP response (agent-canvas, Agentrt
+    actually reads from the HTTP response (agent-canvas, OpenHands
     app-server, SDK examples all ignore the field on
     ``ConversationInfo`` — they either use the in-process
     ``LocalConversation`` directly or read other fields like

@@ -503,7 +503,7 @@ def load_and_categorize(
 
     skill = Skill.load(path, skill_base_dir)
 
-    # AgentSkills (SKILL.md directories) are a separate category from Agentrt skills.
+    # AgentSkills (SKILL.md directories) are a separate category from OpenHands skills.
     # They follow the AgentSkills standard and should be handled differently.
     is_skill_md = path.name.lower() == "skill.md"
     if is_skill_md:

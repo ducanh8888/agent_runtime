@@ -78,7 +78,7 @@ HTML_FILE = (
     "        document.getElementById('showButton').addEventListener('click', "
     "function() {\n"
     "            document.getElementById('result').innerText = "
-    "'The answer is Agentrt is all you need!';\n"
+    "'The answer is OpenHands is all you need!';\n"
     "        });\n"
     "    </script>\n"
     "</body>\n"
@@ -136,7 +136,7 @@ class SimpleBrowsingTest(BaseIntegrationTest):
         logger.info(f"Agent final response to analyze: {agent_response[:500]}...")
 
         # Use regex to check if the agent found the correct answer
-        # The expected answer is "The answer is Agentrt is all you need!"
+        # The expected answer is "The answer is OpenHands is all you need!"
         # We'll be flexible with the exact wording but look for key components
         answer_patterns = [
             r"(?i)the answer is openhands is all you need",
@@ -159,7 +159,7 @@ class SimpleBrowsingTest(BaseIntegrationTest):
                 reason=(
                     f"Agent successfully found the answer! "
                     f"Matched pattern: {matched_pattern}. "
-                    f"Response contained the expected content about Agentrt."
+                    f"Response contained the expected content about OpenHands."
                 ),
             )
         else:

@@ -1,4 +1,4 @@
-"""GPT-5 preset configuration for Agentrt agents.
+"""GPT-5 preset configuration for OpenHands agents.
 
 This preset uses ApplyPatchTool for file edits instead of the default
 claude-style FileEditorTool. It mirrors the Gemini preset pattern by

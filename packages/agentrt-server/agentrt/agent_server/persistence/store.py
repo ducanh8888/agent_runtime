@@ -1,6 +1,6 @@
 """File-based storage implementations for settings and secrets.
 
-Following the same pattern as Agentrt app-server's FileSettingsStore
+Following the same pattern as OpenHands app-server's FileSettingsStore
 and FileSecretsStore for consistency.
 
 File locking uses fcntl on Unix and msvcrt on Windows.

@@ -1,5 +1,5 @@
 """
-Local Event router for Agentrt SDK.
+Local Event router for OpenHands SDK.
 """
 
 import logging

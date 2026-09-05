@@ -270,7 +270,7 @@ class Schema(DiscriminatedUnionMixin):
             field_alias = None
             if fname in discriminator_fields:
                 # MCP tool argument names are user-defined JSON object keys. If
-                # one collides with Agentrt' internal discriminator (e.g.
+                # one collides with OpenHands' internal discriminator (e.g.
                 # "kind"), keep the external name as an alias and use a safe
                 # internal field name for Pydantic.
                 field_alias = fname

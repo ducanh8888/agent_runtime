@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from agentrt.sdk.context import AgentContext
     from agentrt.sdk.llm.llm import LLM
     from agentrt.sdk.secret import LookupSecret
-    from agentrt.sdk.settings import AgentrtAgentSettings
+    from agentrt.sdk.settings import OpenHandsAgentSettings
     from agentrt.sdk.settings.model import ACPAgentSettings, LLMAgentSettings
     from agentrt.sdk.skills import Skill
 
@@ -49,10 +49,10 @@ def _is_retryable_error(error: BaseException) -> bool:
 
 
 class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
-    """Remote workspace implementation that connects to an Agentrt agent server.
+    """Remote workspace implementation that connects to an OpenHands agent server.
 
     RemoteWorkspace provides access to a sandboxed environment running on a remote
-    Agentrt agent server. This is the recommended approach for production deployments
+    OpenHands agent server. This is the recommended approach for production deployments
     as it provides better isolation and security.
 
     Supports optional completion callbacks on exit via environment variables:
@@ -256,7 +256,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
 
         Returns:
             Dictionary of tag key-value pairs (empty when no automation env
-            vars are present). Subclasses (e.g., AgentrtCloudWorkspace) can
+            vars are present). Subclasses (e.g., OpenHandsCloudWorkspace) can
             extend this with additional context.
         """
         tags: dict[str, str] = {}
@@ -318,7 +318,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
 
     # ── Settings Methods ──────────────────────────────────────────────────
     # These methods fetch configuration from the agent-server's persisted
-    # settings endpoints. Subclasses like AgentrtCloudWorkspace may override
+    # settings endpoints. Subclasses like OpenHandsCloudWorkspace may override
     # to use alternative endpoints (e.g., Cloud API).
 
     def _fetch_settings_response(
@@ -335,7 +335,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
 
     def _fetch_agent_settings(
         self,
-    ) -> "AgentrtAgentSettings | LLMAgentSettings | ACPAgentSettings":
+    ) -> "OpenHandsAgentSettings | LLMAgentSettings | ACPAgentSettings":
         """Return the validated agent settings from ``GET /api/settings``.
 
         Uses ``X-Expose-Secrets: plaintext`` so secret fields (e.g. LLM
@@ -512,15 +512,15 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
             ...     mcp_config = workspace.get_mcp_config()
             ...     agent = Agent(llm=llm, mcp_config=mcp_config, tools=...)
         """
-        from agentrt.sdk.settings import AgentrtAgentSettings
+        from agentrt.sdk.settings import OpenHandsAgentSettings
 
         if not self.host or self.host == "undefined":
             raise RuntimeError("Workspace host is not set")
 
         settings = self._fetch_agent_settings()
 
-        # Runtime MCP tools only exist on AgentrtAgentSettings, not ACPAgentSettings.
-        if not isinstance(settings, AgentrtAgentSettings):
+        # Runtime MCP tools only exist on OpenHandsAgentSettings, not ACPAgentSettings.
+        if not isinstance(settings, OpenHandsAgentSettings):
             return {}
 
         return settings.mcp_config
@@ -828,7 +828,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
         triggers = skill_data.get("triggers", [])
 
         if triggers:
-            # Determine trigger type based on content (same logic as Agentrt)
+            # Determine trigger type based on content (same logic as OpenHands)
             # Note: Validate elements are strings before calling .startswith()
             if any(isinstance(t, str) and t.startswith("/") for t in triggers):
                 trigger = TaskTrigger(triggers=triggers)
@@ -858,7 +858,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
 
         This method calls the agent-server running inside the sandbox to load
         skills from all configured sources, mirroring how V1 conversations
-        load skills in Agentrt.
+        load skills in OpenHands.
 
         When project_dirs is provided (e.g., directories of cloned repos),
         project skills are loaded from EACH directory separately and merged.
@@ -868,7 +868,7 @@ class RemoteWorkspace(RemoteWorkspaceMixin, BaseWorkspace):
         Args:
             project_dirs: List of directories to load project skills from.
                 If None, uses self.working_dir only.
-            load_public: Load public skills from Agentrt/extensions repo.
+            load_public: Load public skills from OpenHands/extensions repo.
             load_user: Load user skills from ~/.openhands/skills/.
             load_project: Load project skills from workspace directories.
             load_org: Load organization-level skills.

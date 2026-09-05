@@ -35,7 +35,7 @@ tests/fixtures/llm_data/
 ## File Formats
 
 ### Message Files (`*-llm-message.json`)
-Contains conversation messages in Agentrt format:
+Contains conversation messages in OpenHands format:
 ```json
 [
   {

@@ -738,7 +738,7 @@ class TestLoadAllSkills:
 
 
 class TestDiscoverProfileSkills:
-    """Tests for discover_profile_skills (the Agentrt profile launch catalog)."""
+    """Tests for discover_profile_skills (the OpenHands profile launch catalog)."""
 
     _LOAD_ALL = "agentrt.agent_server.skills_service.load_all_skills"
 

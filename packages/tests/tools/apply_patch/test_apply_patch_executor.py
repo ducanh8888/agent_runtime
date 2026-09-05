@@ -22,27 +22,27 @@ def test_create_modify_delete(tmp_ws: Path):
     patch1 = (
         "*** Begin Patch\n"
         "*** Add File: FACTS.txt\n"
-        "+Agentrt SDK integrates tools.\n"
+        "+OpenHands SDK integrates tools.\n"
         "*** End Patch"
     )
     obs1 = run_exec(tmp_ws, patch1)
     assert not obs1.is_error
     fp = tmp_ws / "FACTS.txt"
     assert fp.exists()
-    assert fp.read_text().rstrip("\n") == "Agentrt SDK integrates tools."
+    assert fp.read_text().rstrip("\n") == "OpenHands SDK integrates tools."
 
     # 2) append a second line
     patch2 = (
         "*** Begin Patch\n"
         "*** Update File: FACTS.txt\n"
         "@@\n"
-        " Agentrt SDK integrates tools.\n"
+        " OpenHands SDK integrates tools.\n"
         "+ApplyPatch works.\n"
         "*** End Patch"
     )
     obs2 = run_exec(tmp_ws, patch2)
     assert not obs2.is_error
-    assert fp.read_text() == ("Agentrt SDK integrates tools.\nApplyPatch works.")
+    assert fp.read_text() == ("OpenHands SDK integrates tools.\nApplyPatch works.")
 
     # 3) delete
     patch3 = "*** Begin Patch\n*** Delete File: FACTS.txt\n*** End Patch"

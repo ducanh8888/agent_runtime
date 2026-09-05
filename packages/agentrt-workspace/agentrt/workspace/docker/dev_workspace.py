@@ -14,8 +14,8 @@ class DockerDevWorkspace(DockerWorkspace):
     on-the-fly from a base image. This is useful for development and testing
     scenarios where you need to customize the agent server environment.
 
-    Note: This class requires the Agentrt SDK workspace structure and should
-    only be used within the Agentrt development environment or when you have
+    Note: This class requires the OpenHands SDK workspace structure and should
+    only be used within the OpenHands development environment or when you have
     the full SDK source code available.
 
     For production use cases with pre-built images, use DockerWorkspace instead.

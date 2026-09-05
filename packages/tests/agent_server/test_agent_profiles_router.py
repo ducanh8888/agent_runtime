@@ -25,7 +25,7 @@ from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
 from agentrt.sdk.profiles import (
     ACPAgentProfile,
     AgentProfileStore,
-    AgentrtAgentProfile,
+    OpenHandsAgentProfile,
 )
 
 
@@ -85,7 +85,7 @@ def test_first_list_seeds_default_profile(client):
     assert len(body["profiles"]) == 1
     seeded = body["profiles"][0]
     assert seeded["name"] == "default"
-    assert seeded["agent_kind"] == "agentrt"
+    assert seeded["agent_kind"] == "openhands"
     assert seeded["llm_profile_ref"] == "default"
     assert seeded["mcp_server_refs"] is None
     # The active pointer is set to the seeded profile's id.
@@ -263,7 +263,7 @@ def test_seed_backfills_when_active_profile_is_empty_string(
             {
                 "schema_version": 2,
                 "agent_settings": {
-                    "agent_kind": "agentrt",
+                    "agent_kind": "openhands",
                     "llm": {"model": "gpt-5.5", "base_url": "https://proxy.example/v1"},
                 },
                 "conversation_settings": {},
@@ -319,7 +319,7 @@ def test_llm_has_real_config(llm, expected):
 
 def test_no_seed_when_store_nonempty(client, store):
     """A non-empty store is never seeded."""
-    store.save(AgentrtAgentProfile(name="mine", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="mine", llm_profile_ref="x"))
 
     body = client.get("/api/agent-profiles").json()
     names = {p["name"] for p in body["profiles"]}
@@ -377,7 +377,7 @@ def test_save_creates_new(client, store):
 
 
 def test_save_overwrites_existing(client, store):
-    store.save(AgentrtAgentProfile(name="existing", llm_profile_ref="old"))
+    store.save(OpenHandsAgentProfile(name="existing", llm_profile_ref="old"))
 
     response = client.post(
         "/api/agent-profiles/existing",
@@ -394,7 +394,7 @@ def test_overwrite_preserves_id_and_pointer(client, store):
     A create-style body that omits ``id``/``revision`` must not mint a fresh
     UUID — that would dangle the active pointer keyed on the old id.
     """
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="base"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="base"))
     pid = client.get("/api/agent-profiles/p").json()["profile"]["id"]
     client.post(f"/api/agent-profiles/{pid}/activate")
     assert client.get("/api/settings").json()["active_agent_profile_id"] == pid
@@ -539,7 +539,7 @@ def test_save_invalid_name_returns_422(client):
 
 
 def test_get_returns_profile(client, store):
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="base"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="base"))
 
     response = client.get("/api/agent-profiles/p")
 
@@ -547,7 +547,7 @@ def test_get_returns_profile(client, store):
     body = response.json()
     assert body["name"] == "p"
     assert body["profile"]["llm_profile_ref"] == "base"
-    assert body["profile"]["agent_kind"] == "agentrt"
+    assert body["profile"]["agent_kind"] == "openhands"
 
 
 def test_get_not_found(client):
@@ -560,7 +560,7 @@ def test_get_ignores_expose_secrets_header(client, store):
     """A profile is secret-free at rest (#4017); GET has no ``X-Expose-Secrets``
     behavior — unlike the LLM ``/api/profiles`` router, the header is simply
     ignored rather than changing the response."""
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="base"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="base"))
 
     plain = client.get("/api/agent-profiles/p").json()
     encrypted = client.get(
@@ -576,7 +576,7 @@ def test_get_corrupted_returns_400(client, temp_agent_profiles_dir):
 
 
 def test_delete_removes_existing(client, store):
-    store.save(AgentrtAgentProfile(name="to-delete", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="to-delete", llm_profile_ref="x"))
 
     response = client.delete("/api/agent-profiles/to-delete")
 
@@ -592,7 +592,7 @@ def test_delete_idempotent(client):
 
 def test_delete_clears_active_pointer(client, store):
     """Deleting the active profile clears active_agent_profile_id."""
-    store.save(AgentrtAgentProfile(name="active-one", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="active-one", llm_profile_ref="x"))
     profile_id = client.get("/api/agent-profiles/active-one").json()["profile"]["id"]
     client.post(f"/api/agent-profiles/{profile_id}/activate")
     assert client.get("/api/settings").json()["active_agent_profile_id"] == profile_id
@@ -603,7 +603,7 @@ def test_delete_clears_active_pointer(client, store):
 
 
 def test_rename_success(client, store):
-    store.save(AgentrtAgentProfile(name="old-name", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="old-name", llm_profile_ref="x"))
 
     response = client.post(
         "/api/agent-profiles/old-name/rename",
@@ -626,8 +626,8 @@ def test_rename_not_found(client):
 
 
 def test_rename_conflict(client, store):
-    store.save(AgentrtAgentProfile(name="source", llm_profile_ref="a"))
-    store.save(AgentrtAgentProfile(name="target", llm_profile_ref="b"))
+    store.save(OpenHandsAgentProfile(name="source", llm_profile_ref="a"))
+    store.save(OpenHandsAgentProfile(name="target", llm_profile_ref="b"))
 
     response = client.post(
         "/api/agent-profiles/source/rename",
@@ -638,7 +638,7 @@ def test_rename_conflict(client, store):
 
 
 def test_rename_invalid_new_name_returns_422(client, store):
-    store.save(AgentrtAgentProfile(name="valid", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="valid", llm_profile_ref="x"))
     response = client.post(
         "/api/agent-profiles/valid/rename",
         json={"new_name": "../etc/passwd"},
@@ -648,7 +648,7 @@ def test_rename_invalid_new_name_returns_422(client, store):
 
 def test_rename_preserves_active_pointer(client, store):
     """The id-keyed active pointer survives a rename (id is stable)."""
-    store.save(AgentrtAgentProfile(name="before", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="before", llm_profile_ref="x"))
     profile_id = client.get("/api/agent-profiles/before").json()["profile"]["id"]
     client.post(f"/api/agent-profiles/{profile_id}/activate")
 
@@ -663,7 +663,7 @@ def test_rename_preserves_active_pointer(client, store):
 
 
 def test_activate_sets_pointer_without_mutating_agent_settings(client, store):
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="x"))
     # Persist settings once first so the snapshot is already round-tripped
     # (the default un-persisted vs persisted form differs harmlessly).
     client.patch(
@@ -684,7 +684,7 @@ def test_activate_sets_pointer_without_mutating_agent_settings(client, store):
 
 
 def test_activate_unknown_id_returns_404(client, store):
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="x"))
     unknown = "00000000-dead-beef-0000-000000000000"
     response = client.post(f"/api/agent-profiles/{unknown}/activate")
     assert response.status_code == 404
@@ -694,7 +694,7 @@ def test_activate_settings_corruption_returns_500(client, store, monkeypatch):
     """A corrupted/mis-keyed settings file is a server-side failure (500)."""
     from agentrt.agent_server.persistence.store import FileSettingsStore
 
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="x"))
     profile_id = client.get("/api/agent-profiles/p").json()["profile"]["id"]
 
     def boom(self, *args, **kwargs):
@@ -709,7 +709,7 @@ def test_activate_settings_corruption_returns_500(client, store, monkeypatch):
 
 
 def test_seed_preserves_openhands_fields(client):
-    """The Agentrt seed carries the overlapping launch fields, not just refs."""
+    """The OpenHands seed carries the overlapping launch fields, not just refs."""
     client.patch(
         "/api/settings",
         json={
@@ -813,7 +813,7 @@ def test_save_timeout_returns_503(client, monkeypatch):
 
 def test_save_at_limit_returns_409(client, store, monkeypatch):
     monkeypatch.setattr(router_module, "MAX_AGENT_PROFILES", 1)
-    store.save(AgentrtAgentProfile(name="first", llm_profile_ref="x"))
+    store.save(OpenHandsAgentProfile(name="first", llm_profile_ref="x"))
 
     response = client.post("/api/agent-profiles/second", json={"llm_profile_ref": "y"})
     assert response.status_code == 409
@@ -860,16 +860,16 @@ def llm_store(temp_llm_profiles_dir):
 
 
 def test_materialize_valid_openhands_profile(client_with_llm_store, store, llm_store):
-    """Valid Agentrt profile with a resolved LLM returns 200 + valid=True."""
+    """Valid OpenHands profile with a resolved LLM returns 200 + valid=True."""
     llm_store.save("base-llm", LLM(model="gpt-4o"), include_secrets=True)
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="base-llm"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="base-llm"))
 
     response = client_with_llm_store.post("/api/agent-profiles/p/materialize")
 
     assert response.status_code == 200
     body = response.json()
     assert body["valid"] is True
-    assert body["agent_kind"] == "agentrt"
+    assert body["agent_kind"] == "openhands"
     assert body["llm_profile_ref"] == "base-llm"
     assert body["llm_profile_resolved"] is True
     assert body["errors"] == []
@@ -893,7 +893,7 @@ def test_materialize_valid_acp_profile(client_with_llm_store, store):
 
 def test_materialize_dangling_llm_ref(client_with_llm_store, store):
     """A profile referencing a missing LLM profile returns 200, valid=False."""
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="nonexistent"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="nonexistent"))
 
     response = client_with_llm_store.post("/api/agent-profiles/p/materialize")
 
@@ -910,7 +910,7 @@ def test_materialize_dangling_mcp_ref(client_with_llm_store, store, llm_store):
     """A profile with a missing MCP server ref returns 200, valid=False."""
     llm_store.save("base-llm", LLM(model="gpt-4o"), include_secrets=True)
     store.save(
-        AgentrtAgentProfile(
+        OpenHandsAgentProfile(
             name="p",
             llm_profile_ref="base-llm",
             mcp_server_refs=["missing-server"],
@@ -936,7 +936,7 @@ def test_materialize_reports_disabled_and_resolved_skills(
 
     llm_store.save("base-llm", LLM(model="gpt-4o"), include_secrets=True)
     store.save(
-        AgentrtAgentProfile(
+        OpenHandsAgentProfile(
             name="p",
             llm_profile_ref="base-llm",
             disabled_skills=["beta", "not-in-catalog"],
@@ -979,7 +979,7 @@ def test_materialize_no_raw_secrets_in_resolved_settings(
         LLM(model="gpt-4o", api_key=SecretStr(raw_key)),
         include_secrets=True,
     )
-    store.save(AgentrtAgentProfile(name="p", llm_profile_ref="base-llm"))
+    store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="base-llm"))
 
     response = client_with_llm_store.post("/api/agent-profiles/p/materialize")
 

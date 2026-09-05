@@ -53,7 +53,7 @@ def find_available_tcp_port(
 class DockerWorkspace(RemoteWorkspace):
     """Remote workspace that sets up and manages a Docker container.
 
-    This workspace creates a Docker container running a pre-built Agentrt agent
+    This workspace creates a Docker container running a pre-built OpenHands agent
     server image, waits for it to become healthy, and then provides remote workspace
     operations through the container's HTTP API.
 

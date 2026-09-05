@@ -146,7 +146,7 @@ Documentation lives in **github.com/OpenHands/docs** under the `sdk/` folder. Wh
 1. Clone docs repo next to this repository: `git clone https://github.com/OpenHands/docs.git ../openhands-docs`
 2. Create matching branch in both repos
 3. Update documentation in `openhands-docs/sdk/` folder
-4. **If you are creating a PR to `Agentrt/software-agent-sdk`**, you must also create a corresponding PR to `Agentrt/docs` with documentation updates in the `sdk/` folder
+4. **If you are creating a PR to `OpenHands/software-agent-sdk`**, you must also create a corresponding PR to `OpenHands/docs` with documentation updates in the `sdk/` folder
 5. Cross-reference both PRs in their descriptions
 
 Example:
@@ -171,7 +171,7 @@ LLM_BASE_URL="https://llm-proxy.eval.all-hands.dev" LLM_API_KEY="$LLM_API_KEY" \
   uv run python examples/01_standalone_sdk/<example_name>.py
 ```
 
-The `LLM_API_KEY` environment variable may be available in the Agentrt development environment and works with the All-Hands LLM proxy (`llm-proxy.eval.all-hands.dev` OR `llm-proxy.app.all-hands.dev`). Please consult the human user for the LLM key if it is not found.
+The `LLM_API_KEY` environment variable may be available in the OpenHands development environment and works with the All-Hands LLM proxy (`llm-proxy.eval.all-hands.dev` OR `llm-proxy.app.all-hands.dev`). Please consult the human user for the LLM key if it is not found.
 
 For examples that use the critic model (e.g., `34_critic_example.py`), the critic is auto-configured when using the All-Hands LLM proxy - no additional setup needed.
 

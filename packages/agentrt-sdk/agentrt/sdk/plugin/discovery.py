@@ -1,4 +1,4 @@
-"""Discovery of locally-available plugins for Agentrt SDK.
+"""Discovery of locally-available plugins for OpenHands SDK.
 
 Mirrors the user/project skill discovery in ``skills/skill.py`` but operates on
 ``Plugin`` objects (loaded via ``Plugin.load``) instead of skills.

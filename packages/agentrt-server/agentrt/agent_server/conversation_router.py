@@ -1,4 +1,4 @@
-"""Conversation router for Agentrt SDK."""
+"""Conversation router for OpenHands SDK."""
 
 from typing import Annotated
 from uuid import UUID

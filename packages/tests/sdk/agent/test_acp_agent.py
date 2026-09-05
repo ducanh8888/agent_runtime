@@ -478,7 +478,7 @@ class TestACPAgentValidation:
             mcp_config=coerce_mcp_config({"test": {"command": "echo"}}),
         )
         # Should not raise; ACP receives MCP servers at session creation instead
-        # of Agentrt creating in-process runtime MCP tools.
+        # of OpenHands creating in-process runtime MCP tools.
         self._init_with_patches(agent, tmp_path)
         assert agent.supports_openhands_tools is False
 
@@ -2700,7 +2700,7 @@ class TestACPAgentAstep:
 
         The ACP server may finish the prompt while ``session/cancel`` is being
         delivered. In that case the remote session has accepted the assistant
-        turn, so Agentrt must finalize the same turn locally instead of
+        turn, so OpenHands must finalize the same turn locally instead of
         discarding the response and later resuming from diverged session history.
         The original cancellation still propagates so explicit user stop intent
         wins at the conversation layer.
@@ -4115,7 +4115,7 @@ class TestACPToolCallAccumulation:
 class TestACPToolCallLiveEmission:
     """Tests that ``session_update`` fires ``on_event`` live (not batched).
 
-    Closes Agentrt/software-agent-sdk#2866: tool-call events must reach
+    Closes OpenHands/software-agent-sdk#2866: tool-call events must reach
     ``on_event`` as each ACP notification arrives, so the event stream
     reflects real subprocess progress instead of a single end-of-turn burst.
     """
@@ -7532,7 +7532,7 @@ class TestACPSecretRegistryEnvInjection:
 
     Secrets registered via ``Conversation.update_secrets()`` — or the
     equivalent ``payload.secrets`` channel that app-server callers
-    (agent-canvas, the Agentrt cloud app server) use — must land in the
+    (agent-canvas, the OpenHands cloud app server) use — must land in the
     ACP subprocess env. ``agent_context.secrets`` are seeded into the same
     registry at ``LocalConversation.__init__`` (below ``request.secrets``), so
     the registry is the single channel ``_start_acp_server`` injects from.
@@ -7619,7 +7619,7 @@ class TestACPSecretRegistryEnvInjection:
     def test_registry_string_secret_injected_into_subprocess_env(self, tmp_path):
         """A string secret in secret_registry lands in the subprocess env.
 
-        The canvas / Agentrt ``payload.secrets`` channel ends up here
+        The canvas / OpenHands ``payload.secrets`` channel ends up here
         via ``Conversation.update_secrets()`` → ``SecretRegistry.update_secrets``;
         without this injection the secret is invisible to the ACP CLI.
         """
@@ -7997,7 +7997,7 @@ class TestACPAgentCurrentModelIdProperty:
 
     ``AgentBase`` is frozen so the value can't live on the agent as a
     regular Pydantic field; it doesn't round-trip through ``model_dump``
-    either.  Cross-process consumers (the Agentrt app_server) should
+    either.  Cross-process consumers (the OpenHands app_server) should
     read it off ``ConversationInfo`` instead — the agent-server lifts the
     value off the agent into the API response.
     """

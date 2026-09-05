@@ -91,7 +91,7 @@ def test_tags_in_pydantic_model():
 
 def test_validate_observability_metadata_valid():
     metadata = {
-        "repo_name": "Agentrt/software-agent-sdk",
+        "repo_name": "OpenHands/software-agent-sdk",
         "private": True,
         "retry_count": 3,
         "cost": 1.5,
@@ -125,8 +125,8 @@ def test_observability_metadata_in_pydantic_model():
     class TestModel(BaseModel):
         observability_metadata: ConversationObservabilityMetadata = {}
 
-    m = TestModel(observability_metadata={"repo_name": "Agentrt/Agentrt"})
-    assert m.observability_metadata == {"repo_name": "Agentrt/Agentrt"}
+    m = TestModel(observability_metadata={"repo_name": "OpenHands/OpenHands"})
+    assert m.observability_metadata == {"repo_name": "OpenHands/OpenHands"}
 
     m = TestModel.model_validate({"observability_metadata": None})
     assert m.observability_metadata == {}

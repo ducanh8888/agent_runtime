@@ -666,7 +666,7 @@ def mock_repo_with_marketplace(tmp_path):
     # Create default marketplace with only git and docker
     marketplace = {
         "name": "default",
-        "owner": {"name": "Agentrt", "email": "test@test.com"},
+        "owner": {"name": "OpenHands", "email": "test@test.com"},
         "metadata": {"description": "Test marketplace", "version": "1.0.0"},
         "plugins": [
             {"name": "git", "source": "./git", "description": "Git skill"},
@@ -677,7 +677,7 @@ def mock_repo_with_marketplace(tmp_path):
 
     custom_marketplace = {
         "name": "custom",
-        "owner": {"name": "Agentrt", "email": "test@test.com"},
+        "owner": {"name": "OpenHands", "email": "test@test.com"},
         "metadata": {"description": "Custom test marketplace", "version": "1.0.0"},
         "plugins": [
             {"name": "git", "source": "./git", "description": "Git skill"},

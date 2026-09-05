@@ -241,7 +241,7 @@ def _get_chromium_error_message() -> str:
 
 
 class BrowserToolExecutor(ToolExecutor[BrowserAction, BrowserObservation]):
-    """Executor that wraps browser-use MCP server for Agentrt integration."""
+    """Executor that wraps browser-use MCP server for OpenHands integration."""
 
     _server: CustomBrowserUseServer
     _config: dict[str, Any]

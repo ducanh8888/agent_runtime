@@ -410,7 +410,7 @@ def _refresh_access_token_sync(refresh_token: str) -> dict[str, Any]:
 _HTML_SUCCESS = """<!DOCTYPE html>
 <html>
 <head>
-  <title>Agentrt - Authorization Successful</title>
+  <title>OpenHands - Authorization Successful</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex;
            justify-content: center; align-items: center; height: 100vh;
@@ -423,7 +423,7 @@ _HTML_SUCCESS = """<!DOCTYPE html>
 <body>
   <div class="container">
     <h1>Authorization Successful</h1>
-    <p>You can close this window and return to Agentrt.</p>
+    <p>You can close this window and return to OpenHands.</p>
   </div>
   <script>setTimeout(() => window.close(), 2000);</script>
 </body>
@@ -432,7 +432,7 @@ _HTML_SUCCESS = """<!DOCTYPE html>
 _HTML_ERROR = """<!DOCTYPE html>
 <html>
 <head>
-  <title>Agentrt - Authorization Failed</title>
+  <title>OpenHands - Authorization Failed</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex;
            justify-content: center; align-items: center; height: 100vh;
@@ -975,7 +975,7 @@ def subscription_login(
 # =========================================================================
 
 DEFAULT_SYSTEM_MESSAGE = (
-    "You are Agentrt agent, a helpful AI assistant that can interact "
+    "You are OpenHands agent, a helpful AI assistant that can interact "
     "with a computer to solve tasks."
 )
 

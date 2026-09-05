@@ -15,7 +15,7 @@ from agentrt.agent_server.persistence import reset_stores
 from agentrt.sdk.llm import LLM
 from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
 from agentrt.sdk.llm.provider_connection_store import ProviderConnectionStore
-from agentrt.sdk.profiles import AgentProfileStore, AgentrtAgentProfile
+from agentrt.sdk.profiles import AgentProfileStore, OpenHandsAgentProfile
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ def agent_store(temp_agent_profiles_dir):
 def test_delete_referenced_llm_profile_returns_409(client, store, agent_store):
     """Deleting an LLM profile cited by an AgentProfile returns 409 w/ referrers."""
     store.save("base-llm", LLM(model="gpt-4o"))
-    agent_store.save(AgentrtAgentProfile(name="agent-a", llm_profile_ref="base-llm"))
+    agent_store.save(OpenHandsAgentProfile(name="agent-a", llm_profile_ref="base-llm"))
 
     response = client.delete("/api/profiles/base-llm")
 
@@ -136,7 +136,7 @@ def test_delete_referenced_llm_profile_returns_409(client, store, agent_store):
 def test_delete_unreferenced_llm_profile_succeeds(client, store, agent_store):
     """An LLM profile no AgentProfile cites deletes normally."""
     store.save("lonely", LLM(model="gpt-4o"))
-    agent_store.save(AgentrtAgentProfile(name="agent-a", llm_profile_ref="other-llm"))
+    agent_store.save(OpenHandsAgentProfile(name="agent-a", llm_profile_ref="other-llm"))
 
     response = client.delete("/api/profiles/lonely")
 
@@ -148,7 +148,7 @@ def test_delete_unreferenced_llm_profile_succeeds(client, store, agent_store):
 def test_rename_llm_profile_cascades_to_agent_refs(client, store, agent_store):
     """Renaming an LLM profile repoints citing AgentProfile.llm_profile_ref."""
     store.save("old-llm", LLM(model="gpt-4o"))
-    agent_store.save(AgentrtAgentProfile(name="agent-a", llm_profile_ref="old-llm"))
+    agent_store.save(OpenHandsAgentProfile(name="agent-a", llm_profile_ref="old-llm"))
 
     response = client.post("/api/profiles/old-llm/rename", json={"new_name": "new-llm"})
 

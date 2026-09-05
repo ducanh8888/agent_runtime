@@ -252,7 +252,7 @@ REQUIRES_INLINE_IMAGE_DATA_MODELS: tuple[str, ...] = (
     # > base64-encoded image content and images/videos uploaded via file ID
     "moonshot/kimi-k2.6",
     "moonshot/kimi-k3",
-    # The Agentrt K3 route uses the same Moonshot image-input contract.
+    # The OpenHands K3 route uses the same Moonshot image-input contract.
     "openhands/kimi-k3",
 )
 

@@ -1,4 +1,4 @@
-"""Tests for SOCKS proxy support (Agentrt/Agentrt-CLI#632).
+"""Tests for SOCKS proxy support (OpenHands/OpenHands-CLI#632).
 
 When a user has SOCKS proxy env vars set (e.g. all_proxy=socks5://...),
 httpx needs the socksio package to handle SOCKS proxy connections.

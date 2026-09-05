@@ -41,7 +41,7 @@ def _write_marketplace(repo_dir: Path, plugins: list[dict]) -> Path:
 def _write_manifest_marketplace(repo_dir: Path, plugins: list[dict]) -> Path:
     """Write the catalog as a ``.plugin/marketplace.json`` manifest.
 
-    Mirrors the real Agentrt/extensions layout, where the catalog is
+    Mirrors the real OpenHands/extensions layout, where the catalog is
     discovered via ``Marketplace.load`` (``.plugin/marketplace.json``) and
     ``marketplaces/default.json`` is absent.
     """
@@ -65,7 +65,7 @@ def _make_installable_plugin(plugin_dir: Path, name: str) -> Path:
 
 def test_catalog_returns_only_true_plugins(tmp_path: Path, monkeypatch):
     # Arrange: a marketplace mixing a true plugin (./plugins/) and a skill
-    # (./skills/), as the real Agentrt marketplace does.
+    # (./skills/), as the real OpenHands marketplace does.
     repo = _write_marketplace(
         tmp_path / "ext",
         [

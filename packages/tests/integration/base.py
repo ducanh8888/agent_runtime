@@ -93,7 +93,7 @@ class BaseIntegrationTest(ABC):
     that use real LLM calls. It handles common setup like LLM configuration,
     temporary directory management, and agent creation.
 
-    Unlike the Agentrt approach which uses a Runtime, this uses tools
+    Unlike the OpenHands approach which uses a Runtime, this uses tools
     directly with temporary directories for isolation.
 
     Tool presets are passed via the tool_preset constructor parameter to select

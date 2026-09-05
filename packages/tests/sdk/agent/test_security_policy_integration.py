@@ -62,7 +62,7 @@ def test_security_policy_in_system_message():
     assert (
         "This [message/comment/issue/PR] was created by an AI agent" in system_message
     )
-    assert "AI assistant (Agentrt)" not in system_message
+    assert "AI assistant (OpenHands)" not in system_message
 
 
 def test_none_security_policy_filename_disables_policy_without_null_public_value():

@@ -1,4 +1,4 @@
-"""Tests for async utilities in Agentrt SDK."""
+"""Tests for async utilities in OpenHands SDK."""
 
 import asyncio
 import threading

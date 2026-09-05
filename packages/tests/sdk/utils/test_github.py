@@ -4,18 +4,18 @@ from agentrt.sdk.utils.github import ZWJ, sanitize_openhands_mentions
 
 
 def test_sanitize_basic_mention():
-    """Test basic @Agentrt mention is sanitized."""
-    text = "Thanks @Agentrt for the help!"
-    expected = f"Thanks @{ZWJ}Agentrt for the help!"
+    """Test basic @OpenHands mention is sanitized."""
+    text = "Thanks @OpenHands for the help!"
+    expected = f"Thanks @{ZWJ}OpenHands for the help!"
     assert sanitize_openhands_mentions(text) == expected
 
 
 def test_sanitize_case_insensitive():
     """Test that mentions are sanitized regardless of case."""
     test_cases = [
-        ("Check @Agentrt here", f"Check @{ZWJ}Agentrt here"),
+        ("Check @OpenHands here", f"Check @{ZWJ}OpenHands here"),
         ("Check @openhands here", f"Check @{ZWJ}openhands here"),
-        ("Check @AGENTRT here", f"Check @{ZWJ}AGENTRT here"),
+        ("Check @OPENHANDS here", f"Check @{ZWJ}OPENHANDS here"),
         ("Check @oPeNhAnDs here", f"Check @{ZWJ}oPeNhAnDs here"),
     ]
     for input_text, expected in test_cases:
@@ -24,22 +24,22 @@ def test_sanitize_case_insensitive():
 
 def test_sanitize_multiple_mentions():
     """Test multiple mentions in the same text."""
-    text = "Both @Agentrt and @openhands should be sanitized"
-    expected = f"Both @{ZWJ}Agentrt and @{ZWJ}openhands should be sanitized"
+    text = "Both @OpenHands and @openhands should be sanitized"
+    expected = f"Both @{ZWJ}OpenHands and @{ZWJ}openhands should be sanitized"
     assert sanitize_openhands_mentions(text) == expected
 
 
 def test_sanitize_with_punctuation():
     """Test mentions followed by punctuation."""
     test_cases = [
-        ("Thanks @Agentrt!", f"Thanks @{ZWJ}Agentrt!"),
-        ("Hello @Agentrt.", f"Hello @{ZWJ}Agentrt."),
-        ("See @Agentrt,", f"See @{ZWJ}Agentrt,"),
-        ("By @Agentrt:", f"By @{ZWJ}Agentrt:"),
-        ("From @Agentrt;", f"From @{ZWJ}Agentrt;"),
-        ("Hi @Agentrt?", f"Hi @{ZWJ}Agentrt?"),
-        ("Use @Agentrt)", f"Use @{ZWJ}Agentrt)"),
-        ("Try (@Agentrt)", f"Try (@{ZWJ}Agentrt)"),
+        ("Thanks @OpenHands!", f"Thanks @{ZWJ}OpenHands!"),
+        ("Hello @OpenHands.", f"Hello @{ZWJ}OpenHands."),
+        ("See @OpenHands,", f"See @{ZWJ}OpenHands,"),
+        ("By @OpenHands:", f"By @{ZWJ}OpenHands:"),
+        ("From @OpenHands;", f"From @{ZWJ}OpenHands;"),
+        ("Hi @OpenHands?", f"Hi @{ZWJ}OpenHands?"),
+        ("Use @OpenHands)", f"Use @{ZWJ}OpenHands)"),
+        ("Try (@OpenHands)", f"Try (@{ZWJ}OpenHands)"),
     ]
     for input_text, expected in test_cases:
         assert sanitize_openhands_mentions(input_text) == expected
@@ -51,7 +51,7 @@ def test_no_sanitize_partial_words():
         "OpenHandsTeam",
         "MyOpenHands",
         "OpenHandsBot",
-        "#Agentrt",
+        "#OpenHands",
     ]
     for text in test_cases:
         # Partial words without @ should remain unchanged
@@ -66,7 +66,7 @@ def test_no_op_cases():
         "Just some text",
         "@GitHub",
         "@Other",
-        "Agentrt without @",
+        "OpenHands without @",
     ]
     for text in test_cases:
         assert sanitize_openhands_mentions(text) == text
@@ -75,9 +75,9 @@ def test_no_op_cases():
 def test_sanitize_at_line_boundaries():
     """Test mentions at the start and end of lines."""
     test_cases = [
-        ("@Agentrt at start", f"@{ZWJ}Agentrt at start"),
-        ("at end @Agentrt", f"at end @{ZWJ}Agentrt"),
-        ("@Agentrt", f"@{ZWJ}Agentrt"),
+        ("@OpenHands at start", f"@{ZWJ}OpenHands at start"),
+        ("at end @OpenHands", f"at end @{ZWJ}OpenHands"),
+        ("@OpenHands", f"@{ZWJ}OpenHands"),
     ]
     for input_text, expected in test_cases:
         assert sanitize_openhands_mentions(input_text) == expected
@@ -85,30 +85,30 @@ def test_sanitize_at_line_boundaries():
 
 def test_sanitize_multiline_text():
     """Test sanitization in multiline text."""
-    text = """Hello @Agentrt!
+    text = """Hello @OpenHands!
 
 This is a test with @openhands mentioned.
 
-Thanks @AGENTRT for everything!"""
+Thanks @OPENHANDS for everything!"""
 
-    expected = f"""Hello @{ZWJ}Agentrt!
+    expected = f"""Hello @{ZWJ}OpenHands!
 
 This is a test with @{ZWJ}openhands mentioned.
 
-Thanks @{ZWJ}AGENTRT for everything!"""
+Thanks @{ZWJ}OPENHANDS for everything!"""
 
     assert sanitize_openhands_mentions(text) == expected
 
 
 def test_sanitize_with_urls():
-    """Test that URLs containing Agentrt are handled correctly."""
+    """Test that URLs containing OpenHands are handled correctly."""
     test_cases = [
         # URL should not be sanitized
         ("Visit https://github.com/OpenHands", "Visit https://github.com/OpenHands"),
         # But mention should be sanitized
         (
-            "See @Agentrt at https://github.com/OpenHands",
-            f"See @{ZWJ}Agentrt at https://github.com/OpenHands",
+            "See @OpenHands at https://github.com/OpenHands",
+            f"See @{ZWJ}OpenHands at https://github.com/OpenHands",
         ),
     ]
     for input_text, expected in test_cases:
@@ -117,8 +117,8 @@ def test_sanitize_with_urls():
 
 def test_sanitize_preserves_whitespace():
     """Test that whitespace is preserved correctly."""
-    text = "  @Agentrt  \n  @openhands  "
-    expected = f"  @{ZWJ}Agentrt  \n  @{ZWJ}openhands  "
+    text = "  @OpenHands  \n  @openhands  "
+    expected = f"  @{ZWJ}OpenHands  \n  @{ZWJ}openhands  "
     assert sanitize_openhands_mentions(text) == expected
 
 

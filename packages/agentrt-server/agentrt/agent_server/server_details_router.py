@@ -34,7 +34,7 @@ class HealthStatus(BaseModel):
 class ServerInfo(BaseModel):
     uptime: float
     idle_time: float
-    title: str = "Agentrt Agent Server"
+    title: str = "OpenHands Agent Server"
 
     version: str = Field(
         default_factory=lambda: _package_version("agentrt-server")

@@ -147,9 +147,9 @@ def test_base_conversation_passes_observability_metadata_and_tag_attributes():
         patch("agentrt.sdk.conversation.base.start_root_span") as mock_start_span,
     ):
         metadata: dict[str, TraceMetadataValue] = {
-            "repo_name": "Agentrt/software-agent-sdk"
+            "repo_name": "OpenHands/software-agent-sdk"
         }
-        span_tags = ["repo:Agentrt/software-agent-sdk"]
+        span_tags = ["repo:OpenHands/software-agent-sdk"]
         conversation_tags = {"automationid": "auto-1", "automationrunid": "run-1"}
 
         conversation._start_observability_span(

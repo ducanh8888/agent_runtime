@@ -654,7 +654,7 @@ def _normalize_server_for_fastmcp(
     server: Mapping[str, Any],
 ) -> dict[str, Any]:
     server = copy.deepcopy(dict(server))
-    # ``enabled`` is an Agentrt-side flag; FastMCP server models are
+    # ``enabled`` is an OpenHands-side flag; FastMCP server models are
     # ``extra="allow"``, so leaving it in would be silently absorbed rather
     # than rejected. Callers are expected to have dropped disabled servers
     # already (see ``enabled_mcp_servers``) -- this only keeps the key from

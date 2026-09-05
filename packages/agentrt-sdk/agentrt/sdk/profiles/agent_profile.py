@@ -79,7 +79,7 @@ class AgentProfileBase(BaseModel):
 
     ``extra="forbid"`` is what gives the union its cross-variant safety: a
     payload tagged ``agent_kind="acp"`` that also carries ``llm_profile_ref``
-    (or an Agentrt payload carrying ``acp_*``) is rejected rather than
+    (or an OpenHands payload carrying ``acp_*``) is rejected rather than
     silently dropping the foreign field into a mongrel profile.
     """
 
@@ -107,7 +107,7 @@ class AgentProfileBase(BaseModel):
     # user-configured and persisted, so this reference is safe: every name that
     # can be referenced is present in ``mcp_config``. Skills are NOT modeled this
     # way — they are discovered from many lazy/incomplete sources, so a profile
-    # selects them by *exclusion* (``AgentrtAgentProfile.disabled_skills``, a
+    # selects them by *exclusion* (``OpenHandsAgentProfile.disabled_skills``, a
     # deny-list) rather than by an allow-list of names that can dangle. See the
     # #4017 architecture discussion.
     mcp_server_refs: list[str] | None = Field(
@@ -119,21 +119,21 @@ class AgentProfileBase(BaseModel):
     )
 
 
-class AgentrtAgentProfile(AgentProfileBase):
-    """``agent_kind="agentrt"`` profile — references an LLM profile by name.
+class OpenHandsAgentProfile(AgentProfileBase):
+    """``agent_kind="openhands"`` profile — references an LLM profile by name.
 
     Mirrors the configurable surface of
-    :class:`~agentrt.sdk.settings.model.AgentrtAgentSettings`, except the
+    :class:`~agentrt.sdk.settings.model.OpenHandsAgentSettings`, except the
     concrete ``llm`` is replaced by :attr:`llm_profile_ref` (resolved against
     the LLM profile store) and ``mcp_config`` by the inherited
     :attr:`~AgentProfileBase.mcp_server_refs`.
     """
 
-    agent_kind: Literal["agentrt"] = Field(
+    agent_kind: Literal["openhands"] = Field(
         default="openhands",
         description=(
             "Discriminator for the ``AgentProfile`` union. ``'openhands'`` "
-            "selects the standard built-in Agentrt agent."
+            "selects the standard built-in OpenHands agent."
         ),
     )
     llm_profile_ref: str = Field(
@@ -298,7 +298,7 @@ def _agent_profile_discriminator(value: Any) -> str:
     """Discriminator for :data:`AgentProfile` — defaults to ``'openhands'``.
 
     A payload without an explicit ``agent_kind`` is treated as the standard
-    Agentrt variant, mirroring
+    OpenHands variant, mirroring
     :func:`~agentrt.sdk.settings.model._agent_settings_discriminator`.
     """
     if isinstance(value, BaseModel):
@@ -309,7 +309,7 @@ def _agent_profile_discriminator(value: Any) -> str:
 
 
 AgentProfile = Annotated[
-    Annotated[AgentrtAgentProfile, Tag("openhands")]
+    Annotated[OpenHandsAgentProfile, Tag("openhands")]
     | Annotated[ACPAgentProfile, Tag("acp")],
     Discriminator(_agent_profile_discriminator),
 ]
@@ -331,7 +331,7 @@ def _migrate_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
     # be opened and saved as its canonical v2 representation.
     migrated.pop("skills", None)
     if (
-        migrated.get("agent_kind", "openhands") == "agentrt"
+        migrated.get("agent_kind", "openhands") == "openhands"
         and migrated.get("name") == "default"
         and migrated.get("revision", 0) == 0
         and migrated.get("tools") == []
@@ -392,7 +392,7 @@ def _apply_persisted_migrations(payload: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
-_AGENT_PROFILE_ADAPTER: TypeAdapter[AgentrtAgentProfile | ACPAgentProfile] = (
+_AGENT_PROFILE_ADAPTER: TypeAdapter[OpenHandsAgentProfile | ACPAgentProfile] = (
     TypeAdapter(AgentProfile)
 )
 
@@ -401,14 +401,14 @@ def validate_agent_profile(
     data: Any,
     *,
     context: Mapping[str, Any] | None = None,
-) -> AgentrtAgentProfile | ACPAgentProfile:
+) -> OpenHandsAgentProfile | ACPAgentProfile:
     """Load and validate an ``AgentProfile`` payload, narrowing on ``agent_kind``.
 
     Already-validated instances pass through unchanged. Raw mappings are
     migrated to the current schema version, then validated against
     :data:`AgentProfile`, so the return is always a canonical variant.
     """
-    if isinstance(data, AgentrtAgentProfile | ACPAgentProfile):
+    if isinstance(data, OpenHandsAgentProfile | ACPAgentProfile):
         return data
     if isinstance(data, BaseModel):
         payload = data.model_dump(mode="json")

@@ -1,4 +1,4 @@
-"""Agentrt Cloud workspace implementation using Cloud API."""
+"""OpenHands Cloud workspace implementation using Cloud API."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Standard exposed URL names from Agentrt Cloud
+# Standard exposed URL names from OpenHands Cloud
 AGENT_SERVER = "AGENT_SERVER"
 
 # Number of retry attempts for transient API failures
@@ -50,32 +50,32 @@ def _is_retryable_error(error: BaseException) -> bool:
     return isinstance(error, (httpx.ConnectError, httpx.TimeoutException))
 
 
-class AgentrtCloudWorkspace(RemoteWorkspace):
-    """Remote workspace using Agentrt Cloud API.
+class OpenHandsCloudWorkspace(RemoteWorkspace):
+    """Remote workspace using OpenHands Cloud API.
 
-    This workspace connects to Agentrt Cloud (app.all-hands.dev) to provision
+    This workspace connects to OpenHands Cloud (app.all-hands.dev) to provision
     and manage sandboxed environments for agent execution.
 
     When ``local_agent_server_mode=True``, the workspace assumes it is already
-    running inside an Agentrt Cloud Runtime sandbox.  Instead of creating or
+    running inside an OpenHands Cloud Runtime sandbox.  Instead of creating or
     managing a sandbox via the Cloud API it connects directly to the local
     agent-server at ``http://localhost:<agent_server_port>``.
 
     Example:
-        workspace = AgentrtCloudWorkspace(
+        workspace = OpenHandsCloudWorkspace(
             cloud_api_url="https://app.all-hands.dev",
             cloud_api_key="your-api-key",
         )
 
         # With custom sandbox spec
-        workspace = AgentrtCloudWorkspace(
+        workspace = OpenHandsCloudWorkspace(
             cloud_api_url="https://app.all-hands.dev",
             cloud_api_key="your-api-key",
             sandbox_spec_id="ghcr.io/openhands/agent-server:main-python",
         )
 
-        # Running inside an Agentrt Cloud Runtime (local agent-server mode)
-        workspace = AgentrtCloudWorkspace(
+        # Running inside an OpenHands Cloud Runtime (local agent-server mode)
+        workspace = OpenHandsCloudWorkspace(
             local_agent_server_mode=True,
             cloud_api_url="https://app.all-hands.dev",
             cloud_api_key=os.environ["AGENTRT_API_KEY"],
@@ -96,7 +96,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
     local_agent_server_mode: bool = Field(
         default=False,
         description=(
-            "When True, assume the SDK is running inside an Agentrt Cloud "
+            "When True, assume the SDK is running inside an OpenHands Cloud "
             "Runtime and connect to the local agent-server instead of "
             "provisioning a sandbox via the Cloud API."
         ),
@@ -112,14 +112,14 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
     # Cloud API fields
     cloud_api_url: str = Field(
         description=(
-            "Base URL of Agentrt Cloud API "
+            "Base URL of OpenHands Cloud API "
             "(e.g., https://app.all-hands.dev). "
             "Required in all modes — used for get_llms / get_secrets."
         ),
     )
     cloud_api_key: str = Field(
         description=(
-            "API key for authenticating with Agentrt Cloud. "
+            "API key for authenticating with OpenHands Cloud. "
             "Required in all modes — used for get_llms / get_secrets."
         ),
     )
@@ -199,7 +199,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
     def _api_headers(self) -> dict[str, str]:
         """Headers for Cloud API requests.
 
-        Uses Bearer token authentication as per Agentrt Cloud API.
+        Uses Bearer token authentication as per OpenHands Cloud API.
         """
         return {"Authorization": f"Bearer {self.cloud_api_key}"}
 
@@ -305,7 +305,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
 
     def _create_new_sandbox(self) -> None:
         """Create a new sandbox via Cloud API."""
-        logger.info("Starting sandbox via Agentrt Cloud API...")
+        logger.info("Starting sandbox via OpenHands Cloud API...")
 
         # Build request params
         params: dict[str, str] = {}
@@ -430,14 +430,14 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
     def pause(self) -> None:
         """Pause the sandbox to conserve resources.
 
-        Note: Agentrt Cloud does not currently support pausing sandboxes.
+        Note: OpenHands Cloud does not currently support pausing sandboxes.
         This method raises NotImplementedError until the API is available.
 
         Raises:
             NotImplementedError: Cloud API pause endpoint is not yet available.
         """
         raise NotImplementedError(
-            "AgentrtCloudWorkspace.pause() is not yet supported - "
+            "OpenHandsCloudWorkspace.pause() is not yet supported - "
             "Cloud API pause endpoint not available"
         )
 
@@ -575,7 +575,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
             RuntimeError: If the sandbox is not running.
 
         Example:
-            >>> with AgentrtCloudWorkspace(...) as workspace:
+            >>> with OpenHandsCloudWorkspace(...) as workspace:
             ...     llm = workspace.get_llm(profile_name="fast")
             ...     agent = Agent(llm=llm, tools=get_default_tools())
         """
@@ -643,7 +643,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
             RuntimeError: If the sandbox is not running.
 
         Example:
-            >>> with AgentrtCloudWorkspace(...) as workspace:
+            >>> with OpenHandsCloudWorkspace(...) as workspace:
             ...     secrets = workspace.get_secrets()
             ...     conversation.update_secrets(secrets)
             ...
@@ -693,7 +693,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
             RuntimeError: If the sandbox is not running.
 
         Example:
-            >>> with AgentrtCloudWorkspace(...) as workspace:
+            >>> with OpenHandsCloudWorkspace(...) as workspace:
             ...     llm = workspace.get_llm()
             ...     mcp_config = workspace.get_mcp_config()
             ...     agent = Agent(llm=llm, mcp_config=mcp_config, tools=...)
@@ -798,7 +798,7 @@ class AgentrtCloudWorkspace(RemoteWorkspace):
     def __del__(self) -> None:
         self.cleanup()
 
-    def __enter__(self) -> AgentrtCloudWorkspace:
+    def __enter__(self) -> OpenHandsCloudWorkspace:
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:

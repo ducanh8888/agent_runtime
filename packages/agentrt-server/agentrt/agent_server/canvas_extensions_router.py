@@ -1,4 +1,4 @@
-"""Canvas Extensions router for Agentrt Agent Server.
+"""Canvas Extensions router for OpenHands Agent Server.
 
 HTTP API endpoints for canvas extension operations. Business logic is
 delegated to ``canvas_extensions/installed.py``; this module mirrors

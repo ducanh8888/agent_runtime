@@ -1,6 +1,6 @@
 """Pydantic models for persisted settings and secrets.
 
-These models mirror the structure used in Agentrt app-server for consistency,
+These models mirror the structure used in OpenHands app-server for consistency,
 allowing the agent-server to be used standalone or as a drop-in replacement
 for the Cloud API's settings/secrets endpoints.
 """
@@ -446,7 +446,7 @@ class CustomSecret(BaseModel):
 class Secrets(BaseModel):
     """Model for storing custom secrets.
 
-    Unlike Agentrt app-server which also stores provider tokens,
+    Unlike OpenHands app-server which also stores provider tokens,
     the agent-server only stores custom secrets since it doesn't
     integrate with OAuth providers directly.
     """

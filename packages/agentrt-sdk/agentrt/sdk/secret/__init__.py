@@ -1,6 +1,6 @@
 """Secret management module for handling sensitive data.
 
-This module provides classes and types for managing secrets in Agentrt.
+This module provides classes and types for managing secrets in OpenHands.
 """
 
 from agentrt.sdk.secret.secrets import (

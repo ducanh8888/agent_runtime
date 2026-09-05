@@ -100,7 +100,7 @@ class _AgentSettingsContract(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     schema_version: int | None = Field(default=None, ge=1)
-    agent_kind: Literal["agentrt", "acp"] | None = None
+    agent_kind: Literal["openhands", "acp"] | None = None
     mcp_config: MCPConfig
 
 
@@ -173,7 +173,7 @@ class SettingsResponse(BaseModel):
         """Parse and validate ``agent_settings`` into a typed model.
 
         Returns:
-            The validated agent settings as either ``AgentrtAgentSettings``
+            The validated agent settings as either ``OpenHandsAgentSettings``
             or ``ACPAgentSettings`` depending on the ``agent_kind`` discriminator.
         """
         from .model import validate_agent_settings

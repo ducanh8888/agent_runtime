@@ -1,4 +1,4 @@
-"""Delegate action and observation models for Agentrt agents."""
+"""Delegate action and observation models for OpenHands agents."""
 
 from typing import Literal
 

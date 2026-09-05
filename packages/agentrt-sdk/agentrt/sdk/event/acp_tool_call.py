@@ -1,4 +1,4 @@
-"""ACPToolCallEvent — surfaces ACP tool call trajectories as Agentrt events."""
+"""ACPToolCallEvent — surfaces ACP tool call trajectories as OpenHands events."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ class ACPToolCallEvent(Event):
 
     Captures the tool name, inputs, outputs, and status from ACP
     ``ToolCallStart`` / ``ToolCallProgress`` notifications so they can
-    be surfaced in the Agentrt event stream and visualizer.
+    be surfaced in the OpenHands event stream and visualizer.
 
     This is *not* an ``LLMConvertibleEvent`` — ACP tool calls do not
     participate in LLM message conversion.

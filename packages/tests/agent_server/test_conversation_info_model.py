@@ -8,7 +8,7 @@ The chain is:
      on the serialized ``agent`` field of the API response.
   3. The agent-server lifts them off the live agent instance into top-level
      ``current_model_id`` / ``available_models`` fields on ``ConversationInfo``
-     so the downstream Agentrt app_server (chip) and the model picker can
+     so the downstream OpenHands app_server (chip) and the model picker can
      read them — the picker resolves the id to a label from the list itself.
 
 These tests pin down step 3 — that ``_compose_conversation_info`` reads the

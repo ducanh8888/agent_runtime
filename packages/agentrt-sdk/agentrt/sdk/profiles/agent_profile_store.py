@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from agentrt.sdk.profiles.agent_profile import (
         ACPAgentProfile,
-        AgentrtAgentProfile,
+        OpenHandsAgentProfile,
     )
 
 _DEFAULT_PROFILE_DIR: Final[Path] = get_user_persistence_dir() / "agent-profiles"
@@ -135,7 +135,7 @@ class AgentProfileStore:
 
     def save(
         self,
-        profile: AgentrtAgentProfile | ACPAgentProfile,
+        profile: OpenHandsAgentProfile | ACPAgentProfile,
         *,
         max_profiles: int | None = None,
     ) -> None:
@@ -179,7 +179,7 @@ class AgentProfileStore:
     def load(
         self,
         name: str,
-    ) -> AgentrtAgentProfile | ACPAgentProfile:
+    ) -> OpenHandsAgentProfile | ACPAgentProfile:
         """Load and validate the profile stored under ``name``.
 
         All fields are references or plain values, so no cipher is needed to
@@ -261,7 +261,7 @@ class AgentProfileStore:
             )
 
     def set_llm_profile_ref(self, name: str, new_ref: str) -> None:
-        """Surgically repoint one Agentrt profile's ``llm_profile_ref``.
+        """Surgically repoint one OpenHands profile's ``llm_profile_ref``.
 
         The single-profile write primitive behind ``profile_refs.cascade_rename``.
         Self-locks (re-entrant), so the read-modify-write is atomic whether called
@@ -315,7 +315,7 @@ class AgentProfileStore:
                         f"[AgentProfile Store] Skipping non-dict profile {name!r}"
                     )
                     continue
-                agent_kind = data.get("agent_kind", "agentrt")
+                agent_kind = data.get("agent_kind", "openhands")
                 summaries.append(
                     {
                         "id": data.get("id"),
@@ -324,7 +324,7 @@ class AgentProfileStore:
                         "revision": data.get("revision"),
                         "llm_profile_ref": (
                             data.get("llm_profile_ref")
-                            if agent_kind == "agentrt"
+                            if agent_kind == "openhands"
                             else None
                         ),
                         "mcp_server_refs": data.get("mcp_server_refs"),
@@ -365,12 +365,12 @@ class AgentProfileStoreProtocol(Protocol):
 
     def save(
         self,
-        profile: AgentrtAgentProfile | ACPAgentProfile,
+        profile: OpenHandsAgentProfile | ACPAgentProfile,
         *,
         max_profiles: int | None = ...,
     ) -> None: ...
 
-    def load(self, name: str) -> AgentrtAgentProfile | ACPAgentProfile: ...
+    def load(self, name: str) -> OpenHandsAgentProfile | ACPAgentProfile: ...
 
     def delete(self, name: str) -> None: ...
 
@@ -404,10 +404,10 @@ def _existing_identity(
 
 def save_profile_preserving_identity(
     store: AgentProfileStoreProtocol,
-    profile: AgentrtAgentProfile | ACPAgentProfile,
+    profile: OpenHandsAgentProfile | ACPAgentProfile,
     *,
     max_profiles: int | None = None,
-) -> AgentrtAgentProfile | ACPAgentProfile:
+) -> OpenHandsAgentProfile | ACPAgentProfile:
     """Save ``profile`` with the server-managed id/revision policy.
 
     * **overwrite** a namesake → keep its stable ``id``, ``revision = prev + 1``;

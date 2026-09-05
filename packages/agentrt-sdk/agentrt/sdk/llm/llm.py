@@ -98,7 +98,7 @@ from agentrt.sdk.llm.exceptions import (
     map_provider_exception,
 )
 
-# Agentrt utilities
+# OpenHands utilities
 from agentrt.sdk.llm.llm_response import LLMResponse
 from agentrt.sdk.llm.message import (
     Message,
@@ -152,7 +152,7 @@ LLM_RETRY_EXCEPTIONS: Final[tuple[type[Exception], ...]] = (
     LLMNoResponseError,
 )
 
-# Minimum context window size required for Agentrt to function properly.
+# Minimum context window size required for OpenHands to function properly.
 # Based on typical usage: system prompt (~2k) + conversation history (~4k)
 # + tool definitions (~2k) + working memory (~8k) = ~16k minimum.
 MIN_CONTEXT_WINDOW_TOKENS: Final[int] = 16384
@@ -218,7 +218,7 @@ class LLMCallContext:
 
 
 class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
-    """Language model interface for Agentrt agents.
+    """Language model interface for OpenHands agents.
 
     The LLM class provides a unified interface for interacting with various
     language models through the litellm library. It handles model configuration,
@@ -340,7 +340,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         json_schema_extra=field_meta(),
     )
     openrouter_app_name: str = Field(
-        default="Agentrt",
+        default="OpenHands",
         json_schema_extra=field_meta(),
     )
 
@@ -406,7 +406,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         default=None,
         description=(
             "Optional canonical model name for feature registry lookups. "
-            "The Agentrt SDK maintains a model feature registry that "
+            "The OpenHands SDK maintains a model feature registry that "
             "maps model names to capabilities (e.g., vision support, "
             "prompt caching, responses API support). When using proxied or "
             "aliased model identifiers, set this field to the canonical "
@@ -2509,7 +2509,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         self._effective_max_output_tokens = effective_max_output_tokens
 
     def _validate_context_window_size(self) -> None:
-        """Validate that the context window is large enough for Agentrt."""
+        """Validate that the context window is large enough for OpenHands."""
         # Allow override via environment variable
         if os.environ.get(ENV_ALLOW_SHORT_CONTEXT_WINDOWS, "").lower() in (
             "true",

@@ -284,7 +284,7 @@ def test_create_mcp_tools_all_servers_disabled():
 
 
 def test_to_fastmcp_mcp_config_strips_enabled():
-    """``enabled`` is Agentrt-side only, and FastMCP would absorb it silently."""
+    """``enabled`` is OpenHands-side only, and FastMCP would absorb it silently."""
     config = native_mcp_config(
         {
             "mcpServers": {
@@ -332,7 +332,7 @@ def test_prepare_mcp_config_applies_explicit_oauth_authentication():
                             "application_type": "native",
                         },
                         "scopes": ["email", "offline_access"],
-                        "client_name": "Agentrt",
+                        "client_name": "OpenHands",
                         "client_id": "openhands-client",
                         "client_secret": "openhands-secret",
                     },
@@ -352,7 +352,7 @@ def test_prepare_mcp_config_applies_explicit_oauth_authentication():
         "token_endpoint_auth_method": "private_key_jwt",
     }
     assert auth._scopes == ["email", "offline_access"]
-    assert auth._client_name == "Agentrt"
+    assert auth._client_name == "OpenHands"
     assert auth._client_id == "openhands-client"
     assert auth._client_secret == "openhands-secret"
 

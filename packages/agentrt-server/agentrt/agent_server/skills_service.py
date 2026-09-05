@@ -1,10 +1,10 @@
-"""Skills service for Agentrt Agent Server.
+"""Skills service for OpenHands Agent Server.
 
 This module contains the business logic for skill loading and management,
 keeping the router clean and focused on HTTP concerns.
 
 Skill Sources:
-- Public skills: registered marketplace plugins or GitHub Agentrt/extensions
+- Public skills: registered marketplace plugins or GitHub OpenHands/extensions
 - User skills: ~/.openhands/skills/ and ~/.openhands/microagents/
 - Project skills: {workspace}/.openhands/skills/, .cursorrules, agents.md
 - Organization skills: {org}/.agentrt or {org}/openhands-config
@@ -433,7 +433,7 @@ def load_all_skills(
 
 
 def discover_profile_skills() -> list[Skill]:
-    """Skill catalog an Agentrt profile launches with (#4017).
+    """Skill catalog an OpenHands profile launches with (#4017).
 
     Returns the merged user + public skills — the deterministic sources of
     :func:`load_all_skills`. ``resolve_agent_profile`` keeps all of them except
@@ -463,7 +463,7 @@ def sync_public_skills() -> tuple[bool, str]:
     """Force refresh of public skills from GitHub repository.
 
     This triggers a git pull on the cached skills repository to get
-    the latest skills from the Agentrt/extensions repository.
+    the latest skills from the OpenHands/extensions repository.
 
     Returns:
         Tuple of (success: bool, message: str).
@@ -502,7 +502,7 @@ def service_install_skill(
         source: Skill source - git URL, GitHub shorthand, or local path.
             Supports formats like:
             - GitHub URL: https://github.com/OpenHands/extensions/tree/main/skills/github
-            - GitHub shorthand: github:Agentrt/extensions/skills/github
+            - GitHub shorthand: github:OpenHands/extensions/skills/github
             - Local path: /path/to/skill
         ref: Optional branch, tag, or commit to install.
         repo_path: Subdirectory path within the repository (for monorepos).

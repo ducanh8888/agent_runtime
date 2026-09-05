@@ -25,7 +25,7 @@ Each record captures the static properties that are known at configuration time
                             provider authenticates from (Codex ``auth.json``,
                             Gemini Vertex SA JSON); see :class:`ACPFileSecretSpec`
 
-Callers outside the SDK (e.g. ``agentrt-server``, the ``Agentrt``
+Callers outside the SDK (e.g. ``agentrt-server``, the ``OpenHands``
 frontend, and the ``@openhands/typescript-client`` mirror) can import
 :data:`ACP_PROVIDERS` and :func:`get_acp_provider` instead of maintaining their
 own copies of this metadata.

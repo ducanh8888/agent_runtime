@@ -124,7 +124,7 @@ def test_conversation_fails_when_removing_tools():
 
     Tools are part of the system prompt and cannot be changed mid-conversation.
     To use different tools, start a new conversation or use conversation forking.
-    See: https://github.com/OpenHands/Agentrt/issues/8560
+    See: https://github.com/OpenHands/OpenHands/issues/8560
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create conversation with original agent having 2 tools

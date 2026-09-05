@@ -1,4 +1,4 @@
-"""Plugins service for Agentrt Agent Server.
+"""Plugins service for OpenHands Agent Server.
 
 Business logic for two related concerns, both mirroring their skills
 counterparts (``skills_service.py``) so the router stays focused on HTTP:
@@ -7,7 +7,7 @@ counterparts (``skills_service.py``) so the router stays focused on HTTP:
   subsystem (``agentrt.sdk.plugin``) — plus listing the locally-available
   plugins.
 * The *plugins-only* marketplace catalog. It returns only true plugins from the
-  Agentrt extensions marketplace — entries whose ``source`` lives under
+  OpenHands extensions marketplace — entries whose ``source`` lives under
   ``./plugins/`` — each carrying attachable ``PluginSource`` coordinates
   (``source`` / ``ref`` / ``repo_path``) plus an ``installed`` flag, so the
   front-end can drive both *attach* and *install* and show install state.
@@ -199,7 +199,7 @@ def service_load_plugin_contents(
 # Plugins-only marketplace catalog
 # ---------------------------------------------------------------------------
 
-# The Agentrt extensions marketplace lists both skills and true plugins under
+# The OpenHands extensions marketplace lists both skills and true plugins under
 # its ``plugins`` array, distinguished only by the entry's source path: true
 # plugins live under ``./plugins/`` while skills live under ``./skills/``. We
 # filter on the raw source for this reason (NOT plugin.json presence, which
@@ -329,7 +329,7 @@ def _fetch_plugin_catalog_entries(
         return []
 
     # Primary loader: ``Marketplace.load`` discovers the manifest in
-    # ``.plugin/`` or ``.claude-plugin/`` — the real Agentrt/extensions layout,
+    # ``.plugin/`` or ``.claude-plugin/`` — the real OpenHands/extensions layout,
     # where ``.plugin/marketplace.json`` points at the published catalog. We must
     # NOT gate on ``marketplace_path`` (``marketplaces/default.json``) existing
     # first: that file is absent in the current extensions repo, so an early

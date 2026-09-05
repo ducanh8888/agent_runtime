@@ -309,12 +309,12 @@ def _same_workspace(a: LocalWorkspace, b: LocalWorkspace) -> bool:
 def _apply_acp_skill_sourcing(
     agent: "AgentBase", sourcing: ACPSkillSourcing
 ) -> "AgentBase":
-    """Strip Agentrt-managed skills from an ACP agent under ``native`` sourcing.
+    """Strip OpenHands-managed skills from an ACP agent under ``native`` sourcing.
 
     A host-local ACP CLI reads the user's own skills from its home directory, so
-    a second, Agentrt-managed set injected into its prompt is at best noise —
+    a second, OpenHands-managed set injected into its prompt is at best noise —
     and the catalog listing tells it to call ``invoke_skill``, a tool no ACP
-    agent has. Container runtimes set ``agentrt_managed`` because that home
+    agent has. Container runtimes set ``openhands_managed`` because that home
     configuration is absent there. Project skills are excluded either way, by
     ``ACPAgent`` itself (#4019).
 
@@ -376,7 +376,7 @@ def _resolve_agent_from_profile(
         get_llm_profile_store,
     )
     from agentrt.sdk.profiles.resolver import ProfileNotFound, resolve_agent_profile
-    from agentrt.sdk.settings.model import AgentrtAgentSettings
+    from agentrt.sdk.settings.model import OpenHandsAgentSettings
 
     store = get_agent_profile_store()
     profile_name = store.name_for_id(profile_id)
@@ -394,14 +394,14 @@ def _resolve_agent_from_profile(
             f"Failed to load agent profile '{profile_name}': {exc}"
         ) from exc
 
-    # Agentrt profiles get the discovered catalog minus their ``disabled_skills``
+    # OpenHands profiles get the discovered catalog minus their ``disabled_skills``
     # deny-list. An ACP profile gets it only where the CLI cannot reach the user's
-    # own configuration (``agentrt_managed``); under ``native`` it sources its
-    # own skills and Agentrt injects none (#4019). A genuine discovery failure
+    # own configuration (``openhands_managed``); under ``native`` it sources its
+    # own skills and OpenHands injects none (#4019). A genuine discovery failure
     # fails the launch loudly rather than silently producing a zero-skill agent.
     available_skills = None
-    wants_skills = profile.agent_kind == "agentrt" or (
-        acp_skill_sourcing == "agentrt_managed"
+    wants_skills = profile.agent_kind == "openhands" or (
+        acp_skill_sourcing == "openhands_managed"
     )
     if wants_skills:
         try:
@@ -423,7 +423,7 @@ def _resolve_agent_from_profile(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Profile '{profile_name}' failed to resolve: {exc}") from exc
 
-    if isinstance(settings_config, AgentrtAgentSettings):
+    if isinstance(settings_config, OpenHandsAgentSettings):
         # Force streaming so this launch path wires on_token: a client can't set
         # llm.stream on a profile's referenced LLM ahead of time. Safe at this
         # layer (not the SDK resolver) because this server wires the token
@@ -438,7 +438,7 @@ def _resolve_agent_from_profile(
     # (environment-dependent); this server knows its runtime, so it injects
     # browser when usable. An explicit profile.tools list is authoritative.
     if (
-        profile.agent_kind == "agentrt"
+        profile.agent_kind == "openhands"
         and profile.tools is None
         and is_tool_usable(BROWSER_TOOL_NAME)
     ):
@@ -922,7 +922,7 @@ class ConversationService:
         if event_service is not None and event_service.is_open():
             live = True
             # Do not acquire the live ConversationState's FIFOLock just to list
-            # a sidebar row. Native Agentrt arun() intentionally holds that
+            # a sidebar row. Native OpenHands arun() intentionally holds that
             # lock across an entire LLM/tool step, which can last minutes; with
             # several parallel runs, composing every live row waits behind each
             # active step and serializes conversation search. The autosaved

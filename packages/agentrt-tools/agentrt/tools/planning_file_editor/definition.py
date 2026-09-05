@@ -106,7 +106,7 @@ class PlanningFileEditorTool(
                 logger.warning(
                     f"Found PLAN.md at legacy location {legacy_plan_path}. "
                     f"Consider moving it to {new_recommended_path} "
-                    f"for consistency with Agentrt conventions."
+                    f"for consistency with OpenHands conventions."
                 )
                 plan_path = str(legacy_plan_path)
             else:

@@ -111,7 +111,7 @@ class TestPiInstallSpec:
         assert spec.packages[0].name == spec.binary_name == "pi-acp"
 
     def test_install_plan_installs_both_but_wraps_only_the_adapter(self):
-        """`pi` is never launched by Agentrt directly — pi-acp spawns it, and
+        """`pi` is never launched by OpenHands directly — pi-acp spawns it, and
         the adapter's wrapper puts $ACP_NODE_DIR/bin on PATH for it, so a
         second wrapper would be dead weight."""
         packages, wrapper_bins = render_docker_install_plan(["pi"])
@@ -230,7 +230,7 @@ class TestACPInstallCatalogCLI:
         """Regression guard for the Dockerfile's `python3 <file> ...`
         invocation: this must work with nothing but the stdlib on
         sys.path, since the acp-providers stage is a bare python image
-        with no Agentrt package (or pydantic) installed.
+        with no OpenHands package (or pydantic) installed.
         """
         result = subprocess.run(
             [sys.executable, "-S", CATALOG_PY, "claude-code"],

@@ -1,4 +1,4 @@
-"""Sub-agents router for Agentrt Agent Server.
+"""Sub-agents router for OpenHands Agent Server.
 
 A single read endpoint listing the file-based and built-in sub-agents available
 to a workspace (mirrors ``skills_router``'s ``POST /skills``). No CRUD: the

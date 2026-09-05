@@ -65,7 +65,7 @@ logger = get_logger(__name__)
 
 _SOUL_PATH = get_user_persistence_dir() / "SOUL.md"
 _DEFAULT_SOUL = (
-    "You are Agentrt agent, a helpful AI assistant that can interact"
+    "You are OpenHands agent, a helpful AI assistant that can interact"
     " with a computer to solve tasks."
 )
 
@@ -100,7 +100,7 @@ def _load_soul_md() -> str:
 
 
 class AgentBase(DiscriminatedUnionMixin, ABC):
-    """Abstract base class for Agentrt agents.
+    """Abstract base class for OpenHands agents.
 
     Agents are stateless and should be fully defined by their configuration.
     This base class provides the common interface and functionality that all
@@ -209,7 +209,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
             "`system_prompt_filename`.\n\n"
             "**Warning**: This is not recommended unless you know what you are "
             "doing (e.g. customising agent behaviour for a completely different "
-            "task).  Setting this will override Agentrt' built-in system "
+            "task).  Setting this will override OpenHands' built-in system "
             "instructions that govern default agent behaviour."
         ),
     )
@@ -1032,7 +1032,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
 
     @property
     def supports_openhands_tools(self) -> bool:
-        """``True`` if Agentrt can inject tools into this agent.
+        """``True`` if OpenHands can inject tools into this agent.
 
         ``False`` for :class:`~agentrt.sdk.agent.acp_agent.ACPAgent` — the
         ACP server manages its own toolset.
@@ -1041,7 +1041,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
 
     @property
     def supports_openhands_mcp(self) -> bool:
-        """``True`` if Agentrt can create in-process MCP tools for this agent.
+        """``True`` if OpenHands can create in-process MCP tools for this agent.
 
         ``False`` for :class:`~agentrt.sdk.agent.acp_agent.ACPAgent` — ACP
         agents pass configured MCP servers through to the ACP subprocess.
@@ -1050,7 +1050,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
 
     @property
     def supports_condenser(self) -> bool:
-        """``True`` if Agentrt context condensing is supported for this agent.
+        """``True`` if OpenHands context condensing is supported for this agent.
 
         ``False`` for :class:`~agentrt.sdk.agent.acp_agent.ACPAgent` — the
         ACP server manages its own context window.
@@ -1058,7 +1058,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         return True
 
     @property
-    def agent_kind(self) -> Literal["agentrt", "acp"]:
+    def agent_kind(self) -> Literal["openhands", "acp"]:
         """Agent kind, matching the ``agent_kind`` settings discriminator."""
         return "openhands"
 

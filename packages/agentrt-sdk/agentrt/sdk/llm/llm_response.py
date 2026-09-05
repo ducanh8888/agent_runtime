@@ -1,7 +1,7 @@
 """LLMResponse type for LLM completion responses.
 
 This module provides the LLMResponse type that wraps LLM completion responses
-with Agentrt-native types, eliminating the need for consumers to work directly
+with OpenHands-native types, eliminating the need for consumers to work directly
 with LiteLLM types.
 """
 
@@ -29,11 +29,11 @@ class LLMResponse(BaseModel):
     """Result of an LLM completion request.
 
     This type provides a clean interface for LLM completion results, exposing
-    only Agentrt-native types to consumers while preserving access to the
+    only OpenHands-native types to consumers while preserving access to the
     raw LiteLLM response for internal use.
 
     Attributes:
-        message: The completion message converted to Agentrt Message type
+        message: The completion message converted to OpenHands Message type
         metrics: Snapshot of metrics from the completion request
         raw_response: The original LiteLLM response (ModelResponse or
             ResponsesAPIResponse) for internal use

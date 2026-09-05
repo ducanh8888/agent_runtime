@@ -1,4 +1,4 @@
-"""Git-related exceptions for Agentrt SDK."""
+"""Git-related exceptions for OpenHands SDK."""
 
 
 class GitError(Exception):

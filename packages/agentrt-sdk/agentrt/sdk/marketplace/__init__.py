@@ -1,4 +1,4 @@
-"""Marketplace module for Agentrt SDK.
+"""Marketplace module for OpenHands SDK.
 
 This module provides support for plugin and skill marketplaces - directories
 that list available plugins and skills with their metadata and source locations.

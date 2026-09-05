@@ -1,7 +1,7 @@
 """Canvas Extensions manifest: schema, validation, and entrypoint containment.
 
 A Canvas extension is an installable UI bundle that contributes pages to the
-Agentrt Canvas frontend. Extensions are installed and served entirely by
+OpenHands Canvas frontend. Extensions are installed and served entirely by
 the agent-server (via ``agentrt.sdk.extensions.installation``, the same
 type-agnostic install-tracking framework Plugins/Skills use); nothing here
 is consumed by ``Agent``/``Conversation``.

@@ -1,6 +1,6 @@
-# Agentrt Agent Server
+# OpenHands Agent Server
 
-The Agentrt Agent Server is a minimal REST API and WebSocket server that provides a programmatic interface for interacting with Agentrt AI agents. It uses the local filesystem to store conversations, events, and workspace files, making it ideal for development, testing, and lightweight deployments.
+The OpenHands Agent Server is a minimal REST API and WebSocket server that provides a programmatic interface for interacting with OpenHands AI agents. It uses the local filesystem to store conversations, events, and workspace files, making it ideal for development, testing, and lightweight deployments.
 
 ## Features
 
@@ -232,8 +232,8 @@ on restart and is flagged so PostHog creates no person profile.
 
 Request-scoped activity that has no conversation `user_id` — a failed request,
 and future events such as LLM-profile creation — can still be attributed by
-sending the frontend's PostHog id in the `X-Agentrt-Telemetry-Distinct-Id`
-header (`headers["X-Agentrt-Telemetry-Distinct-Id"] = posthog.get_distinct_id()`).
+sending the frontend's PostHog id in the `X-OpenHands-Telemetry-Distinct-Id`
+header (`headers["X-OpenHands-Telemetry-Distinct-Id"] = posthog.get_distinct_id()`).
 When absent, those events fall back to the anonymous id. The header is trusted
 the same way as `user_id`: the frontend is responsible for setting it correctly.
 

@@ -124,7 +124,7 @@ def _cleanup_stale_tmux_sessions() -> None:
     """Clean up any stale tmux sessions on server startup.
 
     Tmux sessions live in a separate process that survives agent-server restarts.
-    This function kills all existing sessions on the shared Agentrt tmux socket
+    This function kills all existing sessions on the shared OpenHands tmux socket
     to prevent accumulation of orphaned sessions.
     """
     try:
@@ -355,10 +355,10 @@ def _create_fastapi_instance(config: Config) -> FastAPI:
         Basic FastAPI application with title, description, and lifespan.
     """
     return FastAPI(
-        title="Agentrt Agent Server",
+        title="OpenHands Agent Server",
         version=version("agentrt-server"),
         description=(
-            "Agentrt Agent Server - REST/WebSocket interface for Agentrt AI Agent"
+            "OpenHands Agent Server - REST/WebSocket interface for OpenHands AI Agent"
         ),
         lifespan=api_lifespan,
         root_path=_get_root_path(config),
@@ -548,7 +548,7 @@ def _add_exception_handlers(api: FastAPI) -> None:
         in the error response.  We intercept the error, redact secret-bearing
         fields, and return a safe 422 response.
 
-        Refs: Agentrt/evaluation#385
+        Refs: OpenHands/evaluation#385
         """
         logger.info(
             "Validation error on %s %s: %d error(s)",

@@ -1,6 +1,6 @@
 """Tests for GrepExecutor implementation.
 
-These tests verify that grep behaves like Agentrt:
+These tests verify that grep behaves like OpenHands:
 - Case-insensitive search (rg -i)
 - Returns file paths only (rg -l)
 - Sorted by modification time (--sortr=modified)

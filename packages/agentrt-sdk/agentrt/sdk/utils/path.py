@@ -29,7 +29,7 @@ def _warn_relative_persistence_dir(env_dir: str) -> None:
 
 
 def get_user_persistence_dir(default: Path | None = None) -> Path:
-    """Return the base directory for user-level Agentrt persistence.
+    """Return the base directory for user-level OpenHands persistence.
 
     Honors the ``AGENTRT_PERSISTENCE_DIR`` environment variable when set (used by
     ephemeral/isolated sandboxes to redirect state onto a persistent volume),

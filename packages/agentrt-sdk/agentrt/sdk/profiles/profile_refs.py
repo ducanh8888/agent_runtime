@@ -1,6 +1,6 @@
 """Foreign-key lifecycle between LLM profiles and ``AgentProfile``\\ s.
 
-An ``AgentrtAgentProfile.llm_profile_ref`` is a soft FK onto an LLM-profile
+An ``OpenHandsAgentProfile.llm_profile_ref`` is a soft FK onto an LLM-profile
 store key. ``find_referrers`` / ``cascade_rename`` / ``delete_llm_profile`` /
 ``rename_llm_profile`` keep that FK from dangling.
 
@@ -57,12 +57,12 @@ def _scan_referrers(
     """Return citing agent-profile names. Caller must hold :meth:`store.lock`.
 
     Reads metadata via ``list_summaries`` (no validation / secret
-    instantiation). Only the Agentrt variant carries ``llm_profile_ref``.
+    instantiation). Only the OpenHands variant carries ``llm_profile_ref``.
     """
     return [
         str(summary["name"])
         for summary in store.list_summaries()
-        if summary.get("agent_kind", "openhands") == "agentrt"
+        if summary.get("agent_kind", "openhands") == "openhands"
         and summary.get("llm_profile_ref") == llm_profile_name
     ]
 

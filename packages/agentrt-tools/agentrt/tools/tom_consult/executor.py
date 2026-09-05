@@ -252,7 +252,7 @@ class TomConsultExecutor(
         """Execute sleeptime compute to index conversations for user modeling.
 
         This processes all unprocessed conversations from the file store,
-        similar to the Agentrt implementation.
+        similar to the OpenHands implementation.
 
         Args:
             conversation: Conversation context (used for LLM formatting)

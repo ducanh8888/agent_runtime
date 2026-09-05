@@ -21,7 +21,7 @@ ORACLE_USAGE_PREFIX = "oracle"
 
 _ORACLE_SYSTEM_PROMPT = """\
 You are the Oracle: a highly capable reviewer giving a second opinion to an \
-Agentrt agent.
+OpenHands agent.
 
 Answer the agent's question directly. Do not call tools. Do not perform work \
 directly. Give a concrete recommendation the agent can follow, including important \

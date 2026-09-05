@@ -13,7 +13,7 @@ _RISK_ORDER = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
 class SecurityRisk(str, Enum):
     """Security risk levels for actions.
 
-    Based on Agentrt security risk levels but adapted for agent-sdk.
+    Based on OpenHands security risk levels but adapted for agent-sdk.
     Integer values allow for easy comparison and ordering.
     """
 

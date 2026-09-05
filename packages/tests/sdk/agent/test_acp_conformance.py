@@ -5,7 +5,7 @@ verbatim (through ``npx``) with a bogus credential and an isolated data dir,
 then asserts what the live server reports back rather than what the registry
 assumes it reports. Every historical drift this catches (#3772, #3654,
 #4629, #4812) was silent precisely because nothing read state back from the
-server — see Agentrt/software-agent-sdk#4830 P0-1/P0-2.
+server — see OpenHands/software-agent-sdk#4830 P0-1/P0-2.
 
 No API key, subscription, or network credential is required: every built-in
 provider's handshake (initialize / authenticate / new_session /

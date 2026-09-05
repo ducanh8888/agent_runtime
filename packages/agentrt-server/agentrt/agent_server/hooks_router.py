@@ -1,4 +1,4 @@
-"""Hooks router for Agentrt Agent Server.
+"""Hooks router for OpenHands Agent Server.
 
 This module defines the HTTP API endpoints for hook operations.
 Business logic is delegated to hooks_service.py.

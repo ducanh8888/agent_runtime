@@ -1,4 +1,4 @@
-"""Plugins router for Agentrt Agent Server.
+"""Plugins router for OpenHands Agent Server.
 
 HTTP API endpoints for plugin operations. Business logic is delegated to
 ``plugins_service.py``; this module mirrors ``skills_router.py`` and stays
@@ -99,7 +99,7 @@ class InstallPluginRequest(BaseModel):
         min_length=1,
         description=(
             "Plugin source - git URL, GitHub shorthand, or local path. Examples: "
-            "'github:Agentrt/extensions/plugins/city-weather', '/path/to/plugin'"
+            "'github:OpenHands/extensions/plugins/city-weather', '/path/to/plugin'"
         ),
     )
     ref: str | None = Field(
@@ -357,7 +357,7 @@ def get_marketplace_catalog() -> MarketplaceCatalogResponse:
     """Get the plugins marketplace catalog with installation status.
 
     Returns the true plugins (entries whose source lives under ``./plugins/``)
-    from the Agentrt extensions repository marketplace, each with attachable
+    from the OpenHands extensions repository marketplace, each with attachable
     ``PluginSource`` coordinates (``source`` / ``ref`` / ``repo_path``) and an
     ``installed`` flag. This enables the front-end to render a plugins
     marketplace with install/installed state and to attach plugins to

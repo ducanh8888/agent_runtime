@@ -1,4 +1,4 @@
-"""Tool router for Agentrt SDK."""
+"""Tool router for OpenHands SDK."""
 
 from fastapi import APIRouter
 

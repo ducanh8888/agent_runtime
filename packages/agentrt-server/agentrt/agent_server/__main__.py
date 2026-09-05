@@ -211,7 +211,7 @@ def main() -> None:
     # Set up crash diagnostics early, before any other initialization
     _setup_crash_diagnostics()
 
-    parser = argparse.ArgumentParser(description="Agentrt Agent Server App")
+    parser = argparse.ArgumentParser(description="OpenHands Agent Server App")
     parser.add_argument(
         "--host",
         default=None,
@@ -295,7 +295,7 @@ def main() -> None:
 
     os.environ[_INTERNAL_SERVER_URL_ENV] = _get_internal_server_url(host, args.port)
 
-    print(f"Starting Agentrt Agent Server on {host}:{args.port}")
+    print(f"Starting OpenHands Agent Server on {host}:{args.port}")
     print(f"API docs will be available at http://{host}:{args.port}/docs")
     print(f"Auto-reload: {'enabled' if args.reload else 'disabled'}")
 

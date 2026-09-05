@@ -11,7 +11,7 @@ The curated public surface is tracked via ``__all__`` so CI can detect breaking
 changes.
 
 Note: BrowserToolSet is intentionally NOT re-exported here to avoid forcing
-downstream consumers (e.g., Agentrt-CLI) to bundle the browser-use package
+downstream consumers (e.g., OpenHands-CLI) to bundle the browser-use package
 and its heavy dependencies. Users who need browser tools should import directly
 from ``agentrt.tools.browser_use``.
 """

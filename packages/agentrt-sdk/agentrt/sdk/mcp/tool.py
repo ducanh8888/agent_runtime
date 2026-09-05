@@ -311,7 +311,7 @@ class MCPToolDefinition(ToolDefinition[MCPToolAction, MCPToolObservation]):
         validated = mcp_action_type.model_validate(prefiltered_args)
         # Use exclude_none to avoid injecting nulls back to the call
         # Exclude DiscriminatedUnionMixin fields (e.g., 'kind') as they're
-        # internal to Agentrt and not part of the MCP tool schema
+        # internal to OpenHands and not part of the MCP tool schema
         exclude_fields = set(DiscriminatedUnionMixin.model_fields.keys()) | set(
             DiscriminatedUnionMixin.model_computed_fields.keys()
         )
@@ -385,7 +385,7 @@ class MCPToolDefinition(ToolDefinition[MCPToolAction, MCPToolObservation]):
         ``dict[str, Any]``, losing nested ``properties`` and ``required``
         fields.  For MCP tools the authoritative schema is already provided
         by the MCP server, so we start from a deep copy of it and inject
-        Agentrt-specific fields (``security_risk``, ``summary``) directly.
+        OpenHands-specific fields (``security_risk``, ``summary``) directly.
 
         See: https://github.com/OpenHands/software-agent-sdk/issues/3955
         """

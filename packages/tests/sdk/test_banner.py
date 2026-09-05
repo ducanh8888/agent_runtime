@@ -24,7 +24,7 @@ def test_banner_prints_to_stderr(reset_banner_state, capsys):
     _print_banner("1.0.0")
 
     captured = capsys.readouterr()
-    assert "Agentrt SDK v1.0.0" in captured.err
+    assert "OpenHands SDK v1.0.0" in captured.err
     assert "github.com/OpenHands/software-agent-sdk/issues" in captured.err
     assert "openhands.dev/joinslack" in captured.err
     assert "openhands.dev/product/sdk" in captured.err
@@ -39,7 +39,7 @@ def test_banner_prints_only_once(reset_banner_state, capsys):
     _print_banner("1.0.0")
 
     captured = capsys.readouterr()
-    assert captured.err.count("Agentrt SDK") == 1
+    assert captured.err.count("OpenHands SDK") == 1
 
 
 def test_banner_suppressed_by_env_var(monkeypatch, reset_banner_state, capsys):

@@ -19,7 +19,7 @@ def test_tools_module_has_expected_top_level_exports():
 
     Note: BrowserToolSet is intentionally NOT exported at the top level to avoid
     forcing downstream consumers to bundle browser-use and its heavy dependencies.
-    See: https://github.com/OpenHands/Agentrt-CLI/pull/527
+    See: https://github.com/OpenHands/OpenHands-CLI/pull/527
     """
 
     import agentrt.tools

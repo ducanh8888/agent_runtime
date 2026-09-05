@@ -154,7 +154,7 @@ def test_planning_filename_routes_through_registry() -> None:
     )
     assert static == expected
     assert static.startswith("You are a Planning Agent")
-    # Standalone composition: the default Agentrt identity must not leak in.
+    # Standalone composition: the default OpenHands identity must not leak in.
     assert "<SOUL>" not in static
 
 

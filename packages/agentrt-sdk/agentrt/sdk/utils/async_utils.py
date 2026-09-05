@@ -1,4 +1,4 @@
-"""Async utilities for Agentrt SDK.
+"""Async utilities for OpenHands SDK.
 
 This module provides utilities for working with async callbacks in the context
 of synchronous conversation handling.

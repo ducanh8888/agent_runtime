@@ -1729,7 +1729,7 @@ class LocalConversation(BaseConversation):
     def switch_acp_model(self, model: str) -> None:
         """Switch the model on an ACP conversation.
 
-        Unlike :meth:`switch_llm`, which swaps Agentrt' own LLM object, this
+        Unlike :meth:`switch_llm`, which swaps OpenHands' own LLM object, this
         targets the model the ACP subprocess runs. ``switch_llm`` would not
         affect an ACP conversation, since the subprocess owns its own model.
 

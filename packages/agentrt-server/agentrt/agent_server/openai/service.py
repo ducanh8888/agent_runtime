@@ -41,7 +41,7 @@ from agentrt.sdk.conversation.state import (
     ConversationState,
 )
 from agentrt.sdk.llm.message import ImageContent, TextContent
-from agentrt.sdk.settings import ACPAgentSettings, AgentrtAgentSettings
+from agentrt.sdk.settings import ACPAgentSettings, OpenHandsAgentSettings
 from agentrt.sdk.workspace import LocalWorkspace
 
 
@@ -63,7 +63,7 @@ def _profile_name_from_model(model: str) -> str:
         return model[len(_MODEL_PREFIX) :]
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Unknown Agentrt model '{model}'. Use GET /v1/models.",
+        detail=f"Unknown OpenHands model '{model}'. Use GET /v1/models.",
     )
 
 
@@ -91,15 +91,15 @@ def _append_system_suffix(existing: str | None, system_text: str) -> str:
 
 
 def _with_profile_llm_and_system_text(
-    agent_settings: AgentrtAgentSettings | ACPAgentSettings,
+    agent_settings: OpenHandsAgentSettings | ACPAgentSettings,
     llm: LLM,
     system_text: str,
-) -> AgentrtAgentSettings | ACPAgentSettings:
+) -> OpenHandsAgentSettings | ACPAgentSettings:
     updated = agent_settings.model_copy(update={"llm": llm})
     if not system_text:
         return updated
 
-    if isinstance(updated, AgentrtAgentSettings):
+    if isinstance(updated, OpenHandsAgentSettings):
         context = updated.agent_context
         suffix = _append_system_suffix(context.system_message_suffix, system_text)
         return updated.model_copy(
@@ -383,7 +383,7 @@ async def list_openai_models() -> OpenAIModelListResponse:
             id=f"{_MODEL_PREFIX}{profile['name']}",
             object="model",
             created=0,
-            owned_by="agentrt",
+            owned_by="openhands",
         )
         for profile in profiles
         if isinstance(profile.get("name"), str)

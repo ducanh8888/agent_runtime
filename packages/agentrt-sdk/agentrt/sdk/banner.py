@@ -1,4 +1,4 @@
-"""Startup banner for Agentrt SDK.
+"""Startup banner for OpenHands SDK.
 
 Prints a welcome message with helpful links when the SDK is first imported.
 Can be suppressed by setting the AGENTRT_SUPPRESS_BANNER environment variable.
@@ -13,7 +13,7 @@ _BANNER_PRINTED = False
 
 
 def _print_banner(version: str) -> None:
-    """Print the Agentrt SDK startup banner to stderr."""
+    """Print the OpenHands SDK startup banner to stderr."""
     global _BANNER_PRINTED
 
     # Check if banner should be suppressed (check this first, before setting flag)
@@ -31,7 +31,7 @@ def _print_banner(version: str) -> None:
 
     banner = f"""\
 +----------------------------------------------------------------------+
-|  Agentrt SDK v{version:<53}|
+|  OpenHands SDK v{version:<53}|
 |                                                                      |
 |  Report a bug: github.com/OpenHands/software-agent-sdk/issues        |
 |  Get help: openhands.dev/joinslack                                   |
