@@ -219,3 +219,19 @@ Model mặc định: `ds/deepseek-v4-flash`, đã đo đủ bốn khả năng.
 **Không dùng `free-model`.** Nó trả text chỉ khi stream và tool call chỉ khi không stream, nên không chế độ nào phục vụ được một lượt agent. Nó cũng xoay vòng giữa các model thật (`muse-spark-1.2` rồi `1.3` giữa hai lần gọi) và không trả usage.
 
 Ghi chú kỹ thuật cho P2: `GET /models` qua `urllib` bị Cloudflare chặn (mã 1010), nhưng SDK OpenAI đi qua được. LiteLLM cảnh báo "model isn't mapped yet" cho mọi model id của 9Router — chỉ ảnh hưởng tính chi phí, không ảnh hưởng chức năng.
+
+## Vòng 22 — chế độ chạy tự động
+
+| Câu hỏi | Quyết định |
+|---|---|
+| Mức tự chủ | Tự quyết hết, chỉ báo khi xong. Không dừng hỏi giữa chừng |
+| Ngân sách model | Thoải mái, trần 1 USD tiền DeepSeek |
+| Đích của "hoàn thiện" | Tới khi người dùng dùng được hằng ngày — không phải chỉ tick hết P2-P4 |
+| Codex | Hoãn. Tiêu chí xong của P3 chỉ còn Claude Code; MCP vẫn giữ đúng chuẩn để cắm Codex sau không phải thiết kế lại |
+| Quyền hệ thống | Được: dọn rác test trong state dir, cài dependency Python, spawn/tắt daemon local, sửa cấu hình MCP của Claude Code |
+| Giới hạn | Không đụng vào RAG hoặc các công việc khác đang chạy |
+| Ba test flaky | Chấp nhận, ghi tài liệu, không sửa |
+
+Bù cho việc không dừng hỏi: mọi phán đoán trong lúc chạy được ghi vào chính file này, và mọi sai lệch so với plan đi một commit riêng kèm lý do đầy đủ. `git log` là dấu vết kiểm tra.
+
+Rủi ro đã nêu và người dùng chấp nhận: đây đúng là chế độ mà một sai lầm kiểu tầng 4 sẽ đi rất xa mới lộ ra.
