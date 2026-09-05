@@ -195,3 +195,27 @@ Danh sách phải giữ nguyên, không được replace: tiền tố model Lite
 | Hộp thoại "Pick an app" liên tục khi chạy test | Xóa `packages/.openhands/` — hook dev của upstream trỏ tới file `.sh`, trên Windows `shell=True` rơi về ShellExecute và mở hộp thoại chặn |
 | Nơi đặt credential 9Router | `.env` ở gốc repo (đã gitignore) làm nguồn lúc phát triển; daemon đọc rồi đưa vào LLM profile trong state dir. Hai base URL cho hai protocol |
 | Test ghi vào state dir thật của người dùng | Mọi lần chạy pytest từ nay phải đặt `AGENTRT_PERSISTENCE_DIR` trỏ vào thư mục tạm |
+
+## Vòng 21 — kết quả đo 9Router thật
+
+Endpoint: một URL duy nhất, tương thích cả hai protocol. Sẽ không có model Anthropic; tính tương thích chỉ là tương thích.
+
+**Quyết định vòng 9 bị bãi bỏ.** Không còn hai đường protocol, chỉ một base URL. Biến `AGENTRT_9ROUTER_ANTHROPIC_BASE_URL` và `AGENTRT_DEFAULT_ANTHROPIC_MODEL` đã bỏ.
+
+Model mặc định: `ds/deepseek-v4-flash`, đã đo đủ bốn khả năng.
+
+| Model | text sync | text stream | tool sync | tool stream | usage |
+|---|---|---|---|---|---|
+| `ds/deepseek-v4-flash` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ds/deepseek-v4-flash-vision-exp` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ds/deepseek-v4-pro-max` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ds/deepseek-chat` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ds/deepseek-v4-pro` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `cf/@cf/zai-org/glm-4.7-flash` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `cf/@cf/qwen/qwen2.5-coder-32b-instruct` | ✓ | ✓ | ✗ | ✗ | ✓ |
+| `cf/@cf/moonshotai/kimi-k2.6` | 500 | 500 | 500 | 500 | — |
+| `free-model` (alias) | ✗ | ✓ | ✓ | ✗ | ✗ |
+
+**Không dùng `free-model`.** Nó trả text chỉ khi stream và tool call chỉ khi không stream, nên không chế độ nào phục vụ được một lượt agent. Nó cũng xoay vòng giữa các model thật (`muse-spark-1.2` rồi `1.3` giữa hai lần gọi) và không trả usage.
+
+Ghi chú kỹ thuật cho P2: `GET /models` qua `urllib` bị Cloudflare chặn (mã 1010), nhưng SDK OpenAI đi qua được. LiteLLM cảnh báo "model isn't mapped yet" cho mọi model id của 9Router — chỉ ảnh hưởng tính chi phí, không ảnh hưởng chức năng.
