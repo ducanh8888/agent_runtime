@@ -287,7 +287,7 @@ def agent_definition_to_factory(
 
 def register_file_agents(work_dir: str | Path) -> list[str]:
     """Load and register file-based agents from project-level `.agents/agents` and
-    `.openhands/agents`, and user-level `~/.agents/agents` and `~/.openhands/agents`
+    `.agentrt/agents`, and user-level `~/.agents/agents` and `~/.agentrt/agents`
     directories.
 
     Project-level definitions take priority over user-level ones, and within

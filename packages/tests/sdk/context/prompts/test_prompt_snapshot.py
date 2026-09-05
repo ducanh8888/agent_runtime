@@ -116,7 +116,7 @@ def _build_agent(cell: Cell) -> Agent:
             "llm_security_analyzer": cell.llm_security_analyzer,
             "cli_mode": cell.cli_mode,
             # Pin soul_content to the built-in default so snapshots are
-            # deterministic regardless of whether ~/.openhands/SOUL.md exists
+            # deterministic regardless of whether ~/.agentrt/SOUL.md exists
             # on the machine running the tests.
             "soul_content": _DEFAULT_SOUL,
         },

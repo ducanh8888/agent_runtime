@@ -297,7 +297,7 @@ class LocalConversation(BaseConversation):
                 persistence. If provided, this takes precedence over persistence_dir
                 for state and EventLog storage.
             profile_store_dir: Optional directory containing saved LLM profiles.
-                Defaults to ``~/.openhands/profiles``.
+                Defaults to ``~/.agentrt/profiles``.
         """
         super().__init__()  # Initialize with span tracking
         # Mark cleanup as initiated as early as possible to avoid races or partially
@@ -1508,9 +1508,9 @@ class LocalConversation(BaseConversation):
           2. Plugin agents (registered during plugin loading, i.e.,
                 in _ensure_plugins_loaded())
           3. Project-level file agents (`{project}/.agents/agents/*.md`,
-                then `{project}/.openhands/agents/*.md`)
+                then `{project}/.agentrt/agents/*.md`)
           4. User-level file agents (`~/.agents/agents/*.md`,
-                then `~/.openhands/agents/*.md`)
+                then `~/.agentrt/agents/*.md`)
         """
         # register project-level and then user-level file-based agents
         register_file_agents(self.workspace.working_dir)

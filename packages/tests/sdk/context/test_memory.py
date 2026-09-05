@@ -13,7 +13,7 @@ from agentrt.sdk.llm import LLM
 
 @pytest.fixture(autouse=True)
 def isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """Point the user memory tier (``~/.openhands/memory/``) at a temp home.
+    """Point the user memory tier (``~/.agentrt/memory/``) at a temp home.
 
     USERPROFILE is what ``Path.home()`` reads on Windows, where HOME is a no-op.
     ``AGENTRT_PERSISTENCE_DIR`` is cleared too: it overrides the home-relative base,
@@ -42,7 +42,7 @@ def test_load_memory_reads_project_index(tmp_path: Path) -> None:
     _write_index(workspace, "- run tests with `uv run pytest`\n")
 
     assert load_memory(workspace) == (
-        "# Project memory (.openhands/memory/MEMORY.md)\n"
+        "# Project memory (.agentrt/memory/MEMORY.md)\n"
         "- run tests with `uv run pytest`"
     )
 
@@ -51,7 +51,7 @@ def test_load_memory_reads_user_index(isolated_home: Path, tmp_path: Path) -> No
     _write_index(isolated_home, "- prefers uv over pip\n")
 
     assert load_memory(tmp_path / "workspace") == (
-        "# User memory (~/.openhands/memory/MEMORY.md)\n- prefers uv over pip"
+        "# User memory (~/.agentrt/memory/MEMORY.md)\n- prefers uv over pip"
     )
 
 
@@ -76,7 +76,7 @@ def test_load_memory_truncates_whole_lines_from_top_of_tier(tmp_path: Path) -> N
 
     assert text is not None
     lines = text.splitlines()
-    assert lines[0] == "# Project memory (.openhands/memory/MEMORY.md)"
+    assert lines[0] == "# Project memory (.agentrt/memory/MEMORY.md)"
     assert lines[1] == "[earlier memory truncated]"
     assert text.endswith("NEW")
     assert "OLD" not in text
@@ -94,8 +94,8 @@ def test_load_memory_truncation_keeps_both_tier_headers(
 
     assert text is not None
     lines = text.splitlines()
-    assert "# User memory (~/.openhands/memory/MEMORY.md)" in lines
-    assert "# Project memory (.openhands/memory/MEMORY.md)" in lines
+    assert "# User memory (~/.agentrt/memory/MEMORY.md)" in lines
+    assert "# Project memory (.agentrt/memory/MEMORY.md)" in lines
     # The short user tier fits its share, so its content survives untouched.
     assert "- prefers tabs" in lines
     assert text.endswith("NEW-PROJECT")
@@ -114,7 +114,7 @@ def test_load_memory_truncation_drops_no_partial_lines(tmp_path: Path) -> None:
     assert text is not None
     assert "[earlier memory truncated]" in text
     allowed = {
-        "# Project memory (.openhands/memory/MEMORY.md)",
+        "# Project memory (.agentrt/memory/MEMORY.md)",
         "[earlier memory truncated]",
         *original_lines,
     }
@@ -201,7 +201,7 @@ def test_instructed_write_path_matches_loader_read_path_with_persistence_dir(
 def test_instructed_write_path_matches_loader_read_path_home_fallback(
     isolated_home: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Without AGENTRT_PERSISTENCE_DIR, both halves fall back to ~/.openhands/memory."""
+    """Without AGENTRT_PERSISTENCE_DIR, both halves fall back to ~/.agentrt/memory."""
     monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
 
     write_dir = _advertised_user_memory_dir(_memory_agent())
@@ -220,7 +220,7 @@ def test_load_memory_user_header_reflects_persistence_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """With AGENTRT_PERSISTENCE_DIR set, the loaded user-tier header names the real
-    read path -- not the stale ``~/.openhands/memory/`` -- so it matches the
+    read path -- not the stale ``~/.agentrt/memory/`` -- so it matches the
     write location advertised in the <MEMORY> guidance."""
     persistence = tmp_path / "persistent"
     monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(persistence))
@@ -233,7 +233,7 @@ def test_load_memory_user_header_reflects_persistence_dir(
     assert loaded is not None
     expected = user_memory / "MEMORY.md"
     assert loaded.startswith(f"# User memory ({expected})")
-    assert "~/.openhands/memory/MEMORY.md" not in loaded
+    assert "~/.agentrt/memory/MEMORY.md" not in loaded
 
 
 def test_load_memory_user_header_uses_tilde_without_persistence_dir(
@@ -247,7 +247,7 @@ def test_load_memory_user_header_uses_tilde_without_persistence_dir(
     loaded = load_memory(tmp_path / "workspace")
 
     assert loaded is not None
-    assert loaded.startswith("# User memory (~/.openhands/memory/MEMORY.md)")
+    assert loaded.startswith("# User memory (~/.agentrt/memory/MEMORY.md)")
     assert str(isolated_home) not in loaded
 
 

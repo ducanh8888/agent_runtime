@@ -36,7 +36,7 @@ def fetch_skill(
 
     Args:
         source: Skill source - git URL, GitHub shorthand, or local path.
-        cache_dir: Directory for caching. Defaults to ~/.openhands/cache/skills/.
+        cache_dir: Directory for caching. Defaults to ~/.agentrt/cache/skills/.
         ref: Optional branch, tag, or commit to checkout.
         update: If True and cache exists, update it.
         repo_path: Subdirectory path within the repository.
@@ -68,7 +68,7 @@ def fetch_skill_with_resolution(
 
     Args:
         source: Skill source (git URL, GitHub shorthand, or local path).
-        cache_dir: Directory for caching. Defaults to ~/.openhands/cache/skills/.
+        cache_dir: Directory for caching. Defaults to ~/.agentrt/cache/skills/.
         ref: Optional branch, tag, or commit to checkout.
         update: If True and cache exists, update it.
         repo_path: Subdirectory path within the repository.

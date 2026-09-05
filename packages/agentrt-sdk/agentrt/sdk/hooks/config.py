@@ -167,7 +167,7 @@ class HookMatcher(BaseModel):
 class HookConfig(BaseModel):
     """Configuration for all hooks.
 
-    Hooks can be configured either by loading from `.openhands/hooks.json` or
+    Hooks can be configured either by loading from `.agentrt/hooks.json` or
     by directly instantiating with typed fields:
 
         # Direct instantiation with typed fields (recommended):
@@ -181,7 +181,7 @@ class HookConfig(BaseModel):
         )
 
         # Load from JSON file:
-        config = HookConfig.load(".openhands/hooks.json")
+        config = HookConfig.load(".agentrt/hooks.json")
     """
 
     model_config = {
@@ -281,11 +281,11 @@ class HookConfig(BaseModel):
     def load(
         cls, path: str | Path | None = None, working_dir: str | Path | None = None
     ) -> "HookConfig":
-        """Load config from path or search .openhands/hooks.json locations.
+        """Load config from path or search .agentrt/hooks.json locations.
 
         Args:
             path: Explicit path to hooks.json file. If provided, working_dir is ignored.
-            working_dir: Project directory for discovering .openhands/hooks.json.
+            working_dir: Project directory for discovering .agentrt/hooks.json.
                 Falls back to cwd if not provided.
         """
         if path is None:

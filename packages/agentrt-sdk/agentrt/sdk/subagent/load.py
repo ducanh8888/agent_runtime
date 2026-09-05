@@ -1,7 +1,7 @@
 """Load agent definitions from Markdown files and register them as delegate agents.
 
 Agent definitions are Markdown files with YAML frontmatter that live in
-`.agents/agents` or `.openhands/agents` directories at the project or user level.
+`.agents/agents` or `.agentrt/agents` directories at the project or user level.
 They are auto-registered into the delegate agent registry so they can be
 invoked by name during delegation.
 
@@ -30,9 +30,9 @@ Priority (highest to lowest):
   1. Programmatic `register_agent()` calls (never overwritten)
   2. Plugin agents (`Plugin.agents`)
   3. Project-level `.agents/agents/*.md`
-  4. Project-level `.openhands/agents/*.md`
+  4. Project-level `.agentrt/agents/*.md`
   5. User-level `~/.agents/agents/*.md`
-  6. User-level `~/.openhands/agents/*.md`
+  6. User-level `~/.agentrt/agents/*.md`
 """
 
 from pathlib import Path
@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 # First match wins when the same agent name appears in multiple directories.
 _FILE_BASED_AGENTS_DIR: Final[list[str]] = [
     ".agents/agents",
-    ".openhands/agents",
+    ".agentrt/agents",
 ]
 # File to skip analyzing when searching for agents
 _SKIP_FILES: Final[set[str]] = {"README.md", "readme.md"}
@@ -61,7 +61,7 @@ def load_project_agents(project_dir: str | Path) -> list[AgentDefinition]:
 
     Searches for
         - project_dir/.agents/agents and
-        - project_dir/.openhands/agents (in that order).
+        - project_dir/.agentrt/agents (in that order).
     Note that `.agents/agents` definitions take precedence for duplicate names.
 
     Only reads top-level `.md` files; subdirectories (like `skills/`) are
@@ -83,7 +83,7 @@ def load_user_agents() -> list[AgentDefinition]:
 
     Searches for
         - ~/.agents/agents and
-        - ~/.openhands/agents (in that order).
+        - ~/.agentrt/agents (in that order).
     Note that `.agents/agents` definitions take precedence for duplicate names.
 
     Same file-level rules as `load_project_agents`.
@@ -98,7 +98,7 @@ def load_user_agents() -> list[AgentDefinition]:
 def _user_agents_dir(relative: str) -> Path:
     """Map a file-based agents dir onto its user-level base.
 
-    ``.openhands/agents`` goes under the persistence dir, which replaces the
+    ``.agentrt/agents`` goes under the persistence dir, which replaces the
     ``~/.agentrt`` base; every other entry stays home-relative.
     """
     base, _, rest = relative.partition("/")

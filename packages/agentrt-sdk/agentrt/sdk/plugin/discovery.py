@@ -46,7 +46,7 @@ def _load_plugins_from_dir(plugins_dir: Path, skip_dirs: set[Path]) -> list[Plug
 
     Mirrors ``Plugin.load_all`` but skips any directory in ``skip_dirs``. This is
     needed because the installed-plugins store lives at
-    ``~/.openhands/plugins/installed`` — a child of ``~/.openhands/plugins`` — and
+    ``~/.agentrt/plugins/installed`` — a child of ``~/.agentrt/plugins`` — and
     must not be loaded as if it were a plugin (it has no manifest, so it would be
     mis-loaded as a bogus plugin named "installed"). Failures to load an
     individual plugin are logged and skipped.
@@ -91,9 +91,9 @@ def _merge_plugins_by_name(
 def load_user_plugins() -> list[Plugin]:
     """Load plugins from the user's home directories plus enabled installed plugins.
 
-    Scans ``~/.agents/plugins`` then ``~/.openhands/plugins`` (earlier wins on a
+    Scans ``~/.agents/plugins`` then ``~/.agentrt/plugins`` (earlier wins on a
     name conflict), then appends enabled installed plugins from
-    ``~/.openhands/plugins/installed`` (lower precedence than directory plugins).
+    ``~/.agentrt/plugins/installed`` (lower precedence than directory plugins).
     The installed store is excluded from the directory scan so it is not loaded
     as a plugin itself.
 
@@ -128,7 +128,7 @@ def load_user_plugins() -> list[Plugin]:
 def load_project_plugins(work_dir: str | Path) -> list[Plugin]:
     """Load plugins from project-specific directories.
 
-    Scans ``{root}/.agents/plugins`` and ``{root}/.openhands/plugins`` for the
+    Scans ``{root}/.agents/plugins`` and ``{root}/.agentrt/plugins`` for the
     working directory and (if different) the enclosing Git repository root, with
     the working directory taking precedence on a name conflict.
 

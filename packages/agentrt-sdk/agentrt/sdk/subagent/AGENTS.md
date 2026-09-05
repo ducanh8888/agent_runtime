@@ -33,12 +33,12 @@ Relevant implementation files:
 **Project-level (higher priority than user-level):**
 
 1. `{project}/.agents/agents/*.md`
-2. `{project}/.openhands/agents/*.md`
+2. `{project}/.agentrt/agents/*.md`
 
 **User-level:**
 
 3. `~/.agents/agents/*.md`
-4. `~/.openhands/agents/*.md`
+4. `~/.agentrt/agents/*.md`
 
 Notes:
 
@@ -77,9 +77,9 @@ as part of conversation initialization:
 1. Existing registry entries, including explicit `register_agent(...)` calls
 2. Plugin-provided agents (`Plugin.agents` → `register_plugin_agents`)
 3. Project file-based agents
-   - `{project}/.agents/agents/*.md` then `{project}/.openhands/agents/*.md`
+   - `{project}/.agents/agents/*.md` then `{project}/.agentrt/agents/*.md`
 4. User file-based agents
-   - `~/.agents/agents/*.md` then `~/.openhands/agents/*.md`
+   - `~/.agents/agents/*.md` then `~/.agentrt/agents/*.md`
 
 Built-ins are discovered and registered separately by `agentrt-tools` through
 `register_builtins_agents()`. Because all non-programmatic sources use
@@ -93,7 +93,7 @@ per-conversation file discovery.
 File-based loading has *two* layers of “first wins” deduplication:
 
 1. **Within a level** (`load_project_agents` / `load_user_agents`):
-   - `.agents/agents` wins over `.openhands/agents` for the same agent name.
+   - `.agents/agents` wins over `.agentrt/agents` for the same agent name.
 2. **Across levels** (`register_file_agents`):
    - project wins over user for the same agent name.
 

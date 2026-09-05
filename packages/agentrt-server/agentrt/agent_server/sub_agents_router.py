@@ -30,7 +30,7 @@ class SubAgentsRequest(BaseModel):
 
     load_user: bool = Field(
         default=True,
-        description="Load user agents from ~/.agents/agents and ~/.openhands/agents",
+        description="Load user agents from ~/.agents/agents and ~/.agentrt/agents",
     )
     load_project: bool = Field(
         default=True,

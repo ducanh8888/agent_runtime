@@ -56,10 +56,10 @@ def test_get_credentials_dir_default(monkeypatch):
 
 
 def test_get_credentials_dir_xdg(monkeypatch, tmp_path):
-    """Test credentials directory ignores XDG_DATA_HOME (uses ~/.openhands/auth)."""
+    """Test credentials directory ignores XDG_DATA_HOME (uses ~/.agentrt/auth)."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     creds_dir = get_credentials_dir()
-    # Implementation uses ~/.openhands/auth regardless of XDG_DATA_HOME
+    # Implementation uses ~/.agentrt/auth regardless of XDG_DATA_HOME
     assert creds_dir == Path.home() / ".agentrt" / "auth"
 
 

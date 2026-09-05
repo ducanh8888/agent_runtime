@@ -93,7 +93,7 @@ class LLMProfileStore:
         Args:
             base_dir: Path to the directory where the profiles are stored.
                 If `None` is provided, the default directory is used, i.e.,
-                `~/.openhands/profiles`.
+                `~/.agentrt/profiles`.
             provider_store: Store of shared provider connections used to
                 resolve a profile's ``provider_connection_id`` at load time.
                 When `None` (the default), a :class:`ProviderConnectionStore`
@@ -116,7 +116,7 @@ class LLMProfileStore:
             # Derive the connections directory from base_dir rather than $HOME,
             # so a custom-directory profile store reads its linked credentials
             # from the same location it reads profiles from. For the default
-            # ~/.openhands/profiles this resolves to ~/.openhands/provider-
+            # ~/.agentrt/profiles this resolves to ~/.agentrt/provider-
             # connections, matching ProviderConnectionStore's own default.
             self._provider_store: ProviderConnectionStore | None = (
                 ProviderConnectionStore(

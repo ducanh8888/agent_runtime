@@ -60,7 +60,7 @@ logger = get_logger(__name__)
 
 # -- SOUL.md loader -------------------------------------------------------
 # SOUL.md is the agent's identity file, ``SOUL.md`` under the user persistence
-# directory (~/.openhands/SOUL.md absent AGENTRT_PERSISTENCE_DIR).  When present it
+# directory (~/.agentrt/SOUL.md absent AGENTRT_PERSISTENCE_DIR).  When present it
 # replaces the default identity in the system prompt.
 
 _SOUL_PATH = get_user_persistence_dir() / "SOUL.md"

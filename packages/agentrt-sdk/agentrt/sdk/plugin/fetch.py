@@ -40,7 +40,7 @@ def fetch_plugin(
               e.g., "https://gitlab.com/org/repo", "git@bitbucket.org:team/repo.git"
             - "github:owner/repo" - GitHub shorthand (convenience syntax)
             - "/local/path" - Local path (returned as-is)
-        cache_dir: Directory for caching. Defaults to ~/.openhands/cache/plugins/
+        cache_dir: Directory for caching. Defaults to ~/.agentrt/cache/plugins/
         ref: Optional branch, tag, or commit to checkout.
         update: If True and cache exists, update it. If False, use cached version as-is.
         repo_path: Subdirectory path within the git repository
@@ -83,7 +83,7 @@ def fetch_plugin_with_resolution(
 
     Args:
         source: Plugin source (see fetch_plugin for formats).
-        cache_dir: Directory for caching. Defaults to ~/.openhands/cache/plugins/
+        cache_dir: Directory for caching. Defaults to ~/.agentrt/cache/plugins/
         ref: Optional branch, tag, or commit to checkout.
         update: If True and cache exists, update it. If False, use cached version as-is.
         repo_path: Subdirectory path within the git repository.

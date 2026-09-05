@@ -112,13 +112,13 @@ async def test_git_changes_returns_empty_list_when_path_is_not_git_repo(client):
     # Arrange
     with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.side_effect = GitRepositoryError(
-            "Not a git repository: /Users/hieple/.openhands/agent-server-gui"
+            "Not a git repository: /Users/hieple/.agentrt/agent-server-gui"
         )
 
         # Act
         response = client.get(
             "/api/git/changes",
-            params={"path": "/Users/hieple/.openhands/agent-server-gui"},
+            params={"path": "/Users/hieple/.agentrt/agent-server-gui"},
         )
 
         # Assert

@@ -70,7 +70,7 @@ def install_plugin(
         ref: Optional branch, tag, or commit to install.
         repo_path: Subdirectory path within the repository (for monorepos).
         installed_dir: Directory for installed plugins.
-            Defaults to ``~/.openhands/plugins/installed/``.
+            Defaults to ``~/.agentrt/plugins/installed/``.
         force: If True, overwrite existing installation.
 
     Returns:

@@ -110,7 +110,7 @@ def test_settings_and_secrets_stores_fall_back_to_home(
 def test_profile_stores_do_not_read_home_directory(
     isolated_persistence_dir: Path,
 ) -> None:
-    """The host user's ``~/.openhands/profiles/*.json`` must not appear."""
+    """The host user's ``~/.agentrt/profiles/*.json`` must not appear."""
     llm = get_llm_profile_store()
     agent = get_agent_profile_store()
 

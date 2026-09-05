@@ -5,8 +5,8 @@ keeping the router clean and focused on HTTP concerns.
 
 Skill Sources:
 - Public skills: registered marketplace plugins or GitHub OpenHands/extensions
-- User skills: ~/.openhands/skills/ and ~/.openhands/microagents/
-- Project skills: {workspace}/.openhands/skills/, .cursorrules, agents.md
+- User skills: ~/.agentrt/skills/ and ~/.agentrt/microagents/
+- Project skills: {workspace}/.agentrt/skills/, .cursorrules, agents.md
 - Organization skills: {org}/.agentrt or {org}/openhands-config
 - Sandbox skills: Exposed URLs from sandbox environment
 
@@ -508,7 +508,7 @@ def service_install_skill(
         repo_path: Subdirectory path within the repository (for monorepos).
         force: If True, overwrite existing installation.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         InstalledSkillInfo with details about the installation.
@@ -536,7 +536,7 @@ def service_uninstall_skill(
     Args:
         name: Name of the skill to uninstall.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         True if the skill was uninstalled, False if it wasn't installed.
@@ -553,7 +553,7 @@ def service_enable_skill(
     Args:
         name: Name of the skill to enable.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         True if the skill was enabled, False if it wasn't found.
@@ -570,7 +570,7 @@ def service_disable_skill(
     Args:
         name: Name of the skill to disable.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         True if the skill was disabled, False if it wasn't found.
@@ -587,7 +587,7 @@ def service_list_installed_skills(
 
     Args:
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         List of InstalledSkillInfo objects for all installed skills.
@@ -604,7 +604,7 @@ def service_get_installed_skill(
     Args:
         name: Name of the skill to get.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         InstalledSkillInfo if found, None otherwise.
@@ -621,7 +621,7 @@ def service_update_skill(
     Args:
         name: Name of the skill to update.
         installed_dir: Directory for installed skills.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         Updated InstalledSkillInfo if successful, None if skill not found.
@@ -677,7 +677,7 @@ def service_get_marketplace_catalog(
         marketplace_path: Relative path to marketplace JSON file.
             Defaults to marketplaces/default.json.
         installed_dir: Directory for installed skills to check status.
-            Defaults to ~/.openhands/skills/installed/.
+            Defaults to ~/.agentrt/skills/installed/.
 
     Returns:
         List of MarketplaceSkillInfo with skill details and installation status.

@@ -122,7 +122,7 @@ def install_canvas_extension(
         source: ``"github:owner/repo"``, a git URL, or a local path.
         ref: Optional branch, tag, or commit to install.
         repo_path: Subdirectory within the repository (for monorepos).
-        installed_dir: Defaults to ``~/.openhands/canvas-extensions/installed/``.
+        installed_dir: Defaults to ``~/.agentrt/canvas-extensions/installed/``.
         force: If True, overwrite an existing installation.
 
     Returns:
@@ -333,7 +333,7 @@ def check_canvas_extension_update(
 
     Args:
         name: Name of the installed extension to check.
-        installed_dir: Defaults to ``~/.openhands/canvas-extensions/installed/``.
+        installed_dir: Defaults to ``~/.agentrt/canvas-extensions/installed/``.
 
     Returns:
         None if not installed, else a result -- only apply when ``validated``.
@@ -390,7 +390,7 @@ def apply_canvas_extension_update(
         name: Name of the installed extension to update.
         resolved_ref: The ``resolved_ref`` from a prior, validated check.
         enabled: Enabled state to apply to the new bundle.
-        installed_dir: Defaults to ``~/.openhands/canvas-extensions/installed/``.
+        installed_dir: Defaults to ``~/.agentrt/canvas-extensions/installed/``.
 
     Returns:
         None if not installed, else the InstallationInfo for the new bundle.

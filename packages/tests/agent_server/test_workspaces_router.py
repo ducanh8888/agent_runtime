@@ -1,6 +1,6 @@
 """Tests for workspaces_router endpoints.
 
-Workspaces persisted on the agent-server (workspace/.openhands/workspaces.json)
+Workspaces persisted on the agent-server (workspace/.agentrt/workspaces.json)
 replace the previous browser-local Zustand store, so every client connected to
 the same server sees the same list. These tests cover the HTTP surface the
 GUI consumes plus the file-locked persistence underneath it.

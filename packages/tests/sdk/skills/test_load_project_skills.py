@@ -13,12 +13,12 @@ def test_load_project_skills_no_directories(tmp_path):
 
 
 def test_load_project_skills_agents_md_without_skills_directory(tmp_path):
-    """Test that AGENTS.md is loaded even when .openhands/skills doesn't exist.
+    """Test that AGENTS.md is loaded even when .agentrt/skills doesn't exist.
 
     This is a regression test for the bug where third-party skill files like
-    AGENTS.md were not loaded when the .openhands/skills directory didn't exist.
+    AGENTS.md were not loaded when the .agentrt/skills directory didn't exist.
     """
-    # Create AGENTS.md in the work directory (no .openhands/skills)
+    # Create AGENTS.md in the work directory (no .agentrt/skills)
     agents_md = tmp_path / "AGENTS.md"
     agents_md.write_text("# Project Guidelines\n\nThis is the AGENTS.md content.")
 
@@ -56,11 +56,11 @@ def test_load_project_skills_multiple_third_party_files(tmp_path):
 
 
 def test_load_project_skills_third_party_with_skills_directory(tmp_path):
-    """Test third-party files are loaded alongside skills from .openhands/skills."""
+    """Test third-party files are loaded alongside skills from .agentrt/skills."""
     # Create AGENTS.md in work directory
     (tmp_path / "AGENTS.md").write_text("# AGENTS.md content")
 
-    # Create .openhands/skills directory with a skill
+    # Create .agentrt/skills directory with a skill
     skills_dir = tmp_path / ".agentrt" / "skills"
     skills_dir.mkdir(parents=True)
     (skills_dir / "test_skill.md").write_text(
@@ -75,8 +75,8 @@ def test_load_project_skills_third_party_with_skills_directory(tmp_path):
 
 
 def test_load_project_skills_with_skills_directory(tmp_path):
-    """Test load_project_skills loads from .openhands/skills directory."""
-    # Create .openhands/skills directory
+    """Test load_project_skills loads from .agentrt/skills directory."""
+    # Create .agentrt/skills directory
     skills_dir = tmp_path / ".agentrt" / "skills"
     skills_dir.mkdir(parents=True)
 
@@ -125,10 +125,10 @@ def test_load_project_skills_agents_directory_precedence(tmp_path):
         "---\nname: duplicate\n---\nFrom .agents/skills."
     )
     (skills_dir / "duplicate.md").write_text(
-        "---\nname: duplicate\n---\nFrom .openhands/skills."
+        "---\nname: duplicate\n---\nFrom .agentrt/skills."
     )
     (microagents_dir / "duplicate.md").write_text(
-        "---\nname: duplicate\n---\nFrom .openhands/microagents."
+        "---\nname: duplicate\n---\nFrom .agentrt/microagents."
     )
 
     skills = load_project_skills(tmp_path)
@@ -138,7 +138,7 @@ def test_load_project_skills_agents_directory_precedence(tmp_path):
 
 
 def test_load_project_skills_merges_agents_and_openhands(tmp_path):
-    """Test loading unique skills from .agents/skills and .openhands/skills."""
+    """Test loading unique skills from .agents/skills and .agentrt/skills."""
     agents_dir = tmp_path / ".agents" / "skills"
     openhands_dir = tmp_path / ".agentrt" / "skills"
     agents_dir.mkdir(parents=True)
@@ -158,8 +158,8 @@ def test_load_project_skills_merges_agents_and_openhands(tmp_path):
 
 
 def test_load_project_skills_with_microagents_directory(tmp_path):
-    """Test load_project_skills loads from .openhands/microagents directory (legacy)."""
-    # Create .openhands/microagents directory
+    """Test load_project_skills loads from .agentrt/microagents directory (legacy)."""
+    # Create .agentrt/microagents directory
     microagents_dir = tmp_path / ".agentrt" / "microagents"
     microagents_dir.mkdir(parents=True)
 
@@ -226,7 +226,7 @@ def test_load_project_skills_both_directories(tmp_path):
 
 def test_load_project_skills_handles_errors_gracefully(tmp_path):
     """Test that errors in loading are handled gracefully."""
-    # Create .openhands/skills directory
+    # Create .agentrt/skills directory
     skills_dir = tmp_path / ".agentrt" / "skills"
     skills_dir.mkdir(parents=True)
 
@@ -250,7 +250,7 @@ def test_load_project_skills_one_bad_skill_does_not_break_others(tmp_path):
     This is a regression test for the bug where a single skill validation error
     would cause ALL skills in the directory to fail loading.
     """
-    # Create .openhands/skills directory
+    # Create .agentrt/skills directory
     skills_dir = tmp_path / ".agentrt" / "skills"
     skills_dir.mkdir(parents=True)
 
@@ -327,7 +327,7 @@ def test_long_description_skill_does_not_break_other_skills(tmp_path):
 
 def test_load_project_skills_with_string_path(tmp_path):
     """Test that load_project_skills accepts string paths."""
-    # Create .openhands/skills directory
+    # Create .agentrt/skills directory
     skills_dir = tmp_path / ".agentrt" / "skills"
     skills_dir.mkdir(parents=True)
 

@@ -125,7 +125,7 @@ def install_skill(
         ref: Optional branch, tag, or commit to install.
         repo_path: Subdirectory path within the repository (for monorepos).
         installed_dir: Directory for installed skills.
-            Defaults to ``~/.openhands/skills/installed/``.
+            Defaults to ``~/.agentrt/skills/installed/``.
         force: If True, overwrite existing installation.
 
     Returns:
@@ -208,7 +208,7 @@ def install_skills_from_marketplace(
         marketplace_path: Path to the directory containing
             ``.plugin/marketplace.json``.
         installed_dir: Directory for installed skills.
-            Defaults to ``~/.openhands/skills/installed/``.
+            Defaults to ``~/.agentrt/skills/installed/``.
         force: If True, overwrite existing installations.
 
     Returns:

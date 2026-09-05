@@ -39,7 +39,7 @@ def mock_installed_skill_info():
         resolved_ref="abc123",
         repo_path=None,
         installed_at="2024-01-01T00:00:00Z",
-        install_path=Path("/home/user/.openhands/skills/installed/test-skill"),
+        install_path=Path("/home/user/.agentrt/skills/installed/test-skill"),
     )
 
 

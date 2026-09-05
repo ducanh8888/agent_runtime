@@ -117,13 +117,13 @@ class MemorySection(_StaticTextSection):
     # The user-tier bullet is filled in by ``_user_memory_line`` so the resolved
     # location (honoring AGENTRT_PERSISTENCE_DIR, matching load_memory()'s read path)
     # is what the agent is told to write to. When the env var is unset the line
-    # is the literal ``~/.openhands/memory/`` -- a plain tilde, never the expanded
+    # is the literal ``~/.agentrt/memory/`` -- a plain tilde, never the expanded
     # home path -- so the block stays cache-shared and machine-independent, and
     # the AGENTRT_PERSISTENCE_DIR value that does appear is a deployment-constant mount
     # (see test_static_block_has_no_dynamic_content).
     _TWO_TIER_GUIDANCE = """\
 You have persistent memory that survives across sessions, in two tiers:
-* Project memory: `.openhands/memory/` under the workspace root — knowledge specific to this repository.
+* Project memory: `.agentrt/memory/` under the workspace root — knowledge specific to this repository.
 {user_memory_line}
 
 Each tier contains:

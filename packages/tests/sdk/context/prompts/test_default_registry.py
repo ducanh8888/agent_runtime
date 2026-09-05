@@ -168,7 +168,7 @@ def test_memory_section_body_switches_on_memory_enabled(
     assert section.guard(_ctx()) is True
     default = section.render(_ctx()) or ""
     assert "Use `AGENTS.md` under the repository root" in default
-    assert ".openhands/memory/" not in default
+    assert ".agentrt/memory/" not in default
 
     # Without AGENTRT_PERSISTENCE_DIR the user-tier bullet stays a literal tilde so
     # the static block leaks no per-user home path (cache-shared, machine
@@ -176,9 +176,9 @@ def test_memory_section_body_switches_on_memory_enabled(
     monkeypatch.delenv("AGENTRT_PERSISTENCE_DIR", raising=False)
     enabled = section.render(_ctx(memory_enabled=True)) or ""
     assert "persistent memory that survives across sessions" in enabled
-    assert "`.openhands/memory/`" in enabled
+    assert "`.agentrt/memory/`" in enabled
     assert "<MEMORY_CONTEXT>" in enabled
-    assert "`~/.openhands/memory/`" in enabled
+    assert "`~/.agentrt/memory/`" in enabled
     assert "<MEMORY_LOCATIONS>" not in enabled
 
 
@@ -193,7 +193,7 @@ def test_memory_section_names_persistence_dir_when_set(
     # Slash-separated on every platform, so the agent never sees a mixed path.
     expected = to_posix_path(tmp_path / "persistent" / "memory")
     assert f"`{expected}/`" in enabled
-    assert "~/.openhands/memory/" not in enabled
+    assert "~/.agentrt/memory/" not in enabled
 
 
 def test_model_specific_selects_family_and_variant() -> None:

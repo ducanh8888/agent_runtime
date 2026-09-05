@@ -7,7 +7,7 @@ It also provides support for plugin marketplaces - directories that list
 available plugins with their metadata and source locations.
 
 Additionally, it provides utilities for managing installed plugins in the
-user's home directory (~/.openhands/plugins/installed/).
+user's home directory (~/.agentrt/plugins/installed/).
 
 Note: Marketplace classes live in ``agentrt.sdk.marketplace``.
 """

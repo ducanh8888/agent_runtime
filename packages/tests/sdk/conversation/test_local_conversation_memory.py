@@ -21,7 +21,7 @@ from agentrt.sdk.testing import TestLLM
 
 @pytest.fixture(autouse=True)
 def isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """Keep the user memory tier (``~/.openhands/memory/``) off the host home."""
+    """Keep the user memory tier (``~/.agentrt/memory/``) off the host home."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))

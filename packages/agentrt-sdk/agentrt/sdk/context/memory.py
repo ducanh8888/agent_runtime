@@ -1,7 +1,7 @@
 """Two-tier persistent-memory loader.
 
-Reads the agent-maintained ``MEMORY.md`` indexes -- ``~/.openhands/memory/``
-(user tier) and ``<workspace>/.openhands/memory/`` (project tier) -- into one
+Reads the agent-maintained ``MEMORY.md`` indexes -- ``~/.agentrt/memory/``
+(user tier) and ``<workspace>/.agentrt/memory/`` (project tier) -- into one
 prompt-ready string. LocalConversation resolves this on the first
 ``send_message()`` / ``run()`` (the workspace path is unknown when AgentContext
 validates); AgentContext only carries the resolved text. Daily logs
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 __all__ = ["MEMORY_CHAR_BUDGET", "MEMORY_INDEX_RELPATH", "load_memory"]
 
-MEMORY_INDEX_RELPATH: Final[str] = ".openhands/memory/MEMORY.md"
+MEMORY_INDEX_RELPATH: Final[str] = ".agentrt/memory/MEMORY.md"
 MEMORY_CHAR_BUDGET: Final[int] = 6000
 _TRUNCATION_NOTICE: Final[str] = "[earlier memory truncated]"
 

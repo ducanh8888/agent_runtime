@@ -26,7 +26,7 @@ def temp_user_skills_dir():
         agents_dir = root / ".agents" / "skills"
         agents_dir.mkdir(parents=True)
 
-        # Create .openhands/skills directory
+        # Create .agentrt/skills directory
         skills_dir = root / ".agentrt" / "skills"
         skills_dir.mkdir(parents=True)
 
@@ -39,7 +39,7 @@ def temp_microagents_dir():
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
 
-        # Create .openhands/microagents directory
+        # Create .agentrt/microagents directory
         microagents_dir = root / ".agentrt" / "microagents"
         microagents_dir.mkdir(parents=True)
 
@@ -88,7 +88,7 @@ def test_load_user_skills_with_agents_directory(temp_user_skills_dir):
 
 
 def test_load_user_skills_with_skills_directory(temp_user_skills_dir):
-    """Test load_user_skills loads from .openhands/skills directory."""
+    """Test load_user_skills loads from .agentrt/skills directory."""
     root, _, skills_dir = temp_user_skills_dir
 
     # Create a test skill file
@@ -140,7 +140,7 @@ def test_load_user_skills_with_microagents_directory(temp_microagents_dir):
 
 
 def test_load_user_skills_priority_order(tmp_path):
-    """Test precedence .agents/skills > .openhands/skills > microagents."""
+    """Test precedence .agents/skills > .agentrt/skills > microagents."""
     agents_dir = tmp_path / ".agents" / "skills"
     skills_dir = tmp_path / ".agentrt" / "skills"
     microagents_dir = tmp_path / ".agentrt" / "microagents"
@@ -152,10 +152,10 @@ def test_load_user_skills_priority_order(tmp_path):
         "---\nname: duplicate\n---\nFrom .agents/skills."
     )
     (skills_dir / "duplicate.md").write_text(
-        "---\nname: duplicate\n---\nFrom .openhands/skills."
+        "---\nname: duplicate\n---\nFrom .agentrt/skills."
     )
     (microagents_dir / "duplicate.md").write_text(
-        "---\nname: duplicate\n---\nFrom .openhands/microagents."
+        "---\nname: duplicate\n---\nFrom .agentrt/microagents."
     )
 
     from agentrt.sdk.skills import skill
@@ -172,7 +172,7 @@ def test_load_user_skills_priority_order(tmp_path):
 
 
 def test_load_user_skills_merges_all_directories(tmp_path):
-    """Test loading unique skills from .agents/skills, .openhands/skills,
+    """Test loading unique skills from .agents/skills, .agentrt/skills,
     microagents.
     """
     agents_dir = tmp_path / ".agents" / "skills"

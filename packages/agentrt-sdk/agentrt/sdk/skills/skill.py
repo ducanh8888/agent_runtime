@@ -857,7 +857,7 @@ def load_skills_from_dir(
     Note, legacy repo instructions will not be loaded here.
 
     Args:
-        skill_dir: Path to the skills directory (e.g. .openhands/skills)
+        skill_dir: Path to the skills directory (e.g. .agentrt/skills)
 
     Returns:
         Tuple of (repo_skills, knowledge_skills, agent_skills) dictionaries.
@@ -921,12 +921,12 @@ USER_SKILLS_DIRS = [
 def load_user_skills() -> list[Skill]:
     """Load skills from user's home directory.
 
-    Searches for skills in ~/.agents/skills/, ~/.openhands/skills/, and
-    ~/.openhands/microagents/ (legacy). Skills from all directories are merged,
+    Searches for skills in ~/.agents/skills/, ~/.agentrt/skills/, and
+    ~/.agentrt/microagents/ (legacy). Skills from all directories are merged,
     with earlier entries in USER_SKILLS_DIRS taking precedence for duplicate
     names.
 
-    Also loads enabled installed skills from ~/.openhands/skills/installed/
+    Also loads enabled installed skills from ~/.agentrt/skills/installed/
     (managed via install_skill/uninstall_skill). Installed skills have lower
     precedence than user skills from the directories above.
 
@@ -1027,8 +1027,8 @@ def _load_and_merge_from_dirs(
 def load_project_skills(work_dir: str | Path) -> list[Skill]:
     """Load skills from project-specific directories.
 
-    Searches for skills in {work_dir}/.agents/skills/, {work_dir}/.openhands/skills/,
-    and {work_dir}/.openhands/microagents/ (legacy).
+    Searches for skills in {work_dir}/.agents/skills/, {work_dir}/.agentrt/skills/,
+    and {work_dir}/.agentrt/microagents/ (legacy).
 
     If the working directory is inside a Git repository, this function also loads
     skills from the Git repo root, so running from a subdirectory still picks up
@@ -1037,10 +1037,10 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
     Skills are merged in priority order, with the *working directory* taking
     precedence over the Git repo root when duplicates exist.
 
-    Use .agents/skills for new skills. .openhands/skills is the legacy OpenHands
-    location, and .openhands/microagents is deprecated.
+    Use .agents/skills for new skills. .agentrt/skills is the legacy OpenHands
+    location, and .agentrt/microagents is deprecated.
 
-    Example: If "my-skill" exists in both .agents/skills/ and .openhands/skills/,
+    Example: If "my-skill" exists in both .agents/skills/ and .agentrt/skills/,
     the version from .agents/skills/ is used.
 
     Also loads third-party skill files (AGENTS.md, .cursorrules, etc.) from the
@@ -1067,7 +1067,7 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
         search_roots.append(git_root)
 
     # First, load third-party skill files (AGENTS.md, .cursorrules, etc.) from each
-    # search root. This ensures they are loaded even if .openhands/skills doesn't
+    # search root. This ensures they are loaded even if .agentrt/skills doesn't
     # exist.
     for root in search_roots:
         third_party_files = find_third_party_files(
@@ -1098,7 +1098,7 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
         except (SkillError, OSError, UnicodeDecodeError, yaml.YAMLError) as e:
             logger.warning(f"Failed to load nested third-party file {path}: {e}")
 
-    # Load project-specific skills from .agents/skills, .openhands/skills,
+    # Load project-specific skills from .agents/skills, .agentrt/skills,
     # and legacy microagents (priority order; first wins for duplicates)
     for root in search_roots:
         project_skills_dirs = [
@@ -1210,7 +1210,7 @@ def load_public_skills(
 
     This function maintains a local git clone of the public skills registry at
     https://github.com/OpenHands/extensions. On first run, it clones the repository
-    to ~/.openhands/skills-cache/. On subsequent runs within the same process, it
+    to ~/.agentrt/skills-cache/. On subsequent runs within the same process, it
     returns cached results. For branch refs it re-fetches after the cache TTL; for
     tags and commit SHAs (immutable refs) the cache never expires so no further
     network calls are made.

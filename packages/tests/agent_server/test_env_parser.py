@@ -447,7 +447,7 @@ def test_config_class_parsing(clean_env):
     os.environ["AGENTRT_WORKSPACE_PATH"] = "/custom/workspace"
     os.environ["AGENTRT_ENABLE_VSCODE"] = "false"
 
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
 
     assert config.session_api_keys == ["key1", "key2"]
     assert config.allow_cors_origins == ["http://localhost:3000"]
@@ -524,7 +524,7 @@ def test_config_webhook_specs_parsing(clean_env):
     ]
     os.environ["AGENTRT_WEBHOOKS"] = json.dumps(webhook_data)
 
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
 
     assert len(config.webhooks) == 2
     assert config.webhooks[0].base_url == "https://webhook1.example.com"
@@ -555,7 +555,7 @@ def test_config_webhook_specs_sequential_parsing(clean_env):
     os.environ["AGENTRT_WEBHOOKS_1_NUM_RETRIES"] = "5"
     os.environ["AGENTRT_WEBHOOKS_1_RETRY_DELAY"] = "10"
 
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
 
     assert len(config.webhooks) == 2
     assert config.webhooks[0].base_url == "https://webhook1.example.com"
@@ -583,7 +583,7 @@ def test_config_mixed_webhook_parsing(clean_env):
     os.environ["AGENTRT_WEBHOOKS_0_FLUSH_DELAY"] = "45.0"
     os.environ["AGENTRT_WEBHOOKS_0_HEADERS"] = json.dumps({"Override": "header"})
 
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
 
     assert len(config.webhooks) == 1
     # First webhook: base + overrides
@@ -1391,11 +1391,11 @@ def test_discriminated_union_single_empty_kind_no_variables(clean_env):
 
 
 def test_config_lease_ttl_seconds_default(clean_env):
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
     assert config.lease_ttl_seconds == DEFAULT_LEASE_TTL_SECONDS
 
 
 def test_config_lease_ttl_seconds_env_var(clean_env):
     os.environ["AGENTRT_LEASE_TTL_SECONDS"] = "0"
-    config = from_env(Config, "OH")
+    config = from_env(Config, "AGENTRT")
     assert config.lease_ttl_seconds == 0.0

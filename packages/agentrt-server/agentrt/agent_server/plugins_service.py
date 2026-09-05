@@ -264,7 +264,7 @@ def service_get_plugins_marketplace_catalog(
     Args:
         marketplace_path: Relative path to the marketplace JSON file.
         installed_dir: Directory of installed plugins to check status against.
-            Defaults to ``~/.openhands/plugins/installed/``.
+            Defaults to ``~/.agentrt/plugins/installed/``.
 
     Returns:
         List of MarketplacePluginInfo with plugin details and install status.

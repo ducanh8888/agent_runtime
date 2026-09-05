@@ -48,7 +48,7 @@ class AgentProfileStore:
     """Standalone utility for persisting ``AgentProfile`` launch specs.
 
     Mirrors :class:`~agentrt.sdk.llm.llm_profile_store.LLMProfileStore`: one
-    JSON file per profile under ``~/.openhands/agent-profiles``, the filename is
+    JSON file per profile under ``~/.agentrt/agent-profiles``, the filename is
     the (renameable) profile ``name``, and the stable ``id`` (uuid) lives inside
     the file. The profile is secret-free at rest — every field is a reference
     (``llm_profile_ref``, ``mcp_server_refs``), a deny-list of names
@@ -61,7 +61,7 @@ class AgentProfileStore:
 
         Args:
             base_dir: Directory where profiles are stored. ``None`` uses the
-                default ``~/.openhands/agent-profiles``.
+                default ``~/.agentrt/agent-profiles``.
         """
         self.base_dir = Path(base_dir) if base_dir is not None else _DEFAULT_PROFILE_DIR
         self.base_dir.mkdir(parents=True, exist_ok=True)
