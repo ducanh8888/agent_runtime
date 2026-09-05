@@ -184,3 +184,14 @@ Ghi chú kéo theo: bỏ hook khỏi đường policy không có nghĩa hook bi�
 | Giá trị ghi xuống đĩa / lên dây | Đổi hết cho nhất quán: `agent_kind`, `OpenHandsCloudWorkspace`, header `X-OpenHands-*`, telemetry `source`, enum `openhands_managed` |
 
 Danh sách phải giữ nguyên, không được replace: tiền tố model LiteLLM `"openhands/"` và bảng `VERIFIED_MODELS["openhands"]`, mọi URL `openhands.dev` và `all-hands.dev`, `github.com/OpenHands`, `ghcr.io/openhands/agent-server`, `"originator": "openhands"` gửi cho OpenAI, dòng `Co-authored-by: openhands`, và cả hai file LICENSE.
+
+## Vòng 18-20 — quyết định phát sinh trong lúc chạy P1
+
+| Câu hỏi | Quyết định |
+|---|---|
+| litellm 1.93.0 không có wheel Windows | Nâng pin lên 1.93.1; baseline lấy từ commit đã sửa pin, không phải bản copy nguyên gốc |
+| Tầng 4 (giá trị wire) làm dở dang, ~200 fail | Revert tầng 4, giữ tầng 1-3. `agent_kind`, `OpenHandsCloudWorkspace` và vài enum giữ tên cũ như định danh lịch sử nội bộ |
+| Test kiểm tra `.github/scripts` fail vĩnh viễn | Xóa 7 module trong `tests/cross/` |
+| Hộp thoại "Pick an app" liên tục khi chạy test | Xóa `packages/.openhands/` — hook dev của upstream trỏ tới file `.sh`, trên Windows `shell=True` rơi về ShellExecute và mở hộp thoại chặn |
+| Nơi đặt credential 9Router | `.env` ở gốc repo (đã gitignore) làm nguồn lúc phát triển; daemon đọc rồi đưa vào LLM profile trong state dir. Hai base URL cho hai protocol |
+| Test ghi vào state dir thật của người dùng | Mọi lần chạy pytest từ nay phải đặt `AGENTRT_PERSISTENCE_DIR` trỏ vào thư mục tạm |

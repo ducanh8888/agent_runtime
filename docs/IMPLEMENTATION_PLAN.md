@@ -145,4 +145,5 @@ Scheduling — the OS scheduler calls the CLI, so no cron belongs in the daemon.
 | Hard fork | Upstream fixes will not arrive; the vendored tree is ours to maintain |
 | Windows has no tmux pane pool | Per-session terminal concurrency differs from Linux |
 | Sessions are kept forever | The catalog grows until `delete` is used |
+| A few identifiers keep the upstream spelling | `agent_kind`, `OpenHandsCloudWorkspace` and some enum values are legacy identifiers, not a half-finished rename |
 | Shared workspaces are not coordinated | Two sessions on one repo can overwrite each other; sequencing is the orchestrator's job |
