@@ -7,11 +7,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.event import ActionEvent, MessageEvent, SystemPromptEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.security.grayswan import GraySwanAnalyzer
-from openhands.sdk.security.risk import SecurityRisk
-from openhands.sdk.tool import Action
+from agentrt.sdk.event import ActionEvent, MessageEvent, SystemPromptEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.security.grayswan import GraySwanAnalyzer
+from agentrt.sdk.security.risk import SecurityRisk
+from agentrt.sdk.tool import Action
 
 
 class GraySwanTestAction(Action):

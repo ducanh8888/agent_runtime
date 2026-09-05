@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.context import (
+from agentrt.sdk.context import (
     KeywordTrigger,
     Skill,
     SkillValidationError,
@@ -13,13 +13,13 @@ from openhands.sdk.context import (
     load_project_skills,
     load_skills_from_dir,
 )
-from openhands.sdk.skills.utils import (
+from agentrt.sdk.skills.utils import (
     find_regular_md_files,
     find_skill_md,
     find_skill_md_directories,
     find_third_party_files,
 )
-from openhands.sdk.utils.path import to_posix_path
+from agentrt.sdk.utils.path import to_posix_path
 from tests.platform_utils import require_case_sensitive_fs, symlink_or_skip
 
 

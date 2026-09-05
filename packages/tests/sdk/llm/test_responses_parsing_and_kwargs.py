@@ -17,11 +17,11 @@ from openai.types.responses.response_reasoning_item import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm import LLMCallContext
-from openhands.sdk.llm.message import Message, ReasoningItemModel, TextContent
-from openhands.sdk.llm.options.chat_options import select_chat_options
-from openhands.sdk.llm.options.responses_options import select_responses_options
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm import LLMCallContext
+from agentrt.sdk.llm.message import Message, ReasoningItemModel, TextContent
+from agentrt.sdk.llm.options.chat_options import select_chat_options
+from agentrt.sdk.llm.options.responses_options import select_responses_options
 
 
 def build_responses_message_output(texts: list[str]) -> ResponseOutputMessage:
@@ -167,7 +167,7 @@ def test_responses_encrypted_reasoning_not_added_for_non_reasoning_model():
     assert "reasoning" not in out
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_llm_responses_end_to_end(mock_responses_call):
     # Configure LLM
     llm = LLM(model="gpt-5-mini")
@@ -318,7 +318,7 @@ def test_responses_options_omits_prompt_cache_key_when_unset():
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_responses_retries_without_caching_on_prompt_cache_too_small(mock_responses):
     """When Vertex AI rejects caching due to small content, responses() should
     retry without prompt caching while preserving caller kwargs.
@@ -399,7 +399,7 @@ def test_responses_retries_without_caching_on_prompt_cache_too_small(mock_respon
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
 async def test_aresponses_retries_without_caching_on_prompt_cache_too_small(
     mock_aresponses,
 ):
@@ -503,7 +503,7 @@ def _make_wrapped_response_stream_events(text: str = "Hello wrapped stream"):
     return events, response
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_responses_streaming_accepts_wrapped_iterable(mock_responses):
     """Responses streaming must not require LiteLLM's concrete iterator class."""
     events, completed_response = _make_wrapped_response_stream_events()
@@ -532,7 +532,7 @@ def test_responses_streaming_accepts_wrapped_iterable(mock_responses):
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
 async def test_aresponses_streaming_accepts_sync_generator(mock_aresponses):
     """Async Responses streaming must also tolerate sync iterable wrappers."""
     events, completed_response = _make_wrapped_response_stream_events()
@@ -565,7 +565,7 @@ async def test_aresponses_streaming_accepts_sync_generator(mock_aresponses):
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm_aresponses", new_callable=AsyncMock)
 async def test_aresponses_streaming_accepts_async_generator(mock_aresponses):
     """Regression for lmnr 0.7.47 returning an async_generator wrapper."""
     events, completed_response = _make_wrapped_response_stream_events()

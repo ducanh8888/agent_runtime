@@ -7,9 +7,9 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from openhands.agent_server.openapi import build_public_openapi, serialize_openapi
-from openhands.sdk.mcp.config import MCPServer
-from openhands.sdk.settings.api_models import MCPServerPatch
+from agentrt.agent_server.openapi import build_public_openapi, serialize_openapi
+from agentrt.sdk.mcp.config import MCPServer
+from agentrt.sdk.settings.api_models import MCPServerPatch
 
 
 def _load_quality_module():

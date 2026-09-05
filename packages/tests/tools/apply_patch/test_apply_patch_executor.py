@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.tools.apply_patch.definition import ApplyPatchAction, ApplyPatchExecutor
+from agentrt.tools.apply_patch.definition import ApplyPatchAction, ApplyPatchExecutor
 
 
 @pytest.fixture()

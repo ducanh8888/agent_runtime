@@ -1,6 +1,6 @@
 """Tests for prompt generation utilities (Issue #1478)."""
 
-from openhands.sdk.skills import (
+from agentrt.sdk.skills import (
     Skill,
     to_prompt,
 )

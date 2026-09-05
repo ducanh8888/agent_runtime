@@ -32,16 +32,16 @@ def _probe_auto_title_spans() -> dict[str, Any]:
     )
     from pydantic import SecretStr
 
-    from openhands.agent_server.conversation_service import AutoTitleSubscriber
-    from openhands.agent_server.event_service import EventService
-    from openhands.agent_server.models import StoredConversation
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.conversation import Conversation
-    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-    from openhands.sdk.event.llm_convertible import MessageEvent
-    from openhands.sdk.llm import LLM, Message, TextContent
-    from openhands.sdk.security.confirmation_policy import NeverConfirm
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.agent_server.conversation_service import AutoTitleSubscriber
+    from agentrt.agent_server.event_service import EventService
+    from agentrt.agent_server.models import StoredConversation
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.conversation import Conversation
+    from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+    from agentrt.sdk.event.llm_convertible import MessageEvent
+    from agentrt.sdk.llm import LLM, Message, TextContent
+    from agentrt.sdk.security.confirmation_policy import NeverConfirm
+    from agentrt.sdk.workspace import LocalWorkspace
 
     Laminar.initialize(
         project_api_key="test-key",
@@ -92,7 +92,7 @@ def _probe_auto_title_spans() -> dict[str, Any]:
 
     async def drive() -> None:
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion", side_effect=mocked_completion
+            "agentrt.sdk.llm.llm.litellm_completion", side_effect=mocked_completion
         ):
             await AutoTitleSubscriber(service=service)(event)
             for _ in range(250):

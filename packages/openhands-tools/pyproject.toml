@@ -34,9 +34,9 @@ include-package-data = true
 "" = "."
 
 [tool.setuptools.packages.find]
-include = ["openhands.tools*"]
+include = ["agentrt.tools*"]
 namespaces = true
 
 [tool.setuptools.package-data]
 "*" = ["py.typed", "**/*.j2"]
-"openhands.tools.preset.subagents" = ["*.md"]
+"agentrt.tools.preset.subagents" = ["*.md"]

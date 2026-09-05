@@ -24,16 +24,16 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.event import ActionEvent, AgentErrorEvent, MessageEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.event import ActionEvent, AgentErrorEvent, MessageEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 # ── minimal tool ─────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ def test_newline_whitespace_in_arguments_parses_ok():
     )
 
     events: list[object] = []
-    with patch("openhands.sdk.llm.llm.litellm_completion", return_value=resp):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", return_value=resp):
         conv.send_message(
             Message(
                 role="user",
@@ -194,7 +194,7 @@ def test_control_chars_in_string_values_still_sanitized():
     )
 
     events: list[object] = []
-    with patch("openhands.sdk.llm.llm.litellm_completion", return_value=resp):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", return_value=resp):
         conv.send_message(
             Message(
                 role="user",
@@ -223,7 +223,7 @@ def test_reasoning_only_response_injects_nudge():
     )
 
     events: list[object] = []
-    with patch("openhands.sdk.llm.llm.litellm_completion", return_value=resp):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", return_value=resp):
         conv.send_message(
             Message(
                 role="user",
@@ -254,7 +254,7 @@ def test_content_response_does_not_inject_nudge():
     resp = _model_response(content="Here is my analysis of the bug...")
 
     events: list[object] = []
-    with patch("openhands.sdk.llm.llm.litellm_completion", return_value=resp):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", return_value=resp):
         conv.send_message(
             Message(
                 role="user",
@@ -277,7 +277,7 @@ def test_completely_empty_response_injects_nudge():
     resp = _model_response(content="")
 
     events: list[object] = []
-    with patch("openhands.sdk.llm.llm.litellm_completion", return_value=resp):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", return_value=resp):
         conv.send_message(
             Message(
                 role="user",

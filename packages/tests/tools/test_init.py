@@ -1,12 +1,12 @@
-"""Tests for openhands.tools package initialization and import handling."""
+"""Tests for agentrt.tools package initialization and import handling."""
 
 
 def test_submodule_imports_work():
     """Tools should be imported via explicit submodules."""
-    from openhands.tools.browser_use import BrowserToolSet
-    from openhands.tools.file_editor import FileEditorTool
-    from openhands.tools.task_tracker import TaskTrackerTool
-    from openhands.tools.terminal import TerminalTool
+    from agentrt.tools.browser_use import BrowserToolSet
+    from agentrt.tools.file_editor import FileEditorTool
+    from agentrt.tools.task_tracker import TaskTrackerTool
+    from agentrt.tools.terminal import TerminalTool
 
     assert TerminalTool is not None
     assert FileEditorTool is not None
@@ -22,18 +22,18 @@ def test_tools_module_has_expected_top_level_exports():
     See: https://github.com/OpenHands/OpenHands-CLI/pull/527
     """
 
-    import openhands.tools
+    import agentrt.tools
 
-    assert openhands.tools.TerminalTool is not None
-    assert openhands.tools.FileEditorTool is not None
-    assert openhands.tools.TaskTrackerTool is not None
+    assert agentrt.tools.TerminalTool is not None
+    assert agentrt.tools.FileEditorTool is not None
+    assert agentrt.tools.TaskTrackerTool is not None
 
-    assert openhands.tools.get_default_agent is not None
-    assert openhands.tools.get_default_tools is not None
-    assert openhands.tools.register_default_tools is not None
+    assert agentrt.tools.get_default_agent is not None
+    assert agentrt.tools.get_default_tools is not None
+    assert agentrt.tools.register_default_tools is not None
 
 
 def test_from_import_works():
-    """`from openhands.tools import X` should work for exported symbols."""
+    """`from agentrt.tools import X` should work for exported symbols."""
 
-    from openhands.tools import TerminalTool  # noqa: F401
+    from agentrt.tools import TerminalTool  # noqa: F401

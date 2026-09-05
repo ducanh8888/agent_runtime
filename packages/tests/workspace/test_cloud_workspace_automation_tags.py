@@ -13,7 +13,7 @@ class TestDefaultConversationTags:
     @pytest.fixture
     def workspace(self):
         """Create a workspace instance with mocked sandbox creation."""
-        from openhands.workspace import OpenHandsCloudWorkspace
+        from agentrt.workspace import OpenHandsCloudWorkspace
 
         with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
             workspace = OpenHandsCloudWorkspace(
@@ -133,7 +133,7 @@ class TestRemoteWorkspaceDefaultConversationTags:
     @pytest.fixture
     def workspace(self):
         """Create a plain RemoteWorkspace (constructing makes no requests)."""
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         return RemoteWorkspace(host="http://localhost:1", working_dir="/tmp")
 
@@ -171,8 +171,8 @@ class TestConversationTagMerging:
         """User tags should override workspace default tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         # Create a mock workspace with default_conversation_tags
         mock_workspace = MagicMock(spec=RemoteWorkspace)
@@ -183,7 +183,7 @@ class TestConversationTagMerging:
 
         # Mock RemoteConversation at the impl module level (where it's imported from)
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -211,8 +211,8 @@ class TestConversationTagMerging:
         """Should use workspace default tags when user provides none."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {
@@ -221,7 +221,7 @@ class TestConversationTagMerging:
         }
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -241,15 +241,15 @@ class TestConversationTagMerging:
         """Should not merge when workspace returns None for default tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         # Create mock with default_conversation_tags returning None
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = None
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -270,14 +270,14 @@ class TestConversationTagMerging:
         """Should not merge when workspace returns empty default tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {}
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -298,21 +298,21 @@ class TestPluginSourceUrl:
 
     def test_github_shorthand_basic(self):
         """Should convert github:owner/repo to full URL."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(source="github:OpenHands/skills")
         assert plugin.source_url == "https://github.com/OpenHands/skills"
 
     def test_github_shorthand_with_ref(self):
         """Should add tree/ref for github: sources with ref."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(source="github:OpenHands/skills", ref="v1.0.0")
         assert plugin.source_url == "https://github.com/OpenHands/skills/tree/v1.0.0"
 
     def test_github_shorthand_with_repo_path(self):
         """Should add tree/main/path for github: sources with repo_path."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(
             source="github:OpenHands/monorepo", repo_path="plugins/security"
@@ -324,7 +324,7 @@ class TestPluginSourceUrl:
 
     def test_github_shorthand_with_ref_and_path(self):
         """Should include both ref and path in URL."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(
             source="github:OpenHands/monorepo",
@@ -338,7 +338,7 @@ class TestPluginSourceUrl:
 
     def test_urls_returned_as_is(self):
         """Should return URLs as-is without modification."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         # Full GitHub URL
         plugin = PluginSource(source="https://github.com/OpenHands/skills")
@@ -371,7 +371,7 @@ class TestPluginSourceUrl:
 
     def test_local_path_returns_none(self):
         """Should return None for local paths (not portable)."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         for path in ["/absolute/path", "./relative", "../parent", "~/home"]:
             plugin = PluginSource(source=path)
@@ -385,9 +385,9 @@ class TestPluginsTagInConversation:
         """Should serialize plugins to URLs in the tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.plugin import PluginSource
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.plugin import PluginSource
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {}
@@ -398,7 +398,7 @@ class TestPluginsTagInConversation:
         ]
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -423,9 +423,9 @@ class TestPluginsTagInConversation:
         """Inline creds must not reach the persisted plugins tag; ${VAR} survives."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.plugin import PluginSource
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.plugin import PluginSource
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {}
@@ -435,7 +435,7 @@ class TestPluginsTagInConversation:
             PluginSource(source="https://x-token-auth:${MY_TOKEN}@host/org/ext.git"),
         ]
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
             Conversation(agent=MagicMock(), workspace=mock_workspace, plugins=plugins)
@@ -449,9 +449,9 @@ class TestPluginsTagInConversation:
         """Should not include local path plugins in tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.plugin import PluginSource
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.plugin import PluginSource
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {}
@@ -462,7 +462,7 @@ class TestPluginsTagInConversation:
         ]
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 
@@ -482,9 +482,9 @@ class TestPluginsTagInConversation:
         """Plugins tag should merge with workspace and user tags."""
         from unittest.mock import MagicMock
 
-        from openhands.sdk.conversation.conversation import Conversation
-        from openhands.sdk.plugin import PluginSource
-        from openhands.sdk.workspace import RemoteWorkspace
+        from agentrt.sdk.conversation.conversation import Conversation
+        from agentrt.sdk.plugin import PluginSource
+        from agentrt.sdk.workspace import RemoteWorkspace
 
         mock_workspace = MagicMock(spec=RemoteWorkspace)
         mock_workspace.default_conversation_tags = {
@@ -495,7 +495,7 @@ class TestPluginsTagInConversation:
         plugins = [PluginSource(source="github:OpenHands/skill")]
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+            "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
         ) as mock_convo_class:
             mock_convo_class.return_value = MagicMock()
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.event import SystemPromptEvent
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.skills import Skill, load_project_skills
-from openhands.sdk.testing import TestLLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.event import SystemPromptEvent
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.skills import Skill, load_project_skills
+from agentrt.sdk.testing import TestLLM
 
 
 def _agent(agent_context: AgentContext) -> Agent:
@@ -227,7 +227,7 @@ def test_load_project_skills_failure_does_not_block_conversation(tmp_path: Path)
     )
 
     with patch(
-        "openhands.sdk.conversation.impl.local_conversation.load_available_skills",
+        "agentrt.sdk.conversation.impl.local_conversation.load_available_skills",
         side_effect=PermissionError("workspace unreadable"),
     ):
         conversation.send_message("hi")  # must not raise

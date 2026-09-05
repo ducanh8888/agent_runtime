@@ -7,14 +7,14 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.sdk.git.exceptions import GitCommandError
-from openhands.sdk.git.utils import (
+from agentrt.sdk.git.exceptions import GitCommandError
+from agentrt.sdk.git.utils import (
     get_git_repository_metadata,
     redact_url_credentials,
     run_git_command,
 )  # re-exported for compat
-from openhands.sdk.plugin.types import PluginSource, ResolvedPluginSource
-from openhands.sdk.utils.redact import (
+from agentrt.sdk.plugin.types import PluginSource, ResolvedPluginSource
+from agentrt.sdk.utils.redact import (
     redact_url_credentials as redact_url_credentials_central,
 )
 
@@ -367,7 +367,7 @@ def test_get_git_repository_metadata():
             stderr="",
         ),
     ]
-    with patch("openhands.sdk.git.utils._run_git_subprocess", side_effect=responses):
+    with patch("agentrt.sdk.git.utils._run_git_subprocess", side_effect=responses):
         metadata = get_git_repository_metadata("/repo")
 
     assert metadata == {

@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from openhands.agent_server.models import StartConversationRequest
-from openhands.sdk import (
+from agentrt.agent_server.models import StartConversationRequest
+from agentrt.sdk import (
     LLM,
     ACPAgentSettings,
     Agent,
@@ -20,23 +20,23 @@ from openhands.sdk import (
     export_agent_settings_schema,
     validate_agent_settings,
 )
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.context.condenser import LLMSummarizingCondenser, NoOpCondenser
-from openhands.sdk.critic.base import IterativeRefinementConfig
-from openhands.sdk.critic.impl.api import APIBasedCritic
-from openhands.sdk.mcp.config import MCPServer, coerce_mcp_config, dump_mcp_config
-from openhands.sdk.secret import StaticSecret
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm, ConfirmRisky
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
-from openhands.sdk.settings import (
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.context.condenser import LLMSummarizingCondenser, NoOpCondenser
+from agentrt.sdk.critic.base import IterativeRefinementConfig
+from agentrt.sdk.critic.impl.api import APIBasedCritic
+from agentrt.sdk.mcp.config import MCPServer, coerce_mcp_config, dump_mcp_config
+from agentrt.sdk.secret import StaticSecret
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm, ConfirmRisky
+from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+from agentrt.sdk.settings import (
     AGENT_SETTINGS_SCHEMA_VERSION,
     CondenserSettings,
     LLMSummarizingCondenserSettings,
     NoOpCondenserSettings,
     VerificationSettings,
 )
-from openhands.sdk.settings.model import ACPServerKind
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.settings.model import ACPServerKind
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 # Fields on LLM that have ``exclude=True`` and should not appear in the schema.
@@ -864,7 +864,7 @@ def test_agent_settings_from_persisted_preserves_validated_instance_secrets() ->
 
 
 def test_agent_settings_from_persisted_decrypts_mcp_secrets() -> None:
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     cipher = Cipher(secret_key="test-encryption-key")
     settings = OpenHandsAgentSettings(
@@ -1742,8 +1742,8 @@ def test_acp_create_agent_passes_caller_context_through() -> None:
 def test_llm_agent_settings_public_alias_removed() -> None:
     """The deprecated ``LLMAgentSettings`` public import aliases were removed in
     v1.24.0; the class itself is retained (internal-only) for the union."""
-    import openhands.sdk as _sdk_mod
-    import openhands.sdk.settings as _settings_mod
+    import agentrt.sdk as _sdk_mod
+    import agentrt.sdk.settings as _settings_mod
 
     with pytest.raises(AttributeError):
         getattr(_settings_mod, "LLMAgentSettings")
@@ -1753,7 +1753,7 @@ def test_llm_agent_settings_public_alias_removed() -> None:
     # The class is still reachable at its canonical internal location and keeps
     # agent_kind="llm" so the discriminated union deserializes legacy payloads
     # and the API-breakage checker sees no field-value change.
-    from openhands.sdk.settings.model import LLMAgentSettings
+    from agentrt.sdk.settings.model import LLMAgentSettings
 
     assert issubclass(LLMAgentSettings, OpenHandsAgentSettings)
     settings = LLMAgentSettings(llm=LLM(model="test-model"))
@@ -1860,7 +1860,7 @@ def test_mcp_config_encrypts_env_and_headers_with_cipher() -> None:
     Round-tripping through ``model_validate`` with the same cipher must
     recover the original plaintext values.
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     mcp_config = coerce_mcp_config(
         {
@@ -1921,7 +1921,7 @@ def test_mcp_config_encrypts_env_and_headers_with_cipher() -> None:
 
 
 def test_mcp_config_encrypts_bearer_auth_with_cipher() -> None:
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     mcp_config = coerce_mcp_config(
         {
@@ -2006,7 +2006,7 @@ def test_openhands_agent_settings_mcp_config_decrypt_legacy_plaintext_on_disk() 
     isn't a valid Fernet token is passed through unchanged so the next save
     can re-encrypt it.
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     cipher = Cipher(secret_key="test-encryption-key")
     legacy_payload = {
@@ -2038,7 +2038,7 @@ def test_openhands_agent_settings_mcp_config_expose_encrypted_requires_cipher() 
     """
     from pydantic_core import PydanticSerializationError
 
-    from openhands.sdk.utils.pydantic_secrets import MissingCipherError
+    from agentrt.sdk.utils.pydantic_secrets import MissingCipherError
 
     settings = OpenHandsAgentSettings(
         mcp_config=coerce_mcp_config(
@@ -2061,7 +2061,7 @@ def test_openhands_agent_settings_mcp_config_expose_plaintext_passes_through() -
     even when a cipher is also in the context (e.g. an admin GET with
     explicit plaintext exposure).
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     settings = OpenHandsAgentSettings(
         mcp_config=coerce_mcp_config(
@@ -2185,7 +2185,7 @@ def test_agent_settings_base_create_agent_is_callable_via_interface() -> None:
     assert isinstance(agent, Agent)
 
     acp_settings: AgentSettingsBase = ACPAgentSettings(acp_command=["x"])
-    from openhands.sdk.agent.acp_agent import ACPAgent
+    from agentrt.sdk.agent.acp_agent import ACPAgent
 
     acp_agent = acp_settings.create_agent()
     assert isinstance(acp_agent, ACPAgent)
@@ -2242,11 +2242,11 @@ def test_acp_settings_base_url_env_var_from_registry() -> None:
 def test_acp_resolve_command_uses_registry_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from openhands.sdk.settings.acp_install_catalog import (
+    from agentrt.sdk.settings.acp_install_catalog import (
         PI_ACP_VERSION,
         PI_CODING_AGENT_VERSION,
     )
-    from openhands.sdk.settings.acp_providers import ACP_PROVIDERS
+    from agentrt.sdk.settings.acp_providers import ACP_PROVIDERS
 
     # No pinned binary on PATH → registry default is returned verbatim.
     monkeypatch.setattr(shutil, "which", lambda _: None)
@@ -2287,7 +2287,7 @@ def test_regular_agent_supports_all_capabilities() -> None:
 
 
 def test_acp_agent_reports_no_openhands_capabilities() -> None:
-    from openhands.sdk.agent.acp_agent import ACPAgent
+    from agentrt.sdk.agent.acp_agent import ACPAgent
 
     agent = ACPAgent(acp_command=["x"])
     assert agent.supports_openhands_tools is False
@@ -2316,7 +2316,7 @@ def test_llm_subscription_fields_roundtrip() -> None:
 
 
 def test_llm_create_agent_resolves_subscription_llm(monkeypatch) -> None:
-    from openhands.sdk.llm.auth import openai
+    from agentrt.sdk.llm.auth import openai
 
     original_llm = LLM(
         model="gpt-5.6",
@@ -2343,7 +2343,7 @@ def test_llm_create_agent_resolves_subscription_llm(monkeypatch) -> None:
 
 
 def test_llm_from_persisted_rehydrates_subscription_runtime(monkeypatch) -> None:
-    from openhands.sdk.llm.auth import openai
+    from agentrt.sdk.llm.auth import openai
 
     runtime_llm = LLM(model="openai/gpt-5.6", auth_type="subscription")
     runtime_llm.is_subscription = True
@@ -2373,7 +2373,7 @@ def test_llm_from_persisted_rehydrates_subscription_runtime(monkeypatch) -> None
 
 
 def test_llm_load_from_env_rehydrates_subscription_runtime(monkeypatch) -> None:
-    from openhands.sdk.llm.auth import openai
+    from agentrt.sdk.llm.auth import openai
 
     runtime_llm = LLM(model="openai/gpt-5.6", auth_type="subscription")
     runtime_llm.is_subscription = True
@@ -2400,8 +2400,8 @@ def test_llm_load_from_env_rehydrates_subscription_runtime(monkeypatch) -> None:
 
 
 def test_create_subscription_llm_from_config_preserves_runtime_llm(monkeypatch) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
 
     class UnexpectedAuth:
         def __init__(self, *args, **kwargs):
@@ -2427,9 +2427,9 @@ def test_create_subscription_llm_from_config_preserves_runtime_llm(monkeypatch) 
 def test_llm_from_persisted_rebuilds_serialized_subscription_runtime(
     monkeypatch,
 ) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
-    from openhands.sdk.llm.auth.openai import OpenAISubscriptionAuth
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
+    from agentrt.sdk.llm.auth.openai import OpenAISubscriptionAuth
 
     credentials = OAuthCredentials(
         vendor="openai",
@@ -2468,8 +2468,8 @@ def test_llm_from_persisted_rebuilds_serialized_subscription_runtime(
 
 @pytest.mark.asyncio
 async def test_async_subscription_api_key_uses_async_refresh(monkeypatch) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
 
     credentials = OAuthCredentials(
         vendor="openai",
@@ -2509,8 +2509,8 @@ async def test_async_subscription_api_key_uses_async_refresh(monkeypatch) -> Non
 def test_sync_subscription_api_key_uses_valid_runtime_credentials(
     monkeypatch,
 ) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
 
     credentials = OAuthCredentials(
         vendor="openai",
@@ -2548,9 +2548,9 @@ def test_sync_subscription_api_key_uses_valid_runtime_credentials(
 def test_openai_subscription_create_llm_serializes_subscription_auth(
     monkeypatch,
 ) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
-    from openhands.sdk.llm.auth.openai import OpenAISubscriptionAuth
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
+    from agentrt.sdk.llm.auth.openai import OpenAISubscriptionAuth
 
     monkeypatch.setattr(openai_auth, "_extract_chatgpt_account_id", lambda _: None)
 
@@ -2577,8 +2577,8 @@ def test_openai_subscription_create_llm_serializes_subscription_auth(
 def test_create_subscription_llm_from_config_preserves_non_auth_options(
     monkeypatch,
 ) -> None:
-    import openhands.sdk.llm.auth.openai as openai_auth
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
+    import agentrt.sdk.llm.auth.openai as openai_auth
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
 
     captured: dict[str, object] = {}
 

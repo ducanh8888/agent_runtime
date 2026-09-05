@@ -1,8 +1,8 @@
-"""Tests for openhands.sdk.utils.visualize module."""
+"""Tests for agentrt.sdk.utils.visualize module."""
 
 from rich.text import Text
 
-from openhands.sdk.utils.visualize import display_json
+from agentrt.sdk.utils.visualize import display_json
 
 
 def test_display_json_with_dictionary():

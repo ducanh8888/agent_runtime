@@ -8,24 +8,24 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.persistence import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.persistence import (
     PERSISTED_SETTINGS_SCHEMA_VERSION,
     FileSettingsStore,
     PersistedSettings,
     get_llm_profile_store,
     reset_stores,
 )
-from openhands.agent_server.persistence.models import _deep_merge
-from openhands.sdk.llm import LLM
-from openhands.sdk.settings import (
+from agentrt.agent_server.persistence.models import _deep_merge
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.settings import (
     AGENT_SETTINGS_SCHEMA_VERSION,
     CONVERSATION_SETTINGS_SCHEMA_VERSION,
     ACPAgentSettings,
     OpenHandsAgentSettings,
 )
-from openhands.sdk.utils.cipher import Cipher
+from agentrt.sdk.utils.cipher import Cipher
 
 
 @pytest.fixture
@@ -1366,7 +1366,7 @@ def test_update_agent_settings_kind_switch_replaces_fresh() -> None:
 
 def test_update_agent_settings_switch_back_to_openhands() -> None:
     """Switching back to openhands starts fresh; ACP fields are not leaked."""
-    from openhands.sdk.settings.model import OpenHandsAgentSettings
+    from agentrt.sdk.settings.model import OpenHandsAgentSettings
 
     settings = PersistedSettings()
     settings.update(

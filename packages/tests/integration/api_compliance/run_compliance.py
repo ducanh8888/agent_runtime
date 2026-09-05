@@ -31,7 +31,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from openhands.sdk.logger import get_logger
+from agentrt.sdk.logger import get_logger
 from tests.integration.api_compliance.base import BaseAPIComplianceTest, create_test_llm
 from tests.integration.api_compliance.result import (
     APIResponse,

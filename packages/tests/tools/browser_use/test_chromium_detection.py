@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.tools.browser_use.impl import BrowserToolExecutor
+from agentrt.tools.browser_use.impl import BrowserToolExecutor
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +50,7 @@ class TestChromiumDetection:
             return None
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "linux"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "linux"),
             patch.object(Path, "exists", return_value=False),
             patch("shutil.which", side_effect=mock_which),
         ):
@@ -67,7 +67,7 @@ class TestChromiumDetection:
             return None
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "linux"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "linux"),
             patch.object(Path, "exists", return_value=False),
             patch("shutil.which", side_effect=mock_which),
         ):
@@ -83,7 +83,7 @@ class TestChromiumDetection:
             return str(self) == str(chrome_path)
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "linux"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "linux"),
             patch("shutil.which", return_value=None),
             patch.object(Path, "exists", mock_exists),
         ):
@@ -101,7 +101,7 @@ class TestChromiumDetection:
             return str(self) == str(chrome_path)
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "darwin"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "darwin"),
             patch("shutil.which", return_value=None),
             patch.object(Path, "exists", mock_exists),
         ):
@@ -126,7 +126,7 @@ class TestChromiumDetection:
             return default
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "win32"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "win32"),
             patch("shutil.which", return_value=None),
             patch("os.environ.get", side_effect=mock_environ_get),
             patch.object(Path, "exists", mock_exists),
@@ -145,7 +145,7 @@ class TestChromiumDetection:
             return str(self) in [str(mock_cache_dir), str(mock_chrome_path)]
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "linux"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "linux"),
             patch("shutil.which", return_value=None),
             patch("pathlib.Path.home", return_value=Path("/home/user")),
             patch.object(Path, "exists", mock_exists),
@@ -174,7 +174,7 @@ class TestChromiumDetection:
             return str(self) in [str(mock_cache_dir), str(mock_chrome_path)]
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "darwin"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "darwin"),
             patch("shutil.which", return_value=None),
             patch("pathlib.Path.home", return_value=Path("/Users/user")),
             patch.object(Path, "exists", mock_exists),
@@ -202,7 +202,7 @@ class TestChromiumDetection:
             return default
 
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "win32"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "win32"),
             patch("shutil.which", return_value=None),
             patch("os.environ.get", side_effect=mock_environ_get),
             patch.object(Path, "exists", mock_exists),
@@ -217,7 +217,7 @@ class TestChromiumDetection:
         """Test when no Chromium binary is found."""
         executor = BrowserToolExecutor.__new__(BrowserToolExecutor)
         with (
-            patch("openhands.tools.browser_use.impl.sys.platform", "linux"),
+            patch("agentrt.tools.browser_use.impl.sys.platform", "linux"),
             patch("shutil.which", return_value=None),
             patch("pathlib.Path.home", return_value=Path("/home/user")),
             patch.object(Path, "exists", return_value=False),

@@ -5,17 +5,17 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
-from openhands.sdk.llm import LLM, Message, MessageToolCall, TextContent
-from openhands.sdk.tool import (
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
+from agentrt.sdk.llm import LLM, Message, MessageToolCall, TextContent
+from agentrt.sdk.tool import (
     Action,
     Observation,
     Tool,
@@ -481,9 +481,9 @@ def test_rerun_non_idempotent_with_log(tmp_path: Path, monkeypatch: pytest.Monke
     will fail if the file already exists. The rerun still "succeeds"
     (tool executed correctly) but the observation shows is_error=True.
     """
-    from openhands.sdk.conversation.event_store import EventLog
-    from openhands.sdk.event import ObservationEvent
-    from openhands.sdk.io import LocalFileStore
+    from agentrt.sdk.conversation.event_store import EventLog
+    from agentrt.sdk.event import ObservationEvent
+    from agentrt.sdk.io import LocalFileStore
 
     # Register the file create tool (non-idempotent)
     register_tool_public(FileCreateTool.name, FileCreateTool)
@@ -535,9 +535,9 @@ def test_rerun_early_exit_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyP
     This verifies that rerun stops at the first failure and saves
     partial progress to the log.
     """
-    from openhands.sdk.conversation.event_store import EventLog
-    from openhands.sdk.event import ObservationEvent
-    from openhands.sdk.io import LocalFileStore
+    from agentrt.sdk.conversation.event_store import EventLog
+    from agentrt.sdk.event import ObservationEvent
+    from agentrt.sdk.io import LocalFileStore
 
     # Register both tools
     register_tool_public(FileWriteTool.name, FileWriteTool)

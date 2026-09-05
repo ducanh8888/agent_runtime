@@ -11,20 +11,20 @@ from litellm import ChatCompletionMessageToolCall
 from litellm.types.utils import Function
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.view import View
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.condenser import Condensation
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.event.types import ROOT_PARENT_ID, SourceType
-from openhands.sdk.event.user_action import PauseEvent
-from openhands.sdk.llm import LLM, Message, MessageToolCall, TextContent
-from openhands.sdk.tool.schema import Action
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.view import View
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.condenser import Condensation
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.event.types import ROOT_PARENT_ID, SourceType
+from agentrt.sdk.event.user_action import PauseEvent
+from agentrt.sdk.llm import LLM, Message, MessageToolCall, TextContent
+from agentrt.sdk.tool.schema import Action
 
 
 def _agent() -> Agent:
@@ -606,7 +606,7 @@ def test_generate_title_reads_active_branch(monkeypatch):
             return "title"
 
         monkeypatch.setattr(
-            "openhands.sdk.conversation.impl.local_conversation."
+            "agentrt.sdk.conversation.impl.local_conversation."
             "generate_conversation_title",
             _fake_generate,
         )

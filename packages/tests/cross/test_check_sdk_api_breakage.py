@@ -46,7 +46,7 @@ get_pypi_baseline_version = _prod.get_pypi_baseline_version
 
 # Reusable test config matching the _write_pkg_init helper
 _SDK_CFG = PackageConfig(
-    package="openhands.sdk",
+    package="agentrt.sdk",
     distribution="openhands-sdk",
     source_dir="openhands-sdk",
 )
@@ -168,8 +168,8 @@ def test_griffe_breakage_removed_attribute_requires_minor_bump(tmp_path):
         + "        self.text = text\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, _undeprecated = _prod._compute_breakages(old_root, new_root, _SDK_CFG)
     assert total_breaks > 0
@@ -182,8 +182,8 @@ def test_griffe_removed_export_from_all_is_breaking(tmp_path):
     _write_pkg_init(tmp_path, "old", ["Foo", "Bar"])
     _write_pkg_init(tmp_path, "new", ["Foo"])
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -202,8 +202,8 @@ def test_removal_of_deprecated_symbol_does_not_count_as_undeprecated(tmp_path):
     )
     _write_pkg_init(tmp_path, "new", ["Foo"])
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -226,8 +226,8 @@ def test_removal_with_warn_deprecated_is_not_undeprecated(tmp_path):
     )
     _write_pkg_init(tmp_path, "new", ["Foo"])
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -273,8 +273,8 @@ def test_removal_via_export_registry_is_not_undeprecated(tmp_path):
     )
     _write_pkg_init(tmp_path, "new", ["Foo"])
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(old_root, new_root, _SDK_CFG)
 
@@ -297,8 +297,8 @@ def test_removed_public_method_requires_deprecation(tmp_path):
     )
     new_init.write_text(new_init.read_text() + "\n\nclass Foo:\n    pass\n")
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -325,8 +325,8 @@ def test_removed_public_method_with_deprecation_is_not_undeprecated(tmp_path):
     )
     new_init.write_text(new_init.read_text() + "\n\nclass Foo:\n    pass\n")
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -346,8 +346,8 @@ def test_missing_all_in_previous_release_skips_breakage_check(tmp_path):
 
     _write_pkg_init(tmp_path, "new", ["Foo"])
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(old_root, new_root, _SDK_CFG)
     assert total_breaks == 0
@@ -485,8 +485,8 @@ def test_removed_public_method_requires_removal_target_to_be_reached(tmp_path):
     )
     new_init.write_text(new_init.read_text() + "\n\nclass Foo:\n    pass\n")
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, removal_policy_errors = _prod._compute_breakages(
         old_root,
@@ -515,8 +515,8 @@ def test_removed_public_method_requires_five_minor_release_runway(tmp_path):
     )
     new_init.write_text(new_init.read_text() + "\n\nclass Foo:\n    pass\n")
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, removal_policy_errors = _prod._compute_breakages(
         old_root,
@@ -530,9 +530,9 @@ def test_removed_public_method_requires_five_minor_release_runway(tmp_path):
 
 
 def test_workspace_removed_export_is_breaking(tmp_path):
-    """Breakage detection works for non-SDK packages (openhands.workspace)."""
+    """Breakage detection works for non-SDK packages (agentrt.workspace)."""
     ws_cfg = PackageConfig(
-        package="openhands.workspace",
+        package="agentrt.workspace",
         distribution="openhands-workspace",
         source_dir="openhands-workspace",
     )
@@ -541,8 +541,8 @@ def test_workspace_removed_export_is_breaking(tmp_path):
     )
     _write_pkg_init(tmp_path, "new", ["Foo"], module_parts=("openhands", "workspace"))
 
-    old_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -555,20 +555,20 @@ def test_workspace_removed_export_is_breaking(tmp_path):
 
 def test_accepted_docker_mount_dir_member_removal_detection_is_exact():
     assert _is_accepted_removed_member(
-        "openhands.workspace", "DockerWorkspace.mount_dir"
+        "agentrt.workspace", "DockerWorkspace.mount_dir"
     )
     assert _is_accepted_removed_member(
-        "openhands.workspace", "DockerDevWorkspace.mount_dir"
+        "agentrt.workspace", "DockerDevWorkspace.mount_dir"
     )
     assert not _is_accepted_removed_member(
-        "openhands.workspace", "ApptainerWorkspace.mount_dir"
+        "agentrt.workspace", "ApptainerWorkspace.mount_dir"
     )
-    assert not _is_accepted_removed_member("openhands.sdk", "DockerWorkspace.mount_dir")
+    assert not _is_accepted_removed_member("agentrt.sdk", "DockerWorkspace.mount_dir")
 
 
 def test_accepted_docker_mount_dir_removal_is_not_breaking(tmp_path, capsys):
     ws_cfg = PackageConfig(
-        package="openhands.workspace",
+        package="agentrt.workspace",
         distribution="openhands-workspace",
         source_dir="openhands-workspace",
     )
@@ -602,8 +602,8 @@ def test_accepted_docker_mount_dir_removal_is_not_breaking(tmp_path, capsys):
         + "    pass\n"
     )
 
-    old_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "new")])
 
     total_breaks, removal_policy_errors = _prod._compute_breakages(
         old_root,
@@ -624,7 +624,7 @@ def test_unresolved_alias_exports_do_not_crash_breakage_detection(tmp_path):
     """
 
     ws_cfg = PackageConfig(
-        package="openhands.workspace",
+        package="agentrt.workspace",
         distribution="openhands-workspace",
         source_dir="openhands-workspace",
     )
@@ -635,7 +635,7 @@ def test_unresolved_alias_exports_do_not_crash_breakage_detection(tmp_path):
         (tmp_path / root / "openhands" / "__init__.py").write_text("")
 
         content = (
-            "from openhands.sdk.workspace import PlatformType\n\n"
+            "from agentrt.sdk.workspace import PlatformType\n\n"
             "__all__ = [\n"
             "    'PlatformType',\n"
             "    'Foo',\n"
@@ -652,8 +652,8 @@ def test_unresolved_alias_exports_do_not_crash_breakage_detection(tmp_path):
     _write_workspace("old", include_method=True)
     _write_workspace("new", include_method=False)
 
-    old_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.workspace", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.workspace", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -835,8 +835,8 @@ def test_field_deprecated_change_is_not_breaking(tmp_path):
         + "    enabled: bool = Field(default=False, deprecated=True)\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -872,8 +872,8 @@ def test_field_added_deprecated_kwarg_is_not_breaking(tmp_path):
         + "    )\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -905,8 +905,8 @@ def test_field_description_change_is_not_breaking(tmp_path):
         + "    enabled: bool = Field(default=False, description='New description')\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -967,8 +967,8 @@ def test_field_multiline_description_with_quotes_is_not_breaking(tmp_path):
         + "    )\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(
         old_root,
@@ -1000,8 +1000,8 @@ def test_field_default_change_is_reported_but_not_breaking(tmp_path):
         + "    model: str = Field(default='gpt-5.5')\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     field_default_changes: list[FieldDefaultChange] = []
     total_breaks, undeprecated = _prod._compute_breakages(
@@ -1015,8 +1015,8 @@ def test_field_default_change_is_reported_but_not_breaking(tmp_path):
     assert undeprecated == 0
     assert field_default_changes == [
         _prod.FieldDefaultChange(
-            package="openhands.sdk",
-            object_path="openhands.sdk.Config.model",
+            package="agentrt.sdk",
+            object_path="agentrt.sdk.Config.model",
             old_default="'claude-sonnet-4-20250514'",
             new_default="'gpt-5.5'",
         )
@@ -1048,8 +1048,8 @@ def test_field_default_factory_change_is_reported_but_not_breaking(tmp_path):
         + "    )\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     field_default_changes: list[FieldDefaultChange] = []
     total_breaks, undeprecated = _prod._compute_breakages(
@@ -1063,8 +1063,8 @@ def test_field_default_factory_change_is_reported_but_not_breaking(tmp_path):
     assert undeprecated == 0
     assert field_default_changes == [
         _prod.FieldDefaultChange(
-            package="openhands.sdk",
-            object_path="openhands.sdk.Config.current_datetime",
+            package="agentrt.sdk",
+            object_path="agentrt.sdk.Config.current_datetime",
             old_default="datetime.now",
             new_default="lambda: datetime.now().astimezone()",
         )
@@ -1105,11 +1105,11 @@ def test_field_json_schema_extra_dict_is_not_breaking(tmp_path):
     )
 
     old_root = griffe.load(
-        "openhands.sdk",
+        "agentrt.sdk",
         search_paths=[str(tmp_path / "old")],
     )
     new_root = griffe.load(
-        "openhands.sdk",
+        "agentrt.sdk",
         search_paths=[str(tmp_path / "new")],
     )
 
@@ -1192,8 +1192,8 @@ def test_subclass_member_deprecated_on_base_is_not_undeprecated(tmp_path):
         + "    pass\n"
     )
 
-    old_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "old")])
-    new_root = griffe.load("openhands.sdk", search_paths=[str(tmp_path / "new")])
+    old_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "old")])
+    new_root = griffe.load("agentrt.sdk", search_paths=[str(tmp_path / "new")])
 
     total_breaks, undeprecated = _prod._compute_breakages(old_root, new_root, _SDK_CFG)
     assert total_breaks > 0
@@ -1219,8 +1219,8 @@ def test_collect_field_default_changes_since_ref_reports_pr_introduced_change(tm
 
     assert changes == [
         FieldDefaultChange(
-            package="openhands.sdk",
-            object_path="openhands.sdk.Config.model",
+            package="agentrt.sdk",
+            object_path="agentrt.sdk.Config.model",
             old_default="'claude-sonnet-4-20250514'",
             new_default="'gpt-5.5'",
         )
@@ -1308,8 +1308,8 @@ def test_write_field_default_change_report_includes_base_ref_changes(
 
     changes = [
         FieldDefaultChange(
-            package="openhands.sdk",
-            object_path="openhands.sdk.Config.model",
+            package="agentrt.sdk",
+            object_path="agentrt.sdk.Config.model",
             old_default="'claude-sonnet-4-20250514'",
             new_default="'gpt-5.5'",
         )
@@ -1323,8 +1323,8 @@ def test_write_field_default_change_report_includes_base_ref_changes(
     assert json.loads(report_path.read_text()) == {
         "field_default_changes": [
             {
-                "package": "openhands.sdk",
-                "object_path": "openhands.sdk.Config.model",
+                "package": "agentrt.sdk",
+                "object_path": "agentrt.sdk.Config.model",
                 "old_default": "'claude-sonnet-4-20250514'",
                 "new_default": "'gpt-5.5'",
             }
@@ -1341,8 +1341,8 @@ def test_write_field_default_change_report_omits_unavailable_base_ref(
 
     changes = [
         FieldDefaultChange(
-            package="openhands.sdk",
-            object_path="openhands.sdk.Config.model",
+            package="agentrt.sdk",
+            object_path="agentrt.sdk.Config.model",
             old_default="'claude-sonnet-4-20250514'",
             new_default="'gpt-5.5'",
         )
@@ -1356,8 +1356,8 @@ def test_write_field_default_change_report_omits_unavailable_base_ref(
     assert json.loads(report_path.read_text()) == {
         "field_default_changes": [
             {
-                "package": "openhands.sdk",
-                "object_path": "openhands.sdk.Config.model",
+                "package": "agentrt.sdk",
+                "object_path": "agentrt.sdk.Config.model",
                 "old_default": "'claude-sonnet-4-20250514'",
                 "new_default": "'gpt-5.5'",
             }

@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.git.exceptions import GitCommandError, GitPathError
-from openhands.sdk.git.git_commits import (
+from agentrt.sdk.git.exceptions import GitCommandError, GitPathError
+from agentrt.sdk.git.git_commits import (
     get_commit_changes,
     get_commit_file_diff,
     get_git_commits,
 )
-from openhands.sdk.git.git_diff import MAX_FILE_SIZE_FOR_GIT_DIFF
-from openhands.sdk.git.models import GitChangeStatus
+from agentrt.sdk.git.git_diff import MAX_FILE_SIZE_FOR_GIT_DIFF
+from agentrt.sdk.git.models import GitChangeStatus
 
 
 def run_bash_command(command: str, cwd: str) -> subprocess.CompletedProcess:

@@ -8,7 +8,7 @@ import httpx
 
 def test_api_timeout_is_used_in_client():
     """Test that api_timeout parameter is used for the HTTP client timeout."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     # Mock the entire initialization process
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime") as mock_init:
@@ -46,7 +46,7 @@ def test_api_timeout_is_used_in_client():
 
 def test_api_timeout_default_value():
     """Test that the default api_timeout is 60 seconds."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime") as mock_init:
         mock_init.return_value = None
@@ -76,7 +76,7 @@ def test_api_timeout_default_value():
 
 def test_different_timeout_values():
     """Test that different api_timeout values are correctly applied."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     test_timeouts = [30.0, 120.0, 600.0]
 
@@ -110,7 +110,7 @@ def test_different_timeout_values():
 
 def test_startup_wait_timeout_default_and_override():
     """Ensure startup_wait_timeout can be configured."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime") as mock_init:
         mock_init.return_value = None
@@ -138,7 +138,7 @@ def test_startup_wait_timeout_default_and_override():
 
 def test_forward_env_default_is_empty():
     """Test that forward_env defaults to an empty list."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime") as mock_init:
         mock_init.return_value = None
@@ -157,7 +157,7 @@ def test_forward_env_default_is_empty():
 
 def test_forward_env_is_included_in_start_runtime_payload():
     """Test that forward_env variables are included in the runtime start payload."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     # Set up test environment variables
     test_env = {
@@ -210,7 +210,7 @@ def test_forward_env_is_included_in_start_runtime_payload():
 
 def test_forward_env_empty_list_results_in_empty_environment():
     """Test that an empty forward_env results in an empty environment dict."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime") as mock_attach:
         mock_attach.return_value = None
@@ -245,7 +245,7 @@ def test_forward_env_empty_list_results_in_empty_environment():
 
 def test_start_runtime_logs_environment_keys_without_values(caplog):
     """Test that start-runtime logs do not include forwarded env values."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.dict(
         os.environ,
@@ -294,7 +294,7 @@ def test_start_runtime_logs_environment_keys_without_values(caplog):
 
 def _make_workspace():
     """Create a workspace without starting runtime for callback tests."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime"):
         ws = APIRemoteWorkspace(

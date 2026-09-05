@@ -4,9 +4,9 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.desktop_router import DesktopUrlResponse, get_desktop_url
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.desktop_router import DesktopUrlResponse, get_desktop_url
 
 
 @pytest.fixture

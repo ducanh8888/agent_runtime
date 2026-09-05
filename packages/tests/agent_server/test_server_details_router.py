@@ -5,9 +5,9 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-import openhands.agent_server.server_details_router as sdr
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
+import agentrt.agent_server.server_details_router as sdr
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
 
 
 @pytest.fixture(autouse=True)

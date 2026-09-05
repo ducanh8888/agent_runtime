@@ -13,9 +13,9 @@ toolu_01L5zJ74i3tPdZDVGoMzeMHm. Each `tool_use` block must have a corresponding
 `tool_result` block in the next message."
 """
 
-from openhands.sdk.context.view import View
-from openhands.sdk.event.condenser import Condensation
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.context.view import View
+from agentrt.sdk.event.condenser import Condensation
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     ObservationEvent,
 )

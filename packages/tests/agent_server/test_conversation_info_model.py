@@ -23,18 +23,18 @@ from uuid import uuid4
 import pytest
 from pydantic import SecretStr
 
-from openhands.agent_server.conversation_service import _compose_conversation_info
-from openhands.agent_server.models import ConversationInfo, StoredConversation
-from openhands.agent_server.utils import utc_now
-from openhands.sdk import LLM, Agent, Tool
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.agent.acp_models import ACPModelInfo
-from openhands.sdk.conversation.state import (
+from agentrt.agent_server.conversation_service import _compose_conversation_info
+from agentrt.agent_server.models import ConversationInfo, StoredConversation
+from agentrt.agent_server.utils import utc_now
+from agentrt.sdk import LLM, Agent, Tool
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.agent.acp_models import ACPModelInfo
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.security.confirmation_policy import NeverConfirm
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.security.confirmation_policy import NeverConfirm
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def _make_state(agent) -> ConversationState:

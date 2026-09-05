@@ -11,7 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from openhands.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry import models as m
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def make_event(distinct_id: str) -> m.DiagnosticEvent:
 
 async def test_identified_events_reuse_the_host_distinct_id_verbatim(fake_posthog):
     """Correlation depends on byte-for-byte reuse of the host's identity."""
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     client, _ = fake_posthog
     exporter = PostHogExporter("phc_test")
@@ -80,7 +80,7 @@ async def test_identified_events_reuse_the_host_distinct_id_verbatim(fake_postho
 
 async def test_exporter_never_creates_or_merges_an_identity(fake_posthog):
     """identify()/alias() would duplicate or irreversibly merge a person."""
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     client, _ = fake_posthog
     exporter = PostHogExporter("phc_test")
@@ -95,7 +95,7 @@ async def test_exporter_never_creates_or_merges_an_identity(fake_posthog):
 
 
 async def test_anonymous_events_do_not_create_person_profiles(fake_posthog):
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     client, _ = fake_posthog
     exporter = PostHogExporter("phc_test")
@@ -106,7 +106,7 @@ async def test_anonymous_events_do_not_create_person_profiles(fake_posthog):
 
 
 async def test_identified_events_do_attach_to_the_existing_person(fake_posthog):
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     client, _ = fake_posthog
     exporter = PostHogExporter("phc_test")
@@ -119,7 +119,7 @@ async def test_identified_events_do_attach_to_the_existing_person(fake_posthog):
 
 async def test_vendor_side_collection_is_disabled(fake_posthog):
     """Autocapture would ship tracebacks, defeating the sanitizer entirely."""
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     _, kwargs = fake_posthog
     PostHogExporter("phc_test")
@@ -130,7 +130,7 @@ async def test_vendor_side_collection_is_disabled(fake_posthog):
 
 
 async def test_sent_properties_stay_within_the_allowlist(fake_posthog):
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     client, _ = fake_posthog
     exporter = PostHogExporter("phc_test")
@@ -143,7 +143,7 @@ async def test_sent_properties_stay_within_the_allowlist(fake_posthog):
 
 
 async def test_host_is_configurable(fake_posthog):
-    from openhands.agent_server.telemetry.posthog_exporter import PostHogExporter
+    from agentrt.agent_server.telemetry.posthog_exporter import PostHogExporter
 
     _, kwargs = fake_posthog
     PostHogExporter("phc_test", host="https://eu.i.posthog.com")

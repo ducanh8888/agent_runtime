@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openhands.sdk.tool.schema import TextContent
-from openhands.tools.browser_use.definition import BrowserObservation
-from openhands.tools.browser_use.impl import BrowserToolExecutor
+from agentrt.sdk.tool.schema import TextContent
+from agentrt.tools.browser_use.definition import BrowserObservation
+from agentrt.tools.browser_use.impl import BrowserToolExecutor
 
 
 @pytest.fixture

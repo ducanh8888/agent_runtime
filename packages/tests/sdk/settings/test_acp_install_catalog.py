@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from openhands.sdk.settings.acp_install_catalog import (
+from agentrt.sdk.settings.acp_install_catalog import (
     ACP_INSTALL_CATALOG,
     CLAUDE_AGENT_ACP_VERSION,
     CODEX_ACP_VERSION,
@@ -21,11 +21,11 @@ from openhands.sdk.settings.acp_install_catalog import (
     _main,
     render_docker_install_plan,
 )
-from openhands.sdk.settings.acp_providers import ACP_PROVIDERS
+from agentrt.sdk.settings.acp_providers import ACP_PROVIDERS
 
 
 CATALOG_PY = __import__(
-    "openhands.sdk.settings.acp_install_catalog", fromlist=["__file__"]
+    "agentrt.sdk.settings.acp_install_catalog", fromlist=["__file__"]
 ).__file__
 
 

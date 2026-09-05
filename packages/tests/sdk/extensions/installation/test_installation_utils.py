@@ -1,6 +1,6 @@
 import pytest
 
-from openhands.sdk.extensions.installation.utils import validate_extension_name
+from agentrt.sdk.extensions.installation.utils import validate_extension_name
 
 
 @pytest.mark.parametrize(

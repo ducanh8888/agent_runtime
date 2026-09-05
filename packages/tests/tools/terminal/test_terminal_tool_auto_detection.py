@@ -15,14 +15,14 @@ if platform.system() == "Windows":
         allow_module_level=True,
     )
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import LocalWorkspace
-from openhands.tools.terminal import TerminalTool
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.impl import TerminalExecutor
-from openhands.tools.terminal.terminal import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import LocalWorkspace
+from agentrt.tools.terminal import TerminalTool
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.impl import TerminalExecutor
+from agentrt.tools.terminal.terminal import (
     SubprocessTerminal,
     TerminalSession,
 )
@@ -94,7 +94,7 @@ def test_unix_auto_detection(mock_system):
     with tempfile.TemporaryDirectory() as temp_dir:
         # Mock tmux as available → pool mode
         with patch(
-            "openhands.tools.terminal.terminal.factory._is_tmux_available",
+            "agentrt.tools.terminal.terminal.factory._is_tmux_available",
             return_value=True,
         ):
             tools = TerminalTool.create(_create_conv_state(temp_dir))
@@ -108,11 +108,11 @@ def test_unix_auto_detection(mock_system):
         # Mock tmux as unavailable → single-session / subprocess mode
         with (
             patch(
-                "openhands.tools.terminal.terminal.factory._is_tmux_available",
+                "agentrt.tools.terminal.terminal.factory._is_tmux_available",
                 return_value=False,
             ),
             patch(
-                "openhands.tools.terminal.impl._is_tmux_available",
+                "agentrt.tools.terminal.impl._is_tmux_available",
                 return_value=False,
             ),
         ):

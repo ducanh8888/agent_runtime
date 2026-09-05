@@ -1,7 +1,7 @@
 """Tests for get_planning_tools() plan_path parameter forwarding."""
 
-from openhands.tools.planning_file_editor import PlanningFileEditorTool
-from openhands.tools.preset.planning import get_planning_tools
+from agentrt.tools.planning_file_editor import PlanningFileEditorTool
+from agentrt.tools.preset.planning import get_planning_tools
 
 
 def test_get_planning_tools_without_plan_path_has_empty_params():

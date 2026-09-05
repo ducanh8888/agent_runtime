@@ -21,14 +21,14 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-import openhands.sdk.llm.llm as llm_module
-from openhands.sdk.llm import (
+import agentrt.sdk.llm.llm as llm_module
+from agentrt.sdk.llm import (
     LLM,
     Message,
     TextContent,
 )
-from openhands.sdk.tool.schema import Action
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.tool.schema import Action
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 def create_mock_response(content: str = "Test response", response_id: str = "test-id"):
@@ -113,7 +113,7 @@ async def test_modify_params_is_process_wide_and_calls_overlap(monkeypatch):
     assert llm_module.litellm.modify_params is True
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_basic(mock_completion):
     """Test basic LLM completion functionality."""
     mock_response = create_mock_response("Test response")
@@ -150,7 +150,7 @@ def test_llm_completion_basic(mock_completion):
     assert not llm.should_mock_tool_calls(cc_tools)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_streaming_without_callback_degrades(mock_completion, default_config):
     """Streaming requested without an on_token callback degrades to a plain
     non-streaming completion instead of crashing the run (#4014)."""
@@ -167,8 +167,8 @@ def test_llm_streaming_without_callback_degrades(mock_completion, default_config
     assert response.message.content[0].text == "Test response"
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
-@patch("openhands.sdk.llm.llm.litellm.stream_chunk_builder")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm.stream_chunk_builder")
 def test_llm_completion_streaming_with_callback(mock_stream_builder, mock_completion):
     """Test that streaming with on_token callback works correctly."""
 
@@ -258,8 +258,8 @@ def test_llm_completion_streaming_with_callback(mock_stream_builder, mock_comple
     assert response.message.content[0].text == "Hello world!"
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
-@patch("openhands.sdk.llm.llm.litellm.stream_chunk_builder")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm.stream_chunk_builder")
 def test_llm_completion_streaming_with_tools(mock_stream_builder, mock_completion):
     """Test streaming completion with tool calls."""
 
@@ -371,7 +371,7 @@ def test_llm_completion_streaming_with_tools(mock_stream_builder, mock_completio
     assert response.message.tool_calls[0].name == "test_tool"
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_with_tools(mock_completion):
     """Test LLM completion with tools."""
     mock_response = create_mock_response("I'll use the tool")
@@ -416,7 +416,7 @@ def test_llm_completion_with_tools(mock_completion):
     mock_completion.assert_called_once()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_error_handling(mock_completion):
     """Test LLM completion error handling."""
     # Mock an exception
@@ -526,7 +526,7 @@ def test_llm_token_usage_tracking(default_config):
     assert accumulated.completion_tokens >= 5
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_with_custom_params(mock_completion, default_config):
     """Test LLM completion with custom parameters."""
     mock_response = create_mock_response("Custom response")
@@ -563,7 +563,7 @@ def test_llm_completion_with_custom_params(mock_completion, default_config):
     assert call_kwargs.get("top_p") == 0.9
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_non_function_call_mode(mock_completion):
     """Test LLM completion with non-function call mode (prompt-based tool calling)."""
     # Create a mock response that looks like a non-function call response
@@ -642,7 +642,7 @@ def test_llm_completion_non_function_call_mode(mock_completion):
     assert len(call_messages) >= len(messages)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_completion_function_call_vs_non_function_call_mode(mock_completion):
     """Test the difference between function call mode and non-function call mode."""
     mock_response = create_mock_response("Test response")
@@ -705,7 +705,7 @@ def test_llm_completion_function_call_vs_non_function_call_mode(mock_completion)
     assert non_native_call_kwargs.get("tools") is None
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_llm_streaming_preserves_cache_read_tokens(mock_completion):
     """Test that cache_read_tokens from prompt_tokens_details survive streaming.
 
@@ -816,7 +816,7 @@ def test_llm_streaming_preserves_cache_read_tokens(mock_completion):
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_retries_without_caching_on_prompt_cache_too_small(
     mock_completion,
 ):
@@ -887,7 +887,7 @@ def test_completion_retries_without_caching_on_prompt_cache_too_small(
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
 async def test_acompletion_retries_without_caching_on_prompt_cache_too_small(
     mock_acompletion,
 ):
@@ -1017,8 +1017,8 @@ def _make_streaming_chunks(text: str = "Hello world!"):
     return chunks
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
-@patch("openhands.sdk.llm.llm.litellm.stream_chunk_builder")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm.stream_chunk_builder")
 def test_streaming_accepts_plain_iterator(mock_stream_builder, mock_completion):
     """A sync iterator (no ``CustomStreamWrapper``) must still drive streaming.
 
@@ -1053,8 +1053,8 @@ def test_streaming_accepts_plain_iterator(mock_stream_builder, mock_completion):
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
-@patch("openhands.sdk.llm.llm.litellm.stream_chunk_builder")
+@patch("agentrt.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm.stream_chunk_builder")
 async def test_streaming_accepts_async_generator(mock_stream_builder, mock_acompletion):
     """An async generator (not ``CustomStreamWrapper``) must still drive streaming.
 
@@ -1093,8 +1093,8 @@ async def test_streaming_accepts_async_generator(mock_stream_builder, mock_acomp
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
-@patch("openhands.sdk.llm.llm.litellm.stream_chunk_builder")
+@patch("agentrt.sdk.llm.llm.litellm_acompletion", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.litellm.stream_chunk_builder")
 async def test_streaming_accepts_sync_generator_in_async_path(
     mock_stream_builder, mock_acompletion
 ):

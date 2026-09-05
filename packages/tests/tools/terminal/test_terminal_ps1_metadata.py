@@ -1,16 +1,16 @@
 import json
 from unittest.mock import MagicMock
 
-from openhands.tools.terminal.constants import (
+from agentrt.tools.terminal.constants import (
     CMD_OUTPUT_METADATA_PS1_REGEX,
     CMD_OUTPUT_PS1_BEGIN,
     CMD_OUTPUT_PS1_END,
 )
-from openhands.tools.terminal.definition import (
+from agentrt.tools.terminal.definition import (
     TerminalObservation,
 )
-from openhands.tools.terminal.metadata import CmdOutputMetadata
-from openhands.tools.terminal.terminal.terminal_session import (
+from agentrt.tools.terminal.metadata import CmdOutputMetadata
+from agentrt.tools.terminal.terminal.terminal_session import (
     TerminalSession,
 )
 
@@ -273,7 +273,7 @@ def test_ps1_metadata_regex_pattern():
 
 def test_cmd_output_observation_properties():
     """Test TerminalObservation class properties"""
-    from openhands.sdk.tool.schema import TextContent
+    from agentrt.sdk.tool.schema import TextContent
 
     # Test with successful command
     metadata = CmdOutputMetadata(exit_code=0, pid=123)

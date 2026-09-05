@@ -18,9 +18,9 @@ from uuid import UUID
 
 import pytest
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.llm import Message, TextContent
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.llm import Message, TextContent
 from tests.agent_server.stress.budgets import CONCURRENT_CONVERSATIONS
 from tests.agent_server.stress.probe import ResourceProbe
 from tests.agent_server.stress.scripts import (

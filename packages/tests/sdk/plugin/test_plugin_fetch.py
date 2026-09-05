@@ -14,10 +14,10 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
-from openhands.sdk.git.cached_repo import GitHelper
-from openhands.sdk.git.exceptions import GitCommandError
-from openhands.sdk.plugin import Plugin, PluginFetchError
-from openhands.sdk.plugin.fetch import fetch_plugin
+from agentrt.sdk.git.cached_repo import GitHelper
+from agentrt.sdk.git.exceptions import GitCommandError
+from agentrt.sdk.plugin import Plugin, PluginFetchError
+from agentrt.sdk.plugin.fetch import fetch_plugin
 
 
 def test_fetch_git_error_raises_plugin_fetch_error(tmp_path: Path):
@@ -71,7 +71,7 @@ def test_fetch_uses_default_cache_dir(tmp_path: Path):
 
     mock_git.clone.side_effect = clone_side_effect
 
-    with patch("openhands.sdk.plugin.fetch.DEFAULT_CACHE_DIR", tmp_path / "cache"):
+    with patch("agentrt.sdk.plugin.fetch.DEFAULT_CACHE_DIR", tmp_path / "cache"):
         result = fetch_plugin(
             "github:owner/repo",
             cache_dir=None,

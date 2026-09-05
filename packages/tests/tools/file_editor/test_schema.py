@@ -1,4 +1,4 @@
-from openhands.tools.file_editor import FileEditorTool
+from agentrt.tools.file_editor import FileEditorTool
 
 
 def test_to_mcp_tool_detailed_type_validation_editor(mock_conversation_state):

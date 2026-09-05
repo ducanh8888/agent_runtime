@@ -2,7 +2,7 @@
 
 import json
 
-from openhands.sdk.event import Event, LLMCompletionLogEvent
+from agentrt.sdk.event import Event, LLMCompletionLogEvent
 
 
 def test_llm_completion_log_event_creation() -> None:

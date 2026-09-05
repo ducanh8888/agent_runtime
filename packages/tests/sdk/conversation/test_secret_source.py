@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.secret import LookupSecret, StaticSecret
-from openhands.sdk.utils.cipher import Cipher
+from agentrt.sdk.secret import LookupSecret, StaticSecret
+from agentrt.sdk.utils.cipher import Cipher
 
 
 @pytest.fixture
@@ -291,7 +291,7 @@ def test_lookup_secret_get_value_resolves_relative_url(monkeypatch):
     response.raise_for_status = Mock()
 
     with patch(
-        "openhands.sdk.secret.secrets.httpx.get", return_value=response
+        "agentrt.sdk.secret.secrets.httpx.get", return_value=response
     ) as mock_get:
         secret = LookupSecret(url="api/settings/secrets/OPENAI_API_KEY")
 

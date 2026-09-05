@@ -8,32 +8,32 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server.config import Config
-from openhands.agent_server.conversation_router import conversation_router
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import (
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.conversation_router import conversation_router
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import (
     ConversationInfo,
     ConversationPage,
     ConversationSortOrder,
     SendMessageRequest,
     StartConversationRequest,
 )
-from openhands.agent_server.utils import utc_now
-from openhands.sdk import LLM, Agent, TextContent, Tool
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.llm import llm_profile_store
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.marketplace.registry import (
+from agentrt.agent_server.utils import utc_now
+from agentrt.sdk import LLM, Agent, TextContent, Tool
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.llm import llm_profile_store
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.marketplace.registry import (
     PluginNotFoundError,
     PluginResolutionError,
 )
-from openhands.sdk.plugin import PluginFetchError
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
-from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.plugin import PluginFetchError
+from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+from agentrt.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @pytest.fixture
@@ -1740,10 +1740,10 @@ def test_start_conversation_with_tool_module_qualnames(
             },
             "workspace": {"working_dir": "/tmp/test"},
             "tool_module_qualnames": {
-                "glob": "openhands.tools.glob.definition",
-                "grep": "openhands.tools.grep.definition",
+                "glob": "agentrt.tools.glob.definition",
+                "grep": "agentrt.tools.grep.definition",
                 "planning_file_editor": (
-                    "openhands.tools.planning_file_editor.definition"
+                    "agentrt.tools.planning_file_editor.definition"
                 ),
             },
         }
@@ -1760,9 +1760,9 @@ def test_start_conversation_with_tool_module_qualnames(
         request_arg = call_args[0][0]
         assert hasattr(request_arg, "tool_module_qualnames")
         assert request_arg.tool_module_qualnames == {
-            "glob": "openhands.tools.glob.definition",
-            "grep": "openhands.tools.grep.definition",
-            "planning_file_editor": ("openhands.tools.planning_file_editor.definition"),
+            "glob": "agentrt.tools.glob.definition",
+            "grep": "agentrt.tools.grep.definition",
+            "planning_file_editor": ("agentrt.tools.planning_file_editor.definition"),
         }
     finally:
         client.app.dependency_overrides.clear()
@@ -2377,7 +2377,7 @@ def test_switch_conversation_llm_decrypts_encrypted_api_key(
     """
     from base64 import urlsafe_b64encode
 
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     secret_key = urlsafe_b64encode(b"a" * 32).decode("ascii")
     cipher = Cipher(secret_key)
@@ -2664,7 +2664,7 @@ def test_start_conversation_client_tool_registration_error_returns_422(
     client, mock_conversation_service
 ):
     """Client tool registration input errors yield 422, not 500."""
-    from openhands.sdk.tool.client_tool import ClientToolRegistrationError
+    from agentrt.sdk.tool.client_tool import ClientToolRegistrationError
 
     mock_conversation_service.start_conversation.side_effect = (
         ClientToolRegistrationError(

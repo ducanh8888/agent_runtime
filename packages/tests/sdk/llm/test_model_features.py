@@ -1,14 +1,14 @@
 import pytest
 from litellm.utils import supports_vision
 
-from openhands.sdk.llm.utils.model_features import (
+from agentrt.sdk.llm.utils.model_features import (
     REASONING_EFFORT_MODEL_OVERRIDES,
     VISION_MODEL_OVERRIDES,
     _normalized_supported_openai_params,
     get_features,
     model_matches,
 )
-from openhands.sdk.llm.utils.model_info import get_litellm_model_info
+from agentrt.sdk.llm.utils.model_info import get_litellm_model_info
 
 
 @pytest.mark.parametrize(

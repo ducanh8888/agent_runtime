@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, Mock
 
 import mcp.types
 
-from openhands.sdk.llm import ImageContent, TextContent
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.definition import MCPToolObservation
-from openhands.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
-from openhands.sdk.tool import ToolAnnotations
-from openhands.sdk.utils.async_executor import AsyncExecutor
+from agentrt.sdk.llm import ImageContent, TextContent
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.definition import MCPToolObservation
+from agentrt.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
+from agentrt.sdk.tool import ToolAnnotations
+from agentrt.sdk.utils.async_executor import AsyncExecutor
 
 
 class MockMCPClient(MCPClient):
@@ -444,7 +444,7 @@ class TestMCPTool:
 
 def test_action_type_cache_is_bounded():
     """A tool whose schema keeps changing must not grow the cache forever."""
-    from openhands.sdk.mcp.tool import (
+    from agentrt.sdk.mcp.tool import (
         _MCP_ACTION_TYPE_CACHE_MAX,
         _create_mcp_action_type,
         _mcp_dynamic_action_type,
@@ -477,7 +477,7 @@ def test_action_type_cache_serializes_get_and_evict(monkeypatch):
     import time
     from collections import OrderedDict
 
-    import openhands.sdk.mcp.tool as tool_module
+    import agentrt.sdk.mcp.tool as tool_module
 
     paused = threading.Event()
 

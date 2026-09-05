@@ -5,12 +5,12 @@ from unittest.mock import Mock
 
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.tool.schema import TextContent
-from openhands.tools.terminal import TerminalAction, TerminalObservation
-from openhands.tools.terminal.impl import TerminalExecutor
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.tool.schema import TextContent
+from agentrt.tools.terminal import TerminalAction, TerminalObservation
+from agentrt.tools.terminal.impl import TerminalExecutor
 
 
 def test_terminal_executor_without_conversation():

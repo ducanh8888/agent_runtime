@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, LLM_PROFILE_SCHEMA_VERSION
-from openhands.sdk.llm.llm_profile_store import (
+from agentrt.sdk.llm import LLM, LLM_PROFILE_SCHEMA_VERSION
+from agentrt.sdk.llm.llm_profile_store import (
     LLMProfileStore,
     ProfileLimitExceeded,
 )
@@ -751,7 +751,7 @@ def test_default_provider_store_is_sibling_of_base_dir(tmp_path: Path) -> None:
     ``$HOME``. Otherwise a custom-directory profile store reads profiles from
     ``base_dir`` but credentials from ``~/.openhands`` — the wrong source.
     """
-    from openhands.sdk.llm.provider_connection_store import (
+    from agentrt.sdk.llm.provider_connection_store import (
         ProviderConnection,
         ProviderConnectionStore,
     )

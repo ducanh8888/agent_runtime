@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from openhands.sdk.extensions.installation import (
+from agentrt.sdk.extensions.installation import (
     InstallationInfo,
     InstallationInterface,
     InstallationMetadata,

@@ -6,9 +6,9 @@ from the same batch (sharing the same llm_response_id) form an atomic unit.
 
 from collections.abc import Sequence
 
-from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
-from openhands.sdk.context.view.properties.batch_atomicity import BatchAtomicityProperty
-from openhands.sdk.event import LLMConvertibleEvent
+from agentrt.sdk.context.view.manipulation_indices import ManipulationIndices
+from agentrt.sdk.context.view.properties.batch_atomicity import BatchAtomicityProperty
+from agentrt.sdk.event import LLMConvertibleEvent
 from tests.sdk.context.view.properties.conftest import create_action_event
 
 

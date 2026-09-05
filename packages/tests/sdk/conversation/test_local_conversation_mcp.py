@@ -6,12 +6,12 @@ from typing import Any, cast
 import mcp.types as mcp_types
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.config import MCPServer, coerce_mcp_config
-from openhands.sdk.mcp.tool import MCPToolDefinition
-from openhands.sdk.mcp.utils import MCPToolProvider
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.config import MCPServer, coerce_mcp_config
+from agentrt.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.mcp.utils import MCPToolProvider
 
 
 class EmptyMCPClient:
@@ -162,7 +162,7 @@ class _KwargsMCPToolProvider:
 
 
 def test_provider_supports_on_tools_reconciled() -> None:
-    from openhands.sdk.mcp.utils import (
+    from agentrt.sdk.mcp.utils import (
         DefaultMCPToolProvider,
         provider_supports_on_tools_reconciled,
     )

@@ -22,19 +22,19 @@ from litellm.types.utils import (
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.parallel_executor import ParallelToolExecutor
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.cancellation import CancellationToken
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import LLM, Message, MessageToolCall, TextContent
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.parallel_executor import ParallelToolExecutor
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.cancellation import CancellationToken
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import LLM, Message, MessageToolCall, TextContent
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 class _SpanInputAction(Action):
@@ -213,7 +213,7 @@ def test_tool_span_input_is_the_action_only(exported):
         agent=Agent(llm=llm, tools=[Tool(name="SpanInputEchoTool")]),
         callbacks=[],
     )
-    with patch("openhands.sdk.llm.llm.litellm_completion", side_effect=_responses()):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", side_effect=_responses()):
         conversation.send_message(
             Message(role="user", content=[TextContent(text="hi")])
         )
@@ -244,7 +244,7 @@ def test_every_declared_tool_call_emits_one_result_span(exported):
             conversation.state.block_action(event.id, "blocked by policy")
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion",
+        "agentrt.sdk.llm.llm.litellm_completion",
         side_effect=_mixed_result_response,
     ):
         conversation.send_message(
@@ -293,7 +293,7 @@ def test_rejected_pending_tool_call_emits_one_result_span(exported):
     conversation = Conversation(agent=agent, callbacks=[])
     conversation.set_confirmation_policy(AlwaysConfirm())
 
-    with patch("openhands.sdk.llm.llm.litellm_completion", side_effect=_responses()):
+    with patch("agentrt.sdk.llm.llm.litellm_completion", side_effect=_responses()):
         conversation.send_message(
             Message(role="user", content=[TextContent(text="hi")])
         )

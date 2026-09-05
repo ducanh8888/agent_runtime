@@ -163,7 +163,7 @@ def test_find_sdk_deprecated_fastapi_routes_in_file_flags_direct_import(tmp_path
     source.mkdir(parents=True)
     file_path = source / "router.py"
     file_path.write_text(
-        "from openhands.sdk.utils.deprecation import deprecated\n"
+        "from agentrt.sdk.utils.deprecation import deprecated\n"
         "\n"
         '@router.get("/foo")\n'
         '@deprecated(deprecated_in="1.0.0", removed_in="1.1.0")\n'
@@ -175,7 +175,7 @@ def test_find_sdk_deprecated_fastapi_routes_in_file_flags_direct_import(tmp_path
 
     assert errors == [
         "openhands-agent-server/openhands/agent_server/router.py:5 FastAPI route "
-        "`foo` uses openhands.sdk.utils.deprecation.deprecated; use the route "
+        "`foo` uses agentrt.sdk.utils.deprecation.deprecated; use the route "
         "decorator's deprecated=True flag instead."
     ]
 
@@ -186,7 +186,7 @@ def test_find_sdk_deprecated_fastapi_routes_in_file_flags_alias_import(tmp_path)
     source.mkdir(parents=True)
     file_path = source / "router.py"
     file_path.write_text(
-        "import openhands.sdk.utils.deprecation as dep\n"
+        "import agentrt.sdk.utils.deprecation as dep\n"
         "\n"
         '@router.post("/foo")\n'
         '@dep.deprecated(deprecated_in="1.0.0", removed_in="1.1.0")\n'
@@ -198,7 +198,7 @@ def test_find_sdk_deprecated_fastapi_routes_in_file_flags_alias_import(tmp_path)
 
     assert errors == [
         "openhands-agent-server/openhands/agent_server/router.py:5 FastAPI route "
-        "`foo` uses openhands.sdk.utils.deprecation.deprecated; use the route "
+        "`foo` uses agentrt.sdk.utils.deprecation.deprecated; use the route "
         "decorator's deprecated=True flag instead."
     ]
 
@@ -209,7 +209,7 @@ def test_find_sdk_deprecated_fastapi_routes_in_file_ignores_non_route_usage(tmp_
     source.mkdir(parents=True)
     file_path = source / "helpers.py"
     file_path.write_text(
-        "from openhands.sdk.utils.deprecation import deprecated\n"
+        "from agentrt.sdk.utils.deprecation import deprecated\n"
         "\n"
         '@deprecated(deprecated_in="1.0.0", removed_in="1.1.0")\n'
         "def helper():\n"

@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openhands.sdk.agent.agent import _ActionBatch
-from openhands.sdk.event import ActionEvent, ObservationEvent
-from openhands.sdk.event.llm_convertible import UserRejectObservation
-from openhands.sdk.tool.builtins import FinishTool
+from agentrt.sdk.agent.agent import _ActionBatch
+from agentrt.sdk.event import ActionEvent, ObservationEvent
+from agentrt.sdk.event.llm_convertible import UserRejectObservation
+from agentrt.sdk.tool.builtins import FinishTool
 
 
 def _ae(tool_name: str = "tool", action_id: str | None = None) -> ActionEvent:

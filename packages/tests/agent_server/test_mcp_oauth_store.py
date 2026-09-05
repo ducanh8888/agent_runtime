@@ -17,19 +17,19 @@ from fastmcp.server.auth.providers.in_memory import InMemoryOAuthProvider
 from mcp.server.auth.settings import ClientRegistrationOptions
 from pydantic import SecretStr
 
-import openhands.sdk.mcp.utils as mcp_utils
-from openhands.agent_server.config import Config
-from openhands.agent_server.mcp_oauth_store import (
+import agentrt.sdk.mcp.utils as mcp_utils
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.mcp_oauth_store import (
     MCPSettingsOAuthTokenStore,
     SettingsBackedMCPToolProvider,
     create_settings_backed_mcp_tool_provider,
 )
-from openhands.agent_server.persistence import (
+from agentrt.agent_server.persistence import (
     PersistedSettings,
     get_settings_store,
     reset_stores,
 )
-from openhands.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
+from agentrt.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
 
 
 def _find_free_port() -> int:
@@ -380,7 +380,7 @@ def test_settings_backed_provider_forwards_on_tools_reconciled():
         return None
 
     with patch(
-        "openhands.agent_server.mcp_oauth_store.create_mcp_tools"
+        "agentrt.agent_server.mcp_oauth_store.create_mcp_tools"
     ) as mock_create:
         provider.create_tools(config, on_tools_reconciled=callback)
 

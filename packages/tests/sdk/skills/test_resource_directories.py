@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
-from openhands.sdk.skills import (
+from agentrt.sdk.skills import (
     RESOURCE_DIRECTORIES,
     Skill,
     SkillResources,
     discover_skill_resources,
 )
-from openhands.sdk.utils.path import to_posix_path
+from agentrt.sdk.utils.path import to_posix_path
 
 
 def test_skill_resources_model(tmp_path: Path) -> None:

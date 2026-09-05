@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from openhands.agent_server.canvas_extensions.installed import (
+from agentrt.agent_server.canvas_extensions.installed import (
     _staged_path,
     apply_canvas_extension_update,
     check_canvas_extension_update,
@@ -17,8 +17,8 @@ from openhands.agent_server.canvas_extensions.installed import (
     install_canvas_extension,
     uninstall_canvas_extension,
 )
-from openhands.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
-from openhands.sdk.extensions.fetch import ExtensionFetchError
+from agentrt.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
+from agentrt.sdk.extensions.fetch import ExtensionFetchError
 
 from .conftest import write_extension as _write_extension
 
@@ -107,11 +107,11 @@ def test_check_uses_originally_requested_ref_not_latest(
     # Patch both: install() fetches via the SDK manager, check() via this module.
     with (
         patch(
-            "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+            "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
             return_value=(extension_dir, "sha-v1"),
         ),
         patch(
-            "openhands.agent_server.canvas_extensions.installed.fetch_with_resolution",
+            "agentrt.agent_server.canvas_extensions.installed.fetch_with_resolution",
             return_value=(extension_dir, "sha-v1-updated"),
         ) as mock_check_fetch,
     ):
@@ -216,7 +216,7 @@ def test_check_propagates_fetch_error(extension_dir: Path, installed: Path):
     content is invalid" -- it must raise, not come back as validated=False.
     """
     with patch(
-        "openhands.agent_server.canvas_extensions.installed.fetch_with_resolution",
+        "agentrt.agent_server.canvas_extensions.installed.fetch_with_resolution",
         side_effect=ExtensionFetchError("network down"),
     ):
         with pytest.raises(ExtensionFetchError):
@@ -437,11 +437,11 @@ def test_apply_can_enable_a_previously_disabled_extension(
 def test_apply_preserves_source_and_repo_path(extension_dir: Path, installed_dir: Path):
     with (
         patch(
-            "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+            "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
             return_value=(extension_dir, "sha-1"),
         ),
         patch(
-            "openhands.agent_server.canvas_extensions.installed.fetch_with_resolution",
+            "agentrt.agent_server.canvas_extensions.installed.fetch_with_resolution",
             return_value=(extension_dir, "sha-1"),
         ) as mock_check_fetch,
     ):
@@ -472,11 +472,11 @@ def test_apply_preserves_source_and_repo_path(extension_dir: Path, installed_dir
 def test_apply_persists_new_resolved_ref(extension_dir: Path, installed_dir: Path):
     with (
         patch(
-            "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+            "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
             return_value=(extension_dir, "sha-1"),
         ),
         patch(
-            "openhands.agent_server.canvas_extensions.installed.fetch_with_resolution",
+            "agentrt.agent_server.canvas_extensions.installed.fetch_with_resolution",
             return_value=(extension_dir, "sha-2"),
         ),
     ):

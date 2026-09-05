@@ -12,7 +12,7 @@ from dataclasses import asdict
 
 import pytest
 
-from openhands.agent_server.telemetry.sanitizer import (
+from agentrt.agent_server.telemetry.sanitizer import (
     COST_BOUNDS,
     COUNT_BOUNDS,
     DURATION_BOUNDS,
@@ -184,7 +184,7 @@ def test_safe_token(value, expected):
 
 def test_safe_identifier_rejects_secret_and_path_shapes():
     assert safe_identifier("ValueError") == "ValueError"
-    assert safe_identifier("openhands.sdk.Foo") == "openhands.sdk.Foo"
+    assert safe_identifier("agentrt.sdk.Foo") == "agentrt.sdk.Foo"
     assert safe_identifier(SECRET) == "UnknownError"
     assert safe_identifier(PATH) == "UnknownError"
     assert safe_identifier("a" * 200) == "UnknownError"

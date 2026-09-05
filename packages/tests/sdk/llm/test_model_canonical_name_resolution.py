@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from openhands.sdk.llm import LLM
+from agentrt.sdk.llm import LLM
 
 
 class DummyFeatures:
@@ -34,9 +34,9 @@ def test_model_canonical_name_used_for_capabilities(monkeypatch):
         return DummyFeatures(model)
 
     monkeypatch.setattr(
-        "openhands.sdk.llm.llm.get_litellm_model_info", fake_get_model_info
+        "agentrt.sdk.llm.llm.get_litellm_model_info", fake_get_model_info
     )
-    monkeypatch.setattr("openhands.sdk.llm.llm.get_features", fake_get_features)
+    monkeypatch.setattr("agentrt.sdk.llm.llm.get_features", fake_get_features)
 
     real_llm = LLM(model="openai/gpt-5-mini")
     proxy_llm = LLM(

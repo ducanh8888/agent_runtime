@@ -10,11 +10,11 @@ encountered. Action events without thinking blocks do not start a tool loop.
 
 from collections.abc import Sequence
 
-from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
-from openhands.sdk.context.view.properties.tool_loop_atomicity import (
+from agentrt.sdk.context.view.manipulation_indices import ManipulationIndices
+from agentrt.sdk.context.view.properties.tool_loop_atomicity import (
     ToolLoopAtomicityProperty,
 )
-from openhands.sdk.event import LLMConvertibleEvent
+from agentrt.sdk.event import LLMConvertibleEvent
 from tests.sdk.context.view.properties.conftest import (
     create_action_event,
     create_message_event,

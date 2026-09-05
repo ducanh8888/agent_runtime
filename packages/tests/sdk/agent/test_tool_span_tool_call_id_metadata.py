@@ -21,15 +21,15 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 class _EchoAction(Action):
@@ -104,16 +104,16 @@ def test_tool_span_metadata_carries_tool_call_id():
 
     with (
         patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             side_effect=lambda messages, **kw: _mock_response_with_tool_call(
                 "call_abc123"
             ),
         ),
         patch(
-            "openhands.sdk.agent.agent.should_enable_observability", return_value=True
+            "agentrt.sdk.agent.agent.should_enable_observability", return_value=True
         ),
         patch(
-            "openhands.sdk.agent.agent.observe",
+            "agentrt.sdk.agent.agent.observe",
             side_effect=lambda **kwargs: (lambda f: f),
         ) as mock_observe,
     ):

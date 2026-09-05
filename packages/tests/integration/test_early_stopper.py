@@ -2,11 +2,11 @@
 
 from typing import cast
 
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.llm_convertible.action import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent
-from openhands.tools.file_editor.definition import CommandLiteral, FileEditorAction
-from openhands.tools.terminal.definition import TerminalAction
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.llm_convertible.action import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent
+from agentrt.tools.file_editor.definition import CommandLiteral, FileEditorAction
+from agentrt.tools.terminal.definition import TerminalAction
 from tests.integration.early_stopper import (
     BashCommandPruner,
     CompositeEarlyStopper,

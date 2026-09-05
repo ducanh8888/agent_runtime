@@ -1,7 +1,7 @@
 """Test that an agent can browse a GitHub PR and extract information."""
 
-from openhands.sdk import get_logger
-from openhands.sdk.conversation import get_agent_final_response
+from agentrt.sdk import get_logger
+from agentrt.sdk.conversation import get_agent_final_response
 from tests.integration.base import BaseIntegrationTest, TestResult
 
 

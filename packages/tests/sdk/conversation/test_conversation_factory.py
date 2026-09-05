@@ -6,11 +6,11 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import Agent, Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk import Agent, Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import RemoteWorkspace
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_conversation_factory_creates_local_by_default(agent):
     conversation.close()
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_conversation_factory_creates_remote_with_workspace(
     mock_ws_client, agent, remote_workspace
 ):
@@ -91,12 +91,12 @@ def test_conversation_factory_forwards_local_parameters(agent):
 def test_conversation_factory_forwards_local_observability_span_name(agent):
     with (
         patch(
-            "openhands.sdk.conversation.base.should_enable_observability",
+            "agentrt.sdk.conversation.base.should_enable_observability",
             return_value=True,
         ),
-        patch("openhands.sdk.conversation.base.start_root_span") as mock_start_span,
-        patch("openhands.sdk.conversation.base.start_child_span") as mock_child_span,
-        patch("openhands.sdk.conversation.base.end_root_span"),
+        patch("agentrt.sdk.conversation.base.start_root_span") as mock_start_span,
+        patch("agentrt.sdk.conversation.base.start_child_span") as mock_child_span,
+        patch("agentrt.sdk.conversation.base.end_root_span"),
     ):
         conversation = Conversation(
             agent=agent,
@@ -114,7 +114,7 @@ def test_conversation_factory_forwards_local_observability_span_name(agent):
         conversation.close()
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_conversation_factory_forwards_remote_parameters(
     mock_ws_client, agent, remote_workspace
 ):
@@ -130,7 +130,7 @@ def test_conversation_factory_forwards_remote_parameters(
     assert conversation.max_iteration_per_run == 200
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_conversation_factory_forwards_remote_user_id_to_create_payload(
     mock_ws_client, agent, remote_workspace
 ):
@@ -160,7 +160,7 @@ def test_conversation_factory_string_workspace_creates_local(agent):
     conversation.close()
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_conversation_factory_type_inference(mock_ws_client, agent, remote_workspace):
     """Test that type hints work correctly for both conversation types."""
     local_conv = Conversation(agent=agent)

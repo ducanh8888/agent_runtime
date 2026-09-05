@@ -4,14 +4,14 @@ import json
 
 from pydantic import BaseModel, Field, SecretStr
 
-from openhands.sdk.mcp.config import MCPServer
-from openhands.sdk.skills import (
+from agentrt.sdk.mcp.config import MCPServer
+from agentrt.sdk.skills import (
     KeywordTrigger,
     Skill,
     TaskTrigger,
 )
-from openhands.sdk.skills.types import InputMetadata
-from openhands.sdk.utils.models import OpenHandsModel
+from agentrt.sdk.skills.types import InputMetadata
+from agentrt.sdk.utils.models import OpenHandsModel
 
 
 def test_repo_skill_serialization():
@@ -341,7 +341,7 @@ def test_mcp_tools_secrets_exposed_under_expose_secrets():
 def test_mcp_tools_secrets_encrypted_under_cipher():
     """With a cipher in context, secrets are encrypted (not plaintext, not
     dropped) so they can be decrypted on restore."""
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     skill = _skill_with_mcp_secret()
     cipher = Cipher(secret_key="test-encryption-key")

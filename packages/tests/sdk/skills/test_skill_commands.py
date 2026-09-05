@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.skills import Skill
-from openhands.sdk.skills.execute import (
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.skills.execute import (
     MAX_OUTPUT_SIZE,
     _execute_inline_command,
     render_content_with_commands,

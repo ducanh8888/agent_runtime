@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from openhands.sdk.llm.exceptions import LLMBadRequestError
-from openhands.sdk.llm.utils import vertex_preflight
-from openhands.sdk.llm.utils.vertex_preflight import assert_vertex_sdk_available
+from agentrt.sdk.llm.exceptions import LLMBadRequestError
+from agentrt.sdk.llm.utils import vertex_preflight
+from agentrt.sdk.llm.utils.vertex_preflight import assert_vertex_sdk_available
 
 
 def test_noop_for_non_vertex_providers(monkeypatch: pytest.MonkeyPatch) -> None:

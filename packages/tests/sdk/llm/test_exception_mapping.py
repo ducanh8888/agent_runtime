@@ -7,7 +7,7 @@ from litellm.exceptions import (
     PermissionDeniedError,
 )
 
-from openhands.sdk.llm.exceptions import (
+from agentrt.sdk.llm.exceptions import (
     LLMAuthenticationError,
     LLMBadRequestError,
     LLMContentPolicyViolationError,

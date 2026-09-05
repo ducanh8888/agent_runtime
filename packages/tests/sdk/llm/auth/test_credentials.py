@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from openhands.sdk.llm.auth.credentials import (
+from agentrt.sdk.llm.auth.credentials import (
     CredentialStore,
     OAuthCredentials,
     get_credentials_dir,

@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from openhands.agent_server.config import (
+from agentrt.agent_server.config import (
     CONFIG_PATH_ENV,
     DEFAULT_CONVERSATION_IDLE_TTL_SECONDS,
     Config,

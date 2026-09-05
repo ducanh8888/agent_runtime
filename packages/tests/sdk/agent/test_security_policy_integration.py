@@ -13,10 +13,10 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.event import ActionEvent, AgentErrorEvent
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.event import ActionEvent, AgentErrorEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 def test_security_policy_in_system_message():
@@ -241,8 +241,8 @@ def test_no_security_analyzer_still_includes_risk_assessment():
 
 def test_non_llm_security_analyzer_still_includes_risk_assessment():
     """Test that security risk assessment section is excluded when security analyzer is not LLMSecurityAnalyzer."""  # noqa: E501
-    from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-    from openhands.sdk.security.risk import SecurityRisk
+    from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
+    from agentrt.sdk.security.risk import SecurityRisk
 
     class MockSecurityAnalyzer(SecurityAnalyzerBase):
         def security_risk(self, action: ActionEvent) -> SecurityRisk:
@@ -302,7 +302,7 @@ def test_security_risk_param_ignored_when_no_analyzer():
 
     Expected behavior: security_risk should be UNKNOWN when no analyzer is set.
     """
-    from openhands.sdk.security.risk import SecurityRisk
+    from agentrt.sdk.security.risk import SecurityRisk
 
     llm = LLM(
         usage_id="test-llm",
@@ -321,7 +321,7 @@ def test_security_risk_param_ignored_when_no_analyzer():
     # Mock LLM response that includes security_risk=HIGH even though
     # llm_security_analyzer=False (the LLM might do this if it's well-trained)
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion",
+        "agentrt.sdk.llm.llm.litellm_completion",
         return_value=_tool_response(
             "think",
             '{"thought": "This is a test thought", "security_risk": "HIGH"}',

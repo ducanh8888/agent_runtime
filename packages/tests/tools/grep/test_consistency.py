@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from openhands.tools.grep.definition import GrepAction
-from openhands.tools.grep.impl import GrepExecutor
-from openhands.tools.utils import _check_ripgrep_available
+from agentrt.tools.grep.definition import GrepAction
+from agentrt.tools.grep.impl import GrepExecutor
+from agentrt.tools.utils import _check_ripgrep_available
 
 
 # ruff: noqa

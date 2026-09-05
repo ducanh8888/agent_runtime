@@ -20,11 +20,11 @@ from uuid import uuid4
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.context.prompts.presets import create_registry
-from openhands.sdk.context.prompts.section import Platform, PromptContext
-from openhands.sdk.context.prompts.sections.dynamic import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.context.prompts.presets import create_registry
+from agentrt.sdk.context.prompts.section import Platform, PromptContext
+from agentrt.sdk.context.prompts.sections.dynamic import (
     AvailableSkillsSection,
     CustomSecretsSection,
     CustomSuffixSection,
@@ -32,7 +32,7 @@ from openhands.sdk.context.prompts.sections.dynamic import (
     MemoryContextSection,
     RepoContextSection,
 )
-from openhands.sdk.context.prompts.sections.static import (
+from agentrt.sdk.context.prompts.sections.static import (
     BrowserSection,
     EfficiencySection,
     MemorySection,
@@ -42,11 +42,11 @@ from openhands.sdk.context.prompts.sections.static import (
     SecuritySection,
     SoulSection,
 )
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.skills import KeywordTrigger, Skill
-from openhands.sdk.utils.path import to_posix_path
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.skills import KeywordTrigger, Skill
+from agentrt.sdk.utils.path import to_posix_path
+from agentrt.sdk.workspace import LocalWorkspace
 
 from .test_prompt_snapshot import (
     DYNAMIC_CONTEXT,

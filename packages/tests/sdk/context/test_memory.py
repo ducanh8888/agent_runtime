@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.context.memory import MEMORY_INDEX_RELPATH, load_memory
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.context.memory import MEMORY_INDEX_RELPATH, load_memory
+from agentrt.sdk.llm import LLM
 
 
 @pytest.fixture(autouse=True)

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import pytest
 from tree_sitter import Node
 
-from openhands.sdk.security.shell_parser import parse
+from agentrt.sdk.security.shell_parser import parse
 
 
 type ExpectedChild = tuple[str, str]

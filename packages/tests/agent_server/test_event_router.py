@@ -10,16 +10,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.dependencies import get_event_service
-from openhands.agent_server.event_router import (
+from agentrt.agent_server.dependencies import get_event_service
+from agentrt.agent_server.event_router import (
     event_router,
     normalize_datetime_to_server_timezone,
 )
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import SendMessageRequest
-from openhands.sdk import Message
-from openhands.sdk.event.llm_convertible.message import MessageEvent
-from openhands.sdk.llm.message import ImageContent, TextContent
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import SendMessageRequest
+from agentrt.sdk import Message
+from agentrt.sdk.event.llm_convertible.message import MessageEvent
+from agentrt.sdk.llm.message import ImageContent, TextContent
 
 
 def test_normalize_datetime_naive_passthrough():
@@ -672,8 +672,8 @@ class TestSearchEventsEndpoint:
         self, client, sample_conversation_id
     ):
         """Test source filtering with real events."""
-        from openhands.agent_server.event_service import EventService
-        from openhands.sdk.llm.message import TextContent
+        from agentrt.agent_server.event_service import EventService
+        from agentrt.sdk.llm.message import TextContent
 
         # Create real EventService with sample events
         event_service = EventService(
@@ -741,8 +741,8 @@ class TestSearchEventsEndpoint:
         self, client, sample_conversation_id
     ):
         """Test body filtering with real events."""
-        from openhands.agent_server.event_service import EventService
-        from openhands.sdk.llm.message import TextContent
+        from agentrt.agent_server.event_service import EventService
+        from agentrt.sdk.llm.message import TextContent
 
         # Create real EventService with sample events
         event_service = EventService(

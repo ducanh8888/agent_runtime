@@ -7,9 +7,9 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.llm import LLM
 
 
 def _make_conversation(workspace: str) -> LocalConversation:

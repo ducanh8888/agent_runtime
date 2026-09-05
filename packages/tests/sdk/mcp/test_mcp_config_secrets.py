@@ -1,7 +1,7 @@
-from openhands.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
-from openhands.sdk.subagent.schema import AgentDefinition
-from openhands.sdk.utils.cipher import Cipher
-from openhands.sdk.utils.pydantic_secrets import REDACTED_SECRET_VALUE
+from agentrt.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
+from agentrt.sdk.subagent.schema import AgentDefinition
+from agentrt.sdk.utils.cipher import Cipher
+from agentrt.sdk.utils.pydantic_secrets import REDACTED_SECRET_VALUE
 
 
 def test_all_mcp_secret_fields_round_trip_through_encrypted_json() -> None:

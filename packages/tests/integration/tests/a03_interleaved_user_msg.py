@@ -10,7 +10,7 @@ Pattern:
                                  ↑ Inserted between tool_use and tool_result!
 """
 
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
 from tests.integration.api_compliance.base import BaseAPIComplianceTest
 
 

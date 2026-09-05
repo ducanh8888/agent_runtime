@@ -1,10 +1,10 @@
 from pydantic import BaseModel
 
-from openhands.sdk import LLM, Conversation
-from openhands.sdk.tool.builtins import FinishTool
-from openhands.sdk.tool.registry import list_registered_tools, register_tool
-from openhands.tools.preset import default as default_preset
-from openhands.tools.preset.default import get_default_agent
+from agentrt.sdk import LLM, Conversation
+from agentrt.sdk.tool.builtins import FinishTool
+from agentrt.sdk.tool.registry import list_registered_tools, register_tool
+from agentrt.tools.preset import default as default_preset
+from agentrt.tools.preset.default import get_default_agent
 
 
 class _FinishResult(BaseModel):

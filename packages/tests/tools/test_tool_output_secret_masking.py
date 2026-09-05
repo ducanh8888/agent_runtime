@@ -13,21 +13,21 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.tool import Tool, ToolDefinition, register_tool
-from openhands.tools.apply_patch.definition import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.tool import Tool, ToolDefinition, register_tool
+from agentrt.tools.apply_patch.definition import (
     ApplyPatchAction,
     ApplyPatchObservation,
     ApplyPatchTool,
 )
-from openhands.tools.file_editor import FileEditorTool
-from openhands.tools.file_editor.definition import FileEditorAction
-from openhands.tools.glob import GlobTool
-from openhands.tools.glob.definition import GlobAction, GlobObservation
-from openhands.tools.grep import GrepTool
-from openhands.tools.grep.definition import GrepAction, GrepObservation
+from agentrt.tools.file_editor import FileEditorTool
+from agentrt.tools.file_editor.definition import FileEditorAction
+from agentrt.tools.glob import GlobTool
+from agentrt.tools.glob.definition import GlobAction, GlobObservation
+from agentrt.tools.grep import GrepTool
+from agentrt.tools.grep.definition import GrepAction, GrepObservation
 
 
 SECRET = "sk-supersecret-value"
@@ -128,10 +128,10 @@ def test_no_conversation_means_no_masking(tmp_path: Path):
 
 def _all_tool_definition_subclasses() -> set[type[ToolDefinition]]:
     """Import every shipped tool package, then collect ToolDefinition subclasses."""
-    import openhands.tools
+    import agentrt.tools
 
     for module in pkgutil.walk_packages(
-        openhands.tools.__path__, prefix="openhands.tools."
+        agentrt.tools.__path__, prefix="agentrt.tools."
     ):
         try:
             importlib.import_module(module.name)

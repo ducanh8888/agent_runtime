@@ -5,14 +5,14 @@ import uuid
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event import (
+from agentrt.sdk import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event import (
     ConversationStateUpdateEvent,
     MessageEvent,
     SystemPromptEvent,
 )
-from openhands.sdk.llm import LLM, TextContent
+from agentrt.sdk.llm import LLM, TextContent
 
 
 def _make_agent() -> Agent:
@@ -21,7 +21,7 @@ def _make_agent() -> Agent:
 
 
 def _make_state(agent: Agent, tmp_path) -> ConversationState:
-    from openhands.sdk.workspace.local import LocalWorkspace
+    from agentrt.sdk.workspace.local import LocalWorkspace
 
     return ConversationState.create(
         id=uuid.uuid4(),
@@ -98,7 +98,7 @@ def test_agent_init_state_raises_if_user_message_before_system_prompt_in_prefix(
 ) -> None:
     agent = _make_agent()
     state = _make_state(agent, tmp_path)
-    from openhands.sdk.llm import Message
+    from agentrt.sdk.llm import Message
 
     state.events.append(
         MessageEvent(

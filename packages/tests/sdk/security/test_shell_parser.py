@@ -11,7 +11,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from openhands.sdk.security.shell_parser import ParseResult, parse
+from agentrt.sdk.security.shell_parser import ParseResult, parse
 
 
 class TestParseSuccessShape:

@@ -2,7 +2,7 @@
 
 import json
 
-from openhands.sdk.event import (
+from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
     MessageEvent,
@@ -10,9 +10,9 @@ from openhands.sdk.event import (
     SystemPromptEvent,
     UserRejectObservation,
 )
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.security.grayswan.utils import convert_events_to_openai_messages
-from openhands.sdk.tool import Action, Observation
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.security.grayswan.utils import convert_events_to_openai_messages
+from agentrt.sdk.tool import Action, Observation
 
 
 class GraySwanUtilsTestAction(Action):

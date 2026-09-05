@@ -1,4 +1,4 @@
-"""Tests for MCP schema generation in openhands.sdk.tool.schema."""
+"""Tests for MCP schema generation in agentrt.sdk.tool.schema."""
 
 import json
 from collections.abc import Sequence
@@ -6,8 +6,8 @@ from collections.abc import Sequence
 import pytest
 from pydantic import Field
 
-from openhands.sdk.llm import ImageContent, TextContent
-from openhands.sdk.tool.schema import Action, Observation, Schema, _process_schema_node
+from agentrt.sdk.llm import ImageContent, TextContent
+from agentrt.sdk.tool.schema import Action, Observation, Schema, _process_schema_node
 
 
 class MCPSchemaTestAction(Action):

@@ -14,9 +14,9 @@ import time
 import pytest
 from fastmcp import FastMCP
 
-from openhands.sdk.mcp import create_mcp_tools
-from openhands.sdk.mcp.config import coerce_mcp_config
-from openhands.sdk.mcp.tool import MCPToolExecutor
+from agentrt.sdk.mcp import create_mcp_tools
+from agentrt.sdk.mcp.config import coerce_mcp_config
+from agentrt.sdk.mcp.tool import MCPToolExecutor
 
 
 def _find_free_port() -> int:

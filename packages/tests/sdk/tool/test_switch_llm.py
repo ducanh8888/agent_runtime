@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk import LLM, LocalConversation, OpenHandsAgentSettings
-from openhands.sdk.agent import Agent
-from openhands.sdk.llm import llm_profile_store
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool.builtins import (
+from agentrt.sdk import LLM, LocalConversation, OpenHandsAgentSettings
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.llm import llm_profile_store
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool.builtins import (
     SwitchLLMAction,
     SwitchLLMObservation,
     SwitchLLMTool,

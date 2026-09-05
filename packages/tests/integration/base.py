@@ -11,20 +11,20 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, SecretStr
 
-from openhands.sdk import (
+from agentrt.sdk import (
     LLM,
     Agent,
     Message,
     TextContent,
 )
-from openhands.sdk.context.condenser import CondenserBase
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.visualizer import DefaultConversationVisualizer
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.context.condenser import CondenserBase
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.visualizer import DefaultConversationVisualizer
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.llm_convertible import (
     MessageEvent,
 )
-from openhands.sdk.tool import Tool
+from agentrt.sdk.tool import Tool
 from tests.integration.early_stopper import EarlyStopperBase, EarlyStopResult
 
 
@@ -46,20 +46,20 @@ def get_tools_for_preset(
     """
     match preset:
         case "gemini":
-            from openhands.tools.preset.gemini import get_gemini_tools
+            from agentrt.tools.preset.gemini import get_gemini_tools
 
             return get_gemini_tools(enable_browser=enable_browser)
         case "gpt5":
-            from openhands.tools.preset.gpt5 import get_gpt5_tools
+            from agentrt.tools.preset.gpt5 import get_gpt5_tools
 
             return get_gpt5_tools(enable_browser=enable_browser)
         case "planning":
-            from openhands.tools.preset.planning import get_planning_tools
+            from agentrt.tools.preset.planning import get_planning_tools
 
             # Planning preset is read-only and doesn't support browser tools
             return get_planning_tools()
         case "default":
-            from openhands.tools.preset.default import get_default_tools
+            from agentrt.tools.preset.default import get_default_tools
 
             return get_default_tools(enable_browser=enable_browser)
         case _:
@@ -358,7 +358,7 @@ class BaseIntegrationTest(ABC):
             completion_tokens: Number of completion tokens used by judge
             cost: Cost of the judge call
         """
-        from openhands.sdk.llm.utils.metrics import TokenUsage
+        from agentrt.sdk.llm.utils.metrics import TokenUsage
 
         # Add to conversation stats for the test LLM
         stats = self.conversation.conversation_stats

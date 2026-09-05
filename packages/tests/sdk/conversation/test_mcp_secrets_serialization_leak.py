@@ -12,12 +12,12 @@ import uuid
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent.agent import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.llm import LLM
-from openhands.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.agent.agent import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 # A clearly identifiable secret value for testing
@@ -259,7 +259,7 @@ class TestMcpConfigPreservation:
         When a cipher is provided (the production flow), mcp_config should be
         encrypted on save and decrypted on restore, preserving all values.
         """
-        from openhands.sdk.utils.cipher import Cipher
+        from agentrt.sdk.utils.cipher import Cipher
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         mcp_config = {

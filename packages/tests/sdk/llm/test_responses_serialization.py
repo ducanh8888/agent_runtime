@@ -1,5 +1,5 @@
-from openhands.sdk.llm.llm import LLM
-from openhands.sdk.llm.message import (
+from agentrt.sdk.llm.llm import LLM
+from agentrt.sdk.llm.message import (
     ImageContent,
     Message,
     MessageToolCall,
@@ -159,7 +159,7 @@ def test_tool_to_responses_emits_function_call_output_with_verbatim_call_id():
 def test_tool_to_responses_truncates_output_over_limit():
     from unittest.mock import patch
 
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     long_text = "A" * (DEFAULT_TEXT_CONTENT_LIMIT + 1000)
     m = Message(
@@ -169,7 +169,7 @@ def test_tool_to_responses_truncates_output_over_limit():
         content=[TextContent(text=long_text)],
     )
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         out = m.to_responses_dict(vision_enabled=False)
 
         mock_logger.warning.assert_called_once()

@@ -1,6 +1,6 @@
 """Tests for tool registry module qualname tracking."""
 
-from openhands.sdk.tool.registry import (
+from agentrt.sdk.tool.registry import (
     get_tool_module_qualnames,
     list_registered_tools,
     register_tool,
@@ -9,7 +9,7 @@ from openhands.sdk.tool.registry import (
 
 def test_get_tool_module_qualnames_with_class():
     """Test that module qualnames are tracked when registering a class."""
-    from openhands.tools.glob import GlobTool
+    from agentrt.tools.glob import GlobTool
 
     # Register the GlobTool class
     register_tool("test_glob_class", GlobTool)
@@ -19,13 +19,13 @@ def test_get_tool_module_qualnames_with_class():
 
     # Verify the tool is tracked with its module
     assert "test_glob_class" in qualnames
-    assert qualnames["test_glob_class"] == "openhands.tools.glob.definition"
+    assert qualnames["test_glob_class"] == "agentrt.tools.glob.definition"
 
 
 def test_get_tool_module_qualnames_after_import():
     """Test that importing a tool module registers it with qualname."""
     # Import glob tool module to trigger auto-registration
-    import openhands.tools.glob.definition  # noqa: F401
+    import agentrt.tools.glob.definition  # noqa: F401
 
     # Get registered tools
     registered_tools = list_registered_tools()
@@ -38,7 +38,7 @@ def test_get_tool_module_qualnames_after_import():
 
     # Verify glob has its module qualname tracked
     if "glob" in qualnames:
-        assert qualnames["glob"] == "openhands.tools.glob.definition"
+        assert qualnames["glob"] == "agentrt.tools.glob.definition"
 
 
 def test_get_tool_module_qualnames_returns_copy():

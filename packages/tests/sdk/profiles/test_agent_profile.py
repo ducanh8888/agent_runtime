@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from openhands.sdk.profiles import (
+from agentrt.sdk.profiles import (
     AGENT_PROFILE_SCHEMA_VERSION,
     ACPAgentProfile,
     AgentProfile,
@@ -96,7 +96,7 @@ def test_acp_profile_has_no_skill_field() -> None:
     """ACP profiles carry no skill-selection field at all — the subprocess owns
     its tooling and prompt context (#4017). ``extra="forbid"`` rejects a stray
     ``skill_refs``/``disabled_skills`` on an ACP payload."""
-    from openhands.sdk.profiles import ACPAgentProfile
+    from agentrt.sdk.profiles import ACPAgentProfile
 
     profile = ACPAgentProfile(name="acp", acp_server="claude-code")
     assert not hasattr(profile, "skill_refs")

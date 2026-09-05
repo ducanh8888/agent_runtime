@@ -8,14 +8,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.workspace_router import (
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.workspace_router import (
     conversation_workspace_url_path,
     workspace_router,
 )
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ def test_symlink_pointing_inside_workspace_is_served(client_factory, tmp_path):
 
 def test_non_local_workspace_returns_404(tmp_path):
     """A conversation backed by a non-local workspace cannot be served."""
-    from openhands.sdk.workspace.remote.base import RemoteWorkspace
+    from agentrt.sdk.workspace.remote.base import RemoteWorkspace
 
     cid = uuid4()
     app = FastAPI()

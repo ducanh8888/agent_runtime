@@ -6,10 +6,10 @@ with base_url set, fixing the UnsupportedProtocol error with relative URLs.
 
 import httpx
 
-from openhands.sdk.workspace.remote.async_remote_workspace import (
+from agentrt.sdk.workspace.remote.async_remote_workspace import (
     AsyncRemoteWorkspace,
 )
-from openhands.sdk.workspace.remote.base import RemoteWorkspace
+from agentrt.sdk.workspace.remote.base import RemoteWorkspace
 
 
 def test_remote_workspace_client_has_base_url():

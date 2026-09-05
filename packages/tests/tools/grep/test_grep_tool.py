@@ -8,12 +8,12 @@ from uuid import uuid4
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.tool.tool import DeclaredResources
-from openhands.sdk.workspace import LocalWorkspace
-from openhands.tools.grep import GrepAction, GrepObservation, GrepTool
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.tool.tool import DeclaredResources
+from agentrt.sdk.workspace import LocalWorkspace
+from agentrt.tools.grep import GrepAction, GrepObservation, GrepTool
 
 
 def _create_test_conv_state(temp_dir: str) -> ConversationState:

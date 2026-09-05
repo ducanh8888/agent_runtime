@@ -10,12 +10,12 @@ from typing import Self
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
 
 
 def _agent() -> Agent:
@@ -166,7 +166,7 @@ def test_fork_preserves_metrics_when_requested():
     with tempfile.TemporaryDirectory() as tmpdir:
         src = Conversation(agent=_agent(), persistence_dir=tmpdir, workspace=tmpdir)
         # Inject a non-zero metric
-        from openhands.sdk.llm.utils.metrics import Metrics
+        from agentrt.sdk.llm.utils.metrics import Metrics
 
         m = Metrics()
         m.accumulated_cost = 1.5

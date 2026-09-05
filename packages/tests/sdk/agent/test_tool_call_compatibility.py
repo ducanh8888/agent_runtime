@@ -18,16 +18,16 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent, utils as agent_utils
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.event import ActionEvent, AgentErrorEvent, ObservationEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent, utils as agent_utils
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.event import ActionEvent, AgentErrorEvent, ObservationEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 FILE_EDITOR_TOOL_NAME = "file_editor"
@@ -179,7 +179,7 @@ def _run_tool_call(
     events: list[object] = []
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion",
+        "agentrt.sdk.llm.llm.litellm_completion",
         return_value=_model_response(tool_name, arguments),
     ):
         conversation.send_message(
@@ -501,7 +501,7 @@ def test_explicitly_registered_tool_not_hijacked_by_alias():
     rather than aliased to 'terminal'. This prevents legitimate tools from being
     silently overridden by the compatibility shim.
     """
-    from openhands.sdk.agent.utils import normalize_tool_call
+    from agentrt.sdk.agent.utils import normalize_tool_call
 
     # When 'bash' is explicitly registered alongside 'terminal',
     # normalize_tool_call should preserve 'bash', not alias to 'terminal'
@@ -630,7 +630,7 @@ def test_malformed_tool_name_bash_xml_tag(tmp_path):
 
 def test_malformed_tool_name_no_fix_when_no_match():
     """Test that truly malformed names that don't match any alias return original."""
-    from openhands.sdk.agent.utils import normalize_tool_call
+    from agentrt.sdk.agent.utils import normalize_tool_call
 
     available_tools = {"terminal", "file_editor"}
 
@@ -651,7 +651,7 @@ def test_malformed_tool_name_alias_precedence():
     When a malformed name like 'str_replace </parameter' is fixed to 'str_replace',
     it should then be mapped to 'file_editor' via the alias.
     """
-    from openhands.sdk.agent.utils import normalize_tool_call
+    from agentrt.sdk.agent.utils import normalize_tool_call
 
     available_tools = {"terminal", "file_editor"}
 

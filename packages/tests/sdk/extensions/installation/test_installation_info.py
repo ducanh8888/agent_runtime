@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from openhands.sdk.extensions.installation import InstallationInfo
+from agentrt.sdk.extensions.installation import InstallationInfo
 
 
 @dataclass

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.skills import (
+from agentrt.sdk.skills import (
     Skill,
     SkillValidationError,
     load_skills_from_dir,

@@ -11,7 +11,7 @@ from typing import Annotated, Literal, get_args, get_origin
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from openhands.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry import models as m
 
 
 PROPERTY_MODELS: list[type[BaseModel]] = [

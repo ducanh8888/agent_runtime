@@ -8,15 +8,15 @@ rename of that field (which would silently no-op the whole feature) is caught.
 
 from pathlib import Path
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.event import ActionEvent, ObservationEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.skills import PathTrigger, Skill
-from openhands.sdk.testing import TestLLM
-from openhands.tools.file_editor import FileEditorAction, FileEditorObservation
-from openhands.tools.file_editor.definition import CommandLiteral
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.event import ActionEvent, ObservationEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.skills import PathTrigger, Skill
+from agentrt.sdk.testing import TestLLM
+from agentrt.tools.file_editor import FileEditorAction, FileEditorObservation
+from agentrt.tools.file_editor.definition import CommandLiteral
 
 
 def _conversation(tmp_path: Path) -> LocalConversation:

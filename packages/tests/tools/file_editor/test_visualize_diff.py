@@ -2,8 +2,8 @@
 
 from rich.text import Text
 
-from openhands.tools.file_editor.definition import FileEditorObservation
-from openhands.tools.file_editor.utils.diff import (
+from agentrt.tools.file_editor.definition import FileEditorObservation
+from agentrt.tools.file_editor.utils.diff import (
     get_edit_groups,
     visualize_diff,
 )

@@ -5,7 +5,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel, SecretStr
 
-from openhands.sdk.conversation.secret_registry import SecretRegistry
+from agentrt.sdk.conversation.secret_registry import SecretRegistry
 
 
 SECRET = "sk-supersecret-value"

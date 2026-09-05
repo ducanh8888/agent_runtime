@@ -3,7 +3,7 @@
 
 def test_camel_to_snake_conversion():
     """Test the _camel_to_snake utility function."""
-    from openhands.sdk.tool.tool import _camel_to_snake
+    from agentrt.sdk.tool.tool import _camel_to_snake
 
     # Test basic conversions
     assert _camel_to_snake("TerminalTool") == "terminal_tool"
@@ -25,12 +25,12 @@ def test_camel_to_snake_conversion():
 
 def test_real_tools_have_correct_names():
     """Test that real tools have the expected automatic names."""
-    from openhands.tools.file_editor import FileEditorTool
-    from openhands.tools.glob import GlobTool
-    from openhands.tools.grep import GrepTool
-    from openhands.tools.planning_file_editor import PlanningFileEditorTool
-    from openhands.tools.task_tracker import TaskTrackerTool
-    from openhands.tools.terminal import TerminalTool
+    from agentrt.tools.file_editor import FileEditorTool
+    from agentrt.tools.glob import GlobTool
+    from agentrt.tools.grep import GrepTool
+    from agentrt.tools.planning_file_editor import PlanningFileEditorTool
+    from agentrt.tools.task_tracker import TaskTrackerTool
+    from agentrt.tools.terminal import TerminalTool
 
     # Verify all tools have correct automatic names
     assert TerminalTool.name == "terminal"
@@ -44,7 +44,7 @@ def test_real_tools_have_correct_names():
 def test_tool_name_consistency():
     """Test that tool names are consistent across imports."""
     # Import the same tool multiple times to ensure consistency
-    from openhands.tools.terminal import (
+    from agentrt.tools.terminal import (
         TerminalTool as TerminalTool1,
         TerminalTool as TerminalTool2,
     )
@@ -52,8 +52,8 @@ def test_tool_name_consistency():
     assert TerminalTool1.name == TerminalTool2.name == "terminal"
 
     # Test with different tools
-    from openhands.tools.file_editor import FileEditorTool
-    from openhands.tools.grep import GrepTool
+    from agentrt.tools.file_editor import FileEditorTool
+    from agentrt.tools.grep import GrepTool
 
     assert FileEditorTool.name == "file_editor"
     assert GrepTool.name == "grep"

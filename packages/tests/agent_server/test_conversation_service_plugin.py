@@ -18,21 +18,21 @@ from uuid import uuid4
 
 import pytest
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import (
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import (
     StartConversationRequest,
     StoredConversation,
 )
-from openhands.sdk import LLM
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import (
+from agentrt.sdk import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.hooks import HookConfig, HookDefinition, HookMatcher, HookType
-from openhands.sdk.plugin import PluginSource
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.hooks import HookConfig, HookDefinition, HookMatcher, HookType
+from agentrt.sdk.plugin import PluginSource
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def create_test_plugin_dir(
@@ -122,7 +122,7 @@ async def test_start_conversation_without_plugin(conversation_service):
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service
@@ -182,7 +182,7 @@ async def test_start_conversation_with_plugins_list(conversation_service, tmp_pa
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service
@@ -244,7 +244,7 @@ async def test_start_conversation_with_multiple_plugins(conversation_service, tm
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service
@@ -296,7 +296,7 @@ async def test_plugins_persisted_in_stored_conversation_for_lazy_loading(
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service
@@ -359,7 +359,7 @@ async def test_start_conversation_with_explicit_hook_config(conversation_service
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service
@@ -431,7 +431,7 @@ async def test_start_conversation_stores_both_hooks_and_plugins_for_lazy_merge(
         )
 
         with patch(
-            "openhands.agent_server.conversation_service.EventService"
+            "agentrt.agent_server.conversation_service.EventService"
         ) as mock_event_service_class:
             mock_event_service = AsyncMock(spec=EventService)
             mock_event_service_class.return_value = mock_event_service

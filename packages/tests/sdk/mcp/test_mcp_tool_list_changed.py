@@ -27,13 +27,13 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
 from pydantic import SecretStr, ValidationError
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.llm import LLM, TextContent
-from openhands.sdk.mcp import MCPClient, create_mcp_tools
-from openhands.sdk.mcp.config import coerce_mcp_config
-from openhands.sdk.mcp.tool import MCPToolDefinition
-from openhands.sdk.mcp.utils import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.llm import LLM, TextContent
+from agentrt.sdk.mcp import MCPClient, create_mcp_tools
+from agentrt.sdk.mcp.config import coerce_mcp_config
+from agentrt.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.mcp.utils import (
     _refresh_tools,
     _ToolListChangedHandler,
 )
@@ -348,7 +348,7 @@ def test_default_provider_wires_on_tools_reconciled_before_connect(
     of being set on the client after create_tools() already returned (which
     would drop any notification that arrives during the initial connect).
     """
-    from openhands.sdk.mcp.utils import DefaultMCPToolProvider
+    from agentrt.sdk.mcp.utils import DefaultMCPToolProvider
 
     port = progressive_server
     config = _native_config(

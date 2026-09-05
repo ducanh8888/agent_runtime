@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from openhands.sdk.settings.acp_install_catalog import (
+from agentrt.sdk.settings.acp_install_catalog import (
     ACP_INSTALL_CATALOG,
     DEFAULT_PREINSTALLED_ACP_PROVIDERS,
 )

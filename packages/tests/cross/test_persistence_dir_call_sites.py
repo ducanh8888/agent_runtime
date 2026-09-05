@@ -1,7 +1,7 @@
 """Per-call-site coverage for ``OH_PERSISTENCE_DIR``.
 
 Every module that reads or writes user-level ``~/.openhands`` state must route
-through :func:`openhands.sdk.utils.path.get_user_persistence_dir`, so that an
+through :func:`agentrt.sdk.utils.path.get_user_persistence_dir`, so that an
 enterprise ephemeral sandbox pointing ``OH_PERSISTENCE_DIR`` at a persistent
 volume keeps its data across a resume. This module asserts that contract at
 *each* call site rather than trusting the shared helper alone, which guards
@@ -81,62 +81,62 @@ def _subprocess_env(**overrides: str) -> dict[str, str]:
 # ``attribute`` may be an index into a list constant via "attr[i]".
 _IMPORT_TIME_CALL_SITES: dict[str, tuple[str, str, str]] = {
     "llm_profile_store": (
-        "openhands.sdk.llm.llm_profile_store",
+        "agentrt.sdk.llm.llm_profile_store",
         "_DEFAULT_PROFILE_DIR",
         "profiles",
     ),
     "agent_profile_store": (
-        "openhands.sdk.profiles.agent_profile_store",
+        "agentrt.sdk.profiles.agent_profile_store",
         "_DEFAULT_PROFILE_DIR",
         "agent-profiles",
     ),
     "skills_fetch_cache": (
-        "openhands.sdk.skills.fetch",
+        "agentrt.sdk.skills.fetch",
         "DEFAULT_CACHE_DIR",
         "cache/skills",
     ),
     "skills_installed": (
-        "openhands.sdk.skills.installed",
+        "agentrt.sdk.skills.installed",
         "DEFAULT_INSTALLED_SKILLS_DIR",
         "skills/installed",
     ),
     "skills_user_dirs_skills": (
-        "openhands.sdk.skills.skill",
+        "agentrt.sdk.skills.skill",
         "USER_SKILLS_DIRS[1]",
         "skills",
     ),
     "skills_user_dirs_microagents": (
-        "openhands.sdk.skills.skill",
+        "agentrt.sdk.skills.skill",
         "USER_SKILLS_DIRS[2]",
         "microagents",
     ),
     "plugin_fetch_cache": (
-        "openhands.sdk.plugin.fetch",
+        "agentrt.sdk.plugin.fetch",
         "DEFAULT_CACHE_DIR",
         "cache/plugins",
     ),
     "plugin_source_cache": (
-        "openhands.sdk.plugin.source",
+        "agentrt.sdk.plugin.source",
         "DEFAULT_CACHE_DIR",
         "cache/git",
     ),
     "plugin_user_dirs": (
-        "openhands.sdk.plugin.discovery",
+        "agentrt.sdk.plugin.discovery",
         "USER_PLUGINS_DIRS[1]",
         "plugins",
     ),
     "plugin_installed": (
-        "openhands.sdk.plugin.installed",
+        "agentrt.sdk.plugin.installed",
         "DEFAULT_INSTALLED_PLUGINS_DIR",
         "plugins/installed",
     ),
     "extensions_cache": (
-        "openhands.sdk.extensions.installation.manager",
+        "agentrt.sdk.extensions.installation.manager",
         "DEFAULT_CACHE_DIR",
         "cache/extensions",
     ),
     "agent_soul_path": (
-        "openhands.sdk.agent.base",
+        "agentrt.sdk.agent.base",
         "_SOUL_PATH",
         "SOUL.md",
     ),
@@ -147,12 +147,12 @@ _IMPORT_TIME_CALL_SITES: dict[str, tuple[str, str, str]] = {
 # ``OH_PERSISTENCE_DIR``.
 _AGENTS_DIR_CALL_SITES: dict[str, tuple[str, str, str]] = {
     "skills_user_dirs_agents": (
-        "openhands.sdk.skills.skill",
+        "agentrt.sdk.skills.skill",
         "USER_SKILLS_DIRS[0]",
         ".agents/skills",
     ),
     "plugin_user_dirs_agents": (
-        "openhands.sdk.plugin.discovery",
+        "agentrt.sdk.plugin.discovery",
         "USER_PLUGINS_DIRS[0]",
         ".agents/plugins",
     ),
@@ -260,19 +260,19 @@ def persistence_dir(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 
 def test_credentials_dir_uses_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.sdk.llm.auth.credentials import get_credentials_dir
+    from agentrt.sdk.llm.auth.credentials import get_credentials_dir
 
     assert get_credentials_dir() == persistence_dir / "auth"
 
 
 def test_skills_cache_dir_uses_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.sdk.skills.utils import get_skills_cache_dir
+    from agentrt.sdk.skills.utils import get_skills_cache_dir
 
     assert get_skills_cache_dir() == persistence_dir / "cache" / "skills"
 
 
 def test_hook_config_reads_user_hooks_json(persistence_dir: Path) -> None:
-    from openhands.sdk.hooks.config import HookConfig
+    from agentrt.sdk.hooks.config import HookConfig
 
     (persistence_dir / "hooks.json").write_text(
         json.dumps(
@@ -293,7 +293,7 @@ def test_hook_config_reads_user_hooks_json(persistence_dir: Path) -> None:
 
 
 def test_load_user_agents_reads_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.sdk.subagent.load import load_user_agents
+    from agentrt.sdk.subagent.load import load_user_agents
 
     agents_dir = persistence_dir / "agents"
     agents_dir.mkdir(parents=True)
@@ -305,7 +305,7 @@ def test_load_user_agents_reads_persistence_dir(persistence_dir: Path) -> None:
 
 
 def test_load_memory_reads_user_index(persistence_dir: Path) -> None:
-    from openhands.sdk.context.memory import load_memory
+    from agentrt.sdk.context.memory import load_memory
 
     memory_dir = persistence_dir / "memory"
     memory_dir.mkdir(parents=True)
@@ -316,8 +316,8 @@ def test_load_memory_reads_user_index(persistence_dir: Path) -> None:
 
 
 def test_prompt_jinja_cache_lives_in_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.sdk.agent import base
-    from openhands.sdk.context.prompts import prompt as prompt_mod
+    from agentrt.sdk.agent import base
+    from agentrt.sdk.context.prompts import prompt as prompt_mod
 
     prompt_mod._get_env.cache_clear()
     try:
@@ -331,13 +331,13 @@ def test_tom_consult_file_store_root(persistence_dir: Path) -> None:
     pytest.importorskip("tom_swe")
     from typing import cast
 
-    from openhands.sdk.conversation.state import ConversationState
-    from openhands.sdk.io import LocalFileStore
-    from openhands.tools.tom_consult.definition import (
+    from agentrt.sdk.conversation.state import ConversationState
+    from agentrt.sdk.io import LocalFileStore
+    from agentrt.tools.tom_consult.definition import (
         SleeptimeComputeTool,
         TomConsultTool,
     )
-    from openhands.tools.tom_consult.executor import TomConsultExecutor
+    from agentrt.tools.tom_consult.executor import TomConsultExecutor
 
     # ``create`` ignores ``conv_state`` (state is passed at execution time), so a
     # typed ``None`` keeps pyright happy without building a full state object.
@@ -352,7 +352,7 @@ def test_tom_consult_file_store_root(persistence_dir: Path) -> None:
 
 
 def test_canvas_extensions_dir_uses_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.agent_server.canvas_extensions.installed import (
+    from agentrt.agent_server.canvas_extensions.installed import (
         get_installed_canvas_extensions_dir,
     )
 
@@ -363,7 +363,7 @@ def test_canvas_extensions_dir_uses_persistence_dir(persistence_dir: Path) -> No
 
 
 def test_agent_server_profile_persistence_dir(persistence_dir: Path) -> None:
-    from openhands.agent_server.persistence.store import _get_profile_persistence_dir
+    from agentrt.agent_server.persistence.store import _get_profile_persistence_dir
 
     assert _get_profile_persistence_dir() == persistence_dir
 
@@ -387,8 +387,8 @@ def test_default_llm_profile_store_survives_resume() -> None:
         home1.mkdir()
 
         write = (
-            "from openhands.sdk.llm import LLM\n"
-            "from openhands.sdk.llm.llm_profile_store import LLMProfileStore\n"
+            "from agentrt.sdk.llm import LLM\n"
+            "from agentrt.sdk.llm.llm_profile_store import LLMProfileStore\n"
             "LLMProfileStore().save('prod', LLM(model='gpt-4o', usage_id='prod'))\n"
         )
         r1 = subprocess.run(
@@ -408,7 +408,7 @@ def test_default_llm_profile_store_survives_resume() -> None:
         home2.mkdir()
 
         read = (
-            "from openhands.sdk.llm.llm_profile_store import LLMProfileStore\n"
+            "from agentrt.sdk.llm.llm_profile_store import LLMProfileStore\n"
             "print(LLMProfileStore().load('prod').model)\n"
         )
         r2 = subprocess.run(

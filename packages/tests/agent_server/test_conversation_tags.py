@@ -9,20 +9,20 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server.conversation_router import conversation_router
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import (
+from agentrt.agent_server.conversation_router import conversation_router
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import (
     ConversationInfo,
     StoredConversation,
     UpdateConversationRequest,
 )
-from openhands.agent_server.utils import utc_now
-from openhands.sdk import LLM, Agent, Tool
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.security.confirmation_policy import NeverConfirm
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.utils import utc_now
+from agentrt.sdk import LLM, Agent, Tool
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.security.confirmation_policy import NeverConfirm
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @pytest.fixture
@@ -250,7 +250,7 @@ async def test_event_service_start_forwards_tags_to_local_conversation(tmp_path)
     )
 
     with patch(
-        "openhands.agent_server.event_service.LocalConversation"
+        "agentrt.agent_server.event_service.LocalConversation"
     ) as MockConversation:
         mock_conv = MagicMock()
         mock_state = MagicMock()
@@ -291,7 +291,7 @@ async def test_event_service_start_forwards_observability_span_name(tmp_path):
     )
 
     with patch(
-        "openhands.agent_server.event_service.LocalConversation"
+        "agentrt.agent_server.event_service.LocalConversation"
     ) as MockConversation:
         mock_conv = MagicMock()
         mock_state = MagicMock()

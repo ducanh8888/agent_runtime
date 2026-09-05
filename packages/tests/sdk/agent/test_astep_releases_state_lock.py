@@ -14,11 +14,11 @@ import threading
 import pytest
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.exceptions import LLMContentPolicyViolationError
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.exceptions import LLMContentPolicyViolationError
 
 
 class _LockProbingLLM(LLM):

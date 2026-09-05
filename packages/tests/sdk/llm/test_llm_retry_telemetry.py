@@ -13,7 +13,7 @@ from litellm.exceptions import APIConnectionError
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 def create_mock_response(
@@ -44,7 +44,7 @@ def create_mock_response(
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_telemetry_records_only_successful_attempt_latency(mock_litellm_completion):
     """
     Test that when LLM calls are retried, telemetry only records the latency
@@ -129,7 +129,7 @@ def test_telemetry_records_only_successful_attempt_latency(mock_litellm_completi
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_telemetry_on_request_called_per_retry(mock_litellm_completion):
     """
     Test that telemetry.on_request() is called for each retry attempt.
@@ -195,7 +195,7 @@ def test_telemetry_on_request_called_per_retry(mock_litellm_completion):
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_telemetry_metrics_accurate_with_retries(mock_litellm_completion):
     """
     Test that all telemetry metrics (tokens, cost, latency) are accurate
@@ -254,7 +254,7 @@ def test_telemetry_metrics_accurate_with_retries(mock_litellm_completion):
     assert metrics.response_latencies[0].latency < 0.5
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_telemetry_no_multiple_records_on_retry(mock_litellm_completion):
     """
     Test that telemetry doesn't create multiple records for failed attempts.

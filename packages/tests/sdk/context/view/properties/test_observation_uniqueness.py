@@ -8,12 +8,12 @@ late ObservationEvent share the same tool_call_id.
 
 from unittest.mock import create_autospec
 
-from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
-from openhands.sdk.context.view.properties.observation_uniqueness import (
+from agentrt.sdk.context.view.manipulation_indices import ManipulationIndices
+from agentrt.sdk.context.view.properties.observation_uniqueness import (
     ObservationUniquenessProperty,
 )
-from openhands.sdk.event.base import LLMConvertibleEvent
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.event.base import LLMConvertibleEvent
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     AgentErrorEvent,
     ObservationEvent,

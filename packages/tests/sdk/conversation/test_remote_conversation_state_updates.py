@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 from pydantic import SecretStr
 
-from openhands.sdk import RemoteWorkspace
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.llm import LLM
+from agentrt.sdk import RemoteWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.llm import LLM
 
 from .conftest import create_mock_http_client
 
@@ -29,7 +29,7 @@ def test_update_state_from_event_with_full_state():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -67,7 +67,7 @@ def test_update_state_from_event_with_individual_field():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -105,7 +105,7 @@ def test_update_state_initializes_cache_if_none():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -137,7 +137,7 @@ def test_update_state_from_multiple_events():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -180,7 +180,7 @@ def test_update_state_full_state_overwrites_fields():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -225,7 +225,7 @@ def test_update_state_thread_safe():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -267,7 +267,7 @@ def test_update_state_preserves_data_types():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -307,7 +307,7 @@ def test_state_update_callback_integration():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -359,7 +359,7 @@ def test_conversation_stats_reads_from_stats_field():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -391,7 +391,7 @@ def test_stats_update_via_state_event():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):

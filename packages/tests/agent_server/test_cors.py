@@ -7,20 +7,20 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config, load_config
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.dependencies import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config, load_config
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.dependencies import (
     WORKSPACE_SESSION_COOKIE_NAME,
     get_conversation_service,
 )
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.middleware import (
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.middleware import (
     CORSDispatcher,
     LocalhostCORSMiddleware,
     _is_workspace_cookie_path,
 )
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 SESSION_KEY = "test-key-cors"

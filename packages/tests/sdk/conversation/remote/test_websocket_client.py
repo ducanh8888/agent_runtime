@@ -10,10 +10,10 @@ import pytest
 import websockets
 import websockets.frames
 
-from openhands.sdk.conversation.impl.remote_conversation import WebSocketCallbackClient
-from openhands.sdk.event.conversation_state import FULL_STATE_KEY
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import Message, TextContent
+from agentrt.sdk.conversation.impl.remote_conversation import WebSocketCallbackClient
+from agentrt.sdk.event.conversation_state import FULL_STATE_KEY
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import Message, TextContent
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def test_websocket_client_error_resilience(mock_event):
     )
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.logger"
+        "agentrt.sdk.conversation.impl.remote_conversation.logger"
     ) as mock_logger:
         try:
             client.callback(mock_event)
@@ -187,7 +187,7 @@ def test_websocket_client_authenticates_outside_url(api_key, expected_messages):
     )
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.websockets.connect",
+        "agentrt.sdk.conversation.impl.remote_conversation.websockets.connect",
         _MockConnect(),
     ):
         asyncio.run(client._client_loop())
@@ -287,7 +287,7 @@ def test_websocket_client_retries_after_retryable_connection_closed():
     client._sleep_before_retry = no_sleep
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.websockets.connect",
+        "agentrt.sdk.conversation.impl.remote_conversation.websockets.connect",
         _MockConnect(),
     ):
         asyncio.run(client._client_loop())
@@ -329,7 +329,7 @@ def test_websocket_client_stops_after_fatal_connection_closed(close_code):
     )
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.websockets.connect",
+        "agentrt.sdk.conversation.impl.remote_conversation.websockets.connect",
         _MockConnect(),
     ):
         asyncio.run(client._client_loop())
@@ -373,7 +373,7 @@ def test_websocket_client_calls_on_reconnect_after_subscription_restored():
     client._sleep_before_retry = no_sleep
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.websockets.connect",
+        "agentrt.sdk.conversation.impl.remote_conversation.websockets.connect",
         _MockConnect(),
     ):
         asyncio.run(client._client_loop())

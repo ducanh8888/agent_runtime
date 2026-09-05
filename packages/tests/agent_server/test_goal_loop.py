@@ -13,14 +13,14 @@ from uuid import uuid4
 import pytest
 from pydantic import PrivateAttr, SecretStr
 
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import StoredConversation
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import StoredConversation
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def _scripted(*texts: str, usage_id: str) -> TestLLM:
@@ -71,7 +71,7 @@ def _goal_status_updates(event_service: EventService) -> list:
 
 @pytest.fixture
 def event_service(tmp_path):
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get") as mock_get:
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get") as mock_get:
         mock_get.return_value = MagicMock(json=lambda: {"data": []})
         service = EventService(
             stored=StoredConversation(

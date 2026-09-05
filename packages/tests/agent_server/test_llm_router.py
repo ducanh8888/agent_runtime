@@ -3,15 +3,15 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.llm_router import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.llm_router import (
     list_models,
     list_providers,
     list_verified_models,
 )
-from openhands.sdk.llm.auth.openai import OPENAI_CODEX_MODELS
-from openhands.sdk.llm.utils.verified_models import VERIFIED_MODELS
+from agentrt.sdk.llm.auth.openai import OPENAI_CODEX_MODELS
+from agentrt.sdk.llm.utils.verified_models import VERIFIED_MODELS
 
 
 @pytest.fixture
@@ -141,8 +141,8 @@ def test_openai_subscription_status_endpoint_does_not_return_tokens(
     client, monkeypatch
 ):
     """Status reports safe metadata without exposing OAuth tokens."""
-    from openhands.agent_server import llm_router
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
+    from agentrt.agent_server import llm_router
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
 
     class FakeAuth:
         async def refresh_if_needed(self):
@@ -181,8 +181,8 @@ def test_openai_subscription_device_start_returns_opaque_poll_token(
     client, monkeypatch
 ):
     """Device start stores OpenAI internals server-side."""
-    from openhands.agent_server import llm_router
-    from openhands.sdk.llm.auth.openai import DeviceCode
+    from agentrt.agent_server import llm_router
+    from agentrt.sdk.llm.auth.openai import DeviceCode
 
     class FakeAuth:
         async def start_device_login(self):
@@ -209,9 +209,9 @@ def test_openai_subscription_device_start_returns_opaque_poll_token(
 
 def test_openai_subscription_device_poll_pending_and_success(client, monkeypatch):
     """Polling returns disconnected while pending and connected after success."""
-    from openhands.agent_server import llm_router
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
-    from openhands.sdk.llm.auth.openai import DeviceCode
+    from agentrt.agent_server import llm_router
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
+    from agentrt.sdk.llm.auth.openai import DeviceCode
 
     llm_router._PENDING_OPENAI_DEVICE_LOGINS.clear()
     llm_router._PENDING_OPENAI_DEVICE_LOGINS["opaque-token"] = (
@@ -273,9 +273,9 @@ async def test_openai_subscription_device_poll_failure_keeps_pending_login(
     monkeypatch,
 ):
     """Transient provider failures do not consume the opaque poll token."""
-    from openhands.agent_server import llm_router
-    from openhands.sdk.llm.auth.credentials import OAuthCredentials
-    from openhands.sdk.llm.auth.openai import DeviceCode
+    from agentrt.agent_server import llm_router
+    from agentrt.sdk.llm.auth.credentials import OAuthCredentials
+    from agentrt.sdk.llm.auth.openai import DeviceCode
 
     llm_router._PENDING_OPENAI_DEVICE_LOGINS.clear()
     llm_router._IN_FLIGHT_OPENAI_DEVICE_LOGINS.clear()
@@ -331,7 +331,7 @@ async def test_openai_subscription_device_poll_failure_keeps_pending_login(
 
 def test_openai_subscription_logout_endpoint(client, monkeypatch):
     """Logout removes credentials and returns disconnected status."""
-    from openhands.agent_server import llm_router
+    from agentrt.agent_server import llm_router
 
     llm_router._PENDING_OPENAI_DEVICE_LOGINS["opaque-token"] = (
         llm_router.PendingDeviceLogin(

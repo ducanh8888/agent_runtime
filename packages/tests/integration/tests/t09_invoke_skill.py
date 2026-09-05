@@ -15,12 +15,12 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent, AgentContext, get_logger
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.visualizer import DefaultConversationVisualizer
-from openhands.sdk.event.llm_convertible.action import ActionEvent
-from openhands.sdk.skills import Skill
-from openhands.sdk.tool import Tool
+from agentrt.sdk import LLM, Agent, AgentContext, get_logger
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.visualizer import DefaultConversationVisualizer
+from agentrt.sdk.event.llm_convertible.action import ActionEvent
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.tool import Tool
 from tests.integration.base import (
     BaseIntegrationTest,
     TestResult,

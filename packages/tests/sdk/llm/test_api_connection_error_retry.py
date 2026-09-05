@@ -5,8 +5,8 @@ from litellm.exceptions import APIConnectionError
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, LLMResponse, Message, TextContent
-from openhands.sdk.llm.exceptions import LLMServiceUnavailableError
+from agentrt.sdk.llm import LLM, LLMResponse, Message, TextContent
+from agentrt.sdk.llm.exceptions import LLMServiceUnavailableError
 
 
 def create_mock_response(content: str = "Test response", response_id: str = "test-id"):
@@ -40,7 +40,7 @@ def default_config():
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_retries_api_connection_error(
     mock_litellm_completion, default_config
 ):
@@ -77,7 +77,7 @@ def test_completion_retries_api_connection_error(
     assert mock_litellm_completion.call_count == 2  # Initial call + 1 retry
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_max_retries_api_connection_error(
     mock_litellm_completion, default_config
 ):
@@ -129,7 +129,7 @@ def test_completion_max_retries_api_connection_error(
     assert isinstance(excinfo.value.__cause__, APIConnectionError)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_no_retry_on_success(mock_litellm_completion, default_config):
     """Test that successful calls don't trigger retries."""
     mock_response = create_mock_response("Success on first try")
@@ -154,7 +154,7 @@ def test_completion_no_retry_on_success(mock_litellm_completion, default_config)
     assert mock_litellm_completion.call_count == 1  # Only the initial call
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_no_retry_on_non_retryable_error(
     mock_litellm_completion, default_config
 ):
@@ -210,7 +210,7 @@ def test_retry_configuration_validation():
     assert llm_custom.retry_multiplier == 2.0
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_retry_listener_callback(mock_litellm_completion, default_config):
     """Test that retry listener callback is called during retries."""
     retry_calls = []

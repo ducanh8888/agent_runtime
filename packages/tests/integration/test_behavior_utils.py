@@ -2,9 +2,9 @@
 
 from collections.abc import Sequence
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.event.base import Event
-from openhands.sdk.llm.message import MessageToolCall, TextContent
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.llm.message import MessageToolCall, TextContent
 from tests.integration.behavior_utils import verify_all_actions_have_summary
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.agent_server.canvas_extensions.manifest import (
+from agentrt.agent_server.canvas_extensions.manifest import (
     CanvasExtensionManifest,
     resolve_entrypoint,
 )

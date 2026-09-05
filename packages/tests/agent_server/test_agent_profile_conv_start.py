@@ -19,34 +19,34 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from openhands.agent_server.config import Config
-from openhands.agent_server.conversation_router import conversation_router
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import (
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.conversation_router import conversation_router
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import (
     ConversationInfo,
     LaunchedAgentProfile,
     StartConversationRequest,
     StoredConversation,
 )
-from openhands.agent_server.persistence import PersistedSettings
-from openhands.sdk import LLM, Agent, AgentBase, AgentContext
-from openhands.sdk.conversation.state import (
+from agentrt.agent_server.persistence import PersistedSettings
+from agentrt.sdk import LLM, Agent, AgentBase, AgentContext
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.profiles.agent_profile import (
+from agentrt.sdk.profiles.agent_profile import (
     ACPAgentProfile,
     OpenHandsAgentProfile,
 )
-from openhands.sdk.profiles.resolver import (
+from agentrt.sdk.profiles.resolver import (
     DanglingMcpServerRef,
     ProfileNotFound,
 )
-from openhands.sdk.settings.model import ACPAgentSettings, OpenHandsAgentSettings
-from openhands.sdk.skills import Skill
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.settings.model import ACPAgentSettings, OpenHandsAgentSettings
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 # ---------------------------------------------------------------------------
@@ -154,21 +154,21 @@ class TestStartConversationRequestValidation:
 # ---------------------------------------------------------------------------
 
 # The helper does local imports inside the function body; patch at the source modules.
-_STORE_PATH = "openhands.agent_server.persistence.store.get_agent_profile_store"
-_LLM_STORE_PATH = "openhands.agent_server.persistence.store.get_llm_profile_store"
-_RESOLVE_PATH = "openhands.sdk.profiles.resolver.resolve_agent_profile"
+_STORE_PATH = "agentrt.agent_server.persistence.store.get_agent_profile_store"
+_LLM_STORE_PATH = "agentrt.agent_server.persistence.store.get_llm_profile_store"
+_RESOLVE_PATH = "agentrt.sdk.profiles.resolver.resolve_agent_profile"
 # Skill discovery is patched so OpenHands-profile resolves don't hit the network
 # (load_all_skills loads public skills from GitHub). conversation_service imports
 # discover_profile_skills directly, so patch it in that namespace.
-_DISCOVER_PATH = "openhands.agent_server.conversation_service.discover_profile_skills"
+_DISCOVER_PATH = "agentrt.agent_server.conversation_service.discover_profile_skills"
 # The profile branch of start_conversation reads the persisted settings through a
 # local import too, so patch the package-level name it binds.
-_SETTINGS_STORE_PATH = "openhands.agent_server.persistence.get_settings_store"
+_SETTINGS_STORE_PATH = "agentrt.agent_server.persistence.get_settings_store"
 
 
 class TestResolveAgentFromProfile:
     def test_unknown_id_raises_profile_not_found(self):
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -178,7 +178,7 @@ class TestResolveAgentFromProfile:
                 _resolve_agent_from_profile(uuid4(), cipher=None, mcp_config={})
 
     def test_openhands_profile_resolves_to_agent_and_stamps_launched(self):
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -196,7 +196,7 @@ class TestResolveAgentFromProfile:
             # injected iff the host has chromium (covered by the dedicated
             # injection tests below); this test is about resolution plumbing.
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=False,
             ),
         ):
@@ -225,10 +225,10 @@ class TestResolveAgentFromProfile:
         set llm.stream ahead of time on a profile's referenced LLM. This
         agent-server layer forces it after resolution — not the SDK resolver,
         which runs for every caller including headless/scripted ones."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
-        from openhands.sdk.settings.model import OpenHandsAgentSettings
+        from agentrt.sdk.settings.model import OpenHandsAgentSettings
 
         profile = _make_openhands_profile()
         # A real (unmocked) settings object so isinstance(...) narrows for real.
@@ -242,7 +242,7 @@ class TestResolveAgentFromProfile:
             patch(_LLM_STORE_PATH),
             patch(_RESOLVE_PATH, return_value=resolved_settings),
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=False,
             ),
         ):
@@ -265,7 +265,7 @@ class TestResolveAgentFromProfile:
         their own message chunks through the ACP bridge without exposing an
         LLM the same way (event_service.py's streaming_enabled already treats
         every ACPAgent as streaming-capable regardless of llm.stream)."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -294,7 +294,7 @@ class TestResolveAgentFromProfile:
         """A host-local ACP CLI reads the user's own skills from its home
         directory, so the server injects none and skips discovery entirely
         (#4019)."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -321,7 +321,7 @@ class TestResolveAgentFromProfile:
     def test_acp_profile_gets_catalog_under_managed_sourcing(self):
         """In a container the CLI has no host home to read skills from, so the
         server supplies its discovered catalog instead (#4019)."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -353,7 +353,7 @@ class TestResolveAgentFromProfile:
         """A default-toolset (tools=None) OpenHands profile launch injects the
         browser tool set when this server's runtime can run it — the
         serving-layer counterpart of the SDK's deterministic default (#3978)."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -366,7 +366,7 @@ class TestResolveAgentFromProfile:
             patch(_LLM_STORE_PATH),
             patch(_RESOLVE_PATH) as MockResolve,
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=True,
             ) as MockUsable,
         ):
@@ -385,7 +385,7 @@ class TestResolveAgentFromProfile:
         assert [tool.name for tool in result_agent.tools] == ["browser_tool_set"]
 
     def test_openhands_default_tools_skip_browser_when_unusable(self):
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -397,7 +397,7 @@ class TestResolveAgentFromProfile:
             patch(_LLM_STORE_PATH),
             patch(_RESOLVE_PATH) as MockResolve,
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=False,
             ),
         ):
@@ -417,7 +417,7 @@ class TestResolveAgentFromProfile:
     def test_openhands_explicit_tools_never_amended(self):
         """An explicit profile tools list ([] included) is authoritative: the
         serving layer must not inject browser on top of it."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -429,7 +429,7 @@ class TestResolveAgentFromProfile:
             patch(_LLM_STORE_PATH),
             patch(_RESOLVE_PATH) as MockResolve,
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=True,
             ) as MockUsable,
         ):
@@ -449,7 +449,7 @@ class TestResolveAgentFromProfile:
 
     def test_acp_profile_never_gets_browser_injection(self):
         """ACP agents own their tooling — the injection is OpenHands-only."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -461,7 +461,7 @@ class TestResolveAgentFromProfile:
             patch(_LLM_STORE_PATH),
             patch(_RESOLVE_PATH) as MockResolve,
             patch(
-                "openhands.agent_server.conversation_service.is_tool_usable",
+                "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=True,
             ) as MockUsable,
         ):
@@ -483,7 +483,7 @@ class TestResolveAgentFromProfile:
         """An OpenHands profile always discovers the skill catalog (the deny-list
         needs the full set, minus disabled names). The default deny-list is []
         (all discovered); there is no discovery-skip path anymore (#4017)."""
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -509,7 +509,7 @@ class TestResolveAgentFromProfile:
         MockDiscover.assert_called_once()
 
     def test_dangling_mcp_server_ref_propagates(self):
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
 
@@ -530,10 +530,10 @@ class TestResolveAgentFromProfile:
         assert "missing-server" in exc_info.value.missing
 
     def test_acp_profile_resolves_to_acp_agent(self):
-        from openhands.agent_server.conversation_service import (
+        from agentrt.agent_server.conversation_service import (
             _resolve_agent_from_profile,
         )
-        from openhands.sdk.agent.acp_agent import ACPAgent
+        from agentrt.sdk.agent.acp_agent import ACPAgent
 
         # ACP profiles carry no user/public skills, so discovery never runs and
         # the resolver receives available_skills=None.
@@ -645,7 +645,7 @@ async def _start_from_profile(
         # Pin the environment probe: browser injection is covered by its own
         # tests above and would otherwise vary with the host.
         patch(
-            "openhands.agent_server.conversation_service.is_tool_usable",
+            "agentrt.agent_server.conversation_service.is_tool_usable",
             return_value=False,
         ),
         patch.object(
@@ -749,7 +749,7 @@ class TestConversationServiceStartFromProfile:
         )
 
         with patch(
-            "openhands.agent_server.conversation_service._resolve_agent_from_profile",
+            "agentrt.agent_server.conversation_service._resolve_agent_from_profile",
             return_value=(agent, launched_agent_profile),
         ):
             service = ConversationService(conversations_dir=tmp_path)
@@ -798,7 +798,7 @@ class TestConversationServiceStartFromProfile:
         )
 
         with patch(
-            "openhands.agent_server.conversation_service._resolve_agent_from_profile",
+            "agentrt.agent_server.conversation_service._resolve_agent_from_profile",
             side_effect=ProfileNotFound("profile not found"),
         ):
             service = ConversationService(conversations_dir=tmp_path)
@@ -815,7 +815,7 @@ class TestConversationServiceStartFromProfile:
         )
 
         with patch(
-            "openhands.agent_server.conversation_service._resolve_agent_from_profile",
+            "agentrt.agent_server.conversation_service._resolve_agent_from_profile",
             side_effect=DanglingMcpServerRef(["mcp-server-x"]),
         ):
             service = ConversationService(conversations_dir=tmp_path)

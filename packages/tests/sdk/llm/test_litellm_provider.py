@@ -1,7 +1,7 @@
 import litellm
 import pytest
 
-from openhands.sdk.llm.utils.litellm_provider import LLMProvider
+from agentrt.sdk.llm.utils.litellm_provider import LLMProvider
 
 
 def test_llm_provider_parses_nested_openrouter_model():

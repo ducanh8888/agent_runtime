@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.hooks.config import HookConfig
-from openhands.sdk.mcp.config import MCPServer, dump_mcp_config
-from openhands.sdk.subagent.schema import (
+from agentrt.sdk.hooks.config import HookConfig
+from agentrt.sdk.mcp.config import MCPServer, dump_mcp_config
+from agentrt.sdk.subagent.schema import (
     AgentDefinition,
     _extract_examples,
 )
@@ -693,14 +693,14 @@ class TestAgentDefinitionCondenser:
         assert AgentDefinition.load(agent_md).condenser is None
 
     def test_condenser_none_disables(self, tmp_path: Path):
-        from openhands.sdk.context.condenser import NoOpCondenser
+        from agentrt.sdk.context.condenser import NoOpCondenser
 
         agent_md = tmp_path / "a.md"
         agent_md.write_text("---\nname: a\ncondenser: none\n---\n\nPrompt.\n")
         assert isinstance(AgentDefinition.load(agent_md).condenser, NoOpCondenser)
 
     def test_condenser_false_disables(self, tmp_path: Path):
-        from openhands.sdk.context.condenser import NoOpCondenser
+        from agentrt.sdk.context.condenser import NoOpCondenser
 
         agent_md = tmp_path / "a.md"
         agent_md.write_text("---\nname: a\ncondenser: false\n---\n\nPrompt.\n")

@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-import openhands.tools.grep.impl as grep_impl
-from openhands.tools.grep import GrepAction
-from openhands.tools.grep.impl import GrepExecutor
-from openhands.tools.utils import _check_grep_available
+import agentrt.tools.grep.impl as grep_impl
+from agentrt.tools.grep import GrepAction
+from agentrt.tools.grep.impl import GrepExecutor
+from agentrt.tools.utils import _check_grep_available
 
 
 def test_grep_executor_initialization():

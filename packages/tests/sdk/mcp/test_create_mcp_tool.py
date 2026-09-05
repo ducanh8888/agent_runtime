@@ -19,8 +19,8 @@ from fastmcp.mcp_config import MCPConfig as FastMCPConfig, RemoteMCPServer
 from key_value.aio.stores.memory import MemoryStore
 from pydantic import SecretStr
 
-from openhands.sdk.mcp import create_mcp_tools
-from openhands.sdk.mcp.config import (
+from agentrt.sdk.mcp import create_mcp_tools
+from agentrt.sdk.mcp.config import (
     MCPApiKeyAuthCredential,
     MCPBasicAuthCredential,
     MCPBearerAuthCredential,
@@ -30,8 +30,8 @@ from openhands.sdk.mcp.config import (
     coerce_mcp_config,
     to_fastmcp_mcp_config,
 )
-from openhands.sdk.mcp.exceptions import MCPError, MCPTimeoutError
-from openhands.sdk.mcp.utils import _prepare_mcp_config
+from agentrt.sdk.mcp.exceptions import MCPError, MCPTimeoutError
+from agentrt.sdk.mcp.utils import _prepare_mcp_config
 
 
 logger = logging.getLogger(__name__)
@@ -261,7 +261,7 @@ def test_create_mcp_tools_skips_disabled_servers():
         }
     }
 
-    with patch("openhands.sdk.mcp.utils.MCPClient") as mock_client_class:
+    with patch("agentrt.sdk.mcp.utils.MCPClient") as mock_client_class:
         create_mcp_tools(native_mcp_config(config))
 
     prepared = mock_client_class.call_args.args[0]
@@ -724,7 +724,7 @@ def test_create_mcp_tools_timeout_error_message():
         }
     }
 
-    with patch("openhands.sdk.mcp.utils.MCPClient") as mock_client_class:
+    with patch("agentrt.sdk.mcp.utils.MCPClient") as mock_client_class:
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
         mock_client.call_async_from_sync.side_effect = TimeoutError()

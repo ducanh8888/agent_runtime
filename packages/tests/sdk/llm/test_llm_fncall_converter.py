@@ -7,11 +7,11 @@ from typing import cast
 import pytest
 from litellm import ChatCompletionToolParam
 
-from openhands.sdk.llm.exceptions import (
+from agentrt.sdk.llm.exceptions import (
     FunctionCallConversionError,
     FunctionCallValidationError,
 )
-from openhands.sdk.llm.mixins.fn_call_converter import (
+from agentrt.sdk.llm.mixins.fn_call_converter import (
     STOP_WORDS,
     convert_fncall_messages_to_non_fncall_messages,
     convert_non_fncall_messages_to_fncall_messages,

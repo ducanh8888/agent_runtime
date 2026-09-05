@@ -2,11 +2,11 @@
 
 import pytest
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
-from openhands.sdk.security.risk import SecurityRisk
-from openhands.sdk.tool import Action
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent
+from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+from agentrt.sdk.security.risk import SecurityRisk
+from agentrt.sdk.tool import Action
 
 
 class LlmSecurityAnalyzerMockAction(Action):

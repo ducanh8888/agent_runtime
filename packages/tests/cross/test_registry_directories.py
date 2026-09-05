@@ -8,20 +8,20 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
-from openhands.sdk.event.llm_convertible import SystemPromptEvent
-from openhands.sdk.llm import LLM, TextContent
-from openhands.sdk.tool.registry import resolve_tool
-from openhands.sdk.tool.spec import Tool
-from openhands.tools.file_editor import FileEditorTool
-from openhands.tools.task_tracker import TaskTrackerTool
-from openhands.tools.terminal import TerminalTool
+from agentrt.sdk.event.llm_convertible import SystemPromptEvent
+from agentrt.sdk.llm import LLM, TextContent
+from agentrt.sdk.tool.registry import resolve_tool
+from agentrt.sdk.tool.spec import Tool
+from agentrt.tools.file_editor import FileEditorTool
+from agentrt.tools.task_tracker import TaskTrackerTool
+from agentrt.tools.terminal import TerminalTool
 
 
 class DummyAgent(AgentBase):
@@ -59,7 +59,7 @@ def test_agent():
 @pytest.fixture(autouse=True)
 def register_tools():
     """Register tools for testing."""
-    from openhands.sdk.tool import register_tool
+    from agentrt.sdk.tool import register_tool
 
     register_tool("TerminalTool", TerminalTool)
     register_tool("FileEditorTool", FileEditorTool)

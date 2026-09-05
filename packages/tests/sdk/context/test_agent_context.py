@@ -5,10 +5,10 @@ import re
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.secret import LookupSecret, StaticSecret
-from openhands.sdk.skills import (
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.secret import LookupSecret, StaticSecret
+from agentrt.sdk.skills import (
     KeywordTrigger,
     Skill,
 )
@@ -1154,7 +1154,7 @@ def test_agent_context_secrets_raw_strings_redacted_by_default():
 
 
 def test_agent_context_secrets_static_secret_still_masked():
-    from openhands.sdk.secret import StaticSecret
+    from agentrt.sdk.secret import StaticSecret
 
     context = AgentContext(
         secrets={"TOKEN": StaticSecret(value=SecretStr("static-secret"))},

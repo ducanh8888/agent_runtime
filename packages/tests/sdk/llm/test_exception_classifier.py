@@ -5,7 +5,7 @@ from litellm.exceptions import (
     InternalServerError,
 )
 
-from openhands.sdk.llm.exceptions import (
+from agentrt.sdk.llm.exceptions import (
     is_context_window_exceeded,
     is_prompt_cache_too_small,
     looks_like_auth_error,

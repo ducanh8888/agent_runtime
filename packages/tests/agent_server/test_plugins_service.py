@@ -11,13 +11,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server import plugins_service
-from openhands.agent_server.plugins_router import plugins_router
-from openhands.agent_server.plugins_service import (
+from agentrt.agent_server import plugins_service
+from agentrt.agent_server.plugins_router import plugins_router
+from agentrt.agent_server.plugins_service import (
     MarketplacePluginInfo,
     service_get_plugins_marketplace_catalog,
 )
-from openhands.sdk.plugin import install_plugin
+from agentrt.sdk.plugin import install_plugin
 
 
 @pytest.fixture(autouse=True)
@@ -273,7 +273,7 @@ class TestPluginsMarketplaceRoute:
             )
         ]
         monkeypatch.setattr(
-            "openhands.agent_server.plugins_router."
+            "agentrt.agent_server.plugins_router."
             "service_get_plugins_marketplace_catalog",
             lambda: sample,
         )

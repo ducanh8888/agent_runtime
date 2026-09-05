@@ -7,12 +7,12 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.remote_conversation import RemoteState
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.hooks import HookConfig
-from openhands.sdk.llm import LLM
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteState
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.hooks import HookConfig
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_remote_state_initialization(mock_client, conversation_id):
     assert str(state.id) == conversation_id
 
     # Events should be RemoteEventsList type
-    from openhands.sdk.conversation.impl.remote_conversation import RemoteEventsList
+    from agentrt.sdk.conversation.impl.remote_conversation import RemoteEventsList
 
     assert isinstance(state.events, RemoteEventsList)
 

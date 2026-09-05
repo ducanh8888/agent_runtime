@@ -6,20 +6,20 @@ import uuid
 
 import pytest
 
-from openhands.agent_server.pub_sub import PubSub, Subscriber
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.factory import DiagnosticEventFactory
-from openhands.agent_server.telemetry.subscriber import (
+from agentrt.agent_server.pub_sub import PubSub, Subscriber
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.factory import DiagnosticEventFactory
+from agentrt.agent_server.telemetry.subscriber import (
     ConversationTelemetryContext,
     TelemetrySubscriber,
 )
-from openhands.sdk.event import (
+from agentrt.sdk.event import (
     AgentErrorEvent,
     ConversationStateUpdateEvent,
     StreamingDeltaEvent,
 )
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.event.error_classification import ErrorClassification, FailureKind
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.event.error_classification import ErrorClassification, FailureKind
 
 
 class CollectingSink:
@@ -117,7 +117,7 @@ def test_started_is_only_emitted_for_genuinely_new_conversations():
     """
     import inspect
 
-    from openhands.agent_server.conversation_service import ConversationService
+    from agentrt.agent_server.conversation_service import ConversationService
 
     sig = inspect.signature(ConversationService._start_event_service)
     param = sig.parameters["is_new_conversation"]
@@ -500,10 +500,10 @@ async def test_a_live_transition_after_the_baseline_still_emits(factory):
 def _real_state(status=None):
     import uuid as _uuid
 
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.conversation.state import ConversationState
-    from openhands.sdk.llm import LLM
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.conversation.state import ConversationState
+    from agentrt.sdk.llm import LLM
+    from agentrt.sdk.workspace import LocalWorkspace
 
     state = ConversationState(
         id=_uuid.uuid4(),
@@ -517,8 +517,8 @@ def _real_state(status=None):
 
 async def test_lifecycle_fires_on_the_real_from_conversation_state_event(factory):
     """End-to-end on the constructor EventService actually uses."""
-    from openhands.sdk.conversation.state import ConversationExecutionStatus
-    from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
+    from agentrt.sdk.conversation.state import ConversationExecutionStatus
+    from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 
     sink = CollectingSink()
     sub = make_subscriber(sink, factory)
@@ -538,9 +538,9 @@ async def test_lifecycle_fires_on_the_real_from_conversation_state_event(factory
 
 async def test_outcome_reports_real_bucketed_usage(factory):
     """Regression: token/cost were hardcoded to 'unknown' and never populated."""
-    from openhands.sdk.conversation.state import ConversationExecutionStatus
-    from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-    from openhands.sdk.llm.utils.metrics import Metrics
+    from agentrt.sdk.conversation.state import ConversationExecutionStatus
+    from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+    from agentrt.sdk.llm.utils.metrics import Metrics
 
     sink = CollectingSink()
     sub = make_subscriber(sink, factory)
@@ -582,16 +582,16 @@ def test_confirmation_policy_is_read_from_the_field_that_exists():
     """
     import uuid as _uuid
 
-    from openhands.agent_server.conversation_service import _build_telemetry_context
-    from openhands.agent_server.models import StoredConversation
-    from openhands.agent_server.telemetry.factory import (
+    from agentrt.agent_server.conversation_service import _build_telemetry_context
+    from agentrt.agent_server.models import StoredConversation
+    from agentrt.agent_server.telemetry.factory import (
         DiagnosticEventFactory,
         build_runtime_properties,
     )
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.llm import LLM
-    from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.llm import LLM
+    from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+    from agentrt.sdk.workspace import LocalWorkspace
 
     assert "confirmation_mode" not in StoredConversation.model_fields
     assert "confirmation_policy" in StoredConversation.model_fields
@@ -636,15 +636,15 @@ def test_confirmation_policy_is_read_from_the_field_that_exists():
     ],
 )
 def test_is_automation_is_derived_from_allowlisted_tags(tags, is_automation):
-    from openhands.agent_server.conversation_service import _build_telemetry_context
-    from openhands.agent_server.models import StoredConversation
-    from openhands.agent_server.telemetry.factory import (
+    from agentrt.agent_server.conversation_service import _build_telemetry_context
+    from agentrt.agent_server.models import StoredConversation
+    from agentrt.agent_server.telemetry.factory import (
         DiagnosticEventFactory,
         build_runtime_properties,
     )
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.llm import LLM
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.llm import LLM
+    from agentrt.sdk.workspace import LocalWorkspace
 
     agent = Agent(llm=LLM(model="anthropic/claude-sonnet-5", usage_id="t"), tools=[])
     stored = StoredConversation(

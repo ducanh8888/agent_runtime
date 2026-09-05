@@ -16,12 +16,12 @@ from uuid import uuid4
 import pytest
 from fastapi import WebSocketDisconnect
 
-import openhands.agent_server.sockets as sockets_mod
-from openhands.agent_server.bash_service import BashEventService
-from openhands.agent_server.config import Config
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.sockets import (
+import agentrt.agent_server.sockets as sockets_mod
+from agentrt.agent_server.bash_service import BashEventService
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.sockets import (
     _get_bash_event_service,
     _get_conversation_service,
 )
@@ -101,7 +101,7 @@ def test_get_bash_event_service_ignores_wrong_type():
 def test_get_conversation_service_handles_real_config(tmp_path):
     """Sanity check: the helper returns a real ConversationService built
     from a Config on ``app.state`` rather than the import-time default."""
-    from openhands.agent_server import conversation_service as cs_mod
+    from agentrt.agent_server import conversation_service as cs_mod
 
     original_default = sockets_mod.conversation_service
     cs_mod._conversation_service = None
@@ -123,7 +123,7 @@ def test_get_conversation_service_handles_real_config(tmp_path):
 def test_get_bash_event_service_handles_real_config(tmp_path):
     """Sanity check: the helper returns a real BashEventService built
     from a Config on ``app.state`` rather than the import-time default."""
-    from openhands.agent_server import bash_service as bash_mod
+    from agentrt.agent_server import bash_service as bash_mod
 
     original_default = sockets_mod.bash_event_service
     bash_mod._bash_event_service = None
@@ -147,7 +147,7 @@ def test_get_bash_event_service_handles_real_config(tmp_path):
 async def test_events_socket_uses_app_state_conversation_service():
     """events_socket must use app.state.conversation_service (set by /api/init)
     rather than the module-level singleton captured at import time."""
-    from openhands.agent_server.sockets import events_socket
+    from agentrt.agent_server.sockets import events_socket
 
     mock_event_svc = MagicMock(spec=EventService)
     mock_event_svc.subscribe_to_events = AsyncMock(return_value=uuid4())
@@ -180,7 +180,7 @@ async def test_events_socket_uses_app_state_conversation_service():
 async def test_bash_events_socket_uses_app_state_bash_event_service():
     """bash_events_socket must use app.state.bash_event_service (set by /api/init)
     rather than the module-level singleton captured at import time."""
-    from openhands.agent_server.sockets import bash_events_socket
+    from agentrt.agent_server.sockets import bash_events_socket
 
     per_app_bash_svc = MagicMock(spec=BashEventService)
     per_app_bash_svc.subscribe_to_events = AsyncMock(return_value=uuid4())

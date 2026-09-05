@@ -13,17 +13,17 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import ActionEvent, AgentErrorEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import ActionEvent, AgentErrorEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 class RaisingAction(Action):
@@ -113,7 +113,7 @@ def test_tool_execution_valueerror_returns_error_event():
     conversation = Conversation(agent=agent, callbacks=[event_callback])
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
+        "agentrt.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
     ):
         conversation.send_message(
             Message(
@@ -229,7 +229,7 @@ def test_conversation_continues_after_tool_execution_error():
     conversation = Conversation(agent=agent, callbacks=[event_callback])
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
+        "agentrt.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
     ):
         conversation.send_message(
             Message(

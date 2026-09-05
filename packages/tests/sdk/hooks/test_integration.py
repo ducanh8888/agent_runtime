@@ -2,15 +2,15 @@
 
 import pytest
 
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event import ActionEvent, HookExecutionEvent, MessageEvent
-from openhands.sdk.hooks.config import HookConfig
-from openhands.sdk.hooks.conversation_hooks import (
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event import ActionEvent, HookExecutionEvent, MessageEvent
+from agentrt.sdk.hooks.config import HookConfig
+from agentrt.sdk.hooks.conversation_hooks import (
     HookEventProcessor,
     create_hook_callback,
 )
-from openhands.sdk.hooks.manager import HookManager
-from openhands.sdk.llm import Message, TextContent
+from agentrt.sdk.hooks.manager import HookManager
+from agentrt.sdk.llm import Message, TextContent
 from tests.command_utils import python_command
 
 
@@ -50,9 +50,9 @@ class TestBlockedActionsState:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         with tempfile.TemporaryDirectory() as tmpdir:
             llm = LLM(model="test-model", api_key=SecretStr("test-key"))
@@ -75,9 +75,9 @@ class TestBlockedStatePersistence:
     def _create_persistent_state(self, tmp_path, conversation_id):
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -130,9 +130,9 @@ class TestUserPromptSubmitBlocking:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -249,9 +249,9 @@ class TestHookEventProcessorBlocking:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -288,8 +288,8 @@ class TestHookEventProcessorBlocking:
         processor.set_conversation_state(mock_conversation_state)
 
         # Create a mock action event with required fields
-        from openhands.sdk.llm import MessageToolCall
-        from openhands.sdk.tool.builtins import ThinkAction
+        from agentrt.sdk.llm import MessageToolCall
+        from agentrt.sdk.tool.builtins import ThinkAction
 
         action_event = ActionEvent(
             source="agent",
@@ -368,9 +368,9 @@ class TestPostToolUseActionLookup:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -390,9 +390,9 @@ class TestPostToolUseActionLookup:
         """Test that PostToolUse hooks find action from conversation.state.events."""
         import json
 
-        from openhands.sdk.event import ObservationEvent
-        from openhands.sdk.llm import MessageToolCall
-        from openhands.sdk.tool.builtins import ThinkAction, ThinkObservation
+        from agentrt.sdk.event import ObservationEvent
+        from agentrt.sdk.llm import MessageToolCall
+        from agentrt.sdk.tool.builtins import ThinkAction, ThinkObservation
 
         config, log_file = logging_config
         manager = HookManager(
@@ -444,8 +444,8 @@ class TestPostToolUseActionLookup:
 
     def test_post_tool_use_without_state_does_not_crash(self, tmp_path, logging_config):
         """Test that PostToolUse gracefully handles missing conversation state."""
-        from openhands.sdk.event import ObservationEvent
-        from openhands.sdk.tool.builtins import ThinkObservation
+        from agentrt.sdk.event import ObservationEvent
+        from agentrt.sdk.tool.builtins import ThinkObservation
 
         config, log_file = logging_config
         manager = HookManager(
@@ -495,9 +495,9 @@ class TestLocalConversationHookCallbackWiring:
         """Test that hook-modified events (with additional_context) get persisted."""
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.conversation import LocalConversation
-        from openhands.sdk.llm import LLM
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.conversation import LocalConversation
+        from agentrt.sdk.llm import LLM
 
         # Create a hook that adds additional_context
         command = _json_command(
@@ -550,9 +550,9 @@ class TestAdditionalContextInjection:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -725,9 +725,9 @@ class TestStopHookIntegration:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])
@@ -829,10 +829,10 @@ class TestStopHookConversationIntegration:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.conversation import LocalConversation
-        from openhands.sdk.conversation.state import ConversationExecutionStatus
-        from openhands.sdk.llm import LLM
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.conversation import LocalConversation
+        from agentrt.sdk.conversation.state import ConversationExecutionStatus
+        from agentrt.sdk.llm import LLM
 
         # Create a stop hook that denies stopping the first time, then allows
         stop_count_file = tmp_path / "stop_count"
@@ -923,9 +923,9 @@ class TestHookExecutionEventEmission:
 
         from pydantic import SecretStr
 
-        from openhands.sdk.agent import Agent
-        from openhands.sdk.llm import LLM
-        from openhands.sdk.workspace import LocalWorkspace
+        from agentrt.sdk.agent import Agent
+        from agentrt.sdk.llm import LLM
+        from agentrt.sdk.workspace import LocalWorkspace
 
         llm = LLM(model="test-model", api_key=SecretStr("test-key"))
         agent = Agent(llm=llm, tools=[])

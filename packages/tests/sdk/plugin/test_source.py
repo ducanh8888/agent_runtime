@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.plugin.source import (
+from agentrt.sdk.plugin.source import (
     is_local_path,
     parse_github_url,
     resolve_source_path,

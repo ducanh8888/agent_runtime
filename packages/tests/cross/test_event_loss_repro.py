@@ -21,11 +21,11 @@ import uvicorn
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent, Conversation
-from openhands.sdk.conversation import RemoteConversation
-from openhands.sdk.event import ActionEvent, Event, ObservationEvent
-from openhands.sdk.workspace import RemoteWorkspace
-from openhands.workspace.docker.workspace import find_available_tcp_port
+from agentrt.sdk import LLM, Agent, Conversation
+from agentrt.sdk.conversation import RemoteConversation
+from agentrt.sdk.event import ActionEvent, Event, ObservationEvent
+from agentrt.sdk.workspace import RemoteWorkspace
+from agentrt.workspace.docker.workspace import find_available_tcp_port
 
 
 @pytest.fixture
@@ -53,8 +53,8 @@ def server_env_for_repro(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OPENHANDS_AGENT_SERVER_CONFIG_PATH", str(cfg_file))
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
 
-    from openhands.agent_server.api import create_app
-    from openhands.agent_server.config import Config
+    from agentrt.agent_server.api import create_app
+    from agentrt.agent_server.config import Config
 
     cfg_obj = Config.model_validate_json(cfg_file.read_text())
     app = create_app(cfg_obj)
@@ -111,9 +111,9 @@ def test_event_loss_race_condition_with_ws_delay(
         add_security_risk_prediction=False,
         **kwargs,
     ):
-        from openhands.sdk.llm.llm_response import LLMResponse
-        from openhands.sdk.llm.message import Message
-        from openhands.sdk.llm.utils.metrics import MetricsSnapshot
+        from agentrt.sdk.llm.llm_response import LLMResponse
+        from agentrt.sdk.llm.message import Message
+        from agentrt.sdk.llm.utils.metrics import MetricsSnapshot
 
         litellm_msg = LiteLLMMessage.model_validate(
             {

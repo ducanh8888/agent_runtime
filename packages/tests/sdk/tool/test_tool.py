@@ -7,15 +7,15 @@ from abc import ABC
 import pytest
 from pydantic import Field, ValidationError
 
-from openhands.sdk.tool import Action
-from openhands.sdk.tool.spec import Tool
-from openhands.sdk.tool.tool import (
+from agentrt.sdk.tool import Action
+from agentrt.sdk.tool.spec import Tool
+from agentrt.sdk.tool.tool import (
     _action_types_with_risk,
     _action_types_with_summary,
     _create_action_type_with_summary,
     create_action_type_with_risk,
 )
-from openhands.sdk.utils.models import _get_checked_concrete_subclasses
+from agentrt.sdk.utils.models import _get_checked_concrete_subclasses
 
 
 # Must live at module scope (Pydantic rejects <locals> classes).

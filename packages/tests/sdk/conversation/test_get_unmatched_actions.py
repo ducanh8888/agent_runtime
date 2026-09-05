@@ -12,16 +12,16 @@ Related Issue: https://github.com/OpenHands/agent-sdk/issues/2298
 from litellm import ChatCompletionMessageToolCall
 from litellm.types.utils import Function
 
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event import (
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
     ObservationEvent,
     UserRejectObservation,
 )
-from openhands.sdk.event.base import Event
-from openhands.sdk.llm import MessageToolCall, TextContent
-from openhands.sdk.tool.schema import Action, Observation
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.llm import MessageToolCall, TextContent
+from agentrt.sdk.tool.schema import Action, Observation
 
 
 class MockTestAction(Action):

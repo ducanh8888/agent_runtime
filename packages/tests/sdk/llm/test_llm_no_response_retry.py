@@ -10,8 +10,8 @@ from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelRespons
 from openai.types.responses import ResponseOutputMessage, ResponseOutputText
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, LLMResponse, Message, TextContent
-from openhands.sdk.llm.exceptions import LLMNoResponseError
+from agentrt.sdk.llm import LLM, LLMResponse, Message, TextContent
+from agentrt.sdk.llm.exceptions import LLMNoResponseError
 
 
 def create_mock_response(
@@ -58,7 +58,7 @@ def base_llm() -> LLM:
     )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_no_response_retries_then_succeeds(mock_completion, base_llm: LLM) -> None:
     mock_completion.side_effect = [
         create_empty_choices_response("empty-1"),
@@ -74,7 +74,7 @@ def test_no_response_retries_then_succeeds(mock_completion, base_llm: LLM) -> No
     assert mock_completion.call_count == 2  # initial + 1 retry
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_no_response_exhausts_retries_bubbles_llm_no_response(
     mock_completion, base_llm: LLM
 ) -> None:
@@ -93,7 +93,7 @@ def test_no_response_exhausts_retries_bubbles_llm_no_response(
     assert mock_completion.call_count == base_llm.num_retries
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_no_response_retry_bumps_temperature(mock_completion, base_llm: LLM) -> None:
     # Ensure we start at 0.0 to trigger bump to 1.0 on retry
     assert base_llm.temperature == 0.0
@@ -121,7 +121,7 @@ def test_no_response_retry_bumps_temperature(mock_completion, base_llm: LLM) -> 
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_acompletion",
+    "agentrt.sdk.llm.llm.litellm_acompletion",
     new_callable=AsyncMock,
 )
 async def test_async_no_response_retry_bumps_temperature(
@@ -147,7 +147,7 @@ async def test_async_no_response_retry_bumps_temperature(
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_acompletion",
+    "agentrt.sdk.llm.llm.litellm_acompletion",
     new_callable=AsyncMock,
 )
 async def test_async_no_response_retries_then_succeeds(
@@ -169,7 +169,7 @@ async def test_async_no_response_retries_then_succeeds(
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_acompletion",
+    "agentrt.sdk.llm.llm.litellm_acompletion",
     new_callable=AsyncMock,
 )
 async def test_async_no_response_exhausts_retries(
@@ -217,7 +217,7 @@ def create_mock_responses_api_response(
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_aresponses",
+    "agentrt.sdk.llm.llm.litellm_aresponses",
     new_callable=AsyncMock,
 )
 async def test_async_aresponses_retry_bumps_temperature(
@@ -243,7 +243,7 @@ async def test_async_aresponses_retry_bumps_temperature(
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_aresponses",
+    "agentrt.sdk.llm.llm.litellm_aresponses",
     new_callable=AsyncMock,
 )
 async def test_async_aresponses_retries_then_succeeds(
@@ -265,7 +265,7 @@ async def test_async_aresponses_retries_then_succeeds(
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_aresponses",
+    "agentrt.sdk.llm.llm.litellm_aresponses",
     new_callable=AsyncMock,
 )
 async def test_async_aresponses_exhausts_retries(
@@ -289,7 +289,7 @@ async def test_async_aresponses_exhausts_retries(
 # ------------------------------------------------------------------
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_responses_retry_bumps_temperature(mock_responses, base_llm: LLM) -> None:
     """Sync responses must apply the temperature bump on retry after the
     _prepare_responses_params / _build_responses_call_kwargs extraction."""
@@ -310,7 +310,7 @@ def test_responses_retry_bumps_temperature(mock_responses, base_llm: LLM) -> Non
     assert second_kwargs.get("temperature") == 1.0
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_responses_retries_then_succeeds(mock_responses, base_llm: LLM) -> None:
     mock_responses.side_effect = [
         LLMNoResponseError("empty response"),
@@ -359,7 +359,7 @@ class _FakeSyncStreamIterator(SyncResponsesAPIStreamingIterator):
         return self._events.pop(0)
 
 
-@patch("openhands.sdk.llm.llm.litellm_responses")
+@patch("agentrt.sdk.llm.llm.litellm_responses")
 def test_responses_stream_path_retry_bumps_temperature(mock_responses) -> None:
     """Sync streaming counterpart of the aresponses stream-path test: an
     iterator that ends without a completed event raises LLMNoResponseError
@@ -420,7 +420,7 @@ class _FakeAsyncStreamIterator(ResponsesAPIStreamingIterator):
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.llm.llm.litellm_aresponses",
+    "agentrt.sdk.llm.llm.litellm_aresponses",
     new_callable=AsyncMock,
 )
 async def test_async_aresponses_stream_path_retry_bumps_temperature(

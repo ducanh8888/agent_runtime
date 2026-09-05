@@ -2,10 +2,10 @@
 
 import pytest
 
-from openhands.sdk.context import AgentContext
-from openhands.sdk.mcp.config import MCPServer
-from openhands.sdk.plugin import Plugin, PluginManifest
-from openhands.sdk.skills import Skill
+from agentrt.sdk.context import AgentContext
+from agentrt.sdk.mcp.config import MCPServer
+from agentrt.sdk.plugin import Plugin, PluginManifest
+from agentrt.sdk.skills import Skill
 
 
 def mcp_config(

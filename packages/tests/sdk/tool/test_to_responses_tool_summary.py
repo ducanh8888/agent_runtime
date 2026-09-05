@@ -8,9 +8,9 @@ import mcp.types
 import pytest
 from pydantic import Field
 
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.tool import MCPToolDefinition
-from openhands.sdk.tool import Action, Observation, ToolDefinition
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.tool import Action, Observation, ToolDefinition
 
 
 class TSAction(Action):

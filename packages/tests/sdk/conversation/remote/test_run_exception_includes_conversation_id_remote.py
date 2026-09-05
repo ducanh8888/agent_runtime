@@ -4,10 +4,10 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.exceptions import ConversationRunError
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.exceptions import ConversationRunError
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import RemoteWorkspace
 
 from ..conftest import create_mock_http_client
 
@@ -26,7 +26,7 @@ def test_remote_run_raises_conversation_run_error_with_id():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+            "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
         ),
     ):
         workspace = RemoteWorkspace(
@@ -36,7 +36,7 @@ def test_remote_run_raises_conversation_run_error_with_id():
         )
 
         # Instantiate RemoteConversation attached to an existing id to avoid create POST
-        from openhands.sdk.conversation.impl.remote_conversation import (
+        from agentrt.sdk.conversation.impl.remote_conversation import (
             RemoteConversation,
         )
 
@@ -59,7 +59,7 @@ def test_remote_run_raises_conversation_run_error_with_id():
 
         try:
             with patch(
-                "openhands.sdk.conversation.impl.remote_conversation._send_request",
+                "agentrt.sdk.conversation.impl.remote_conversation._send_request",
                 side_effect=fake_send_request,
             ):
                 with pytest.raises(ConversationRunError) as excinfo:

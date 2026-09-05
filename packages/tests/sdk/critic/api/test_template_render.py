@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from openhands.sdk.critic.impl.api.chat_template import ChatTemplateRenderer
+from agentrt.sdk.critic.impl.api.chat_template import ChatTemplateRenderer
 
 
 # =============================================================================

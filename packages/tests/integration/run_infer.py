@@ -16,7 +16,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from openhands.sdk.logger import get_logger
+from agentrt.sdk.logger import get_logger
 from tests.integration.base import (
     BaseIntegrationTest,
     SkipTest,

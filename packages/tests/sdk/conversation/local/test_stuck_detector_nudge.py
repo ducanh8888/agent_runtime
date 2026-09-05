@@ -3,14 +3,14 @@
 from collections.abc import Sequence
 from typing import ClassVar
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import AgentErrorEvent, MessageEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import AgentErrorEvent, MessageEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool import (
     Action,
     Observation,
     Tool,

@@ -4,9 +4,9 @@ import asyncio
 import threading
 import time
 
-from openhands.sdk.event import Event
-from openhands.sdk.event.types import SourceType
-from openhands.sdk.utils.async_utils import (
+from agentrt.sdk.event import Event
+from agentrt.sdk.event.types import SourceType
+from agentrt.sdk.utils.async_utils import (
     AsyncCallbackWrapper,
     AsyncConversationCallback,
 )

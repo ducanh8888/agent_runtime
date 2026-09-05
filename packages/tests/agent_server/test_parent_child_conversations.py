@@ -8,15 +8,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.conversation_router import conversation_router
-from openhands.agent_server.conversation_service import (
+from agentrt.agent_server.conversation_router import conversation_router
+from agentrt.agent_server.conversation_service import (
     ConversationService,
     InvalidParentConversation,
 )
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.models import StartConversationRequest
-from openhands.sdk import LLM, Agent
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.models import StartConversationRequest
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def _start_request(

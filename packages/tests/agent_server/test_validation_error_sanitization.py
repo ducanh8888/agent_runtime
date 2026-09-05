@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from openhands.agent_server.api import (
+from agentrt.agent_server.api import (
     _add_exception_handlers,
     _sanitize_validation_errors,
 )

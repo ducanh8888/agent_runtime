@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm import LLM, Message, TextContent
 from tests.conftest import create_mock_litellm_response
 
 
@@ -14,8 +14,8 @@ def test_llm_pricing_passthrough_custom_rates():
     litellm.cost_calculator.completion_cost.
     """
     with (
-        patch("openhands.sdk.llm.llm.litellm_completion") as mock_completion,
-        patch("openhands.sdk.llm.utils.telemetry.litellm_completion_cost") as mock_cost,
+        patch("agentrt.sdk.llm.llm.litellm_completion") as mock_completion,
+        patch("agentrt.sdk.llm.utils.telemetry.litellm_completion_cost") as mock_cost,
     ):
         mock_completion.return_value = create_mock_litellm_response("ok")
         mock_cost.return_value = 0.123

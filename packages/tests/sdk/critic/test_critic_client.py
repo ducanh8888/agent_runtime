@@ -3,14 +3,14 @@
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent
-from openhands.sdk.critic.impl.api import APIBasedCritic
-from openhands.sdk.critic.impl.api.client import (
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.critic.impl.api import APIBasedCritic
+from agentrt.sdk.critic.impl.api.client import (
     DEFAULT_CRITIC_MODEL_NAME,
     DEFAULT_CRITIC_SERVER_URL,
     CriticClient,
 )
-from openhands.sdk.utils.cipher import Cipher
+from agentrt.sdk.utils.cipher import Cipher
 
 
 def test_critic_client_uses_current_default_route():

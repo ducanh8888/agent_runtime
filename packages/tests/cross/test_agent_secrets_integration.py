@@ -7,16 +7,16 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.secret import LookupSecret, SecretSource, StaticSecret
-from openhands.sdk.tool import Tool, register_tool
-from openhands.tools.terminal import TerminalTool
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.impl import TerminalExecutor
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.secret import LookupSecret, SecretSource, StaticSecret
+from agentrt.sdk.tool import Tool, register_tool
+from agentrt.tools.terminal import TerminalTool
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.impl import TerminalExecutor
 
 
 pytestmark = pytest.mark.skipif(

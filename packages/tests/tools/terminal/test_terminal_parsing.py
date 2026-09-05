@@ -1,6 +1,6 @@
 import pytest
 
-from openhands.tools.terminal.utils.command import (
+from agentrt.tools.terminal.utils.command import (
     escape_bash_special_chars,
     split_bash_commands,
 )

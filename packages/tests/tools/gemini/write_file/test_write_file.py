@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from openhands.tools.gemini.write_file.definition import WriteFileAction, WriteFileTool
-from openhands.tools.gemini.write_file.impl import WriteFileExecutor
+from agentrt.tools.gemini.write_file.definition import WriteFileAction, WriteFileTool
+from agentrt.tools.gemini.write_file.impl import WriteFileExecutor
 
 
 def test_write_file_create_new(tmp_path):

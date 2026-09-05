@@ -14,21 +14,21 @@ import uuid
 
 import pytest
 
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.factory import (
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.factory import (
     DiagnosticEventFactory,
     build_runtime_properties,
 )
-from openhands.agent_server.telemetry.policy import (
+from agentrt.agent_server.telemetry.policy import (
     TelemetryConsent,
     TelemetryDecision,
 )
-from openhands.agent_server.telemetry.sink import BufferedTelemetrySink
-from openhands.agent_server.telemetry.subscriber import (
+from agentrt.agent_server.telemetry.sink import BufferedTelemetrySink
+from agentrt.agent_server.telemetry.subscriber import (
     ConversationTelemetryContext,
     TelemetrySubscriber,
 )
-from openhands.sdk.event import AgentErrorEvent, ConversationStateUpdateEvent
+from agentrt.sdk.event import AgentErrorEvent, ConversationStateUpdateEvent
 
 
 # Values that must never appear in any emitted payload.

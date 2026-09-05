@@ -15,11 +15,11 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 
-from openhands.agent_server import bash_router as bash_router_module
-from openhands.agent_server.bash_service import BashEventService
-from openhands.agent_server.config import Config
-from openhands.agent_server.models import BashCommand, BashEventSortOrder, BashOutput
-from openhands.agent_server.server_details_router import (
+from agentrt.agent_server import bash_router as bash_router_module
+from agentrt.agent_server.bash_service import BashEventService
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.models import BashCommand, BashEventSortOrder, BashOutput
+from agentrt.agent_server.server_details_router import (
     mark_initialization_complete,
     server_details_router,
 )
@@ -101,7 +101,7 @@ async def test_bash_execution_error_log_omits_command(
     failure = RuntimeError(f"failed to start command containing {secret}")
 
     with patch(
-        "openhands.agent_server.bash_service.asyncio.create_subprocess_shell",
+        "agentrt.agent_server.bash_service.asyncio.create_subprocess_shell",
         new=AsyncMock(side_effect=failure),
     ):
         await bash_service._execute_bash_command(command)
@@ -169,7 +169,7 @@ async def test_search_bash_events_runs_blocking_scan_off_event_loop(
     service._save_event_to_file(BashCommand(command="echo ok"))
 
     with patch(
-        "openhands.agent_server.bash_service.asyncio.to_thread",
+        "agentrt.agent_server.bash_service.asyncio.to_thread",
         wraps=asyncio.to_thread,
     ) as to_thread:
         page = await service.search_bash_events(limit=10)
@@ -185,7 +185,7 @@ async def test_get_bash_event_runs_blocking_scan_off_event_loop(tmp_path: Path):
     service._save_event_to_file(command)
 
     with patch(
-        "openhands.agent_server.bash_service.asyncio.to_thread",
+        "agentrt.agent_server.bash_service.asyncio.to_thread",
         wraps=asyncio.to_thread,
     ) as to_thread:
         event = await service.get_bash_event(command.id.hex)

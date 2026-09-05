@@ -14,9 +14,9 @@ import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
-from openhands.sdk.agent.acp_agent import MAX_ACP_CONTENT_CHARS, _serialize_tool_content
-from openhands.sdk.conversation.impl.remote_conversation import RemoteEventsList
-from openhands.sdk.event.acp_tool_call import ACPToolCallEvent
+from agentrt.sdk.agent.acp_agent import MAX_ACP_CONTENT_CHARS, _serialize_tool_content
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteEventsList
+from agentrt.sdk.event.acp_tool_call import ACPToolCallEvent
 
 
 def _make_tool_call_event(tool_call_id: str, raw_output: str = "") -> ACPToolCallEvent:
@@ -95,7 +95,7 @@ class TestACPToolCallDeduplication(unittest.TestCase):
         self.events._cached_event_ids.discard(ev1.id)
 
         ev2 = _make_tool_call_event("tc-1", "v2")
-        with self.assertLogs("openhands.sdk", level=logging.WARNING) as log_ctx:
+        with self.assertLogs("agentrt.sdk", level=logging.WARNING) as log_ctx:
             self._add(ev2)
 
         self.assertTrue(

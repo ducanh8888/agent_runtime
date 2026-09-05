@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 
-from openhands.sdk.workspace.models import CommandResult, FileOperationResult
-from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
+from agentrt.sdk.workspace.models import CommandResult, FileOperationResult
+from agentrt.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 
 
 def test_async_remote_workspace_initialization():
@@ -104,7 +104,7 @@ async def test_async_execute_method():
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
+    "agentrt.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
 )
 async def test_async_execute_command(mock_execute):
     """Test execute_command method calls _execute with correct generator."""
@@ -133,7 +133,7 @@ async def test_async_execute_command(mock_execute):
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
+    "agentrt.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
 )
 async def test_async_file_upload(mock_execute):
     """Test file_upload method calls _execute with correct generator."""
@@ -161,7 +161,7 @@ async def test_async_file_upload(mock_execute):
 
 @pytest.mark.asyncio
 @patch(
-    "openhands.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
+    "agentrt.sdk.workspace.remote.async_remote_workspace.AsyncRemoteWorkspace._execute"
 )
 async def test_async_file_download(mock_execute):
     """Test file_download method calls _execute with correct generator."""
@@ -241,7 +241,7 @@ async def test_async_file_operations_with_path_objects():
 
 def test_async_inheritance():
     """Test AsyncRemoteWorkspace inherits from correct base classes."""
-    from openhands.sdk.workspace.remote.remote_workspace_mixin import (
+    from agentrt.sdk.workspace.remote.remote_workspace_mixin import (
         RemoteWorkspaceMixin,
     )
 
@@ -392,7 +392,7 @@ class MockHTTPResponse:
         pass
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_true_on_successful_health_check(mock_urlopen):
     """Test alive property returns True when health endpoint returns 2xx status."""
     workspace = AsyncRemoteWorkspace(
@@ -407,7 +407,7 @@ def test_async_alive_returns_true_on_successful_health_check(mock_urlopen):
     mock_urlopen.assert_called_once_with("http://localhost:8000/health", timeout=5.0)
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_true_on_204_status(mock_urlopen):
     """Test alive property returns True when health endpoint returns 204 No Content."""
     workspace = AsyncRemoteWorkspace(
@@ -421,7 +421,7 @@ def test_async_alive_returns_true_on_204_status(mock_urlopen):
     assert result is True
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_false_on_server_error(mock_urlopen):
     """Test alive property returns False when health endpoint returns 5xx status."""
     workspace = AsyncRemoteWorkspace(
@@ -435,7 +435,7 @@ def test_async_alive_returns_false_on_server_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_false_on_client_error(mock_urlopen):
     """Test alive property returns False when health endpoint returns 4xx status."""
     workspace = AsyncRemoteWorkspace(
@@ -449,7 +449,7 @@ def test_async_alive_returns_false_on_client_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_false_on_connection_error(mock_urlopen):
     """Test alive property returns False when connection fails."""
     workspace = AsyncRemoteWorkspace(
@@ -463,7 +463,7 @@ def test_async_alive_returns_false_on_connection_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_returns_false_on_timeout(mock_urlopen):
     """Test alive property returns False when request times out."""
     workspace = AsyncRemoteWorkspace(
@@ -479,7 +479,7 @@ def test_async_alive_returns_false_on_timeout(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_constructs_correct_health_url(mock_urlopen):
     """Test alive property constructs correct health URL from host."""
     workspace = AsyncRemoteWorkspace(
@@ -495,7 +495,7 @@ def test_async_alive_constructs_correct_health_url(mock_urlopen):
     )
 
 
-@patch("openhands.sdk.workspace.remote.async_remote_workspace.urlopen")
+@patch("agentrt.sdk.workspace.remote.async_remote_workspace.urlopen")
 def test_async_alive_with_normalized_host(mock_urlopen):
     """Test alive property works correctly when host was normalized."""
     # Host with trailing slash gets normalized in model_post_init

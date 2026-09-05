@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from openhands.tools.glob.definition import GlobAction
-from openhands.tools.glob.impl import GlobExecutor
-from openhands.tools.utils import _check_ripgrep_available
+from agentrt.tools.glob.definition import GlobAction
+from agentrt.tools.glob.impl import GlobExecutor
+from agentrt.tools.utils import _check_ripgrep_available
 
 
 @pytest.mark.skipif(

@@ -23,7 +23,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from openhands.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
+from agentrt.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
 
 
 class RemoteWorkspaceMixinHelper(RemoteWorkspaceMixin):
@@ -36,7 +36,7 @@ class RemoteWorkspaceMixinHelper(RemoteWorkspaceMixin):
 class TestPollingDeduplication:
     """Tests for proper event filtering using order__gt in the polling loop."""
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_polling_should_not_duplicate_events_across_iterations(self, mock_time):
         """Test that polling uses order__gt to fetch only new events.
 
@@ -124,7 +124,7 @@ class TestPollingDeduplication:
             "Events should be deduplicated across poll iterations."
         )
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_base64_output_should_decode_correctly(self, mock_time):
         """Test that base64 output is not corrupted by polling.
 
@@ -230,7 +230,7 @@ class TestPollingDeduplication:
         decoded = base64.b64decode(result.stdout)
         assert decoded == original_data
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_base64_decode_succeeds_with_order_filtering(self, mock_time):
         """Test that base64 decoding works correctly with order__gt filtering.
 
@@ -339,7 +339,7 @@ class TestPollingDeduplication:
             f"Got {len(result.stdout)} chars (length % 4 = {len(result.stdout) % 4})"
         )
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_assertion_fires_on_duplicate_events(self, mock_time):
         """Test that an AssertionError is raised if duplicate events are received.
 
@@ -415,7 +415,7 @@ class TestPollingDeduplication:
         assert result.exit_code == -1
         assert "Duplicate event received: event-1" in result.stderr
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_single_poll_works_correctly(self, mock_time):
         """Test that single poll iteration works correctly.
 
@@ -478,7 +478,7 @@ class TestPollingDeduplication:
 
         assert result.stdout == "CHUNK1CHUNK2CHUNK3"
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_mixed_event_types_with_kind_filtering(self, mock_time):
         """Test that mixed event types (BashCommand + BashOutput) work correctly.
 
@@ -566,7 +566,7 @@ class TestPollingDeduplication:
         )
         assert result.exit_code == 0
 
-    @patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+    @patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
     def test_bash_command_events_are_ignored(self, mock_time):
         """Test that BashCommand events are properly ignored.
 

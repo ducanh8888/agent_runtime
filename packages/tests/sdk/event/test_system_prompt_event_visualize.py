@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import Field
 
-from openhands.sdk.event.llm_convertible import SystemPromptEvent
-from openhands.sdk.llm import TextContent
-from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
+from agentrt.sdk.event.llm_convertible import SystemPromptEvent
+from agentrt.sdk.llm import TextContent
+from agentrt.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+    from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 
 
 class SimpleAction(Action):

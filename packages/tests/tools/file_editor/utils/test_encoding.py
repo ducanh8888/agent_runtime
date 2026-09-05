@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.tools.file_editor import file_editor
-from openhands.tools.file_editor.editor import FileEditor
-from openhands.tools.file_editor.utils.encoding import (
+from agentrt.tools.file_editor import file_editor
+from agentrt.tools.file_editor.editor import FileEditor
+from agentrt.tools.file_editor.utils.encoding import (
     EncodingManager,
     with_encoding,
 )

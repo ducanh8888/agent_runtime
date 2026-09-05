@@ -1,6 +1,6 @@
 """Tests for installed skills management.
 
-These tests verify the public API in ``openhands.sdk.skills.installed``
+These tests verify the public API in ``agentrt.sdk.skills.installed``
 delegates correctly to ``InstallationManager``.  Internal metadata and
 sync logic is already covered by ``tests/sdk/extensions/installation/``.
 """
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.marketplace import Marketplace, MarketplaceRegistration
-from openhands.sdk.skills import (
+from agentrt.sdk.marketplace import Marketplace, MarketplaceRegistration
+from agentrt.sdk.skills import (
     Skill,
     disable_skill,
     enable_skill,

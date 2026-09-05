@@ -10,12 +10,12 @@ rather than letting it escape ``step``/``astep`` and become a fatal
 import pytest
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.exceptions import LLMContentPolicyViolationError
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.exceptions import LLMContentPolicyViolationError
 
 
 class ContentPolicyRaisingLLM(LLM):

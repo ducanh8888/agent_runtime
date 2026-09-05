@@ -10,9 +10,9 @@ identical for all conversations regardless of per-conversation context.
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent, AgentContext
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.skills import Skill
+from agentrt.sdk import LLM, Agent, AgentContext
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.skills import Skill
 
 
 def test_static_system_message_is_constant_across_different_contexts():
@@ -77,10 +77,10 @@ def test_end_to_end_caching_flow(tmp_path, dynamic_context, expect_dynamic):
     """
     import uuid
 
-    from openhands.sdk.conversation import ConversationState
-    from openhands.sdk.event import MessageEvent, SystemPromptEvent
-    from openhands.sdk.event.base import LLMConvertibleEvent
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.conversation import ConversationState
+    from agentrt.sdk.event import MessageEvent, SystemPromptEvent
+    from agentrt.sdk.event.base import LLMConvertibleEvent
+    from agentrt.sdk.workspace import LocalWorkspace
 
     llm = LLM(
         model="claude-sonnet-4-20250514",
@@ -198,10 +198,10 @@ def test_cross_conversation_cache_sharing(tmp_path, first_suffix, second_suffix)
     """Two conversations should share identical static prompts and cache marks."""
     import uuid
 
-    from openhands.sdk.conversation import ConversationState
-    from openhands.sdk.event import MessageEvent, SystemPromptEvent
-    from openhands.sdk.event.base import LLMConvertibleEvent
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.conversation import ConversationState
+    from agentrt.sdk.event import MessageEvent, SystemPromptEvent
+    from agentrt.sdk.event.base import LLMConvertibleEvent
+    from agentrt.sdk.workspace import LocalWorkspace
 
     llm = LLM(
         model="claude-sonnet-4-20250514",

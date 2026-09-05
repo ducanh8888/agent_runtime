@@ -11,11 +11,11 @@ High-value behavior:
 import threading
 from unittest.mock import MagicMock, patch
 
-from openhands.sdk.conversation.impl.remote_conversation import (
+from agentrt.sdk.conversation.impl.remote_conversation import (
     RemoteEventsList,
     WebSocketCallbackClient,
 )
-from openhands.sdk.event.conversation_state import FULL_STATE_KEY
+from agentrt.sdk.event.conversation_state import FULL_STATE_KEY
 
 
 class TestWebSocketReadySignaling:
@@ -109,7 +109,7 @@ class TestRemoteEventsListReconciliation:
             }
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation._send_request"
+            "agentrt.sdk.conversation.impl.remote_conversation._send_request"
         ) as mock_send:
             mock_response = MagicMock()
             mock_response.json.side_effect = [
@@ -140,7 +140,7 @@ class TestRemoteEventsListReconciliation:
         mock_client = MagicMock()
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation._send_request"
+            "agentrt.sdk.conversation.impl.remote_conversation._send_request"
         ) as mock_send:
             mock_response = MagicMock()
             mock_response.json.side_effect = [
@@ -178,7 +178,7 @@ class TestRemoteEventsListReconciliation:
             }
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation._send_request"
+            "agentrt.sdk.conversation.impl.remote_conversation._send_request"
         ) as mock_send:
             mock_response = MagicMock()
             mock_response.json.side_effect = lambda: make_response()

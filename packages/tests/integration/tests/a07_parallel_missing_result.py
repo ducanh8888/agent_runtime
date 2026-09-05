@@ -9,7 +9,7 @@ Pattern:
                                                                ↑ Missing result for C!
 """
 
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
 from tests.integration.api_compliance.base import BaseAPIComplianceTest
 
 

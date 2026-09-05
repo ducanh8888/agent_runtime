@@ -9,18 +9,18 @@ import builtins
 
 import pytest
 
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.factory import build_runtime_properties
-from openhands.agent_server.telemetry.sanitizer import (
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.factory import build_runtime_properties
+from agentrt.agent_server.telemetry.sanitizer import (
     _FIRST_PARTY_ROOT,
     _MODEL_FAMILY_HINTS,
     _known_providers,
 )
-from openhands.agent_server.telemetry.subscriber import (
+from agentrt.agent_server.telemetry.subscriber import (
     _FAILURE_STATUSES,
     _TERMINAL_STATUSES,
 )
-from openhands.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
 
 
 # ── single definitions ────────────────────────────────────────────────────
@@ -37,8 +37,8 @@ def test_terminal_statuses_come_from_the_sdk_enum():
 
 
 def test_full_state_key_comes_from_the_sdk():
-    import openhands.agent_server.telemetry.subscriber as sub
-    from openhands.sdk.event.conversation_state import FULL_STATE_KEY
+    import agentrt.agent_server.telemetry.subscriber as sub
+    from agentrt.sdk.event.conversation_state import FULL_STATE_KEY
 
     assert "_FULL_STATE_KEY" not in vars(sub), (
         "the full_state key is defined in the SDK; do not restate it here"
@@ -48,7 +48,7 @@ def test_full_state_key_comes_from_the_sdk():
 
 def test_first_party_root_is_derived_not_hardcoded():
     """It must track the package it lives in, not a literal that can go stale."""
-    import openhands.agent_server.telemetry.sanitizer as sanitizer
+    import agentrt.agent_server.telemetry.sanitizer as sanitizer
 
     assert _FIRST_PARTY_ROOT == sanitizer.__name__.split(".", 1)[0]
     assert _FIRST_PARTY_ROOT == "openhands"  # current value, for readability
@@ -56,7 +56,7 @@ def test_first_party_root_is_derived_not_hardcoded():
 
 def test_consent_literal_has_one_definition():
     """policy owns TelemetryConsent now that no typed settings field exists."""
-    from openhands.agent_server.persistence import models as persisted
+    from agentrt.agent_server.persistence import models as persisted
 
     assert not hasattr(persisted, "TelemetryConsent"), (
         "consent lives in misc_settings.telemetry; there is no typed field"
@@ -66,7 +66,7 @@ def test_consent_literal_has_one_definition():
 
 def test_no_deployment_mode_concept_remains():
     """The follow-up removed cloud mode from SDK and agent-server."""
-    import openhands.agent_server.config as config_mod
+    import agentrt.agent_server.config as config_mod
 
     assert not hasattr(config_mod, "TelemetryMode")
     assert "mode" not in config_mod.TelemetrySpec.model_fields
@@ -75,7 +75,7 @@ def test_no_deployment_mode_concept_remains():
 
 
 def test_deployment_kind_is_a_runtime_property_not_a_mode():
-    import openhands.agent_server.config as config_mod
+    import agentrt.agent_server.config as config_mod
 
     assert (
         config_mod.TelemetrySpec(deployment_kind="remote").deployment_kind == "remote"
@@ -91,7 +91,7 @@ def test_deployment_kind_is_a_runtime_property_not_a_mode():
 
 def test_versions_match_server_info():
     """Telemetry and /server_info must never disagree about what is running."""
-    from openhands.agent_server.server_details_router import ServerInfo
+    from agentrt.agent_server.server_details_router import ServerInfo
 
     info = ServerInfo(uptime=0.0, idle_time=0.0)
     runtime = build_runtime_properties(deferred_init=False)

@@ -12,20 +12,20 @@ from typing import Any, ClassVar, cast
 
 import pytest
 
-from openhands.sdk import LLM
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm.message import ImageContent, TextContent
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.config import MCPServer
-from openhands.sdk.mcp.utils import ToolsChangedCallback
-from openhands.sdk.tool import ToolDefinition
-from openhands.sdk.tool.builtins import ThinkTool
-from openhands.sdk.tool.registry import register_tool
-from openhands.sdk.tool.spec import Tool
-from openhands.sdk.tool.tool import Action, Observation, ToolExecutor
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm.message import ImageContent, TextContent
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.config import MCPServer
+from agentrt.sdk.mcp.utils import ToolsChangedCallback
+from agentrt.sdk.tool import ToolDefinition
+from agentrt.sdk.tool.builtins import ThinkTool
+from agentrt.sdk.tool.registry import register_tool
+from agentrt.sdk.tool.spec import Tool
+from agentrt.sdk.tool.tool import Action, Observation, ToolExecutor
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 class _FilterAction(Action):

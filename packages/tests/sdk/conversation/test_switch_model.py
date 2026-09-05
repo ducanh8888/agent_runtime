@@ -6,21 +6,21 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, LocalConversation
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.context.condenser import LLMSummarizingCondenser
-from openhands.sdk.context.view import View
-from openhands.sdk.conversation.persistence_const import BASE_STATE
-from openhands.sdk.conversation.state import (
+from agentrt.sdk import LLM, LocalConversation
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.context.condenser import LLMSummarizingCondenser
+from agentrt.sdk.context.view import View
+from agentrt.sdk.conversation.persistence_const import BASE_STATE
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent, llm_profile_store
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.utils.cipher import Cipher
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent, llm_profile_store
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.utils.cipher import Cipher
 from tests.conftest import create_mock_litellm_response
 
 
@@ -433,7 +433,7 @@ def test_switch_llm_refreshes_llm_condenser_credentials(
             model=kwargs["model"],
         )
 
-    monkeypatch.setattr("openhands.sdk.llm.llm.litellm_acompletion", _fake_acompletion)
+    monkeypatch.setattr("agentrt.sdk.llm.llm.litellm_acompletion", _fake_acompletion)
 
     response = asyncio.run(
         condenser_llm.acompletion(
@@ -474,7 +474,7 @@ def test_switch_llm_condenser_can_generate_condensation(
             model=kwargs["model"],
         )
 
-    monkeypatch.setattr("openhands.sdk.llm.llm.litellm_completion", _fake_completion)
+    monkeypatch.setattr("agentrt.sdk.llm.llm.litellm_completion", _fake_completion)
 
     assert isinstance(conv.agent.condenser, LLMSummarizingCondenser)
     condensation = conv.agent.condenser.get_condensation(
@@ -707,7 +707,7 @@ def test_switch_llm_tool_during_arun_does_not_deadlock(profile_store, tmp_path):
 def test_switch_llm_to_subscription_profile_keeps_condenser(
     monkeypatch, empty_profile_store
 ):
-    import openhands.sdk.conversation.impl.local_conversation as local_conversation
+    import agentrt.sdk.conversation.impl.local_conversation as local_conversation
 
     condenser = LLMSummarizingCondenser(
         llm=_make_llm("condenser-model", "condenser"),

@@ -1,6 +1,6 @@
 """Tests for installed plugins management.
 
-These tests verify the public API in ``openhands.sdk.plugin.installed``
+These tests verify the public API in ``agentrt.sdk.plugin.installed``
 delegates correctly to ``InstallationManager``.  Internal metadata and
 sync logic is already covered by ``tests/sdk/extensions/installation/``.
 
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.extensions.fetch import get_cache_path, parse_extension_source
-from openhands.sdk.plugin import (
+from agentrt.sdk.extensions.fetch import get_cache_path, parse_extension_source
+from agentrt.sdk.plugin import (
     Plugin,
     PluginFetchError,
     disable_plugin,
@@ -27,7 +27,7 @@ from openhands.sdk.plugin import (
     uninstall_plugin,
     update_plugin,
 )
-from openhands.sdk.plugin.fetch import DEFAULT_CACHE_DIR as DEFAULT_PLUGIN_CACHE_DIR
+from agentrt.sdk.plugin.fetch import DEFAULT_CACHE_DIR as DEFAULT_PLUGIN_CACHE_DIR
 
 
 # ============================================================================

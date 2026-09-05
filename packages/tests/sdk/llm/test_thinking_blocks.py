@@ -4,7 +4,7 @@ from litellm.types.llms.openai import ChatCompletionThinkingBlock
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Message, MessageEvent, TextContent, ThinkingBlock
+from agentrt.sdk import LLM, Message, MessageEvent, TextContent, ThinkingBlock
 
 
 def create_mock_response_with_thinking(
@@ -145,7 +145,7 @@ def test_message_from_llm_chat_message_with_thinking_no_signature():
 
 def test_message_with_thinking_blocks():
     """Test Message with thinking blocks fields."""
-    from openhands.sdk.llm.message import Message, TextContent, ThinkingBlock
+    from agentrt.sdk.llm.message import Message, TextContent, ThinkingBlock
 
     thinking_block = ThinkingBlock(
         thinking="Let me think about this step by step...",
@@ -499,7 +499,7 @@ def test_thinking_blocks_only_for_assistant_role():
 
 def test_redacted_thinking_block_in_message_dict():
     """Test that redacted thinking blocks are also properly placed in message_dict."""
-    from openhands.sdk.llm.message import RedactedThinkingBlock
+    from agentrt.sdk.llm.message import RedactedThinkingBlock
 
     redacted_block = RedactedThinkingBlock(
         data="[REDACTED]",
@@ -522,7 +522,7 @@ def test_redacted_thinking_block_in_message_dict():
 
 def test_mixed_thinking_and_redacted_blocks():
     """Test handling of mixed thinking and redacted thinking blocks."""
-    from openhands.sdk.llm.message import RedactedThinkingBlock
+    from agentrt.sdk.llm.message import RedactedThinkingBlock
 
     thinking_block = ThinkingBlock(
         thinking="Active reasoning...",

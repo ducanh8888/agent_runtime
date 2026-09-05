@@ -24,19 +24,19 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.base import BaseConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import ActionEvent, MessageEvent, ObservationEvent, PauseEvent
-from openhands.sdk.llm import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.base import BaseConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import ActionEvent, MessageEvent, ObservationEvent, PauseEvent
+from agentrt.sdk.llm import (
     LLM,
     ImageContent,
     Message,
     TextContent,
 )
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-from openhands.sdk.tool import (
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.tool import (
     Action,
     Observation,
     Tool,
@@ -176,7 +176,7 @@ class TestPauseFunctionality:
         assert len(pause_events) == 1
         assert pause_events[0].source == "user"
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_pause_during_normal_execution(self, mock_completion):
         """Test pausing before run() starts - pause is reset and agent runs normally."""
         # Mock LLM to return a message that finishes execution
@@ -223,7 +223,7 @@ class TestPauseFunctionality:
         ]
         assert len(pause_events) == 1
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_resume_paused_agent(self, mock_completion):
         """Test pausing before run() - pause is reset and agent runs normally."""
         # Mock LLM to return a message that finishes execution
@@ -268,7 +268,7 @@ class TestPauseFunctionality:
         ]
         assert len(agent_messages) == 1  # Agent ran and completed
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_pause_with_confirmation_mode(self, mock_completion):
         """Test that pause before run() with confirmation mode - pause is reset and agent waits for confirmation."""  # noqa: E501
         # Enable confirmation mode
@@ -360,7 +360,7 @@ class TestPauseFunctionality:
         )
 
     @pytest.mark.timeout(3)
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_pause_while_running_continuous_actions(self, mock_completion):
         step_entered = threading.Event()
 

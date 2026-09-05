@@ -12,7 +12,7 @@ Tests are organized by serialization strategy to ensure clear separation of conc
 
 import json
 
-from openhands.sdk.llm.message import (
+from agentrt.sdk.llm.message import (
     ImageContent,
     Message,
     TextContent,

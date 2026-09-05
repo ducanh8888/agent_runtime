@@ -7,10 +7,10 @@ from typing import ClassVar
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.context.prompts.presets import PromptPreset, create_registry
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.context.prompts.presets import PromptPreset, create_registry
+from agentrt.sdk.llm import LLM
 
 
 def _make_llm() -> LLM:

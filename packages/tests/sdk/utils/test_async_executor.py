@@ -6,7 +6,7 @@ import time
 import anyio
 from anyio.to_thread import run_sync
 
-from openhands.sdk.utils.async_executor import AsyncExecutor
+from agentrt.sdk.utils.async_executor import AsyncExecutor
 
 
 def _close_in_background(executor: AsyncExecutor, **kwargs) -> threading.Event:

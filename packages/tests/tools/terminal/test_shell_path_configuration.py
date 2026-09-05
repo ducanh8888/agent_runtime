@@ -15,8 +15,8 @@ if platform.system() == "Windows":
         allow_module_level=True,
     )
 
-from openhands.tools.terminal.terminal import SubprocessTerminal
-from openhands.tools.terminal.terminal.factory import create_terminal_session
+from agentrt.tools.terminal.terminal import SubprocessTerminal
+from agentrt.tools.terminal.terminal.factory import create_terminal_session
 
 
 def test_shell_path_explicit_parameter():
@@ -131,7 +131,7 @@ def test_shell_path_with_tmux_terminal():
 
 def test_shell_path_reset_preserves_config():
     """Test that terminal reset preserves the shell_path configuration."""
-    from openhands.tools.terminal.impl import TerminalExecutor
+    from agentrt.tools.terminal.impl import TerminalExecutor
 
     with tempfile.TemporaryDirectory() as temp_dir:
         bash_path = shutil.which("bash")
@@ -181,11 +181,11 @@ def test_terminal_tool_shell_path_parameter():
 
     from pydantic import SecretStr
 
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.conversation.state import ConversationState
-    from openhands.sdk.llm import LLM
-    from openhands.sdk.workspace import LocalWorkspace
-    from openhands.tools.terminal.definition import TerminalTool
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.conversation.state import ConversationState
+    from agentrt.sdk.llm import LLM
+    from agentrt.sdk.workspace import LocalWorkspace
+    from agentrt.tools.terminal.definition import TerminalTool
 
     with tempfile.TemporaryDirectory() as temp_dir:
         bash_path = shutil.which("bash")
@@ -210,7 +210,7 @@ def test_terminal_tool_shell_path_parameter():
 
         terminal = tools[0]
         # Verify the executor has the shell_path
-        from openhands.tools.terminal.impl import TerminalExecutor
+        from agentrt.tools.terminal.impl import TerminalExecutor
 
         assert isinstance(terminal.executor, TerminalExecutor)
         assert terminal.executor.shell_path == bash_path

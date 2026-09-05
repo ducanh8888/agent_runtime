@@ -1,12 +1,12 @@
 """Tests for View.append_event."""
 
-from openhands.sdk.context.view import View
-from openhands.sdk.event.condenser import (
+from agentrt.sdk.context.view import View
+from agentrt.sdk.event.condenser import (
     Condensation,
     CondensationRequest,
     CondensationSummaryEvent,
 )
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 from tests.sdk.context.view.conftest import (
     create_action_event,
     create_observation_event,

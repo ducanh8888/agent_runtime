@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
 
 
 @pytest.fixture

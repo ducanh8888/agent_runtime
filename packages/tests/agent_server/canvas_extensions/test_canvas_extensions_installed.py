@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from openhands.agent_server.canvas_extensions.installed import (
+from agentrt.agent_server.canvas_extensions.installed import (
     disable_canvas_extension,
     enable_canvas_extension,
     get_installed_canvas_extension,
@@ -24,8 +24,8 @@ from openhands.agent_server.canvas_extensions.installed import (
     load_installed_canvas_extensions,
     uninstall_canvas_extension,
 )
-from openhands.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
-from openhands.sdk.extensions.installation import InstallationMetadata
+from agentrt.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
+from agentrt.sdk.extensions.installation import InstallationMetadata
 
 from .conftest import write_extension as _write_extension
 

@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.tool.schema import TextContent
-from openhands.tools.file_editor.definition import (
+from agentrt.sdk.tool.schema import TextContent
+from agentrt.tools.file_editor.definition import (
     FileEditorObservation,
 )
-from openhands.tools.file_editor.editor import FileEditor
+from agentrt.tools.file_editor.editor import FileEditor
 
 
 @pytest.fixture

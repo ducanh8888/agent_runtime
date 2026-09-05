@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from openhands.sdk.agent.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.agent.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +19,7 @@ def _reset_observability_cache():
     The flag is sticky-True by design (see laminar.py docstring), so it
     leaks across tests. This fixture isolates each test from prior state.
     """
-    from openhands.sdk.observability import laminar
+    from agentrt.sdk.observability import laminar
 
     laminar._observability_enabled = False
     yield
@@ -51,7 +51,7 @@ def test_lmnr_base_url_parsing(env_value, expected):
         elif "LMNR_BASE_URL" in os.environ:
             del os.environ["LMNR_BASE_URL"]
 
-        from openhands.sdk.observability.laminar import get_env
+        from agentrt.sdk.observability.laminar import get_env
 
         result = get_env("LMNR_BASE_URL")
         if expected is None:
@@ -86,7 +86,7 @@ def test_lmnr_base_url_passed_to_laminar():
             with patch("lmnr.LaminarLiteLLMCallback"):
                 with patch("litellm.callbacks", new=MagicMock()):
                     mock_laminar.is_initialized.return_value = False
-                    from openhands.sdk.observability.laminar import maybe_init_laminar
+                    from agentrt.sdk.observability.laminar import maybe_init_laminar
 
                     maybe_init_laminar()
 
@@ -120,7 +120,7 @@ def test_lmnr_base_url_not_passed_when_empty():
             with patch("lmnr.LaminarLiteLLMCallback"):
                 with patch("litellm.callbacks", new=MagicMock()):
                     mock_laminar.is_initialized.return_value = False
-                    from openhands.sdk.observability.laminar import maybe_init_laminar
+                    from agentrt.sdk.observability.laminar import maybe_init_laminar
 
                     maybe_init_laminar()
 
@@ -157,7 +157,7 @@ def test_maybe_init_laminar_skips_when_already_initialized():
             with patch("lmnr.LaminarLiteLLMCallback"):
                 with patch("litellm.callbacks", new=MagicMock()):
                     mock_laminar.is_initialized.return_value = True
-                    from openhands.sdk.observability.laminar import maybe_init_laminar
+                    from agentrt.sdk.observability.laminar import maybe_init_laminar
 
                     maybe_init_laminar()
                     maybe_init_laminar()
@@ -198,7 +198,7 @@ def test_get_bool_env(env_value, expected):
         elif "TEST_BOOL_VAR" in os.environ:
             del os.environ["TEST_BOOL_VAR"]
 
-        from openhands.sdk.observability.laminar import _get_bool_env
+        from agentrt.sdk.observability.laminar import _get_bool_env
 
         result = _get_bool_env("TEST_BOOL_VAR")
         assert result == expected
@@ -217,7 +217,7 @@ def test_observe_preserves_async_signature():
     decorated async methods. That broke `MCPToolExecutor.__call__`, which
     relies on `iscoroutinefunction` in `run_async` to dispatch the call.
     """
-    from openhands.sdk.observability.laminar import observe
+    from agentrt.sdk.observability.laminar import observe
 
     @observe(name="async_fn")
     async def async_fn(x: int) -> int:
@@ -257,7 +257,7 @@ def test_lmnr_force_http_passed_to_laminar(force_http_value, expected_force_http
             with patch("lmnr.LaminarLiteLLMCallback"):
                 with patch("litellm.callbacks", new=MagicMock()):
                     mock_laminar.is_initialized.return_value = False
-                    from openhands.sdk.observability.laminar import maybe_init_laminar
+                    from agentrt.sdk.observability.laminar import maybe_init_laminar
 
                     maybe_init_laminar()
 
@@ -298,12 +298,12 @@ def test_lmnr_instruments_passed_to_laminar(
         with (
             patch("lmnr.Laminar") as mock_laminar,
             patch(
-                "openhands.sdk.observability.laminar._is_otel_backend_laminar",
+                "agentrt.sdk.observability.laminar._is_otel_backend_laminar",
                 return_value=is_laminar_backend,
             ),
         ):
             mock_laminar.is_initialized.return_value = False
-            from openhands.sdk.observability.laminar import maybe_init_laminar
+            from agentrt.sdk.observability.laminar import maybe_init_laminar
 
             maybe_init_laminar()
 
@@ -331,7 +331,7 @@ class _DummyOwner:
     """Mimics a ``BaseConversation`` for the purposes of the observe wrapper."""
 
     def __init__(self, root_span):
-        from openhands.sdk.observability.laminar import RootSpan
+        from agentrt.sdk.observability.laminar import RootSpan
 
         # Build a RootSpan-like object without invoking real lmnr.
         self._observability_root_span = RootSpan.__new__(RootSpan)
@@ -345,7 +345,7 @@ def test_observe_calls_use_span_with_owner_root_span_on_sync():
     try:
         from lmnr import Laminar  # noqa: F401  ensure module is importable
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         sentinel_span = MagicMock(name="root-span")
         used_with: list = []
@@ -382,7 +382,7 @@ def test_observe_with_owner_root_span_preserves_wrapped_exceptions():
     try:
         from lmnr import Laminar
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         sentinel_span = MagicMock(name="root-span")
         used_with: list = []
@@ -415,7 +415,7 @@ def test_observe_calls_use_span_with_owner_root_span_on_async():
     try:
         from lmnr import Laminar
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         sentinel_span = MagicMock(name="root-span")
         used_with: list = []
@@ -458,7 +458,7 @@ def test_root_span_sets_user_id():
     try:
         from lmnr import Laminar
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         mock_span = MagicMock(name="span")
 
@@ -487,7 +487,7 @@ def test_root_span_skips_user_id_when_none():
     try:
         from lmnr import Laminar
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         mock_span = MagicMock(name="span")
 
@@ -515,7 +515,7 @@ def test_root_span_sets_attributes():
     try:
         from lmnr import Laminar
 
-        from openhands.sdk.observability import laminar as lam
+        from agentrt.sdk.observability import laminar as lam
 
         mock_span = MagicMock(name="span")
 
@@ -540,7 +540,7 @@ def test_two_concurrent_conversations_do_not_collide():
     conversation constructed while the first was alive would corrupt the
     first's root span on close.
     """
-    from openhands.sdk.conversation.base import BaseConversation
+    from agentrt.sdk.conversation.base import BaseConversation
 
     # Bypass ABC instantiation by calling ``BaseConversation.__init__`` on a
     # bare ``object``-like instance. We only exercise the span-management
@@ -555,7 +555,7 @@ def test_two_concurrent_conversations_do_not_collide():
 
     # Patch the symbol in the module where it's looked up at call time, and
     # force observability on so the shortcut early-return doesn't fire.
-    from openhands.sdk.conversation import base as base_mod
+    from agentrt.sdk.conversation import base as base_mod
 
     with (
         patch.object(base_mod, "should_enable_observability", return_value=True),
@@ -594,7 +594,7 @@ def contextlib_compat():
 
 
 def test_root_span_sets_trace_metadata_and_tags():
-    from openhands.sdk.observability.laminar import RootSpan
+    from agentrt.sdk.observability.laminar import RootSpan
 
     fake_span = MagicMock()
 
@@ -644,7 +644,7 @@ def test_detached_delegate_context_severs_ambient_span_and_links_parent():
     from opentelemetry import trace as trace_api
     from opentelemetry.sdk.trace import TracerProvider
 
-    from openhands.sdk.observability import laminar as lam
+    from agentrt.sdk.observability import laminar as lam
 
     parent_ctx = SimpleNamespace(
         trace_id="11111111-1111-1111-1111-111111111111",
@@ -678,7 +678,7 @@ def test_detached_delegate_context_restores_ambient_span_after_exit():
     from opentelemetry import trace as trace_api
     from opentelemetry.sdk.trace import TracerProvider
 
-    from openhands.sdk.observability import laminar as lam
+    from agentrt.sdk.observability import laminar as lam
 
     tracer = TracerProvider().get_tracer("test")
     outer_span = tracer.start_span("outer")
@@ -696,7 +696,7 @@ def test_detached_delegate_context_without_ambient_parent():
     """No active span to sever must not crash and must yield an empty link."""
     from lmnr import Laminar
 
-    from openhands.sdk.observability import laminar as lam
+    from agentrt.sdk.observability import laminar as lam
 
     with patch.object(Laminar, "get_laminar_span_context", return_value=None):
         lam._observability_enabled = True
@@ -707,7 +707,7 @@ def test_detached_delegate_context_without_ambient_parent():
 
 def test_detached_delegate_context_noop_when_observability_disabled():
     """When observability is off, the context manager must be a pure no-op."""
-    from openhands.sdk.observability import laminar as lam
+    from agentrt.sdk.observability import laminar as lam
 
     with patch("lmnr.Laminar") as mock_laminar:
         mock_laminar.is_initialized.return_value = False
@@ -721,7 +721,7 @@ def test_detached_delegate_context_noop_when_observability_disabled():
 
 def test_deprecated_shims_are_removed():
     """The legacy global-stack API (deprecated 1.22.0) was removed in 1.27.0."""
-    from openhands.sdk.observability import laminar as lam
+    from agentrt.sdk.observability import laminar as lam
 
     assert not hasattr(lam, "start_active_span")
     assert not hasattr(lam, "end_active_span")

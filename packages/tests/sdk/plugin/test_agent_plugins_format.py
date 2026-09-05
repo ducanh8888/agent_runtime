@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.plugin import (
+from agentrt.sdk.plugin import (
     AgentPluginsFormat,
     ClaudeCodePluginFormat,
     PluginManifest,
     detect_format,
 )
-from openhands.sdk.plugin.format.agent_plugins import (
+from agentrt.sdk.plugin.format.agent_plugins import (
     _MANIFEST_SCHEMA_FILE,
     MANIFEST_SCHEMA_URL,
     _load_schema,

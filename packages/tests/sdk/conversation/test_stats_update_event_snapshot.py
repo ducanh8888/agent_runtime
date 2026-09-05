@@ -5,13 +5,13 @@ import uuid
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent
-from openhands.sdk.conversation.conversation_stats import ConversationStats
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.io import InMemoryFileStore
-from openhands.sdk.llm.utils.metrics import Metrics
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.conversation.conversation_stats import ConversationStats
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.io import InMemoryFileStore
+from agentrt.sdk.llm.utils.metrics import Metrics
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @pytest.fixture

@@ -18,20 +18,20 @@ import httpx
 import psutil
 from pydantic import PrivateAttr, SecretStr
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.models import ConversationInfo, StartConversationRequest
-from openhands.sdk import LLM, Agent, Tool
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.llm.llm_response import LLMResponse
-from openhands.sdk.llm.streaming import TokenCallbackType
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool.tool import ToolDefinition
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.models import ConversationInfo, StartConversationRequest
+from agentrt.sdk import LLM, Agent, Tool
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.llm.llm_response import LLMResponse
+from agentrt.sdk.llm.streaming import TokenCallbackType
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.llm.llm import LLMCallContext
+    from agentrt.sdk.llm.llm import LLMCallContext
 
 
 class SlowTestLLM(TestLLM):

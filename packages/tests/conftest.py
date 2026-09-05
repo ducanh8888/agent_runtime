@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.io import InMemoryFileStore
-from openhands.sdk.llm import LLM
-from openhands.sdk.tool import ToolExecutor
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.io import InMemoryFileStore
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.tool import ToolExecutor
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -176,7 +176,7 @@ def create_mock_litellm_response(
 def suppress_logging(monkeypatch):
     """Suppress logging during tests to reduce noise."""
     mock_logger = MagicMock()
-    monkeypatch.setattr("openhands.sdk.llm.llm.logger", mock_logger)
+    monkeypatch.setattr("agentrt.sdk.llm.llm.logger", mock_logger)
 
 
 @pytest.fixture(autouse=True)
@@ -189,7 +189,7 @@ def restore_observability_latch():
     wrapper on first call — which silently breaks tests that trigger that lazy
     build themselves, and only when they share an xdist worker.
     """
-    from openhands.sdk.observability import laminar
+    from agentrt.sdk.observability import laminar
 
     previous = laminar._observability_enabled
     try:

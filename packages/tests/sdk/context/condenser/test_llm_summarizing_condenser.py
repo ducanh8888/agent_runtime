@@ -10,19 +10,19 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.context.condenser.base import (
+from agentrt.sdk.context.condenser.base import (
     CondensationRequirement,
     NoCondensationAvailableException,
 )
-from openhands.sdk.context.condenser.llm_summarizing_condenser import (
+from agentrt.sdk.context.condenser.llm_summarizing_condenser import (
     LLMSummarizingCondenser,
     Reason,
 )
-from openhands.sdk.context.view import View
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.condenser import Condensation, CondensationRequest
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import (
+from agentrt.sdk.context.view import View
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.condenser import Condensation, CondensationRequest
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import (
     LLM,
     LLMResponse,
     Message,
@@ -779,7 +779,7 @@ def test_condense_with_hard_requirement_and_no_condensation_available(
     When there's a hard requirement but no valid condensation range available
     (e.g., entire view is a single atomic unit), should raise an exception.
     """
-    from openhands.sdk.context.condenser.base import NoCondensationAvailableException
+    from agentrt.sdk.context.condenser.base import NoCondensationAvailableException
 
     condenser = LLMSummarizingCondenser(llm=mock_llm, max_size=100, keep_first=2)
     events: list[Event] = [message_event(f"Event {i}") for i in range(10)]
@@ -991,7 +991,7 @@ def _summary_response(content: str = "A summary") -> ModelResponse:
     )
 
 
-@patch("openhands.sdk.llm.llm.LLM._transport_call", autospec=True)
+@patch("agentrt.sdk.llm.llm.LLM._transport_call", autospec=True)
 def test_summarization_disables_streaming_when_llm_streams(mock_transport) -> None:
     """Regression test for issue #3902: a ``stream=True`` LLM must still summarize
     even though the condenser passes no ``on_token`` callback."""
@@ -1024,7 +1024,7 @@ def test_summarization_disables_streaming_when_llm_streams(mock_transport) -> No
 
 
 @pytest.mark.asyncio
-@patch("openhands.sdk.llm.llm.LLM._atransport_call", new_callable=AsyncMock)
+@patch("agentrt.sdk.llm.llm.LLM._atransport_call", new_callable=AsyncMock)
 async def test_async_summarization_disables_streaming_when_llm_streams(
     mock_atransport,
 ) -> None:
@@ -1047,7 +1047,7 @@ async def test_async_summarization_disables_streaming_when_llm_streams(
     assert llm.stream is True
 
 
-@patch("openhands.sdk.llm.llm.LLM._transport_call", autospec=True)
+@patch("agentrt.sdk.llm.llm.LLM._transport_call", autospec=True)
 def test_summarization_uses_llm_as_is_when_not_streaming(mock_transport) -> None:
     """When streaming is off, the condenser summarizes with the LLM unchanged."""
     mock_transport.return_value = _summary_response("A summary")

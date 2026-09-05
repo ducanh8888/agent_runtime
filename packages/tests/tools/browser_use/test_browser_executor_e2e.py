@@ -10,7 +10,7 @@ from collections.abc import Generator
 
 import pytest
 
-from openhands.tools.browser_use.definition import (
+from agentrt.tools.browser_use.definition import (
     BrowserClickAction,
     BrowserCloseTabAction,
     BrowserGetContentAction,
@@ -27,7 +27,7 @@ from openhands.tools.browser_use.definition import (
     BrowserSwitchTabAction,
     BrowserTypeAction,
 )
-from openhands.tools.browser_use.impl import BrowserToolExecutor
+from agentrt.tools.browser_use.impl import BrowserToolExecutor
 
 
 # Test HTML content for browser operations
@@ -781,7 +781,7 @@ class TestBrowserExecutorE2E:
         Note: Recording output goes to BROWSER_RECORDING_OUTPUT_DIR
         (.agent_tmp/browser_observations/) regardless of full_output_save_dir.
         """
-        from openhands.tools.browser_use.definition import (
+        from agentrt.tools.browser_use.definition import (
             BROWSER_RECORDING_OUTPUT_DIR,
         )
 

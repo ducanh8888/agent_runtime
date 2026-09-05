@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from openhands.tools.file_editor import (
+from agentrt.tools.file_editor import (
     FileEditorObservation,
     file_editor,
 )
-from openhands.tools.file_editor.editor import FileEditor
-from openhands.tools.file_editor.exceptions import (
+from agentrt.tools.file_editor.editor import FileEditor
+from agentrt.tools.file_editor.exceptions import (
     EditorToolParameterInvalidError,
     EditorToolParameterMissingError,
     ToolError,
 )
-from openhands.tools.file_editor.utils.constants import (
+from agentrt.tools.file_editor.utils.constants import (
     DIRECTORY_CONTENT_TRUNCATED_NOTICE,
     TEXT_FILE_CONTENT_TRUNCATED_NOTICE,
 )
@@ -242,7 +242,7 @@ def test_create_operation(temp_file):
 
 def test_view_operation_truncation(temp_file):
     """Test that view operation truncates large files correctly."""
-    from openhands.tools.file_editor.utils.constants import (
+    from agentrt.tools.file_editor.utils.constants import (
         MAX_RESPONSE_LEN_CHAR,
         TEXT_FILE_CONTENT_TRUNCATED_NOTICE,
     )

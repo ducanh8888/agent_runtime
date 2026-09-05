@@ -10,9 +10,9 @@ import os
 from pathlib import Path
 from typing import Final
 
-from openhands.sdk.context.prompts.presets import PromptPreset, create_registry
-from openhands.sdk.context.prompts.section import Platform, PromptContext
-from openhands.sdk.context.prompts.sections.planning import PlanningSection
+from agentrt.sdk.context.prompts.presets import PromptPreset, create_registry
+from agentrt.sdk.context.prompts.section import Platform, PromptContext
+from agentrt.sdk.context.prompts.sections.planning import PlanningSection
 
 
 SNAPSHOT_DIR: Final[Path] = Path(__file__).parent / "snapshots"

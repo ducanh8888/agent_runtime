@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from openhands.sdk.utils.paging import page_iterator
+from agentrt.sdk.utils.paging import page_iterator
 
 
 @dataclass

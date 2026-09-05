@@ -12,36 +12,36 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-import openhands.agent_server.event_service as event_service_module
-from openhands.agent_server.conversation_service import (
+import agentrt.agent_server.event_service as event_service_module
+from agentrt.agent_server.conversation_service import (
     ConversationService,
     CredentialBindingActivationRequired,
 )
-from openhands.agent_server.credential_binding import (
+from agentrt.agent_server.credential_binding import (
     LocalVersionedCredentialBinding,
     router,
 )
-from openhands.agent_server.event_service import (
+from agentrt.agent_server.event_service import (
     CredentialBindingActivationTooLate,
     EventService,
 )
-from openhands.agent_server.models import StartConversationRequest, StoredConversation
-from openhands.agent_server.persistence import (
+from agentrt.agent_server.models import StartConversationRequest, StoredConversation
+from agentrt.agent_server.persistence import (
     CustomSecret,
     FileSecretsStore,
     Secrets,
 )
-from openhands.sdk import AgentContext
-from openhands.sdk.agent import ACPAgent
-from openhands.sdk.credential import (
+from agentrt.sdk import AgentContext
+from agentrt.sdk.agent import ACPAgent
+from agentrt.sdk.credential import (
     CredentialConflict,
     CredentialNeedsReauthentication,
     CredentialSyncError,
     HttpVersionedCredentialBinding,
 )
-from openhands.sdk.secret import StaticSecret
-from openhands.sdk.utils.cipher import Cipher
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.secret import StaticSecret
+from agentrt.sdk.utils.cipher import Cipher
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @dataclass
@@ -236,7 +236,7 @@ def test_activation_route_rejects_unavailable_binding(
     callback.responses.extend([(503, "{}")] * 3)
 
     sleep = AsyncMock()
-    with patch("openhands.agent_server.credential_binding.asyncio.sleep", sleep):
+    with patch("agentrt.agent_server.credential_binding.asyncio.sleep", sleep):
         response = TestClient(app).put(
             f"/api/conversations/{conversation_id}/credential-bindings/CODEX_AUTH_JSON",
             json={
@@ -269,7 +269,7 @@ def test_activation_route_retries_transient_binding_failure(
     )
     sleep = AsyncMock()
 
-    with patch("openhands.agent_server.credential_binding.asyncio.sleep", sleep):
+    with patch("agentrt.agent_server.credential_binding.asyncio.sleep", sleep):
         response = TestClient(app).put(
             f"/api/conversations/{conversation_id}/credential-bindings/CODEX_AUTH_JSON",
             json={
@@ -341,7 +341,7 @@ def test_activation_route_rejects_invalid_binding_url(
     conversation_id = uuid4()
 
     sleep = AsyncMock()
-    with patch("openhands.agent_server.credential_binding.asyncio.sleep", sleep):
+    with patch("agentrt.agent_server.credential_binding.asyncio.sleep", sleep):
         response = TestClient(app).put(
             f"/api/conversations/{conversation_id}/credential-bindings/CODEX_AUTH_JSON",
             json={
@@ -648,7 +648,7 @@ async def test_late_binding_scrubs_open_uninitialized_conversation(tmp_path) -> 
                 return original_atomic_write(*args, **kwargs)
 
             with patch(
-                "openhands.agent_server.event_service.atomic_write_text",
+                "agentrt.agent_server.event_service.atomic_write_text",
                 side_effect=fail_first_write,
             ):
                 with pytest.raises(OSError, match="write failed"):

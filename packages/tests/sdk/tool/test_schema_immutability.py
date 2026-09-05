@@ -3,7 +3,7 @@
 import pytest
 from pydantic import Field, ValidationError
 
-from openhands.sdk.tool.schema import Schema
+from agentrt.sdk.tool.schema import Schema
 
 
 class MockSchema(Schema):

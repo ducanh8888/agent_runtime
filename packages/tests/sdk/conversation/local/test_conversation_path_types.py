@@ -5,10 +5,10 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def create_test_agent() -> Agent:

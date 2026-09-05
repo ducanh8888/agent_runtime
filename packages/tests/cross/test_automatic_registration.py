@@ -4,13 +4,13 @@ import sys
 
 import pytest
 
-from openhands.sdk.tool.registry import list_registered_tools
+from agentrt.sdk.tool.registry import list_registered_tools
 
 
 def test_bash_tool_automatic_registration():
     """Test that TerminalTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.terminal.definition  # noqa: F401
+    import agentrt.tools.terminal.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -20,7 +20,7 @@ def test_bash_tool_automatic_registration():
 def test_file_editor_tool_automatic_registration():
     """Test that FileEditorTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.file_editor.definition  # noqa: F401
+    import agentrt.tools.file_editor.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -30,7 +30,7 @@ def test_file_editor_tool_automatic_registration():
 def test_task_tracker_tool_automatic_registration():
     """Test that TaskTrackerTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.task_tracker.definition  # noqa: F401
+    import agentrt.tools.task_tracker.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -40,7 +40,7 @@ def test_task_tracker_tool_automatic_registration():
 def test_browser_tool_automatic_registration():
     """Test that BrowserToolSet is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.browser_use.definition  # noqa: F401
+    import agentrt.tools.browser_use.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -51,9 +51,9 @@ def test_browser_tool_usable_listing_respects_chromium_availability(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Usable tools should follow the browser tool's Chromium availability."""
-    import openhands.tools.browser_use.definition  # noqa: F401
-    from openhands.sdk.tool.registry import list_usable_tools
-    from openhands.tools.browser_use.definition import BrowserToolSet
+    import agentrt.tools.browser_use.definition  # noqa: F401
+    from agentrt.sdk.tool.registry import list_usable_tools
+    from agentrt.tools.browser_use.definition import BrowserToolSet
 
     assert "browser_tool_set" in list_registered_tools()
 
@@ -75,7 +75,7 @@ def test_browser_tool_usable_listing_respects_chromium_availability(
 def test_grep_tool_automatic_registration():
     """Test that GrepTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.grep.definition  # noqa: F401
+    import agentrt.tools.grep.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -85,7 +85,7 @@ def test_grep_tool_automatic_registration():
 def test_glob_tool_automatic_registration():
     """Test that GlobTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.glob.definition  # noqa: F401
+    import agentrt.tools.glob.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -95,7 +95,7 @@ def test_glob_tool_automatic_registration():
 def test_planning_file_editor_tool_automatic_registration():
     """Test that PlanningFileEditorTool is automatically registered when imported."""
     # Import the module to trigger registration
-    import openhands.tools.planning_file_editor.definition  # noqa: F401
+    import agentrt.tools.planning_file_editor.definition  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -105,7 +105,7 @@ def test_planning_file_editor_tool_automatic_registration():
 def test_import_from_init_triggers_registration():
     """Test that importing from __init__.py also triggers registration."""
     # Import from the __init__.py file
-    from openhands.tools.terminal import TerminalTool  # noqa: F401
+    from agentrt.tools.terminal import TerminalTool  # noqa: F401
 
     # Check that the tool is registered with snake_case name
     registered_tools = list_registered_tools()
@@ -121,10 +121,10 @@ def test_tool_can_be_resolved_after_automatic_registration():
     from unittest.mock import MagicMock
 
     # Import to trigger registration
-    import openhands.tools.terminal.definition  # noqa: F401
-    from openhands.sdk.conversation.state import ConversationState
-    from openhands.sdk.tool.registry import resolve_tool
-    from openhands.sdk.tool.spec import Tool
+    import agentrt.tools.terminal.definition  # noqa: F401
+    from agentrt.sdk.conversation.state import ConversationState
+    from agentrt.sdk.tool.registry import resolve_tool
+    from agentrt.sdk.tool.spec import Tool
 
     # Create a mock conversation state
     mock_conv_state = MagicMock(spec=ConversationState)

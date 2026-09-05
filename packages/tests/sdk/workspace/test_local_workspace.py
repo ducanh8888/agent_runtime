@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def test_context_exit_sends_registered_cost_in_completion_callback(

@@ -14,12 +14,12 @@ if platform.system() == "Windows":
         allow_module_level=True,
     )
 
-from openhands.tools.terminal.terminal import (
+from agentrt.tools.terminal.terminal import (
     SubprocessTerminal,
     TerminalSession,
     TmuxTerminal,
 )
-from openhands.tools.terminal.terminal.factory import (
+from agentrt.tools.terminal.terminal.factory import (
     _is_tmux_available,
     create_terminal_session,
 )
@@ -61,7 +61,7 @@ def test_unavailable_terminal_type():
     with tempfile.TemporaryDirectory() as temp_dir:
         # Mock tmux as unavailable
         with patch(
-            "openhands.tools.terminal.terminal.factory._is_tmux_available",
+            "agentrt.tools.terminal.terminal.factory._is_tmux_available",
             return_value=False,
         ):
             with pytest.raises(RuntimeError, match="Tmux is not available"):
@@ -76,7 +76,7 @@ def test_auto_detection_unix(mock_system):
     with tempfile.TemporaryDirectory() as temp_dir:
         # Mock tmux as available
         with patch(
-            "openhands.tools.terminal.terminal.factory._is_tmux_available",
+            "agentrt.tools.terminal.terminal.factory._is_tmux_available",
             return_value=True,
         ):
             session = create_terminal_session(work_dir=temp_dir)
@@ -86,7 +86,7 @@ def test_auto_detection_unix(mock_system):
 
         # Mock tmux as unavailable
         with patch(
-            "openhands.tools.terminal.terminal.factory._is_tmux_available",
+            "agentrt.tools.terminal.terminal.factory._is_tmux_available",
             return_value=False,
         ):
             session = create_terminal_session(work_dir=temp_dir)
@@ -102,7 +102,7 @@ def test_warning_when_tmux_not_available(mock_system):
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with patch(
-            "openhands.tools.terminal.terminal.factory._is_tmux_available",
+            "agentrt.tools.terminal.terminal.factory._is_tmux_available",
             return_value=False,
         ):
             with warnings.catch_warnings(record=True) as w:

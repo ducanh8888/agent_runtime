@@ -6,11 +6,11 @@ change because ``misc_settings`` already exists and is already persisted.
 
 import pytest
 
-from openhands.agent_server.persistence.models import (
+from agentrt.agent_server.persistence.models import (
     PERSISTED_SETTINGS_SCHEMA_VERSION,
     PersistedSettings,
 )
-from openhands.agent_server.telemetry.policy import resolve
+from agentrt.agent_server.telemetry.policy import resolve
 
 
 def test_schema_version_was_not_bumped_for_consent():

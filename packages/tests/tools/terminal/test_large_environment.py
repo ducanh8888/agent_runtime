@@ -11,8 +11,8 @@ import tempfile
 
 import pytest
 
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.terminal import create_terminal_session
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.terminal import create_terminal_session
 
 
 @pytest.mark.parametrize("terminal_type", ["tmux"])

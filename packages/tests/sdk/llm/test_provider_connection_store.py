@@ -6,15 +6,15 @@ import time
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.llm.provider_connection_store import (
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.llm.provider_connection_store import (
     PROVIDER_CONNECTIONS_SCHEMA_VERSION,
     ProviderConnection,
     ProviderConnectionNotFound,
     ProviderConnectionStore,
 )
-from openhands.sdk.utils.cipher import Cipher
+from agentrt.sdk.utils.cipher import Cipher
 
 
 def _connection(**overrides) -> ProviderConnection:

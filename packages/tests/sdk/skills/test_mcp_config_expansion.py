@@ -3,7 +3,7 @@
 import json
 import os
 
-from openhands.sdk.skills.utils import expand_mcp_variables, load_mcp_config
+from agentrt.sdk.skills.utils import expand_mcp_variables, load_mcp_config
 
 
 class TestExpandMcpVariables:

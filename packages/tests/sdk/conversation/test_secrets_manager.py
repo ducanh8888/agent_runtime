@@ -2,11 +2,11 @@
 
 from pydantic import SecretStr
 
-from openhands.sdk.conversation.secret_registry import (
+from agentrt.sdk.conversation.secret_registry import (
     FAILED_LOOKUP_RETRY_SECONDS,
     SecretRegistry,
 )
-from openhands.sdk.secret import SecretSource, StaticSecret
+from agentrt.sdk.secret import SecretSource, StaticSecret
 
 
 # NOTE: module-level on purpose. A function-local ``SecretSource``

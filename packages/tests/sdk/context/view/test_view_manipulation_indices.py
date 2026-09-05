@@ -5,8 +5,8 @@ events (inserting new events or forgetting ranges) while respecting atomicity
 constraints.
 """
 
-from openhands.sdk.context.view import View
-from openhands.sdk.llm import (
+from agentrt.sdk.context.view import View
+from agentrt.sdk.llm import (
     ThinkingBlock,
 )
 from tests.sdk.context.view.conftest import (  # noqa: F401

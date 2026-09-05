@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from openhands.sdk.security._shell_ast import (
+from agentrt.sdk.security._shell_ast import (
     ShellCommand,
     ShellPipeline,
     ShellProgram,
@@ -21,7 +21,7 @@ from openhands.sdk.security._shell_ast import (
     split_short_flags,
     view_shell_program,
 )
-from openhands.sdk.security.shell_parser import parse
+from agentrt.sdk.security.shell_parser import parse
 
 
 def _commands(source: str) -> tuple[ShellCommand, ...]:

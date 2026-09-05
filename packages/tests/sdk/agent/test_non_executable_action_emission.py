@@ -12,14 +12,14 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     AgentErrorEvent,
     MessageEvent,
 )
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 def test_emits_action_event_with_none_action_then_error_on_missing_tool() -> None:
@@ -68,7 +68,7 @@ def test_emits_action_event_with_none_action_then_error_on_missing_tool() -> Non
     conv = Conversation(agent=agent, callbacks=[cb])
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
+        "agentrt.sdk.llm.llm.litellm_completion", side_effect=mock_llm_response
     ):
         conv.send_message(Message(role="user", content=[TextContent(text="go")]))
         agent.step(conv, on_event=cb)

@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.skills import (
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.skills import (
     KeywordTrigger,
     PathTrigger,
     Skill,
     load_project_skills,
     utils as skills_utils,
 )
-from openhands.sdk.skills.exceptions import SkillValidationError
-from openhands.sdk.skills.skill import path_matches_glob
+from agentrt.sdk.skills.exceptions import SkillValidationError
+from agentrt.sdk.skills.skill import path_matches_glob
 
 
 _HAS_GIT = shutil.which("git") is not None
@@ -110,7 +110,7 @@ def test_path_trigger_is_inert_on_text_matching() -> None:
 
 
 def test_keyword_skill_does_not_match_paths() -> None:
-    from openhands.sdk.skills import KeywordTrigger
+    from agentrt.sdk.skills import KeywordTrigger
 
     skill = Skill(name="k", content="c", trigger=KeywordTrigger(keywords=["deploy"]))
     assert skill.match_path_trigger("src/api/x.ts") is None

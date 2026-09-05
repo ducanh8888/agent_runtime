@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.conversation.conversation_stats import ConversationStats
-from openhands.sdk.hooks.config import HookDefinition, HookType
-from openhands.sdk.hooks.executor import HookExecutor
-from openhands.sdk.hooks.types import HookDecision, HookEvent, HookEventType
-from openhands.sdk.llm import LLM, Message, TextContent, content_to_str
-from openhands.sdk.llm.utils.metrics import Metrics
+from agentrt.sdk.conversation.conversation_stats import ConversationStats
+from agentrt.sdk.hooks.config import HookDefinition, HookType
+from agentrt.sdk.hooks.executor import HookExecutor
+from agentrt.sdk.hooks.types import HookDecision, HookEvent, HookEventType
+from agentrt.sdk.llm import LLM, Message, TextContent, content_to_str
+from agentrt.sdk.llm.utils.metrics import Metrics
 from tests.command_utils import python_command
 
 
@@ -241,7 +241,7 @@ class TestAsyncHookExecution:
         self, executor, sample_event, monkeypatch
     ):
         """Test Windows process-group kwargs by simulating win32 on any runner."""
-        import openhands.sdk.hooks.executor as executor_module
+        import agentrt.sdk.hooks.executor as executor_module
 
         popen_kwargs: dict[str, object] = {}
         stdin = mock.Mock()
@@ -310,7 +310,7 @@ class TestAsyncProcessManager:
 
     def test_add_process_and_cleanup_all(self, tmp_path):
         """Test that processes can be added and cleaned up."""
-        from openhands.sdk.hooks.executor import AsyncProcessManager
+        from agentrt.sdk.hooks.executor import AsyncProcessManager
 
         manager = AsyncProcessManager()
 
@@ -342,7 +342,7 @@ class TestAsyncProcessManager:
         """Test that cleanup_expired terminates processes past their timeout."""
         import time
 
-        from openhands.sdk.hooks.executor import AsyncProcessManager
+        from agentrt.sdk.hooks.executor import AsyncProcessManager
 
         manager = AsyncProcessManager()
 
@@ -371,8 +371,8 @@ class TestAsyncProcessManager:
 
     def test_async_process_manager_windows_kill_uses_bounded_wait(self, monkeypatch):
         """Test that Windows cleanup does not wait indefinitely after kill."""
-        import openhands.sdk.hooks.executor as executor_module
-        from openhands.sdk.hooks.executor import AsyncProcessManager
+        import agentrt.sdk.hooks.executor as executor_module
+        from agentrt.sdk.hooks.executor import AsyncProcessManager
 
         process = mock.Mock()
         process.pid = 123
@@ -402,7 +402,7 @@ class TestAsyncProcessManager:
 
     def test_cleanup_expired_keeps_active_processes(self, tmp_path):
         """Test that cleanup_expired keeps processes within their timeout."""
-        from openhands.sdk.hooks.executor import AsyncProcessManager
+        from agentrt.sdk.hooks.executor import AsyncProcessManager
 
         manager = AsyncProcessManager()
 
@@ -432,10 +432,10 @@ class TestAgentHookExecution:
     """Tests for HookType.AGENT execution path."""
 
     # Patch at the package/module level so lazy `from X import Y` picks up the mock.
-    _AGENT_PATH = "openhands.sdk.agent.Agent"
-    _CONV_PATH = "openhands.sdk.conversation.impl.local_conversation.LocalConversation"
+    _AGENT_PATH = "agentrt.sdk.agent.Agent"
+    _CONV_PATH = "agentrt.sdk.conversation.impl.local_conversation.LocalConversation"
     _RESPONSE_PATH = (
-        "openhands.sdk.conversation.response_utils.get_agent_final_response"
+        "agentrt.sdk.conversation.response_utils.get_agent_final_response"
     )
 
     @pytest.fixture
@@ -459,7 +459,7 @@ class TestAgentHookExecution:
 
     def test_execute_dispatches_to_agent_hook(self, executor, sample_event):
         """execute() routes AGENT type to _execute_agent_hook, not subprocess."""
-        from openhands.sdk.hooks.executor import HookResult
+        from agentrt.sdk.hooks.executor import HookResult
 
         hook = HookDefinition(
             type=HookType.AGENT,
@@ -822,7 +822,7 @@ class TestAgentHookExecution:
         LocalConversation.initialize() rebinds a visualizer instance to its own
         state, so the executor must request a fresh sub-visualizer instead.
         """
-        from openhands.sdk.conversation.visualizer import ConversationVisualizerBase
+        from agentrt.sdk.conversation.visualizer import ConversationVisualizerBase
 
         sub_viz = MagicMock(spec=ConversationVisualizerBase)
 

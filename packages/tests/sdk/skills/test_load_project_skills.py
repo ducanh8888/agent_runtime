@@ -1,6 +1,6 @@
 """Tests for load_project_skills functionality."""
 
-from openhands.sdk.skills import (
+from agentrt.sdk.skills import (
     KeywordTrigger,
     load_project_skills,
 )

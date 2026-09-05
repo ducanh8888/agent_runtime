@@ -3,7 +3,7 @@ import tempfile
 
 import pytest
 
-from openhands.tools.file_editor.utils.file_cache import FileCache
+from agentrt.tools.file_editor.utils.file_cache import FileCache
 from tests.platform_utils import supports_posix_execute_bits
 
 

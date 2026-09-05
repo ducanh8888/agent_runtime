@@ -1,15 +1,15 @@
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
-from openhands.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 class ConversationDefaultCallbackDummyAgent(AgentBase):

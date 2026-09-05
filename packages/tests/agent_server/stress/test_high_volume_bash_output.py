@@ -20,7 +20,7 @@ from uuid import UUID
 
 import pytest
 
-from openhands.agent_server.bash_service import BashEventService
+from agentrt.agent_server.bash_service import BashEventService
 from tests.agent_server.stress.budgets import HIGH_VOLUME_BASH_OUTPUT
 from tests.agent_server.stress.scripts import descendants_of
 

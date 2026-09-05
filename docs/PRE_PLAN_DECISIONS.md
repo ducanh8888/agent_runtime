@@ -174,3 +174,13 @@ Ghi chú kéo theo: bỏ hook khỏi đường policy không có nghĩa hook bi�
 |---|---|
 | Donor repo khác | Giữ `repos/` làm tham chiếu chỉ-đọc. Chỉ vendor `software-agent-sdk`. Đến P4 mới port đoạn cần dùng, kèm ghi chú nguồn và LICENSE. Điều kiện: không xóa `repos/` |
 | Bước tiếp | Bắt đầu P1. Git init và docs đã do người dùng làm xong |
+
+## Vòng 17 — quyết định cho việc đổi tên (sau khi có kết quả khảo sát)
+
+| Câu hỏi | Quyết định |
+|---|---|
+| Phạm vi đổi tên | Chỉ phần runtime thực thi: bốn package, `tests/`, `pyproject.toml`, `MANIFEST.in`, `Makefile`, `.openhands/` của chính repo. KHÔNG đụng `clients/typescript`, `.github/`, `examples/`, `scripts/`, README/AGENTS/CONTRIBUTING/DEVELOPMENT, LICENSE |
+| `.openhands` và `OH_` | Đổi cả hai ngay trong P1. Không cần fallback vì máy không có dữ liệu thật |
+| Giá trị ghi xuống đĩa / lên dây | Đổi hết cho nhất quán: `agent_kind`, `OpenHandsCloudWorkspace`, header `X-OpenHands-*`, telemetry `source`, enum `openhands_managed` |
+
+Danh sách phải giữ nguyên, không được replace: tiền tố model LiteLLM `"openhands/"` và bảng `VERIFIED_MODELS["openhands"]`, mọi URL `openhands.dev` và `all-hands.dev`, `github.com/OpenHands`, `ghcr.io/openhands/agent-server`, `"originator": "openhands"` gửi cho OpenAI, dòng `Co-authored-by: openhands`, và cả hai file LICENSE.

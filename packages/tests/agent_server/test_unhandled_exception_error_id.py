@@ -9,8 +9,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import _add_exception_handlers
-from openhands.agent_server.conversation_service import (
+from agentrt.agent_server.api import _add_exception_handlers
+from agentrt.agent_server.conversation_service import (
     CredentialBindingActivationRequired,
 )
 

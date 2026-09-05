@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import RemoteWorkspace
 
 
 def _agent() -> Agent:
@@ -64,7 +64,7 @@ def _setup_workspace_with_mock_client(
     return workspace, mock_client
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_sends_post_request(mock_ws_cls: Mock) -> None:
     """fork() must POST to /{id}/fork."""
     mock_ws_cls.return_value = Mock()
@@ -87,7 +87,7 @@ def test_remote_fork_sends_post_request(mock_ws_cls: Mock) -> None:
     assert len(fork_calls) == 1
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_uses_server_returned_tags(mock_ws_cls: Mock) -> None:
     """The forked RemoteConversation constructor must receive tags from the
     server response (which merges title), not the raw input kwargs.
@@ -111,7 +111,7 @@ def test_remote_fork_uses_server_returned_tags(mock_ws_cls: Mock) -> None:
             super().__init__(**kwargs)  # type: ignore[arg-type]
 
     # Temporarily replace the class reference used by the fork method.
-    import openhands.sdk.conversation.impl.remote_conversation as _mod
+    import agentrt.sdk.conversation.impl.remote_conversation as _mod
 
     _mod.RemoteConversation = _Capture  # type: ignore[misc]
     try:
@@ -122,7 +122,7 @@ def test_remote_fork_uses_server_returned_tags(mock_ws_cls: Mock) -> None:
     assert captured_kwargs.get("tags") == server_tags
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_raises_on_agent_param(mock_ws_cls: Mock) -> None:
     """Passing agent= must raise NotImplementedError for remote forks."""
     mock_ws_cls.return_value = Mock()
@@ -134,7 +134,7 @@ def test_remote_fork_raises_on_agent_param(mock_ws_cls: Mock) -> None:
         conv.fork(agent=_agent())
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_passes_body_fields(mock_ws_cls: Mock) -> None:
     """Verify conversation_id, title, tags, reset_metrics are sent in body."""
     mock_ws_cls.return_value = Mock()
@@ -166,7 +166,7 @@ def test_remote_fork_passes_body_fields(mock_ws_cls: Mock) -> None:
     assert body["reset_metrics"] is False
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_passes_from_event_id(mock_ws_cls: Mock) -> None:
     """fork(from_event_id=...) forwards the branch point in the request body."""
     mock_ws_cls.return_value = Mock()
@@ -184,7 +184,7 @@ def test_remote_fork_passes_from_event_id(mock_ws_cls: Mock) -> None:
     assert fork_calls[0][1].get("json", {})["from_event_id"] == "evt-123"
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_fork_omits_from_event_id_when_none(mock_ws_cls: Mock) -> None:
     """A whole-conversation fork must not send a from_event_id field."""
     mock_ws_cls.return_value = Mock()

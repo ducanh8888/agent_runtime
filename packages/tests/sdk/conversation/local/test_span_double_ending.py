@@ -7,9 +7,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.llm import LLM
 
 
 def create_test_agent() -> Agent:
@@ -37,7 +37,7 @@ def test_no_double_span_ending_warning(caplog):
         with caplog.at_level(logging.WARNING):
             # Mock the agent.step to raise an exception to trigger the finally block
             with patch(
-                "openhands.sdk.agent.agent.Agent.step",
+                "agentrt.sdk.agent.agent.Agent.step",
                 side_effect=Exception("Test exception"),
             ):
                 # Try to run the conversation (will fail due to mocked exception)
@@ -84,7 +84,7 @@ def test_span_ending_with_successful_run(caplog):
         # Capture logs at WARNING level
         with caplog.at_level(logging.WARNING):
             with patch(
-                "openhands.sdk.agent.agent.Agent.step", side_effect=finish_immediately
+                "agentrt.sdk.agent.agent.Agent.step", side_effect=finish_immediately
             ):
                 # Run the conversation successfully
                 conversation.run()
@@ -128,7 +128,7 @@ def test_no_span_operations_when_observability_disabled(caplog):
         with caplog.at_level(logging.WARNING):
             # Run and close the conversation
             with patch(
-                "openhands.sdk.agent.agent.Agent.step", side_effect=finish_immediately
+                "agentrt.sdk.agent.agent.Agent.step", side_effect=finish_immediately
             ):
                 conversation.run()
             conversation.close()

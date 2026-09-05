@@ -5,9 +5,9 @@ import sys
 
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config, TelemetrySpec
-from openhands.agent_server.telemetry import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config, TelemetrySpec
+from agentrt.agent_server.telemetry import (
     NoOpTelemetrySink,
     build_telemetry_sink,
     get_event_factory,
@@ -73,14 +73,14 @@ def test_importing_the_telemetry_package_does_not_import_posthog():
     script = """
 import sys
 
-import openhands.agent_server.telemetry as t
-from openhands.agent_server.config import Config, TelemetrySpec
-from openhands.agent_server.api import create_app
+import agentrt.agent_server.telemetry as t
+from agentrt.agent_server.config import Config, TelemetrySpec
+from agentrt.agent_server.api import create_app
 
 assert "posthog" not in sys.modules, "importing telemetry pulled in posthog"
 
 create_app(Config(static_files_path=None, session_api_keys=[]))
-assert "openhands.agent_server.telemetry.posthog_exporter" not in sys.modules, (
+assert "agentrt.agent_server.telemetry.posthog_exporter" not in sys.modules, (
     "the exporter module was imported with telemetry disabled"
 )
 print("OK")
@@ -98,7 +98,7 @@ print("OK")
 
 async def test_disabled_server_never_constructs_the_exporter(temp_persistence_dir):
     """Complements the import test: no exporter object is built either."""
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     built: list[object] = []
 
@@ -127,16 +127,16 @@ async def test_conversation_service_reads_the_live_sink_not_a_captured_one(
     """
     from uuid import uuid4
 
-    import openhands.agent_server.telemetry.service as service_mod
-    from openhands.agent_server.conversation_service import ConversationService
-    from openhands.agent_server.models import StoredConversation
-    from openhands.agent_server.telemetry import models as m
-    from openhands.agent_server.telemetry.factory import (
+    import agentrt.agent_server.telemetry.service as service_mod
+    from agentrt.agent_server.conversation_service import ConversationService
+    from agentrt.agent_server.models import StoredConversation
+    from agentrt.agent_server.telemetry import models as m
+    from agentrt.agent_server.telemetry.factory import (
         DiagnosticEventFactory,
         build_runtime_properties,
     )
-    from openhands.sdk.security.confirmation_policy import NeverConfirm
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.security.confirmation_policy import NeverConfirm
+    from agentrt.sdk.workspace import LocalWorkspace
 
     # 1. Construct the service while telemetry is still the pre-init NoOp — the
     #    exact ordering sockets.py forces by building the service at import.
@@ -207,8 +207,8 @@ def test_server_lifecycle_events_are_emitted_when_enabled(
     temp_persistence_dir, monkeypatch
 ):
     """server_started/stopped bracket the lifespan when telemetry is active."""
-    import openhands.agent_server.telemetry.service as service_mod
-    from openhands.agent_server.telemetry import models as m
+    import agentrt.agent_server.telemetry.service as service_mod
+    from agentrt.agent_server.telemetry import models as m
 
     emitted: list[str] = []
 
@@ -249,7 +249,7 @@ def test_deferred_pod_does_not_emit_an_unpaired_server_stopped(
     neither event — previously it emitted a lone ``server_stopped``, which
     corrupts uptime and session metrics.
     """
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     emitted: list[str] = []
 
@@ -293,9 +293,9 @@ async def test_telemetry_init_does_not_hijack_the_settings_store_singleton(
 
     from pydantic import SecretStr
 
-    import openhands.agent_server.telemetry.posthog_exporter as pe
-    from openhands.agent_server.config import Config, TelemetrySpec
-    from openhands.agent_server.persistence.store import get_settings_store
+    import agentrt.agent_server.telemetry.posthog_exporter as pe
+    from agentrt.agent_server.config import Config, TelemetrySpec
+    from agentrt.agent_server.persistence.store import get_settings_store
 
     class _FakeExporter:
         async def send(self, events):

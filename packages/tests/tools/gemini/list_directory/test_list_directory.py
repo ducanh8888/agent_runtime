@@ -4,13 +4,13 @@ import threading
 
 import pytest
 
-from openhands.sdk.tool.tool import DeclaredResources
-from openhands.tools.gemini.list_directory.definition import (
+from agentrt.sdk.tool.tool import DeclaredResources
+from agentrt.tools.gemini.list_directory.definition import (
     ListDirectoryAction,
     ListDirectoryObservation,
     ListDirectoryTool,
 )
-from openhands.tools.gemini.list_directory.impl import ListDirectoryExecutor
+from agentrt.tools.gemini.list_directory.impl import ListDirectoryExecutor
 
 
 def test_list_directory_basic(tmp_path):

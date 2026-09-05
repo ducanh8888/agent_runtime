@@ -5,7 +5,7 @@ boundaries. A tool loop starts with a batch that has thinking blocks and
 continues through all subsequent batches until a non-batch event is encountered.
 """
 
-from openhands.sdk.context.view import View
+from agentrt.sdk.context.view import View
 from tests.sdk.context.view.conftest import (  # noqa: F401
     create_action_event,
     create_observation_event,

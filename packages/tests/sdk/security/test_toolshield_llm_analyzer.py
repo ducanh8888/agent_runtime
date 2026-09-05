@@ -10,20 +10,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import PrivateAttr
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import LLMResponse, Message, MessageToolCall, TextContent
-from openhands.sdk.llm.streaming import TokenCallbackType
-from openhands.sdk.security.risk import SecurityRisk
-from openhands.sdk.security.toolshield_llm_analyzer import (
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import LLMResponse, Message, MessageToolCall, TextContent
+from agentrt.sdk.llm.streaming import TokenCallbackType
+from agentrt.sdk.security.risk import SecurityRisk
+from agentrt.sdk.security.toolshield_llm_analyzer import (
     ToolShieldLLMSecurityAnalyzer,
     _format_action_for_guardrail,
 )
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool import Action, ToolDefinition
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool import Action, ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.llm.llm import LLMCallContext
+    from agentrt.sdk.llm.llm import LLMCallContext
 
 
 # Tests that exercise the real `toolshield` package (bundled experiences,
@@ -311,7 +311,7 @@ class TestParseRisk:
         fails safe. A genuine leading verdict still parses."""
         import time
 
-        from openhands.sdk.security.toolshield_llm_analyzer import _MAX_PARSE_CHARS
+        from agentrt.sdk.security.toolshield_llm_analyzer import _MAX_PARSE_CHARS
 
         # Verdict on the first line (where a real one lives) survives the cap.
         head_verdict = "RISK: HIGH\n" + ("<summary " * 200000)
@@ -610,7 +610,7 @@ class TestSafetyExperiences:
         passing ``default_safety_experiences()`` -- there is no implicit
         auto-load. Requires the ``[toolshield]`` extra.
         """
-        from openhands.sdk.security import default_safety_experiences
+        from agentrt.sdk.security import default_safety_experiences
 
         seed = default_safety_experiences()
         assert isinstance(seed, str) and len(seed) > 100, (
@@ -649,7 +649,7 @@ def _consume_coro(return_value):
 
 class TestToolShieldHelpers:
     def test_require_toolshield_raises_helpful_error_when_missing(self):
-        from openhands.sdk.security.toolshield_helpers import _require_toolshield
+        from agentrt.sdk.security.toolshield_helpers import _require_toolshield
 
         with patch.dict("sys.modules", {"toolshield": None}):
             # Force an ImportError by replacing the module entry
@@ -668,7 +668,7 @@ class TestToolShieldHelpers:
 
     def test_detect_active_mcp_tools_always_includes_terminal(self):
         """With no MCP servers responding, terminal-mcp is still returned."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         # Stub out the async MCP scanner so we don't actually hit the network.
         with patch.object(th, "_require_toolshield", return_value=None):
@@ -689,7 +689,7 @@ class TestToolShieldHelpers:
     def test_experience_name_from_server_name(self):
         """Verify the server-name -> experience-name mapping matches
         toolshield's auto_discover convention."""
-        from openhands.sdk.security.toolshield_helpers import (
+        from agentrt.sdk.security.toolshield_helpers import (
             _experience_name_from_server_name,
         )
 
@@ -708,7 +708,7 @@ class TestToolShieldHelpers:
     def test_auto_detect_loads_experiences_for_detected_server(self):
         """When toolshield.mcp_scan returns a recognized server, the helper
         loads its bundled experience."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         fake_servers = [
             {
@@ -734,7 +734,7 @@ class TestToolShieldHelpers:
     @requires_toolshield
     def test_auto_detect_falls_back_to_default_seed_when_nothing_detected(self):
         """No networked servers + fallback_to_default=True -> default seed."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         with patch.object(th.asyncio, "run", side_effect=_consume_coro([])):
             result = th.auto_detect_safety_experiences(
@@ -755,7 +755,7 @@ class TestToolShieldHelpers:
         (the filterwarnings marker turns that warning into a failure)."""
         import gc
 
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         with patch.object(
             th.asyncio,
@@ -776,7 +776,7 @@ class TestToolShieldHelpers:
         no asyncio.run attempt, just the always-active fallback."""
         import sys
 
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         fake_mcp_scan = MagicMock()
         with patch.object(th, "_require_toolshield", return_value=None):
@@ -796,7 +796,7 @@ class TestToolShieldHelpers:
     def test_auto_detect_without_toolshield_no_fallback_returns_empty(self):
         """fallback_to_default=False + missing toolshield -> "" (documented
         no-op path), NOT ImportError."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         with patch.object(
             th,
@@ -809,7 +809,7 @@ class TestToolShieldHelpers:
     def test_auto_detect_without_toolshield_with_fallback_raises(self):
         """fallback_to_default=True needs toolshield to load the default
         seed, so the helpful ImportError must surface."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         with patch.object(
             th,
@@ -825,7 +825,7 @@ class TestToolShieldHelpers:
         even with verbose=False (and verbose=True)."""
         import sys
 
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         def noisy_scan(coro):
             # Simulate toolshield.mcp_scan.main's unconditional prints.
@@ -847,7 +847,7 @@ class TestToolShieldHelpers:
     # ----------------------------------------------------------------------
 
     def test_mcp_tools_from_config_maps_server_names(self):
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         config = {
             "mcpServers": {
@@ -861,7 +861,7 @@ class TestToolShieldHelpers:
         assert "postgres-mcp" in result
 
     def test_mcp_tools_from_config_empty_config_returns_always_active(self):
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         assert th.mcp_tools_from_config({}) == list(th.ALWAYS_ACTIVE_TOOLS)
 
@@ -869,7 +869,7 @@ class TestToolShieldHelpers:
         """Experience names become filename stems in toolshield's loader, so
         names that don't slug to a conservative [a-z0-9-] identifier must be
         dropped, not forwarded (e.g. path-traversal-shaped names)."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         config = {
             "mcpServers": {
@@ -891,7 +891,7 @@ class TestToolShieldHelpers:
         pinned against the real registry in
         tests/cross/test_toolshield_tool_experience_mapping.py, since
         tests/sdk is layered below the tools package."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         result = th.mcp_tools_from_config(
             {}, tool_names=["file_editor", "task_tracker"]
@@ -902,7 +902,7 @@ class TestToolShieldHelpers:
 
     def test_mcp_tools_from_config_accepts_camelcase_aliases(self):
         """Hand-authored configs may use class names; aliases still map."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         result = th.mcp_tools_from_config(
             {}, tool_names=["FileEditorTool", "BrowserToolSet"]
@@ -913,7 +913,7 @@ class TestToolShieldHelpers:
     def test_mcp_tools_from_config_dedupes_tool_and_server_surface(self):
         """A filesystem MCP server plus FileEditorTool must yield a single
         filesystem-mcp entry."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         config = {"mcpServers": {"filesystem": {}}}
         result = th.mcp_tools_from_config(config, tool_names=["file_editor"])
@@ -921,14 +921,14 @@ class TestToolShieldHelpers:
 
     @requires_toolshield
     def test_safety_experiences_for_mcp_config_accepts_tool_names(self):
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         result = th.safety_experiences_for_mcp_config({}, tool_names=["file_editor"])
         assert "filesystem" in result.lower()
 
     @requires_toolshield
     def test_safety_experiences_for_mcp_config_loads_bundled(self):
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         config = {"mcpServers": {"filesystem": {"command": "npx"}}}
         result = th.safety_experiences_for_mcp_config(config)
@@ -939,7 +939,7 @@ class TestToolShieldHelpers:
     def test_safety_experiences_for_mcp_config_skips_unbundled(self):
         """Configured servers without a bundled experience file are skipped
         rather than raising; always-active tools still load."""
-        from openhands.sdk.security import toolshield_helpers as th
+        from agentrt.sdk.security import toolshield_helpers as th
 
         config = {"mcpServers": {"no-such-tool": {"command": "x"}}}
         result = th.safety_experiences_for_mcp_config(config)
@@ -964,7 +964,7 @@ class TestConfirmRiskyIntegration:
     def _confirm(self, llm_output: str) -> bool:
         """Run the analyzer on a scripted TestLLM response, then ask
         the default ConfirmRisky policy whether to pause."""
-        from openhands.sdk.security import ConfirmRisky
+        from agentrt.sdk.security import ConfirmRisky
 
         analyzer = _make_analyzer(llm_outputs=[llm_output])
         risk = analyzer.security_risk(_make_action_event())
@@ -992,7 +992,7 @@ class TestConfirmRiskyIntegration:
     def test_unknown_does_not_pause_when_confirm_unknown_false(self):
         """Sanity: callers who opt out of UNKNOWN-pausing get the
         permissive behavior."""
-        from openhands.sdk.security import ConfirmRisky
+        from agentrt.sdk.security import ConfirmRisky
 
         analyzer = _make_analyzer(llm_outputs=["I'm not sure."])
         risk = analyzer.security_risk(_make_action_event())

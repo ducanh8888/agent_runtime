@@ -14,10 +14,10 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from openhands.agent_server.config import Config, TelemetryExporterKind, TelemetrySpec
-from openhands.agent_server.persistence.store import reset_stores
-from openhands.agent_server.telemetry import reset_telemetry_sink
-from openhands.agent_server.telemetry.policy import (
+from agentrt.agent_server.config import Config, TelemetryExporterKind, TelemetrySpec
+from agentrt.agent_server.persistence.store import reset_stores
+from agentrt.agent_server.telemetry import reset_telemetry_sink
+from agentrt.agent_server.telemetry.policy import (
     CONSENT_ENV,
     CONSENT_MODE_ENV,
     DO_NOT_TRACK_ENV,

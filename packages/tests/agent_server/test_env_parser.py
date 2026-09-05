@@ -21,9 +21,9 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field
 
-from openhands.agent_server.config import Config, load_config
-from openhands.agent_server.conversation_lease import DEFAULT_LEASE_TTL_SECONDS
-from openhands.agent_server.env_parser import (
+from agentrt.agent_server.config import Config, load_config
+from agentrt.agent_server.conversation_lease import DEFAULT_LEASE_TTL_SECONDS
+from agentrt.agent_server.env_parser import (
     MISSING,
     BoolEnvParser,
     DelayedParser,
@@ -42,7 +42,7 @@ from openhands.agent_server.env_parser import (
     merge,
     to_env,
 )
-from openhands.sdk.security.risk import SecurityRisk
+from agentrt.sdk.security.risk import SecurityRisk
 from tests.sdk.utils.test_discriminated_union import Animal, Dog
 
 

@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from openhands.agent_server.hooks_service import load_hooks_from_workspace
+from agentrt.agent_server.hooks_service import load_hooks_from_workspace
 
 
 class TestLoadHooksFromWorkspace:

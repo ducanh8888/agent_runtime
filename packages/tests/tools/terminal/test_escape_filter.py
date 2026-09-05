@@ -7,9 +7,9 @@ import tempfile
 
 import pytest
 
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.terminal import create_terminal_session
-from openhands.tools.terminal.utils.escape_filter import (
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.terminal import create_terminal_session
+from agentrt.tools.terminal.utils.escape_filter import (
     TerminalQueryFilter,
     filter_terminal_queries,
 )

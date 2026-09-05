@@ -9,9 +9,9 @@ from abc import ABC, abstractmethod
 
 from pydantic import BaseModel
 
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.llm_convertible.action import ActionEvent
-from openhands.sdk.logger import get_logger
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.llm_convertible.action import ActionEvent
+from agentrt.sdk.logger import get_logger
 
 
 logger = get_logger(__name__)
@@ -69,7 +69,7 @@ class FileEditPruner(EarlyStopperBase):
 
     def check(self, events: list[Event]) -> EarlyStopResult:
         """Check if any file editing operations were performed."""
-        from openhands.tools.file_editor.definition import (
+        from agentrt.tools.file_editor.definition import (
             FileEditorAction,
             FileEditorTool,
         )
@@ -111,7 +111,7 @@ class BashCommandPruner(EarlyStopperBase):
 
     def check(self, events: list[Event]) -> EarlyStopResult:
         """Check if any forbidden bash commands were executed."""
-        from openhands.tools.terminal.definition import (
+        from agentrt.tools.terminal.definition import (
             TerminalAction,
             TerminalTool,
         )

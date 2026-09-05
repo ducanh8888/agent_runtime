@@ -1,6 +1,6 @@
 import pytest
 
-from openhands.agent_server.persistence import reset_stores
+from agentrt.agent_server.persistence import reset_stores
 
 
 @pytest.fixture(autouse=True)

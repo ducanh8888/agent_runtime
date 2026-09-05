@@ -40,16 +40,16 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from opentelemetry.trace import SpanContext, Tracer
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.parallel_executor import ParallelToolExecutor
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.parallel_executor import ParallelToolExecutor
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 _PROBE: contextvars.ContextVar[str] = contextvars.ContextVar("probe", default="unset")
@@ -476,11 +476,11 @@ def test_agent_step_tool_spans_nest_under_dispatcher_without_lmnr(tracing) -> No
 
     with (
         patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             side_effect=lambda messages, **kw: _response_with_two_tool_calls(),
         ),
         patch(
-            "openhands.sdk.agent.agent.should_enable_observability", return_value=True
+            "agentrt.sdk.agent.agent.should_enable_observability", return_value=True
         ),
         # Run the undecorated ``step``. Its ``@observe`` wrapper builds a real
         # lmnr span once observability is on anywhere in the process — and caches
@@ -488,7 +488,7 @@ def test_agent_step_tool_spans_nest_under_dispatcher_without_lmnr(tracing) -> No
         # spans. Without this, ambient ``LMNR_*`` env vars decide whether the test
         # measures what its name claims.
         patch.object(Agent, "step", inspect.unwrap(Agent.step)),
-        patch("openhands.sdk.agent.agent.observe", side_effect=fake_observe),
+        patch("agentrt.sdk.agent.agent.observe", side_effect=fake_observe),
     ):
         conversation.send_message(
             Message(role="user", content=[TextContent(text="please echo hi")])

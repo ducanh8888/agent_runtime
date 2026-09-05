@@ -8,16 +8,16 @@ import pytest
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.condenser import LLMSummarizingCondenser
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.condenser import LLMSummarizingCondenser
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     MessageEvent,
     ObservationEvent,
 )
-from openhands.sdk.llm import (
+from agentrt.sdk.llm import (
     LLM,
     ImageContent,
     LLMResponse,
@@ -26,8 +26,8 @@ from openhands.sdk.llm import (
     MetricsSnapshot,
     TextContent,
 )
-from openhands.sdk.tool import Action, Observation
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.tool import Action, Observation
+from agentrt.sdk.workspace import RemoteWorkspace
 from tests.sdk.conversation.conftest import create_mock_http_client
 
 
@@ -137,14 +137,14 @@ def test_local_conversation_condense_without_condenser(tmp_path, agent):
 
 
 @patch(
-    "openhands.sdk.context.condenser.llm_summarizing_condenser.LLMSummarizingCondenser.condense"
+    "agentrt.sdk.context.condenser.llm_summarizing_condenser.LLMSummarizingCondenser.condense"
 )
 def test_local_conversation_condense_with_condenser(
     mock_condense, tmp_path, agent_with_condenser
 ):
     """condense adds CondensationRequest and calls agent.step() when condenser is configured."""  # noqa: E501
     # Mock the condenser to avoid actual LLM calls
-    from openhands.sdk.event.condenser import Condensation
+    from agentrt.sdk.event.condenser import Condensation
 
     # Return a Condensation event to simulate successful condensation
     mock_condense.return_value = Condensation(
@@ -172,7 +172,7 @@ def test_local_conversation_condense_with_condenser(
     conv.condense()
 
     # Check that a CondensationRequest was added to the events
-    from openhands.sdk.event.condenser import CondensationRequest
+    from agentrt.sdk.event.condenser import CondensationRequest
 
     condensation_requests = [
         e for e in conv.state.events if isinstance(e, CondensationRequest)
@@ -314,7 +314,7 @@ def test_local_conversation_condense_force_condenser_bypasses_window(tmp_path, a
 # ---------------------------------------------------------------------------
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_condense(mock_ws_client, agent):
     """RemoteConversation.condense() calls the server condense endpoint."""
     mock_ws_client.return_value.wait_until_ready.return_value = True
@@ -369,7 +369,7 @@ def test_remote_conversation_condense(mock_ws_client, agent):
         assert "json" not in kwargs or kwargs["json"] is None
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_condense_with_agent_with_condenser(
     mock_ws_client, agent_with_condenser
 ):
@@ -476,7 +476,7 @@ def test_local_conversation_condense_handles_empty_response(tmp_path, agent):
         conv.condense()
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_condense_raises_http_status_error(mock_ws_client, agent):
     """RemoteConversation condense properly propagates HTTPStatusError from server."""
     mock_ws_client.return_value.wait_until_ready.return_value = True
@@ -529,7 +529,7 @@ def test_remote_conversation_condense_raises_http_status_error(mock_ws_client, a
         assert "500 Internal Server Error" in str(exc_info.value)
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_condense_raises_request_error(mock_ws_client, agent):
     """RemoteConversation condense properly propagates RequestError from network."""
     mock_ws_client.return_value.wait_until_ready.return_value = True

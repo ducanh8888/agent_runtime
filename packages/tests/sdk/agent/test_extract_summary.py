@@ -6,10 +6,10 @@ import mcp.types
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.llm import LLM
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.tool import MCPToolDefinition
 
 
 @pytest.fixture

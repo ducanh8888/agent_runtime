@@ -1,7 +1,7 @@
 from pydantic import Field
 
-from openhands.sdk import LLM, Agent, LLMSummarizingCondenser
-from openhands.sdk.llm.router import MultimodalRouter
+from agentrt.sdk import LLM, Agent, LLMSummarizingCondenser
+from agentrt.sdk.llm.router import MultimodalRouter
 
 
 def check_usage_id_exists(usage_id: str, llms: list[LLM]):

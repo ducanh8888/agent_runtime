@@ -14,14 +14,14 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.agent_server.config import ACPSkillSourcing, Config
-from openhands.agent_server.conversation_service import _apply_acp_skill_sourcing
-from openhands.sdk import LLM, Agent, Conversation
-from openhands.sdk.agent import ACPAgent, AgentBase
-from openhands.sdk.context import AgentContext
-from openhands.sdk.marketplace.registration import MarketplaceRegistration
-from openhands.sdk.settings.model import validate_agent_settings
-from openhands.sdk.skills import Skill
+from agentrt.agent_server.config import ACPSkillSourcing, Config
+from agentrt.agent_server.conversation_service import _apply_acp_skill_sourcing
+from agentrt.sdk import LLM, Agent, Conversation
+from agentrt.sdk.agent import ACPAgent, AgentBase
+from agentrt.sdk.context import AgentContext
+from agentrt.sdk.marketplace.registration import MarketplaceRegistration
+from agentrt.sdk.settings.model import validate_agent_settings
+from agentrt.sdk.skills import Skill
 
 
 AGENTS_MD_BODY = "sentinel-agents-md-body"

@@ -2,9 +2,9 @@ import warnings
 
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse
 
-from openhands.sdk.llm import LLM, LLMResponse, Message
-from openhands.sdk.llm.message import TextContent
-from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
+from agentrt.sdk.llm import LLM, LLMResponse, Message
+from agentrt.sdk.llm.message import TextContent
+from agentrt.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
 
 
 def test_pydantic_serializer_warnings_suppressed():
@@ -12,11 +12,11 @@ def test_pydantic_serializer_warnings_suppressed():
     Test that Pydantic serializer warnings from litellm are suppressed.
 
     This test verifies that the warning filter is correctly configured
-    in the openhands.sdk.llm module initialization to suppress
+    in the agentrt.sdk.llm module initialization to suppress
     "Pydantic serializer warnings" that occur when litellm's Pydantic
     models are serialized with mismatched field counts.
 
-    The filter is applied at module import time in openhands.sdk.llm.__init__.py
+    The filter is applied at module import time in agentrt.sdk.llm.__init__.py
     and prevents these warnings from being shown to users during normal usage.
     """
     # Capture all warnings during module import

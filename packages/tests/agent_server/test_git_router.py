@@ -7,10 +7,10 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.sdk.git.exceptions import GitCommandError, GitRepositoryError
-from openhands.sdk.git.models import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
+from agentrt.sdk.git.models import (
     GitChange,
     GitChangeStatus,
     GitCommit,
@@ -40,7 +40,7 @@ async def test_git_changes_query_param_success(client):
         GitChange(status=GitChangeStatus.DELETED, path=Path("old_file.py")),
     ]
 
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = expected_changes
 
         test_path = "src/test_repo"
@@ -63,7 +63,7 @@ async def test_git_changes_query_param_success(client):
 @pytest.mark.asyncio
 async def test_git_changes_query_param_empty_result(client):
     """Test git changes endpoint with query parameter and no changes."""
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = []
 
         test_path = "src/empty_repo"
@@ -76,7 +76,7 @@ async def test_git_changes_query_param_empty_result(client):
 @pytest.mark.asyncio
 async def test_git_changes_query_param_with_exception(client):
     """Test that unexpected git failures still surface as 500."""
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.side_effect = RuntimeError("unexpected failure")
 
         response = client.get("/api/git/changes", params={"path": "nonexistent/repo"})
@@ -87,7 +87,7 @@ async def test_git_changes_query_param_with_exception(client):
 @pytest.mark.asyncio
 async def test_git_changes_query_param_with_command_error(client):
     """Test git changes returns 400 for GitCommandError."""
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.side_effect = GitCommandError(
             message="git diff failed",
             command=["git", "diff"],
@@ -110,7 +110,7 @@ async def test_git_changes_returns_empty_list_when_path_is_not_git_repo(client):
     Changes tab.
     """
     # Arrange
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.side_effect = GitRepositoryError(
             "Not a git repository: /Users/hieple/.openhands/agent-server-gui"
         )
@@ -130,7 +130,7 @@ async def test_git_changes_returns_empty_list_when_path_is_not_git_repo(client):
 async def test_git_diff_returns_empty_diff_when_path_is_not_git_repo(client):
     """Non-repo paths to /api/git/diff should yield 200 with null fields."""
     # Arrange
-    with patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff:
+    with patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff:
         mock_git_diff.side_effect = GitRepositoryError(
             "Not a git repository: /tmp/not-a-repo"
         )
@@ -245,7 +245,7 @@ async def test_git_changes_query_param_absolute_path(client):
         GitChange(status=GitChangeStatus.ADDED, path=Path("new_file.py")),
     ]
 
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = expected_changes
 
         # This is the main use case - absolute paths with leading slash
@@ -265,7 +265,7 @@ async def test_git_diff_query_param_success(client):
         original="def old_function():\n    return 'original'",
     )
 
-    with patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff:
+    with patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff:
         mock_git_diff.return_value = expected_diff
 
         test_path = "src/test_file.py"
@@ -284,7 +284,7 @@ async def test_git_diff_query_param_with_none_values(client):
     """Test git diff endpoint with query parameter and None values."""
     expected_diff = GitDiff(modified=None, original=None)
 
-    with patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff:
+    with patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff:
         mock_git_diff.return_value = expected_diff
 
         test_path = "nonexistent_file.py"
@@ -300,7 +300,7 @@ async def test_git_diff_query_param_with_none_values(client):
 @pytest.mark.asyncio
 async def test_git_diff_query_param_with_command_error(client):
     """Test git diff returns 400 for GitCommandError."""
-    with patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff:
+    with patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff:
         mock_git_diff.side_effect = GitCommandError(
             message="git diff failed",
             command=["git", "diff"],
@@ -337,7 +337,7 @@ async def test_git_changes_with_all_status_types(client):
         GitChange(status=GitChangeStatus.MOVED, path=Path("moved.py")),
     ]
 
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = expected_changes
 
         test_path = "src/test_repo"
@@ -371,7 +371,7 @@ async def test_git_changes_with_complex_paths(client):
         ),
     ]
 
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = expected_changes
 
         test_path = "src/complex_repo"
@@ -389,7 +389,7 @@ async def test_git_changes_with_complex_paths(client):
 @pytest.mark.asyncio
 async def test_git_changes_forwards_ref_query_param(client):
     """The ``ref`` query param should be plumbed through to ``get_git_changes``."""
-    with patch("openhands.agent_server.git_router.get_git_changes") as mock_git_changes:
+    with patch("agentrt.agent_server.git_router.get_git_changes") as mock_git_changes:
         mock_git_changes.return_value = []
 
         test_path = "src/test_repo"
@@ -404,7 +404,7 @@ async def test_git_changes_forwards_ref_query_param(client):
 @pytest.mark.asyncio
 async def test_git_diff_forwards_ref_query_param(client):
     """The ``ref`` query param should be plumbed through to ``get_git_diff``."""
-    with patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff:
+    with patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff:
         mock_git_diff.return_value = GitDiff(modified="m", original="o")
 
         test_path = "src/test_file.py"
@@ -457,7 +457,7 @@ _SAMPLE_COMMIT = GitCommit(
 @pytest.mark.asyncio
 async def test_git_commits_query_success(client):
     """The commits endpoint forwards to the SDK and serializes the page."""
-    with patch("openhands.agent_server.git_router.get_git_commits") as mock_commits:
+    with patch("agentrt.agent_server.git_router.get_git_commits") as mock_commits:
         mock_commits.return_value = GitCommitsPage(
             commits=[_SAMPLE_COMMIT], has_more=True
         )
@@ -483,7 +483,7 @@ async def test_git_commits_query_success(client):
 @pytest.mark.asyncio
 async def test_git_commits_query_not_a_repo_returns_empty_page(client):
     """A non-repo workspace yields an empty page, not an error."""
-    with patch("openhands.agent_server.git_router.get_git_commits") as mock_commits:
+    with patch("agentrt.agent_server.git_router.get_git_commits") as mock_commits:
         mock_commits.side_effect = GitRepositoryError("not a git repository")
 
         response = client.get("/api/git/commits", params={"path": "/not-a-repo"})
@@ -496,7 +496,7 @@ async def test_git_commits_query_not_a_repo_returns_empty_page(client):
 async def test_git_commit_changes_query_success(client):
     """The per-commit changes endpoint forwards the sha and repo path."""
     sha = "b" * 40
-    with patch("openhands.agent_server.git_router.get_commit_changes") as mock_changes:
+    with patch("agentrt.agent_server.git_router.get_commit_changes") as mock_changes:
         mock_changes.return_value = [
             GitChange(status=GitChangeStatus.DELETED, path=Path("doomed.txt"))
         ]
@@ -535,9 +535,9 @@ async def test_git_diff_query_commit_param_uses_commit_file_diff(client):
     sha = "c" * 40
     with (
         patch(
-            "openhands.agent_server.git_router.get_commit_file_diff"
+            "agentrt.agent_server.git_router.get_commit_file_diff"
         ) as mock_commit_diff,
-        patch("openhands.agent_server.git_router.get_git_diff") as mock_git_diff,
+        patch("agentrt.agent_server.git_router.get_git_diff") as mock_git_diff,
     ):
         mock_commit_diff.return_value = GitDiff(modified="", original="contents")
 

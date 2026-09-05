@@ -5,8 +5,8 @@ from unittest.mock import patch
 from PIL import Image
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, ImageContent, Message, TextContent
-from openhands.sdk.llm.utils.image_resize import maybe_resize_messages_for_provider
+from agentrt.sdk.llm import LLM, ImageContent, Message, TextContent
+from agentrt.sdk.llm.utils.image_resize import maybe_resize_messages_for_provider
 
 
 def _make_png_data_url(width: int, height: int) -> str:

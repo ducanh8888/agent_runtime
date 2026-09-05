@@ -67,8 +67,8 @@ class NoPrematureImplementationTest(SoftwareAgentSDKBehaviorTest):
 
         if editing_operations:
             # Agent started editing files - this is wrong!
-            from openhands.sdk.event import ActionEvent
-            from openhands.tools.file_editor.definition import FileEditorAction
+            from agentrt.sdk.event import ActionEvent
+            from agentrt.tools.file_editor.definition import FileEditorAction
 
             edited_files = []
             for event in editing_operations:

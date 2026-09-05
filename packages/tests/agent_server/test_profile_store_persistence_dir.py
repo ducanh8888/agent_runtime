@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from openhands.agent_server.config import Config
-from openhands.agent_server.persistence import (
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.persistence import (
     PersistedSettings,
     get_agent_profile_store,
     get_llm_profile_store,

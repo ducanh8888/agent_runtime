@@ -17,13 +17,13 @@ import time
 
 import pytest
 
-from openhands.sdk import TextContent
-from openhands.sdk.logger import get_logger
-from openhands.tools.terminal.definition import (
+from agentrt.sdk import TextContent
+from agentrt.sdk.logger import get_logger
+from agentrt.tools.terminal.definition import (
     TerminalAction,
     TerminalObservation,
 )
-from openhands.tools.terminal.terminal import (
+from agentrt.tools.terminal.terminal import (
     TerminalCommandStatus,
     create_terminal_session,
 )
@@ -142,7 +142,7 @@ def test_session_truncates_large_command_output(monkeypatch, terminal_type):
     # (Avoid generating 30k+ output in unit tests.)
     small_max = 600
 
-    from openhands.tools.terminal.terminal import (
+    from agentrt.tools.terminal.terminal import (
         terminal_session as terminal_session_mod,
     )
 
@@ -171,7 +171,7 @@ def test_session_truncates_multiline_output(monkeypatch, terminal_type):
 
     small_max = 600
 
-    from openhands.tools.terminal.terminal import (
+    from agentrt.tools.terminal.terminal import (
         terminal_session as terminal_session_mod,
     )
 
@@ -201,8 +201,8 @@ def test_session_truncates_multiline_output(monkeypatch, terminal_type):
 def test_truncation_preserves_metadata_in_llm_content(monkeypatch, terminal_type):
     # Ensure that when we truncate the final formatted text for the LLM,
     # the metadata suffix remains visible.
-    from openhands.sdk.utils.truncate import DEFAULT_TRUNCATE_NOTICE
-    from openhands.tools.terminal import definition as terminal_definition_mod
+    from agentrt.sdk.utils.truncate import DEFAULT_TRUNCATE_NOTICE
+    from agentrt.tools.terminal import definition as terminal_definition_mod
 
     session = create_terminal_session(work_dir=os.getcwd(), terminal_type=terminal_type)
     session.initialize()

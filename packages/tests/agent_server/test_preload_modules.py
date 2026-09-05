@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from openhands.agent_server.__main__ import (
+from agentrt.agent_server.__main__ import (
     _EXTRA_PYTHON_PATH_ENV,
     _get_internal_server_url,
     extend_python_path,
@@ -20,28 +20,28 @@ from openhands.agent_server.__main__ import (
 class TestPreloadModules:
     def test_none_is_noop(self):
         with patch(
-            "openhands.agent_server.__main__.importlib.import_module"
+            "agentrt.agent_server.__main__.importlib.import_module"
         ) as mock_import:
             preload_modules(None)
         mock_import.assert_not_called()
 
     def test_empty_string_is_noop(self):
         with patch(
-            "openhands.agent_server.__main__.importlib.import_module"
+            "agentrt.agent_server.__main__.importlib.import_module"
         ) as mock_import:
             preload_modules("")
         mock_import.assert_not_called()
 
     def test_single_module(self):
         with patch(
-            "openhands.agent_server.__main__.importlib.import_module"
+            "agentrt.agent_server.__main__.importlib.import_module"
         ) as mock_import:
             preload_modules("myapp.tools")
         mock_import.assert_called_once_with("myapp.tools")
 
     def test_comma_separated_strips_whitespace(self):
         with patch(
-            "openhands.agent_server.__main__.importlib.import_module"
+            "agentrt.agent_server.__main__.importlib.import_module"
         ) as mock_import:
             preload_modules(" myapp.tools , myapp.plugins ")
         assert [c.args[0] for c in mock_import.call_args_list] == [
@@ -51,7 +51,7 @@ class TestPreloadModules:
 
     def test_empty_segments_skipped(self):
         with patch(
-            "openhands.agent_server.__main__.importlib.import_module"
+            "agentrt.agent_server.__main__.importlib.import_module"
         ) as mock_import:
             preload_modules("myapp.tools,,myapp.plugins, ")
         assert [c.args[0] for c in mock_import.call_args_list] == [
@@ -273,14 +273,14 @@ class TestMainCheckBrowserOrdering:
 
         with (
             patch("sys.argv", ["prog", "--check-browser", "--import-modules", "boom"]),
-            patch("openhands.tools.preset.default.register_default_tools"),
+            patch("agentrt.tools.preset.default.register_default_tools"),
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 return_value=mock_executor,
             ),
-            patch("openhands.agent_server.__main__.preload_modules") as mock_preload,
+            patch("agentrt.agent_server.__main__.preload_modules") as mock_preload,
         ):
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -299,12 +299,12 @@ class TestMainCheckBrowserOrdering:
 
         with (
             patch("sys.argv", ["prog", "--host", "0.0.0.0", "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server_cls,
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server_cls,
         ):
             mock_server_cls.return_value.run.side_effect = SystemExit(0)
 
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -334,13 +334,13 @@ class TestMainBindHostGuard:
 
         with (
             patch("sys.argv", ["prog", "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__._setup_crash_diagnostics"),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server,
-            patch("openhands.agent_server.__main__.Config", side_effect=capture_config),
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__._setup_crash_diagnostics"),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server,
+            patch("agentrt.agent_server.__main__.Config", side_effect=capture_config),
         ):
             mock_server.return_value.run.side_effect = SystemExit(0)
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -360,13 +360,13 @@ class TestMainBindHostGuard:
 
         with (
             patch("sys.argv", ["prog", "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__._setup_crash_diagnostics"),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server,
-            patch("openhands.agent_server.__main__.Config", side_effect=capture_config),
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__._setup_crash_diagnostics"),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server,
+            patch("agentrt.agent_server.__main__.Config", side_effect=capture_config),
         ):
             mock_server.return_value.run.side_effect = SystemExit(0)
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -388,14 +388,14 @@ class TestMainBindHostGuard:
 
         with (
             patch("sys.argv", ["prog", "--host", wildcard, "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__._setup_crash_diagnostics"),
-            patch("openhands.agent_server.__main__.Config", side_effect=capture_config),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server,
-            caplog.at_level(logging.WARNING, logger="openhands.agent_server.__main__"),
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__._setup_crash_diagnostics"),
+            patch("agentrt.agent_server.__main__.Config", side_effect=capture_config),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server,
+            caplog.at_level(logging.WARNING, logger="agentrt.agent_server.__main__"),
         ):
             mock_server.return_value.run.side_effect = SystemExit(0)
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -417,13 +417,13 @@ class TestMainBindHostGuard:
 
         with (
             patch("sys.argv", ["prog", "--host", "0.0.0.0", "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__._setup_crash_diagnostics"),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server,
-            patch("openhands.agent_server.__main__.Config", side_effect=capture_config),
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__._setup_crash_diagnostics"),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server,
+            patch("agentrt.agent_server.__main__.Config", side_effect=capture_config),
         ):
             mock_server.return_value.run.side_effect = SystemExit(0)
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -442,13 +442,13 @@ class TestMainBindHostGuard:
 
         with (
             patch("sys.argv", ["prog", "--host", "127.0.0.1", "--port", "4321"]),
-            patch("openhands.agent_server.__main__.preload_modules"),
-            patch("openhands.agent_server.__main__._setup_crash_diagnostics"),
-            patch("openhands.agent_server.__main__.LoggingServer") as mock_server,
-            patch("openhands.agent_server.__main__.Config", side_effect=capture_config),
+            patch("agentrt.agent_server.__main__.preload_modules"),
+            patch("agentrt.agent_server.__main__._setup_crash_diagnostics"),
+            patch("agentrt.agent_server.__main__.LoggingServer") as mock_server,
+            patch("agentrt.agent_server.__main__.Config", side_effect=capture_config),
         ):
             mock_server.return_value.run.side_effect = SystemExit(0)
-            from openhands.agent_server.__main__ import main
+            from agentrt.agent_server.__main__ import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -458,7 +458,7 @@ class TestMainBindHostGuard:
 
 
 def test_auth_enabled_reads_config_keys(monkeypatch, tmp_path):
-    from openhands.agent_server.__main__ import _auth_enabled
+    from agentrt.agent_server.__main__ import _auth_enabled
 
     cfg = tmp_path / "config.json"
     monkeypatch.delenv("SESSION_API_KEY", raising=False)
@@ -473,7 +473,7 @@ def test_auth_enabled_reads_config_keys(monkeypatch, tmp_path):
 
 
 def test_auth_enabled_reads_env_key(monkeypatch, tmp_path):
-    from openhands.agent_server.__main__ import _auth_enabled
+    from agentrt.agent_server.__main__ import _auth_enabled
 
     cfg = tmp_path / "config.json"
     cfg.write_text("{}")

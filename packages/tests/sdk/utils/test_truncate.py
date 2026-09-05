@@ -1,6 +1,6 @@
 """Tests for truncate utility functions."""
 
-from openhands.sdk.utils import (
+from agentrt.sdk.utils import (
     DEFAULT_TEXT_CONTENT_LIMIT,
     DEFAULT_TRUNCATE_NOTICE,
     maybe_truncate,

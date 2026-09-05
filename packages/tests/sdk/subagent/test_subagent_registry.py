@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import LLM, Agent
-from openhands.sdk.context.condenser import LLMSummarizingCondenser, NoOpCondenser
-from openhands.sdk.hooks.config import HookConfig, HookDefinition, HookMatcher
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.mcp.config import MCPServer, dump_mcp_config
-from openhands.sdk.subagent.registry import (
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.context.condenser import LLMSummarizingCondenser, NoOpCondenser
+from agentrt.sdk.hooks.config import HookConfig, HookDefinition, HookMatcher
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.mcp.config import MCPServer, dump_mcp_config
+from agentrt.sdk.subagent.registry import (
     _reset_registry_for_tests,
     agent_definition_to_factory,
     get_agent_factory,
@@ -20,7 +20,7 @@ from openhands.sdk.subagent.registry import (
     register_file_agents,
     register_plugin_agents,
 )
-from openhands.sdk.subagent.schema import AgentDefinition
+from agentrt.sdk.subagent.schema import AgentDefinition
 
 
 def setup_function() -> None:
@@ -66,7 +66,7 @@ def test_register_file_agents_project_priority(tmp_path: Path) -> None:
         "---\nname: shared-agent\ndescription: User version\n---\n\nUser prompt."
     )
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=user_home):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=user_home):
         registered = register_file_agents(tmp_path)
 
     assert "shared-agent" in registered
@@ -96,7 +96,7 @@ def test_register_file_agents_skips_programmatic(tmp_path: Path) -> None:
     )
 
     with patch(
-        "openhands.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
+        "agentrt.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
     ):
         registered = register_file_agents(tmp_path)
 
@@ -348,7 +348,7 @@ def test_agent_definition_to_factory_skills_project_over_user(tmp_path: Path) ->
         skills=["shared-skill"],
     )
 
-    with patch("openhands.sdk.skills.skill.Path.home", return_value=user_home):
+    with patch("agentrt.sdk.skills.skill.Path.home", return_value=user_home):
         factory = agent_definition_to_factory(agent_def, work_dir=tmp_path)
 
     llm = _make_test_llm()
@@ -492,7 +492,7 @@ def test_agent_definition_to_factory_model_profile(tmp_path: Path) -> None:
     factory = agent_definition_to_factory(agent_def)
     parent_llm = _make_test_llm()
     with patch(
-        "openhands.sdk.subagent.registry._get_profile_store", return_value=store
+        "agentrt.sdk.subagent.registry._get_profile_store", return_value=store
     ):
         agent = factory(parent_llm)
 
@@ -529,7 +529,7 @@ def test_agent_definition_to_factory_model_profile_with_json_suffix(
     factory = agent_definition_to_factory(agent_def)
     parent_llm = _make_test_llm()
     with patch(
-        "openhands.sdk.subagent.registry._get_profile_store", return_value=store
+        "agentrt.sdk.subagent.registry._get_profile_store", return_value=store
     ):
         agent = factory(parent_llm)
 
@@ -554,7 +554,7 @@ def test_agent_definition_to_factory_model_profile_not_found(tmp_path: Path) -> 
     parent_llm = _make_test_llm()
 
     with patch(
-        "openhands.sdk.subagent.registry._get_profile_store", return_value=store
+        "agentrt.sdk.subagent.registry._get_profile_store", return_value=store
     ):
         with pytest.raises(ValueError, match="nonexistent"):
             factory(parent_llm)
@@ -581,7 +581,7 @@ def test_agent_definition_to_factory_model_profile_custom_store(tmp_path: Path) 
     factory = agent_definition_to_factory(agent_def)
     parent_llm = _make_test_llm()
     with patch(
-        "openhands.sdk.subagent.registry._get_profile_store", return_value=custom_store
+        "agentrt.sdk.subagent.registry._get_profile_store", return_value=custom_store
     ):
         agent = factory(parent_llm)
 
@@ -659,7 +659,7 @@ def test_agent_definition_to_factory_profile_store_dir_none_uses_default(
     parent_llm = _make_test_llm()
 
     with patch(
-        "openhands.sdk.subagent.registry._get_profile_store", return_value=store
+        "agentrt.sdk.subagent.registry._get_profile_store", return_value=store
     ):
         agent = factory(parent_llm)
 
@@ -732,7 +732,7 @@ def test_register_file_agents_with_hooks(tmp_path: Path) -> None:
     )
 
     with patch(
-        "openhands.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
+        "agentrt.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
     ):
         registered = register_file_agents(tmp_path)
 
@@ -867,7 +867,7 @@ def test_register_file_agents_passes_mcp_config_to_agent(tmp_path: Path) -> None
     )
 
     with patch(
-        "openhands.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
+        "agentrt.sdk.subagent.load.Path.home", return_value=tmp_path / "no_user"
     ):
         registered = register_file_agents(tmp_path)
 

@@ -5,7 +5,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from openhands.sdk.extensions.fetch import (
+from agentrt.sdk.extensions.fetch import (
     ExtensionFetchError,
     SourceType,
     fetch,
@@ -13,8 +13,8 @@ from openhands.sdk.extensions.fetch import (
     get_cache_path,
     parse_extension_source,
 )
-from openhands.sdk.git.cached_repo import GitHelper
-from openhands.sdk.git.exceptions import GitCommandError
+from agentrt.sdk.git.cached_repo import GitHelper
+from agentrt.sdk.git.exceptions import GitCommandError
 
 
 # -- parse_extension_source ---------------------------------------------------

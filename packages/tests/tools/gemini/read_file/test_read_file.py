@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from openhands.tools.gemini.read_file.definition import ReadFileAction, ReadFileTool
-from openhands.tools.gemini.read_file.impl import ReadFileExecutor
+from agentrt.tools.gemini.read_file.definition import ReadFileAction, ReadFileTool
+from agentrt.tools.gemini.read_file.impl import ReadFileExecutor
 
 
 def test_read_file_basic(tmp_path):

@@ -2,9 +2,9 @@
 
 import pytest
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent
-from openhands.sdk.security.risk import SecurityRisk
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent
+from agentrt.sdk.security.risk import SecurityRisk
 
 
 @pytest.fixture

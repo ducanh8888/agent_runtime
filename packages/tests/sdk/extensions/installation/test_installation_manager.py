@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from openhands.sdk.extensions.installation import (
+from agentrt.sdk.extensions.installation import (
     InstallationInterface,
     InstallationManager,
     InstallationMetadata,
@@ -111,7 +111,7 @@ def test_install_records_requested_ref(
     """Test that the ref passed to install() is recorded as requested_ref,
     separately from the resolved commit SHA."""
     with patch(
-        "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+        "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
         return_value=(mock_extension_dir, "abc123"),
     ):
         info = manager.install(source="github:org/repo", ref="v1.0.0")
@@ -127,7 +127,7 @@ def test_install_without_ref_leaves_requested_ref_none(
     """Test that omitting ref leaves requested_ref unset, even though a
     resolved_ref is still recorded (tracking a moving ref)."""
     with patch(
-        "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+        "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
         return_value=(mock_extension_dir, "abc123"),
     ):
         info = manager.install(source="github:org/repo")
@@ -148,7 +148,7 @@ def test_update_reclones_with_credentialed_source(
     extension fail to re-clone on update (regression guard for issue #3752)."""
     cred = "https://oauth2:SUPER_SECRET@github.com/org/repo.git"
     with patch(
-        "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+        "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
         return_value=(mock_extension_dir, "abc123"),
     ) as mock_fetch:
         manager.install(source=cred, force=True)  # records cred in .installed.json
@@ -520,7 +520,7 @@ def test_update_clears_requested_ref_to_track_latest(
     """update() re-fetches with ref=None, so a previously pinned requested_ref
     is cleared to reflect that the extension now tracks the latest version."""
     with patch(
-        "openhands.sdk.extensions.installation.manager.fetch_with_resolution",
+        "agentrt.sdk.extensions.installation.manager.fetch_with_resolution",
         return_value=(mock_extension_dir, "abc123"),
     ) as mock_fetch:
         info = manager.install(source="github:org/repo", ref="v1.0.0")

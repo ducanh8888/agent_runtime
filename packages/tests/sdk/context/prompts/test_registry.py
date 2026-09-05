@@ -5,8 +5,8 @@ Pure assembly logic, exercised with fake sections.
 
 import pytest
 
-from openhands.sdk.context.prompts.registry import PromptRegistry
-from openhands.sdk.context.prompts.section import CacheTier, PromptContext
+from agentrt.sdk.context.prompts.registry import PromptRegistry
+from agentrt.sdk.context.prompts.section import CacheTier, PromptContext
 
 from ._fakes import FakeSection
 

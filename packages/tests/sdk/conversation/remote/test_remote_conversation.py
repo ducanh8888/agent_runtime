@@ -8,26 +8,26 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.conversation.conversation_stats import ConversationStats
-from openhands.sdk.conversation.exceptions import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.conversation.conversation_stats import ConversationStats
+from agentrt.sdk.conversation.exceptions import (
     ConversationRunError,
     WebSocketConnectionError,
 )
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.conversation.secret_registry import SecretValue
-from openhands.sdk.conversation.visualizer import DefaultConversationVisualizer
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.event.conversation_state import (
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.conversation.secret_registry import SecretValue
+from agentrt.sdk.conversation.visualizer import DefaultConversationVisualizer
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.event.conversation_state import (
     FULL_STATE_KEY,
     ConversationStateUpdateEvent,
 )
-from openhands.sdk.event.llm_completion_log import LLMCompletionLogEvent
-from openhands.sdk.llm import LLM, Message, Metrics, TextContent
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.event.llm_completion_log import LLMCompletionLogEvent
+from agentrt.sdk.llm import LLM, Message, Metrics, TextContent
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.workspace import RemoteWorkspace
 
 
 class TestRemoteConversation:
@@ -172,7 +172,7 @@ class TestRemoteConversation:
         return ws_callback
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_initialization_new_conversation(self, mock_ws_client):
         """Test RemoteConversation initialization with new conversation."""
@@ -225,7 +225,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_raises_when_websocket_never_ready(
         self, mock_ws_client
@@ -242,7 +242,7 @@ class TestRemoteConversation:
         mock_ws_instance.stop.assert_called_once()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_can_tolerate_websocket_ready_timeout(
         self, mock_ws_client, monkeypatch
@@ -260,7 +260,7 @@ class TestRemoteConversation:
         mock_ws_instance.stop.assert_not_called()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_sends_observability_fields(self, mock_ws_client):
         conversation_id = str(uuid.uuid4())
@@ -294,7 +294,7 @@ class TestRemoteConversation:
         assert payload["user_id"] == "test-user-42"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_plugin_source_redacted_placeholder_kept(
         self, mock_ws_client
@@ -302,7 +302,7 @@ class TestRemoteConversation:
         """The create payload masks inline plugin-source creds but keeps ${VAR}
         placeholders, so the server clones private plugins via secret expansion
         without raw credentials crossing the wire."""
-        from openhands.sdk.plugin import PluginSource
+        from agentrt.sdk.plugin import PluginSource
 
         conversation_id = str(uuid.uuid4())
         mock_client_instance = self.setup_mock_client(conversation_id=conversation_id)
@@ -329,7 +329,7 @@ class TestRemoteConversation:
         assert "LEAKME" not in str(create_call.kwargs["json"]["plugins"])
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_user_id_none_sends_explicit_null(self, mock_ws_client):
         """user_id=None sends an explicit null key (not omitted) so the server
@@ -354,7 +354,7 @@ class TestRemoteConversation:
         assert payload["user_id"] is None
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_llm_completion_log_callback_writes_utf8(self, mock_ws_client, tmp_path):
         llm = LLM(
@@ -393,7 +393,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_acp_remote_conversation_uses_unified_endpoint(self, mock_ws_client):
         acp_agent = ACPAgent(acp_command=["echo", "test"])
@@ -449,7 +449,7 @@ class TestRemoteConversation:
         assert len(get_events_calls) >= 1
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_initialization_existing_conversation(
         self, mock_ws_client
@@ -508,7 +508,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_initialization_nonexistent_conversation_creates_new(
         self, mock_ws_client
@@ -593,7 +593,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_existing_different_agent_kind_raises_clear_error(
         self, mock_ws_client
@@ -640,7 +640,7 @@ class TestRemoteConversation:
         assert post_create_calls == []
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_send_message_string(self, mock_ws_client):
         """Test sending a string message."""
@@ -668,7 +668,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_send_message_object(self, mock_ws_client):
         """Test sending a Message object."""
@@ -701,7 +701,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_send_message_invalid_role(self, mock_ws_client):
         """Test sending a message with invalid role raises assertion error."""
@@ -731,10 +731,10 @@ class TestRemoteConversation:
             conversation.send_message(invalid_message)
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.generate_conversation_title"
+        "agentrt.sdk.conversation.impl.remote_conversation.generate_conversation_title"
     )
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_generate_title_reconciles_locally(
         self, mock_ws_client, mock_generate_title
@@ -818,7 +818,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run(self, mock_ws_client):
         """Test running the conversation."""
@@ -847,7 +847,7 @@ class TestRemoteConversation:
         assert len(request_calls) >= 1, "Should have made a POST call to run endpoint"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_already_running(self, mock_ws_client):
         """Test running when conversation is already running (409 response)."""
@@ -899,7 +899,7 @@ class TestRemoteConversation:
         assert len(request_calls) >= 1, "Should have made a POST call to run endpoint"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_non_blocking(self, mock_ws_client):
         """Test running the conversation with blocking=False returns immediately."""
@@ -936,7 +936,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_blocking_polls_until_finished(
         self, mock_ws_client
@@ -993,7 +993,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_returns_on_waiting_for_confirmation_snapshot(
         self, mock_ws_client
@@ -1035,7 +1035,7 @@ class TestRemoteConversation:
         assert conversation.state.execution_status.value == "waiting_for_confirmation"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_preserves_post_run_snapshot_after_running_poll(
         self, mock_ws_client
@@ -1074,7 +1074,7 @@ class TestRemoteConversation:
         assert poll_count[0] == 1
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_ws_finished_is_only_a_hint_not_terminal(
         self, mock_ws_client
@@ -1164,7 +1164,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_rest_finished_revert_waits_for_full_state(
         self, mock_ws_client
@@ -1221,7 +1221,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_ws_error_still_terminates_immediately(
         self, mock_ws_client
@@ -1263,7 +1263,7 @@ class TestRemoteConversation:
         assert classification.kind == "auth"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_stale_pre_run_snapshot_is_ignored(
         self, mock_ws_client
@@ -1313,7 +1313,7 @@ class TestRemoteConversation:
         assert poll_count[0] >= 1
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_rest_hard_fallback_when_ws_silent(
         self, mock_ws_client
@@ -1355,7 +1355,7 @@ class TestRemoteConversation:
             return base + call_counter[0] * 10.0
 
         with patch(
-            "openhands.sdk.conversation.impl.remote_conversation.time.monotonic",
+            "agentrt.sdk.conversation.impl.remote_conversation.time.monotonic",
             side_effect=fast_monotonic,
         ):
             conversation.run(blocking=True, poll_interval=0.01)
@@ -1363,7 +1363,7 @@ class TestRemoteConversation:
         assert poll_count[0] >= 1, f"Expected at least 1 REST poll, got {poll_count[0]}"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_full_state_updates_cached_state(
         self, mock_ws_client
@@ -1452,7 +1452,7 @@ class TestRemoteConversation:
         ].accumulated_cost == pytest.approx(1.25)
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_error_status_raises(self, mock_ws_client):
         """Test that error status raises ConversationRunError."""
@@ -1483,7 +1483,7 @@ class TestRemoteConversation:
         assert "error" in str(exc_info.value).lower()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_stuck_status_raises(self, mock_ws_client):
         """Test that stuck status raises ConversationRunError."""
@@ -1514,7 +1514,7 @@ class TestRemoteConversation:
         assert "stuck" in str(exc_info.value).lower()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_404_raises(self, mock_ws_client):
         """Test that 404s during polling raise ConversationRunError."""
@@ -1540,11 +1540,11 @@ class TestRemoteConversation:
         assert "not found" in str(exc_info.value).lower()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_run_timeout(self, mock_ws_client):
         """Test that run() raises ConversationRunError on timeout."""
-        from openhands.sdk.conversation.exceptions import ConversationRunError
+        from agentrt.sdk.conversation.exceptions import ConversationRunError
 
         # Setup mocks
         conversation_id = str(uuid.uuid4())
@@ -1579,7 +1579,7 @@ class TestRemoteConversation:
         assert "timed out" in str(exc_info.value).lower()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_set_confirmation_policy(self, mock_ws_client):
         """Test setting confirmation policy."""
@@ -1608,7 +1608,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_reject_pending_actions(self, mock_ws_client):
         """Test rejecting pending actions."""
@@ -1636,7 +1636,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_pause(self, mock_ws_client):
         """Test pausing the conversation."""
@@ -1661,7 +1661,7 @@ class TestRemoteConversation:
         assert len(request_calls) >= 1, "Should have made a POST call to pause endpoint"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_interrupt(self, mock_ws_client):
         """interrupt() must POST to /interrupt, not degrade to /pause."""
@@ -1687,7 +1687,7 @@ class TestRemoteConversation:
         ), "interrupt() must not degrade to the pause endpoint"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_load_plugin(self, mock_ws_client):
         """load_plugin() POSTs the plugin reference to the server."""
@@ -1710,7 +1710,7 @@ class TestRemoteConversation:
         assert matching_calls[0].kwargs["json"] == {"plugin_ref": "review-bot@team"}
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_update_secrets(self, mock_ws_client):
         """Test updating secrets."""
@@ -1727,7 +1727,7 @@ class TestRemoteConversation:
         # Test with string secrets
         from typing import cast
 
-        from openhands.sdk.conversation.secret_registry import SecretValue
+        from agentrt.sdk.conversation.secret_registry import SecretValue
 
         secrets = cast(
             dict[str, SecretValue],
@@ -1750,7 +1750,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_update_secrets_callable(self, mock_ws_client):
         """Test updating secrets with callable values."""
@@ -1785,7 +1785,7 @@ class TestRemoteConversation:
         )
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_close(self, mock_ws_client):
         """Test closing the conversation."""
@@ -1814,7 +1814,7 @@ class TestRemoteConversation:
         mock_client_instance.close.assert_not_called()
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_close_reports_accumulated_cost_to_workspace(self, mock_ws_client):
         """Closing hands the accumulated LLM cost to the workspace."""
@@ -1833,7 +1833,7 @@ class TestRemoteConversation:
         assert self.workspace.accumulated_cost == 0.75
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_close_does_not_fetch_state_to_read_cost(self, mock_ws_client):
         """Closing never fetches state over HTTP — the server may already be gone."""
@@ -1847,7 +1847,7 @@ class TestRemoteConversation:
         assert mock_client_instance.request.call_args_list == []
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_close_leaves_cost_unreported_when_state_has_no_stats(self, mock_ws_client):
         """An unknown cost stays unreported rather than being reported as 0.0."""
@@ -1863,7 +1863,7 @@ class TestRemoteConversation:
         assert self.workspace.accumulated_cost is None
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_close_reports_streamed_cost_on_error_only_wakeup(self, mock_ws_client):
         """The failure path reports this run's spend, not the subscribe snapshot.
@@ -1902,7 +1902,7 @@ class TestRemoteConversation:
         assert self.workspace.accumulated_cost == 0.75
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_stuck_detector_not_implemented(self, mock_ws_client):
         """Test that stuck_detector property raises NotImplementedError."""
@@ -1929,7 +1929,7 @@ class TestRemoteConversation:
             _ = conversation.stuck_detector
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_with_callbacks(self, mock_ws_client):
         """Test RemoteConversation with custom callbacks."""
@@ -1966,7 +1966,7 @@ class TestRemoteConversation:
         assert "callback" in call_args[1]  # Should have a callback parameter
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_with_visualize(self, mock_ws_client):
         """Test RemoteConversation with visualizer=DefaultConversationVisualizer()."""
@@ -2000,7 +2000,7 @@ class TestRemoteConversation:
         assert custom_visualizer.on_event in conversation._callbacks
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_host_url_normalization(self, mock_ws_client):
         """Test that host URL is normalized correctly."""
@@ -2029,7 +2029,7 @@ class TestRemoteConversation:
         assert conversation.workspace.host == "http://localhost:8000"
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_execute_tool_not_implemented(self, mock_ws_client):
         """Test that execute_tool raises NotImplementedError for RemoteConversation."""
@@ -2061,7 +2061,7 @@ class TestRemoteConversation:
         assert "not yet supported for RemoteConversation" in str(exc_info.value)
 
     @patch(
-        "openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
+        "agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient"
     )
     def test_remote_conversation_calls_register_conversation(self, mock_ws_client):
         """Test RemoteConversation.__init__ calls workspace.register_conversation."""

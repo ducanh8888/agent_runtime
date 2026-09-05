@@ -17,14 +17,14 @@ class TestCheckBrowser:
 
         with (
             patch(
-                "openhands.tools.preset.default.register_default_tools"
+                "agentrt.tools.preset.default.register_default_tools"
             ) as mock_register,
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 return_value=mock_executor,
             ) as mock_executor_class,
         ):
-            from openhands.agent_server.__main__ import check_browser
+            from agentrt.agent_server.__main__ import check_browser
 
             result = check_browser()
 
@@ -48,13 +48,13 @@ class TestCheckBrowser:
         mock_executor.return_value = mock_result
 
         with (
-            patch("openhands.tools.preset.default.register_default_tools"),
+            patch("agentrt.tools.preset.default.register_default_tools"),
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 return_value=mock_executor,
             ),
         ):
-            from openhands.agent_server.__main__ import check_browser
+            from agentrt.agent_server.__main__ import check_browser
 
             result = check_browser()
 
@@ -71,13 +71,13 @@ class TestCheckBrowser:
         mock_executor.side_effect = RuntimeError("Browser crashed")
 
         with (
-            patch("openhands.tools.preset.default.register_default_tools"),
+            patch("agentrt.tools.preset.default.register_default_tools"),
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 return_value=mock_executor,
             ),
         ):
-            from openhands.agent_server.__main__ import check_browser
+            from agentrt.agent_server.__main__ import check_browser
 
             result = check_browser()
 
@@ -91,13 +91,13 @@ class TestCheckBrowser:
     def test_check_browser_cleanup_on_executor_creation_failure(self, capsys):
         """Test check_browser handles executor creation failure gracefully."""
         with (
-            patch("openhands.tools.preset.default.register_default_tools"),
+            patch("agentrt.tools.preset.default.register_default_tools"),
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 side_effect=RuntimeError("Chromium not found"),
             ),
         ):
-            from openhands.agent_server.__main__ import check_browser
+            from agentrt.agent_server.__main__ import check_browser
 
             result = check_browser()
 
@@ -118,13 +118,13 @@ class TestCheckBrowser:
         mock_executor.return_value = mock_result
 
         with (
-            patch("openhands.tools.preset.default.register_default_tools"),
+            patch("agentrt.tools.preset.default.register_default_tools"),
             patch(
-                "openhands.tools.browser_use.impl.BrowserToolExecutor",
+                "agentrt.tools.browser_use.impl.BrowserToolExecutor",
                 return_value=mock_executor,
             ),
         ):
-            from openhands.agent_server.__main__ import check_browser
+            from agentrt.agent_server.__main__ import check_browser
 
             result = check_browser()
 

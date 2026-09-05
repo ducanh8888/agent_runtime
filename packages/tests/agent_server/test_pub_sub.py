@@ -2,7 +2,7 @@
 Standalone unit tests for PubSub class functionality.
 
 This test file recreates the PubSub class logic to test it
-without dependencies on the openhands.sdk module.
+without dependencies on the agentrt.sdk module.
 """
 
 import asyncio
@@ -858,7 +858,7 @@ class TestPubSubMaxSubscribers:
     """Tests for the max_subscribers limit using the real PubSub class."""
 
     async def test_subscribe_rejected_at_limit(self):
-        from openhands.agent_server.pub_sub import (
+        from agentrt.agent_server.pub_sub import (
             MaxSubscribersError,
             PubSub,
             Subscriber,
@@ -876,7 +876,7 @@ class TestPubSubMaxSubscribers:
             pubsub.subscribe(_Sub())
 
     async def test_subscribe_allowed_after_unsubscribe(self):
-        from openhands.agent_server.pub_sub import PubSub, Subscriber
+        from agentrt.agent_server.pub_sub import PubSub, Subscriber
 
         class _Sub(Subscriber[str]):
             async def __call__(self, event: str) -> None:
@@ -892,7 +892,7 @@ class TestPubSubMaxSubscribers:
         assert len(pubsub._subscribers) == 2
 
     async def test_no_limit_when_none(self):
-        from openhands.agent_server.pub_sub import PubSub, Subscriber
+        from agentrt.agent_server.pub_sub import PubSub, Subscriber
 
         class _Sub(Subscriber[str]):
             async def __call__(self, event: str) -> None:

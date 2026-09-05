@@ -1,6 +1,6 @@
 import json
 
-from openhands.sdk.critic.result import CriticResult
+from agentrt.sdk.critic.result import CriticResult
 
 
 def test_format_critic_result_with_json_message():

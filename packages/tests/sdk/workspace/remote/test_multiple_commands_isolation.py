@@ -7,7 +7,7 @@ without contamination from previous commands.
 
 from unittest.mock import Mock
 
-from openhands.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
+from agentrt.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
 
 
 class _RemoteWorkspaceMixinForTest(RemoteWorkspaceMixin):

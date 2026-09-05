@@ -16,17 +16,17 @@ import pytest
 from litellm.types.utils import ModelResponse
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.event.llm_convertible import UserRejectObservation
-from openhands.sdk.llm import LLM, LLMResponse, Message, MessageToolCall, TextContent
-from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-from openhands.sdk.tool import Tool, ToolDefinition, ToolExecutor, register_tool
-from openhands.sdk.tool.schema import Action, Observation
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.event.llm_convertible import UserRejectObservation
+from agentrt.sdk.llm import LLM, LLMResponse, Message, MessageToolCall, TextContent
+from agentrt.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.tool import Tool, ToolDefinition, ToolExecutor, register_tool
+from agentrt.sdk.tool.schema import Action, Observation
 
 
 MODEL = "test-model"

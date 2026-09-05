@@ -21,11 +21,11 @@ from uuid import UUID
 
 import pytest
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.models import StartConversationRequest
-from openhands.sdk import LLM, Agent
-from openhands.sdk.security.confirmation_policy import NeverConfirm
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.models import StartConversationRequest
+from agentrt.sdk import LLM, Agent
+from agentrt.sdk.security.confirmation_policy import NeverConfirm
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def _request(workspace_dir, model: str, usage_id: str) -> StartConversationRequest:

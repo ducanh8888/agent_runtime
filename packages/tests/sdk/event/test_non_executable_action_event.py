@@ -1,8 +1,8 @@
 import json
 from collections.abc import Sequence
 
-from openhands.sdk.event.llm_convertible import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent
+from agentrt.sdk.event.llm_convertible import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent
 
 
 def test_action_event_with_none_action_to_llm_message_round_trip() -> None:

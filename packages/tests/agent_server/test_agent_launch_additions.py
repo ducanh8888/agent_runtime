@@ -6,24 +6,24 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from openhands.agent_server.conversation_service import (
+from agentrt.agent_server.conversation_service import (
     ConversationService,
     _append_system_message_suffix,
 )
-from openhands.agent_server.event_service import EventService
-from openhands.agent_server.models import LaunchedAgentProfile, StoredConversation
-from openhands.sdk import LLM, Agent, AgentContext
-from openhands.sdk.agent.acp_agent import ACPAgent
-from openhands.sdk.conversation.request import (
+from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import LaunchedAgentProfile, StoredConversation
+from agentrt.sdk import LLM, Agent, AgentContext
+from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.conversation.request import (
     AgentLaunchAdditions,
     StartConversationRequest,
 )
-from openhands.sdk.conversation.state import (
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.tool.client_tool import ClientToolSpec
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.tool.client_tool import ClientToolSpec
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 _RUNTIME_SERVICES = """<RUNTIME_SERVICES>
@@ -133,7 +133,7 @@ async def test_launch_additions_apply_after_agent_resolution(profile_launch, tmp
 
     with (
         patch(
-            "openhands.agent_server.conversation_service._resolve_agent_from_profile",
+            "agentrt.agent_server.conversation_service._resolve_agent_from_profile",
             return_value=(resolved_agent, launched),
         ) as resolve_profile,
         patch.object(

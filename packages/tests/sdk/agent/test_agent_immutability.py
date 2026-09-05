@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.agent.agent import Agent
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent.agent import Agent
+from agentrt.sdk.llm import LLM
 
 
 def test_agent_is_frozen():

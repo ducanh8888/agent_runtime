@@ -8,12 +8,12 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.sdk.agent.acp_file_credentials import (
+from agentrt.sdk.agent.acp_file_credentials import (
     CODEX_AUTH_SECRET_NAME,
     create_file_credential_lifecycle,
 )
-from openhands.sdk.conversation.secret_registry import SecretRegistry
-from openhands.sdk.credential import (
+from agentrt.sdk.conversation.secret_registry import SecretRegistry
+from agentrt.sdk.credential import (
     CredentialAuthorizationRejected,
     CredentialConflict,
     CredentialNeedsReauthentication,
@@ -192,7 +192,7 @@ def test_mask_tracking_does_not_sleep_or_write() -> None:
     try:
         lifecycle.path.write_text(rotated, encoding="utf-8")
         with patch(
-            "openhands.sdk.agent.acp_file_credentials.time.sleep",
+            "agentrt.sdk.agent.acp_file_credentials.time.sleep",
             side_effect=AssertionError("mask tracking must not sleep"),
         ):
             lifecycle.track_current()
@@ -296,7 +296,7 @@ def test_monitor_logs_persistent_writeback_failure_once() -> None:
     runtime = cast(Any, lifecycle)
     try:
         with patch(
-            "openhands.sdk.agent.acp_file_credentials.logger.warning"
+            "agentrt.sdk.agent.acp_file_credentials.logger.warning"
         ) as warning:
             lifecycle.path.write_text(_auth("refresh-r1"), encoding="utf-8")
             deadline = time.monotonic() + 2

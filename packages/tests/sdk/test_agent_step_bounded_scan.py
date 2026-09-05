@@ -4,13 +4,13 @@ from collections.abc import Iterator
 
 import pytest
 
-from openhands.sdk.agent.agent import Agent
-from openhands.sdk.conversation import LocalConversation
-from openhands.sdk.conversation.event_store import EventLog
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.workspace.local import LocalWorkspace
+from agentrt.sdk.agent.agent import Agent
+from agentrt.sdk.conversation import LocalConversation
+from agentrt.sdk.conversation.event_store import EventLog
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.workspace.local import LocalWorkspace
 
 
 class _LimitedIterEvents(EventLog):
@@ -130,7 +130,7 @@ def test_agent_step_legacy_state_no_last_user_id(tmp_path, caplog):
     conv.state.last_user_message_id = None
 
     # Capture debug logs
-    with caplog.at_level(logging.DEBUG, logger="openhands.sdk.agent.agent"):
+    with caplog.at_level(logging.DEBUG, logger="agentrt.sdk.agent.agent"):
         # Step should NOT finish early since we can't check blocked messages
         # without last_user_message_id. It will proceed to LLM call which will
         # fail due to invalid API key, but that's expected.

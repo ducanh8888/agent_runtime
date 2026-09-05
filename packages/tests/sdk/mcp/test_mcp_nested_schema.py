@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import mcp.types
 
-from openhands.sdk.mcp.definition import MCPToolAction
-from openhands.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
+from agentrt.sdk.mcp.definition import MCPToolAction
+from agentrt.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
 
 
 class DummyExecutor(MCPToolExecutor):
@@ -236,7 +236,7 @@ class TestInjectedFields:
 
     def test_security_risk_not_injected_for_readonly(self) -> None:
         """Read-only tools should NOT get security_risk."""
-        from openhands.sdk.tool import ToolAnnotations
+        from agentrt.sdk.tool import ToolAnnotations
 
         mcp_tool = mcp.types.Tool(
             name="readonly_tool",

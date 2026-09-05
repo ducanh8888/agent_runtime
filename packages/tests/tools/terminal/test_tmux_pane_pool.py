@@ -6,11 +6,11 @@ import time
 
 import pytest
 
-from openhands.tools.terminal.constants import (
+from agentrt.tools.terminal.constants import (
     TMUX_SESSION_HEIGHT,
     TMUX_SESSION_WIDTH,
 )
-from openhands.tools.terminal.terminal.tmux_pane_pool import TmuxPanePool
+from agentrt.tools.terminal.terminal.tmux_pane_pool import TmuxPanePool
 
 
 def test_tmux_session_viewport_is_bounded():
@@ -251,7 +251,7 @@ def test_checkout_after_close_raises(pool):
 
 def test_checkin_foreign_pane_is_ignored(pool):
     """Checkin of a pane not from this pool is ignored."""
-    from openhands.tools.terminal.terminal.tmux_terminal import TmuxTerminal
+    from agentrt.tools.terminal.terminal.tmux_terminal import TmuxTerminal
 
     fake = TmuxTerminal.__new__(TmuxTerminal)
     pool.checkin(fake)  # should log warning, not crash

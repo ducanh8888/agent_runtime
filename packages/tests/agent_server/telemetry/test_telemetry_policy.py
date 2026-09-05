@@ -6,8 +6,8 @@ There is no deployment mode axis. Effective consent is resolved from
 
 import pytest
 
-from openhands.agent_server.config import Config
-from openhands.agent_server.telemetry.policy import (
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.telemetry.policy import (
     CONSENT_ENV,
     CONSENT_MODE_ENV,
     DO_NOT_TRACK_ENV,

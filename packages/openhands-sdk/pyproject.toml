@@ -44,7 +44,7 @@ build-backend = "setuptools.build_meta"
 "" = "."
 
 [tool.setuptools.packages.find]
-include = ["openhands.sdk*"]
+include = ["agentrt.sdk*"]
 namespaces = true
 
 [tool.setuptools.package-data]

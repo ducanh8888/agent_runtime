@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.skills import load_project_skills
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.skills import load_project_skills
 
 
 _REPO_BASELINE_TEXT = (

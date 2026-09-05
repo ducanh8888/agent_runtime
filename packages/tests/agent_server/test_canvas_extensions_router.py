@@ -12,7 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.canvas_extensions_router import canvas_extensions_router
+from agentrt.agent_server.canvas_extensions_router import canvas_extensions_router
 
 from .canvas_extensions.conftest import write_extension
 
@@ -22,7 +22,7 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     """A TestClient whose install store is an isolated temp directory."""
     store = tmp_path / "installed-store"
     monkeypatch.setattr(
-        "openhands.agent_server.canvas_extensions.installed."
+        "agentrt.agent_server.canvas_extensions.installed."
         "get_installed_canvas_extensions_dir",
         lambda: store,
     )

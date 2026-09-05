@@ -8,8 +8,8 @@ this in several places; this exercises the single SDK owner.
 
 from pydantic import SecretStr
 
-from openhands.sdk import apply_agent_settings_diff, validate_agent_settings
-from openhands.sdk.settings.model import (
+from agentrt.sdk import apply_agent_settings_diff, validate_agent_settings
+from agentrt.sdk.settings.model import (
     AGENT_SETTINGS_SCHEMA_VERSION,
     ACPAgentSettings,
     LLMAgentSettings,
@@ -172,6 +172,6 @@ def test_validate_never_returns_llm_subclass() -> None:
 
 
 def test_llm_agent_settings_remains_importable() -> None:
-    from openhands.sdk.settings.model import LLMAgentSettings as _LLM
+    from agentrt.sdk.settings.model import LLMAgentSettings as _LLM
 
     assert issubclass(_LLM, OpenHandsAgentSettings)

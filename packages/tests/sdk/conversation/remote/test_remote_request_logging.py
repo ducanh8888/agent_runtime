@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
-from openhands.sdk.conversation.impl.remote_conversation import _send_request
-from openhands.sdk.utils.redact import (
+from agentrt.sdk.conversation.impl.remote_conversation import _send_request
+from agentrt.sdk.utils.redact import (
     http_error_log_content,
     is_secret_key,
     sanitize_dict,

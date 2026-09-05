@@ -13,9 +13,9 @@ import pytest
 @pytest.fixture
 def mock_docker_workspace():
     """Create a mocked DockerWorkspace with minimal setup."""
-    from openhands.workspace import DockerWorkspace
+    from agentrt.workspace import DockerWorkspace
 
-    with patch("openhands.workspace.docker.workspace.execute_command") as mock_exec:
+    with patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec:
         mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
 
         with patch.object(DockerWorkspace, "_start_container"):
@@ -32,7 +32,7 @@ def mock_docker_workspace():
 @pytest.fixture
 def mock_api_workspace():
     """Create a mocked APIRemoteWorkspace with minimal setup."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime"):
         workspace = APIRemoteWorkspace(
@@ -52,7 +52,7 @@ def mock_api_workspace():
 @pytest.fixture
 def mock_cloud_workspace():
     """Create a mocked OpenHandsCloudWorkspace with minimal setup."""
-    from openhands.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import OpenHandsCloudWorkspace
 
     with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
         workspace = OpenHandsCloudWorkspace(
@@ -74,7 +74,7 @@ def mock_cloud_workspace():
 
 def test_local_workspace_pause_is_noop():
     """Test that pause() is a no-op for LocalWorkspace."""
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.workspace import LocalWorkspace
 
     workspace = LocalWorkspace(working_dir="/tmp")
     # Should not raise
@@ -83,7 +83,7 @@ def test_local_workspace_pause_is_noop():
 
 def test_local_workspace_resume_is_noop():
     """Test that resume() is a no-op for LocalWorkspace."""
-    from openhands.sdk.workspace import LocalWorkspace
+    from agentrt.sdk.workspace import LocalWorkspace
 
     workspace = LocalWorkspace(working_dir="/tmp")
     # Should not raise
@@ -126,10 +126,10 @@ def test_docker_workspace_resume_calls_docker_unpause(mock_docker_workspace):
 
 def test_docker_workspace_pause_raises_if_no_container():
     """Test that pause() raises RuntimeError if container not running."""
-    from openhands.workspace import DockerWorkspace
+    from agentrt.workspace import DockerWorkspace
 
     with patch.object(DockerWorkspace, "_start_container"):
-        with patch("openhands.workspace.docker.workspace.execute_command") as mock_exec:
+        with patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec:
             mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
             workspace = DockerWorkspace(server_image="test:latest")
 
@@ -141,10 +141,10 @@ def test_docker_workspace_pause_raises_if_no_container():
 
 def test_docker_workspace_resume_raises_if_no_container():
     """Test that resume() raises RuntimeError if container not running."""
-    from openhands.workspace import DockerWorkspace
+    from agentrt.workspace import DockerWorkspace
 
     with patch.object(DockerWorkspace, "_start_container"):
-        with patch("openhands.workspace.docker.workspace.execute_command") as mock_exec:
+        with patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec:
             mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
             workspace = DockerWorkspace(server_image="test:latest")
 
@@ -184,7 +184,7 @@ def test_api_workspace_resume_calls_api_endpoint(mock_api_workspace):
 
 def test_api_workspace_pause_raises_if_no_runtime():
     """Test that pause() raises RuntimeError if runtime not running."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime"):
         workspace = APIRemoteWorkspace(
@@ -201,7 +201,7 @@ def test_api_workspace_pause_raises_if_no_runtime():
 
 def test_api_workspace_resume_raises_if_no_runtime():
     """Test that resume() raises RuntimeError if runtime not running."""
-    from openhands.workspace import APIRemoteWorkspace
+    from agentrt.workspace import APIRemoteWorkspace
 
     with patch.object(APIRemoteWorkspace, "_start_or_attach_to_runtime"):
         workspace = APIRemoteWorkspace(
@@ -241,7 +241,7 @@ def test_cloud_workspace_resume_calls_resume_sandbox(mock_cloud_workspace):
 
 def test_cloud_workspace_resume_raises_if_no_sandbox():
     """Test that resume() raises RuntimeError if sandbox not running."""
-    from openhands.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import OpenHandsCloudWorkspace
 
     with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
         workspace = OpenHandsCloudWorkspace(

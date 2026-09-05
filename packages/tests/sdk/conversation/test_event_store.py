@@ -5,16 +5,16 @@ from unittest.mock import Mock
 
 import pytest
 
-from openhands.sdk.conversation.event_store import LOCK_FILE_NAME, EventLog
-from openhands.sdk.conversation.persistence_const import (
+from agentrt.sdk.conversation.event_store import LOCK_FILE_NAME, EventLog
+from agentrt.sdk.conversation.persistence_const import (
     EVENT_FILE_PATTERN,
     EVENT_NAME_RE,
     EVENTS_DIR,
 )
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.io.memory import InMemoryFileStore
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.utils.path import posix_path_name
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.io.memory import InMemoryFileStore
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.utils.path import posix_path_name
 
 
 def create_test_event(event_id: str, content: str = "Test content") -> MessageEvent:
@@ -238,7 +238,7 @@ def test_event_log_index_gaps_detection():
             "content": [{"type": "text", "text": "Event 0"}],
         },
         "source": "user",
-        "kind": "openhands.sdk.event.llm_convertible.MessageEvent",
+        "kind": "agentrt.sdk.event.llm_convertible.MessageEvent",
     }
     fs.write("events/event-00000-event-0.json", json.dumps(event0))
 
@@ -249,7 +249,7 @@ def test_event_log_index_gaps_detection():
             "content": [{"type": "text", "text": "Event 2"}],
         },
         "source": "user",
-        "kind": "openhands.sdk.event.llm_convertible.MessageEvent",
+        "kind": "agentrt.sdk.event.llm_convertible.MessageEvent",
     }
     fs.write("events/event-00002-event-2.json", json.dumps(event2))
 
@@ -376,7 +376,7 @@ def test_event_log_concurrent_append_thread_safety():
     import tempfile
     import threading
 
-    from openhands.sdk.io.local import LocalFileStore
+    from agentrt.sdk.io.local import LocalFileStore
 
     with tempfile.TemporaryDirectory() as temp_dir:
         fs = LocalFileStore(temp_dir)
@@ -412,7 +412,7 @@ def test_event_log_concurrent_writes_serialized():
     """Test two EventLog instances serialize writes correctly."""
     import tempfile
 
-    from openhands.sdk.io.local import LocalFileStore
+    from agentrt.sdk.io.local import LocalFileStore
 
     with tempfile.TemporaryDirectory() as temp_dir:
         fs = LocalFileStore(temp_dir)

@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import pytest
 
-from openhands.tools.terminal.terminal.windows_terminal import WindowsTerminal
+from agentrt.tools.terminal.terminal.windows_terminal import WindowsTerminal
 
 
 class _FakeStdin:

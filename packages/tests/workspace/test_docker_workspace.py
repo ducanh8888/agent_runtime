@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from pydantic import ValidationError
 
-from openhands.workspace import (
+from agentrt.workspace import (
     ApptainerWorkspace,
     DockerDevWorkspace,
     DockerWorkspace,
@@ -20,7 +20,7 @@ from openhands.workspace import (
 def mock_docker_workspace():
     """Fixture to create a mocked DockerWorkspace with minimal setup."""
 
-    with patch("openhands.workspace.docker.workspace.execute_command") as mock_exec:
+    with patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec:
         # Mock execute_command to return success
         mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
 
@@ -53,7 +53,7 @@ def test_docker_workspace_import():
 
 def test_docker_workspace_inheritance():
     """Test that DockerWorkspace inherits from RemoteWorkspace."""
-    from openhands.sdk.workspace import RemoteWorkspace
+    from agentrt.sdk.workspace import RemoteWorkspace
 
     assert issubclass(DockerWorkspace, RemoteWorkspace)
 
@@ -75,8 +75,8 @@ def test_docker_workspace_no_build_import():
     """DockerWorkspace import should not pull in build-time dependencies."""
     code = (
         "import importlib, sys\n"
-        "importlib.import_module('openhands.workspace')\n"
-        "print('1' if 'openhands.agent_server.docker.build' in sys.modules else '0')\n"
+        "importlib.import_module('agentrt.workspace')\n"
+        "print('1' if 'agentrt.agent_server.docker.build' in sys.modules else '0')\n"
     )
 
     env = os.environ.copy()
@@ -155,11 +155,11 @@ def test_docker_network(mock_docker_workspace):
     # We need to mock things that _start_container calls before and after docker run
     with (
         patch(
-            "openhands.workspace.docker.workspace.check_port_available",
+            "agentrt.workspace.docker.workspace.check_port_available",
             return_value=True,
         ),
         patch(
-            "openhands.workspace.docker.workspace.find_available_tcp_port",
+            "agentrt.workspace.docker.workspace.find_available_tcp_port",
             return_value=8000,
         ),
         patch.object(DockerWorkspace, "_wait_for_health"),
@@ -217,16 +217,16 @@ def test_docker_workspace_startup_uses_health_check_timeout():
     """Test that _start_container passes health_check_timeout to _wait_for_health."""
     with (
         patch(
-            "openhands.workspace.docker.workspace.check_port_available",
+            "agentrt.workspace.docker.workspace.check_port_available",
             return_value=True,
         ),
         patch(
-            "openhands.workspace.docker.workspace.find_available_tcp_port",
+            "agentrt.workspace.docker.workspace.find_available_tcp_port",
             return_value=8000,
         ),
-        patch("openhands.workspace.docker.workspace.execute_command") as mock_exec,
+        patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec,
         patch.object(DockerWorkspace, "_wait_for_health") as mock_wait,
-        patch("openhands.workspace.docker.workspace.RemoteWorkspace.model_post_init"),
+        patch("agentrt.workspace.docker.workspace.RemoteWorkspace.model_post_init"),
     ):
         mock_exec.return_value = Mock(returncode=0, stdout="container_123", stderr="")
         DockerWorkspace(server_image="test:latest", health_check_timeout=60.0)
@@ -236,7 +236,7 @@ def test_docker_workspace_startup_uses_health_check_timeout():
 def test_docker_workspace_resume_uses_health_check_timeout():
     """Test that resume() passes health_check_timeout to _wait_for_health."""
     with patch.object(DockerWorkspace, "_start_container"):
-        with patch("openhands.workspace.docker.workspace.execute_command") as mock_exec:
+        with patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec:
             mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
             workspace = DockerWorkspace(
                 server_image="test:latest", health_check_timeout=30.0
@@ -245,7 +245,7 @@ def test_docker_workspace_resume_uses_health_check_timeout():
     workspace._container_id = "container_id_123"
 
     with (
-        patch("openhands.workspace.docker.workspace.execute_command") as mock_exec,
+        patch("agentrt.workspace.docker.workspace.execute_command") as mock_exec,
         patch.object(workspace, "_wait_for_health") as mock_wait,
     ):
         mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")
@@ -256,13 +256,13 @@ def test_docker_workspace_resume_uses_health_check_timeout():
 def test_apptainer_workspace_startup_uses_health_check_timeout():
     """Test that model_post_init passes health_check_timeout to _wait_for_health."""
     with (
-        patch("openhands.workspace.apptainer.workspace.execute_command") as mock_exec,
+        patch("agentrt.workspace.apptainer.workspace.execute_command") as mock_exec,
         patch(
-            "openhands.workspace.apptainer.workspace.check_port_available",
+            "agentrt.workspace.apptainer.workspace.check_port_available",
             return_value=True,
         ),
         patch(
-            "openhands.workspace.apptainer.workspace.find_available_tcp_port",
+            "agentrt.workspace.apptainer.workspace.find_available_tcp_port",
             return_value=8000,
         ),
         patch.object(
@@ -271,7 +271,7 @@ def test_apptainer_workspace_startup_uses_health_check_timeout():
         patch.object(ApptainerWorkspace, "_start_container"),
         patch.object(ApptainerWorkspace, "_wait_for_health") as mock_wait,
         patch(
-            "openhands.workspace.apptainer.workspace.RemoteWorkspace.model_post_init"
+            "agentrt.workspace.apptainer.workspace.RemoteWorkspace.model_post_init"
         ),
     ):
         mock_exec.return_value = Mock(returncode=0, stdout="", stderr="")

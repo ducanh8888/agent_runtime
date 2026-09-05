@@ -7,19 +7,19 @@ the rule content is appended to the resulting ObservationEvent's
 
 from pathlib import Path
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.event import ActionEvent, ObservationEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.skills import PathTrigger, Skill
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool.builtins.finish import FinishObservation
-from openhands.sdk.tool.builtins.invoke_skill import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.event import ActionEvent, ObservationEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.skills import PathTrigger, Skill
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool.builtins.finish import FinishObservation
+from agentrt.sdk.tool.builtins.invoke_skill import (
     InvokeSkillAction,
     InvokeSkillExecutor,
 )
-from openhands.sdk.tool.schema import Action
+from agentrt.sdk.tool.schema import Action
 
 
 class _FileAction(Action):

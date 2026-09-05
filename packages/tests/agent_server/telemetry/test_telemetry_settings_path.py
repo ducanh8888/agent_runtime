@@ -8,9 +8,9 @@ settings-update path re-resolves the telemetry decision before returning.
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.persistence.store import get_settings_store
-from openhands.agent_server.telemetry.policy import TelemetryDecision, resolve
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.persistence.store import get_settings_store
+from agentrt.agent_server.telemetry.policy import TelemetryDecision, resolve
 
 
 SETTINGS_URL = "/api/settings"
@@ -66,7 +66,7 @@ def test_consent_is_written_and_read_through_misc_settings(client, config_factor
 
 
 def test_consent_survives_a_store_reset(client, config_factory, temp_persistence_dir):
-    from openhands.agent_server.persistence.store import reset_stores
+    from agentrt.agent_server.persistence.store import reset_stores
 
     with client as c:
         c.patch(SETTINGS_URL, json=diff("granted"))
@@ -97,7 +97,7 @@ def test_consent_does_not_appear_as_a_typed_settings_field(client):
 
 
 def test_granting_consent_notifies_the_sink(client, monkeypatch):
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     sink = RecordingSink(enabled=False)
     with client as c:
@@ -112,7 +112,7 @@ def test_granting_consent_notifies_the_sink(client, monkeypatch):
 
 def test_revoking_consent_discards_queued_events(client, monkeypatch):
     """The unchanged acceptance criterion, now via the settings path."""
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     sink = RecordingSink(enabled=True)
     sink.events.extend(["queued-1", "queued-2", "queued-3"])
@@ -127,7 +127,7 @@ def test_revoking_consent_discards_queued_events(client, monkeypatch):
 
 def test_an_unrelated_settings_write_still_re_resolves(client, monkeypatch):
     """A misc write that does not touch telemetry is harmless but re-resolved."""
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     sink = RecordingSink(enabled=False)
     with client as c:
@@ -138,7 +138,7 @@ def test_an_unrelated_settings_write_still_re_resolves(client, monkeypatch):
 
 
 def test_a_non_misc_settings_write_does_not_touch_telemetry(client, monkeypatch):
-    import openhands.agent_server.telemetry.service as service_mod
+    import agentrt.agent_server.telemetry.service as service_mod
 
     sink = RecordingSink(enabled=True)
     with client as c:
@@ -162,9 +162,9 @@ def test_there_is_no_dedicated_consent_endpoint(client):
 
 def test_request_failed_uses_the_distinct_id_header(client, monkeypatch):
     """A 500 attributes to the frontend's PostHog identity when supplied."""
-    import openhands.agent_server.telemetry.service as service_mod
-    from openhands.agent_server.api import create_app
-    from openhands.agent_server.telemetry.factory import (
+    import agentrt.agent_server.telemetry.service as service_mod
+    from agentrt.agent_server.api import create_app
+    from agentrt.agent_server.telemetry.factory import (
         DISTINCT_ID_HEADER,
         DiagnosticEventFactory,
         build_runtime_properties,
@@ -210,9 +210,9 @@ def test_request_failed_uses_the_distinct_id_header(client, monkeypatch):
 
 
 def test_request_failed_without_the_header_is_anonymous(client, monkeypatch):
-    import openhands.agent_server.telemetry.service as service_mod
-    from openhands.agent_server.api import create_app
-    from openhands.agent_server.telemetry.factory import (
+    import agentrt.agent_server.telemetry.service as service_mod
+    from agentrt.agent_server.api import create_app
+    from agentrt.agent_server.telemetry.factory import (
         ANONYMOUS_PREFIX,
         DiagnosticEventFactory,
         build_runtime_properties,
@@ -256,10 +256,10 @@ def test_request_failed_without_the_header_is_anonymous(client, monkeypatch):
 def test_request_failed_is_emitted_for_an_exception_group(client, monkeypatch):
     """Regression: a BaseExceptionGroup with no HTTPException returned a 500 but
     skipped request_failed telemetry."""
-    import openhands.agent_server.telemetry.service as service_mod
-    from openhands.agent_server.api import create_app
-    from openhands.agent_server.telemetry import models as m
-    from openhands.agent_server.telemetry.factory import (
+    import agentrt.agent_server.telemetry.service as service_mod
+    from agentrt.agent_server.api import create_app
+    from agentrt.agent_server.telemetry import models as m
+    from agentrt.agent_server.telemetry.factory import (
         DiagnosticEventFactory,
         build_runtime_properties,
     )

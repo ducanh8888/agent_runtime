@@ -5,19 +5,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openhands.sdk.agent.critic_mixin import (
+from agentrt.sdk.agent.critic_mixin import (
     ITERATIVE_REFINEMENT_ITERATION_KEY,
     CriticMixin,
 )
-from openhands.sdk.critic.base import (
+from agentrt.sdk.critic.base import (
     CriticBase,
     CriticResult,
     IterativeRefinementConfig,
 )
-from openhands.sdk.critic.impl.api import APIBasedCritic
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent
-from openhands.sdk.tool.builtins.finish import FinishAction
+from agentrt.sdk.critic.impl.api import APIBasedCritic
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent
+from agentrt.sdk.tool.builtins.finish import FinishAction
 
 
 class MockCritic(CriticBase):

@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk import LLM, Agent, Conversation
-from openhands.sdk.tool import Tool, client_tool as ct, registry as reg
-from openhands.sdk.tool.client_tool import ClientToolSpec
-from openhands.sdk.utils.models import clear_subclass_cache
+from agentrt.sdk import LLM, Agent, Conversation
+from agentrt.sdk.tool import Tool, client_tool as ct, registry as reg
+from agentrt.sdk.tool.client_tool import ClientToolSpec
+from agentrt.sdk.utils.models import clear_subclass_cache
 
 
 @pytest.fixture(autouse=True)

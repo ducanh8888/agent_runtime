@@ -13,10 +13,10 @@ Key behaviors tested:
 - Backward compatibility with existing summary properties
 """
 
-from openhands.sdk.context.view import View
-from openhands.sdk.event import Condensation, CondensationSummaryEvent
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import TextContent
+from agentrt.sdk.context.view import View
+from agentrt.sdk.event import Condensation, CondensationSummaryEvent
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import TextContent
 from tests.sdk.context.view.conftest import message_event  # noqa: F401
 
 

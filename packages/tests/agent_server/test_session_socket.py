@@ -7,17 +7,17 @@ from uuid import uuid4
 import pytest
 from fastapi import WebSocketDisconnect
 
-from openhands.agent_server.session_protocol import MAX_FRAME_BYTES
-from openhands.agent_server.session_socket import (
+from agentrt.agent_server.session_protocol import MAX_FRAME_BYTES
+from agentrt.agent_server.session_socket import (
     _ConnectionWriter,
     _inbound_loop,
     _read_page,
     _replay,
     _SessionSubscriber,
 )
-from openhands.sdk import Message, TextContent
-from openhands.sdk.event import MessageEvent, StreamingDeltaEvent
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk import Message, TextContent
+from agentrt.sdk.event import MessageEvent, StreamingDeltaEvent
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 
 
 def _msg(text: str) -> MessageEvent:

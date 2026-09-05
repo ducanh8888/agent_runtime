@@ -15,14 +15,14 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server import agent_profiles_router as router_module
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.persistence import reset_stores
-from openhands.agent_server.profiles_router import MAX_PROFILES
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.profiles import (
+from agentrt.agent_server import agent_profiles_router as router_module
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.persistence import reset_stores
+from agentrt.agent_server.profiles_router import MAX_PROFILES
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.profiles import (
     ACPAgentProfile,
     AgentProfileStore,
     OpenHandsAgentProfile,
@@ -53,7 +53,7 @@ def client(temp_agent_profiles_dir, temp_settings_dir, monkeypatch):
     config = Config(static_files_path=None, session_api_keys=[], secret_key=None)
     app = create_app(config)
     with patch(
-        "openhands.agent_server.agent_profiles_router.get_agent_profile_store",
+        "agentrt.agent_server.agent_profiles_router.get_agent_profile_store",
         lambda: AgentProfileStore(base_dir=temp_agent_profiles_dir),
     ):
         yield TestClient(app)
@@ -224,9 +224,9 @@ def test_seed_llm_profile_limit_reached_does_not_500(client, default_llm_profile
     instead of 500ing.
 
     Regression test: the backfill must catch the LLM store's own
-    ``ProfileLimitExceeded`` (``openhands.sdk.llm.llm_profile_store``), not
+    ``ProfileLimitExceeded`` (``agentrt.sdk.llm.llm_profile_store``), not
     the identically-named exception from the agent-profile store
-    (``openhands.sdk.profiles``) — catching the wrong class let the real one
+    (``agentrt.sdk.profiles``) — catching the wrong class let the real one
     propagate as an unhandled 500.
     """
     for i in range(MAX_PROFILES):
@@ -508,7 +508,7 @@ def test_save_schemaless_body_with_stray_skills_key_rejected(client):
 def test_save_current_schema_version_rejects_stray_skills_key(client):
     """A body that claims the current schema version with a stray ``skills`` key
     is a genuine extra='forbid' violation (422)."""
-    from openhands.sdk.profiles.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
+    from agentrt.sdk.profiles.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
 
     response = client.post(
         "/api/agent-profiles/bad",
@@ -692,7 +692,7 @@ def test_activate_unknown_id_returns_404(client, store):
 
 def test_activate_settings_corruption_returns_500(client, store, monkeypatch):
     """A corrupted/mis-keyed settings file is a server-side failure (500)."""
-    from openhands.agent_server.persistence.store import FileSettingsStore
+    from agentrt.agent_server.persistence.store import FileSettingsStore
 
     store.save(OpenHandsAgentProfile(name="p", llm_profile_ref="x"))
     profile_id = client.get("/api/agent-profiles/p").json()["profile"]["id"]
@@ -842,11 +842,11 @@ def client_with_llm_store(
     app = create_app(config)
     with (
         patch(
-            "openhands.agent_server.agent_profiles_router.get_agent_profile_store",
+            "agentrt.agent_server.agent_profiles_router.get_agent_profile_store",
             lambda: AgentProfileStore(base_dir=temp_agent_profiles_dir),
         ),
         patch(
-            "openhands.agent_server.agent_profiles_router.get_llm_profile_store",
+            "agentrt.agent_server.agent_profiles_router.get_llm_profile_store",
             lambda: LLMProfileStore(base_dir=temp_llm_profiles_dir),
         ),
     ):
@@ -932,7 +932,7 @@ def test_materialize_reports_disabled_and_resolved_skills(
     """The materialize dry-run reports the deny-list and the resolved set
     (catalog minus disabled). A disabled name absent from the catalog is a no-op
     and does NOT invalidate the profile — the deny-list can't dangle (#4017)."""
-    from openhands.sdk.skills import Skill
+    from agentrt.sdk.skills import Skill
 
     llm_store.save("base-llm", LLM(model="gpt-4o"), include_secrets=True)
     store.save(
@@ -944,7 +944,7 @@ def test_materialize_reports_disabled_and_resolved_skills(
     )
 
     with patch(
-        "openhands.agent_server.agent_profiles_router.discover_profile_skills",
+        "agentrt.agent_server.agent_profiles_router.discover_profile_skills",
         return_value=[
             Skill(name="alpha", content="x"),
             Skill(name="beta", content="y"),

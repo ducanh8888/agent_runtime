@@ -6,7 +6,7 @@ import os
 import subprocess
 from textwrap import dedent
 
-from openhands.sdk import get_logger
+from agentrt.sdk import get_logger
 from tests.integration.base import BaseIntegrationTest, SkipTest, TestResult
 from tests.integration.behavior_utils import (
     get_conversation_summary,

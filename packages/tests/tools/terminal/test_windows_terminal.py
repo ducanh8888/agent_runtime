@@ -10,15 +10,15 @@ from typing import cast
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.tool import Tool, register_tool
-from openhands.sdk.workspace import LocalWorkspace
-from openhands.tools.terminal import TerminalAction, TerminalTool
-from openhands.tools.terminal.impl import TerminalExecutor
-from openhands.tools.terminal.terminal import TerminalSession, create_terminal_session
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.tool import Tool, register_tool
+from agentrt.sdk.workspace import LocalWorkspace
+from agentrt.tools.terminal import TerminalAction, TerminalTool
+from agentrt.tools.terminal.impl import TerminalExecutor
+from agentrt.tools.terminal.terminal import TerminalSession, create_terminal_session
 
 
 pytestmark = pytest.mark.skipif(

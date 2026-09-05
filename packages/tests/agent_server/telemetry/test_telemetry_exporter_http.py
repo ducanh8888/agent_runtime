@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.http_exporter import HttpExporter
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.http_exporter import HttpExporter
 
 
 ENDPOINT = "https://telemetry.example.test/v1/events"

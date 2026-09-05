@@ -6,16 +6,16 @@ from typing import cast
 
 import pytest
 
-from openhands.sdk.event.base import LLMConvertibleEvent
-from openhands.sdk.event.condenser import CondensationSummaryEvent
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.event.base import LLMConvertibleEvent
+from agentrt.sdk.event.condenser import CondensationSummaryEvent
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     AgentErrorEvent,
     MessageEvent,
     ObservationEvent,
     SystemPromptEvent,
 )
-from openhands.sdk.llm import (
+from agentrt.sdk.llm import (
     ImageContent,
     Message,
     MessageToolCall,
@@ -23,7 +23,7 @@ from openhands.sdk.llm import (
     TextContent,
     ThinkingBlock,
 )
-from openhands.sdk.tool import Action, Observation
+from agentrt.sdk.tool import Action, Observation
 
 
 class EventsToMessagesMockAction(Action):

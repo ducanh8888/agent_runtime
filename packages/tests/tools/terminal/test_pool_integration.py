@@ -11,13 +11,13 @@ import time
 
 import pytest
 
-from openhands.sdk.tool import DeclaredResources
-from openhands.tools.terminal.definition import (
+from agentrt.sdk.tool import DeclaredResources
+from agentrt.tools.terminal.definition import (
     TerminalAction,
     TerminalObservation,
     TerminalTool,
 )
-from openhands.tools.terminal.impl import TerminalExecutor
+from agentrt.tools.terminal.impl import TerminalExecutor
 
 
 @pytest.fixture

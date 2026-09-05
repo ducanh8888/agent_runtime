@@ -7,8 +7,8 @@ from unittest.mock import Mock, mock_open, patch
 import httpx
 import pytest
 
-from openhands.sdk.workspace.models import CommandResult, FileOperationResult
-from openhands.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
+from agentrt.sdk.workspace.models import CommandResult, FileOperationResult
+from agentrt.sdk.workspace.remote.remote_workspace_mixin import RemoteWorkspaceMixin
 
 
 class RemoteWorkspaceMixinHelper(RemoteWorkspaceMixin):
@@ -206,7 +206,7 @@ def test_execute_command_generator_polling_loop(mock_time, mock_sleep):
     mock_sleep.assert_called_with(0.1)
 
 
-@patch("openhands.sdk.workspace.remote.remote_workspace_mixin.time")
+@patch("agentrt.sdk.workspace.remote.remote_workspace_mixin.time")
 def test_execute_command_generator_timeout(mock_time, caplog):
     """Test _execute_command_generator handles timeout correctly."""
     mixin = RemoteWorkspaceMixinHelper(

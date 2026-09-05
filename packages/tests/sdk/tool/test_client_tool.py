@@ -5,10 +5,10 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import TextContent
-from openhands.sdk.llm.message import MessageToolCall
-from openhands.sdk.tool.client_tool import (
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import TextContent
+from agentrt.sdk.llm.message import MessageToolCall
+from agentrt.sdk.tool.client_tool import (
     ClientTool,
     ClientToolExecutor,
     ClientToolObservation,
@@ -16,9 +16,9 @@ from openhands.sdk.tool.client_tool import (
     ClientToolSpec,
     register_client_tools,
 )
-from openhands.sdk.tool.registry import list_registered_tools, resolve_tool
-from openhands.sdk.tool.schema import Action
-from openhands.sdk.tool.tool import ToolAnnotations, ToolDefinition
+from agentrt.sdk.tool.registry import list_registered_tools, resolve_tool
+from agentrt.sdk.tool.schema import Action
+from agentrt.sdk.tool.tool import ToolAnnotations, ToolDefinition
 
 
 # ---------------------------------------------------------------------------

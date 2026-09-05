@@ -9,7 +9,7 @@ Pattern:
                                                      ↑ References non-existent ID!
 """
 
-from openhands.sdk.llm import Message, TextContent
+from agentrt.sdk.llm import Message, TextContent
 from tests.integration.api_compliance.base import BaseAPIComplianceTest
 
 

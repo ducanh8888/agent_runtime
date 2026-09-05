@@ -11,14 +11,14 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, ImageContent, Message, TextContent
-from openhands.sdk.llm.utils import image_inline
-from openhands.sdk.llm.utils.image_inline import (
+from agentrt.sdk.llm import LLM, ImageContent, Message, TextContent
+from agentrt.sdk.llm.utils import image_inline
+from agentrt.sdk.llm.utils.image_inline import (
     _CACHE,
     amaybe_inline_image_urls,
     maybe_inline_image_urls,
 )
-from openhands.sdk.llm.utils.model_features import get_features
+from agentrt.sdk.llm.utils.model_features import get_features
 
 
 _TINY_PNG = (

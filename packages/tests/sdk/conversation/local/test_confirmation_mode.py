@@ -18,16 +18,16 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation, LocalConversation
-from openhands.sdk.conversation.state import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation, LocalConversation
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.event import ActionEvent, MessageEvent, ObservationEvent
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.llm_convertible import UserRejectObservation
-from openhands.sdk.llm import (
+from agentrt.sdk.event import ActionEvent, MessageEvent, ObservationEvent
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.llm_convertible import UserRejectObservation
+from agentrt.sdk.llm import (
     LLM,
     ImageContent,
     Message,
@@ -35,15 +35,15 @@ from openhands.sdk.llm import (
     MetricsSnapshot,
     TextContent,
 )
-from openhands.sdk.llm.utils.metrics import TokenUsage
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm, NeverConfirm
-from openhands.sdk.tool import (
+from agentrt.sdk.llm.utils.metrics import TokenUsage
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm, NeverConfirm
+from agentrt.sdk.tool import (
     Tool,
     ToolDefinition,
     ToolExecutor,
     register_tool,
 )
-from openhands.sdk.tool.schema import Action, Observation
+from agentrt.sdk.tool.schema import Action, Observation
 
 
 class MockConfirmationModeAction(Action):
@@ -154,7 +154,7 @@ class TestConfirmationMode:
         self.conversation.set_confirmation_policy(AlwaysConfirm())
         mock_completion = self._mock_action_once()
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             return_value=mock_completion.return_value,
         ):
             self.conversation.send_message(
@@ -429,7 +429,7 @@ class TestConfirmationMode:
         self.conversation.set_confirmation_policy(AlwaysConfirm())
         mock_completion = self._mock_message_only("Hello, how can I help you?")
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             return_value=mock_completion.return_value,
         ):
             self.conversation.send_message(
@@ -465,7 +465,7 @@ class TestConfirmationMode:
             # Confirm path per your instruction: call run() to execute pending action
             mock_completion = self._mock_message_only("Task completed successfully!")
             with patch(
-                "openhands.sdk.llm.llm.litellm_completion",
+                "agentrt.sdk.llm.llm.litellm_completion",
                 return_value=mock_completion.return_value,
             ):
                 self.conversation.run()
@@ -515,7 +515,7 @@ class TestConfirmationMode:
 
         # Send a message that should trigger the finish action
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             return_value=mock_completion.return_value,
         ):
             self.conversation.send_message(
@@ -560,7 +560,7 @@ class TestConfirmationMode:
         mock_finish = self._mock_finish_action("Analysis complete")
 
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             side_effect=[mock_think.return_value, mock_finish.return_value],
         ):
             # Kick things off (LLM returns ThinkAction; should execute immediately)
@@ -667,7 +667,7 @@ class TestConfirmationMode:
         assert not self.conversation.is_confirmation_mode_active
 
         # Create agent and set security analyzer on conversation state
-        from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+        from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
 
         agent = Agent(
             llm=self.llm,

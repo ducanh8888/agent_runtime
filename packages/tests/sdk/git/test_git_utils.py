@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from openhands.sdk.git.utils import GIT_EMPTY_TREE_HASH, get_valid_ref
+from agentrt.sdk.git.utils import GIT_EMPTY_TREE_HASH, get_valid_ref
 
 
 def run_bash_command(command: str, cwd: str) -> subprocess.CompletedProcess:

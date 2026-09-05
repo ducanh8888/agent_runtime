@@ -38,16 +38,16 @@ import pytest
 from acp.client.connection import ClientSideConnection
 from acp.exceptions import RequestError as ACPRequestError
 
-from openhands.sdk.agent.acp_agent import (
+from agentrt.sdk.agent.acp_agent import (
     ACPAgent,
     _apply_acp_model,
     _select_auth_method,
 )
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.settings.acp_install_catalog import ACP_INSTALL_CATALOG
-from openhands.sdk.settings.acp_providers import ACP_PROVIDERS
-from openhands.sdk.utils.async_executor import AsyncExecutor
-from openhands.sdk.workspace.local import LocalWorkspace
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.settings.acp_install_catalog import ACP_INSTALL_CATALOG
+from agentrt.sdk.settings.acp_providers import ACP_PROVIDERS
+from agentrt.sdk.utils.async_executor import AsyncExecutor
+from agentrt.sdk.workspace.local import LocalWorkspace
 
 
 def _npm_registry_reachable(timeout: float = 3.0) -> bool:
@@ -216,7 +216,7 @@ def test_acp_conformance_probe(
         return picked
 
     monkeypatch.setattr(
-        "openhands.sdk.agent.acp_agent._select_auth_method", _spy_select_auth_method
+        "agentrt.sdk.agent.acp_agent._select_auth_method", _spy_select_auth_method
     )
 
     agent = ACPAgent(

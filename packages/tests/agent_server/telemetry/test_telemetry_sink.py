@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.policy import (
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.policy import (
     TelemetryConsent,
     TelemetryDecision,
 )
-from openhands.agent_server.telemetry.sink import (
+from agentrt.agent_server.telemetry.sink import (
     BufferedTelemetrySink,
     NoOpTelemetrySink,
 )

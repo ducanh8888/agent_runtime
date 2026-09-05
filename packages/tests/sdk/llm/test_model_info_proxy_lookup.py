@@ -13,7 +13,7 @@ aliases (claude-opus-4-8 vision still off).
 
 from unittest.mock import patch
 
-from openhands.sdk.llm.utils.model_info import (
+from agentrt.sdk.llm.utils.model_info import (
     _get_model_info_from_litellm_proxy,
     _merge_raw_model_metadata,
     get_litellm_model_info,
@@ -59,7 +59,7 @@ def setup_function(_):
 
 def test_lookup_matches_by_model_name_alias():
     """Existing behavior: address by the proxy's public alias."""
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
         info = _get_model_info_from_litellm_proxy(
             secret_api_key="k",
             base_url="https://proxy.example",
@@ -77,7 +77,7 @@ def test_lookup_matches_by_litellm_params_model():
     configured with `litellm_proxy/anthropic/claude-opus-4-8`, so the
     pre-fix matcher (which only looked at `model_name`) missed.
     """
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
         info = _get_model_info_from_litellm_proxy(
             secret_api_key="k",
             base_url="https://proxy.example",
@@ -88,7 +88,7 @@ def test_lookup_matches_by_litellm_params_model():
 
 
 def test_lookup_returns_none_for_unknown_model():
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
         info = _get_model_info_from_litellm_proxy(
             secret_api_key="k",
             base_url="https://proxy.example",
@@ -102,7 +102,7 @@ def test_get_litellm_model_info_uses_proxy_match_for_provider_prefixed_id():
     """End-to-end: `get_litellm_model_info` returns the proxy override when
     the SDK is configured with the provider-prefixed id even though the
     proxy advertises a shorter alias."""
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
         info = get_litellm_model_info(
             secret_api_key="k",
             base_url="https://proxy.example",
@@ -113,7 +113,7 @@ def test_get_litellm_model_info_uses_proxy_match_for_provider_prefixed_id():
 
 
 def test_get_litellm_model_info_uses_proxy_for_openhands_provider_model():
-    with patch("openhands.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
+    with patch("agentrt.sdk.llm.utils.model_info.httpx.get", _patched_httpx_get):
         info = get_litellm_model_info(
             secret_api_key="k",
             base_url=None,
@@ -130,7 +130,7 @@ def test_raw_registry_capabilities_survive_typed_model_info_projection():
             "supports_sampling_params": False,
         }
     }
-    with patch.dict("openhands.sdk.llm.utils.model_info.model_cost", raw, clear=True):
+    with patch.dict("agentrt.sdk.llm.utils.model_info.model_cost", raw, clear=True):
         info = _merge_raw_model_metadata(
             {"key": "future-model", "supports_reasoning": True}
         )

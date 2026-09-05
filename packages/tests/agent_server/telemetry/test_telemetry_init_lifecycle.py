@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-import openhands.agent_server.telemetry.service as service_mod
-from openhands.agent_server.config import Config
-from openhands.agent_server.init_router import InitRequest, InitService
-from openhands.agent_server.telemetry import models as m
-from openhands.agent_server.telemetry.factory import (
+import agentrt.agent_server.telemetry.service as service_mod
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.init_router import InitRequest, InitService
+from agentrt.agent_server.telemetry import models as m
+from agentrt.agent_server.telemetry.factory import (
     DiagnosticEventFactory,
     build_runtime_properties,
 )
@@ -54,7 +54,7 @@ def recording(monkeypatch):
 
 
 def _reset_singletons():
-    from openhands.agent_server import bash_service, conversation_service
+    from agentrt.agent_server import bash_service, conversation_service
 
     conversation_service._conversation_service = None
     bash_service._bash_event_service = None
@@ -97,7 +97,7 @@ async def test_failed_init_emits_no_start_and_retry_emits_exactly_one(
     # place so the emit path is observable regardless.
     monkeypatch.setattr(service_mod, "build_telemetry_sink", _keep_sink(recording))
     monkeypatch.setattr(service_mod, "shutdown_telemetry_sink", _noop_async)
-    import openhands.agent_server.init_router as init_mod
+    import agentrt.agent_server.init_router as init_mod
 
     monkeypatch.setattr(init_mod, "build_telemetry_sink", _keep_sink(recording))
     monkeypatch.setattr(init_mod, "shutdown_telemetry_sink", _noop_async)

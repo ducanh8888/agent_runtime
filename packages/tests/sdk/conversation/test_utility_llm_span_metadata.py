@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.observability.laminar import OPERATION_METADATA_KEY
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.observability.laminar import OPERATION_METADATA_KEY
 
 
 METADATA_ATTRIBUTE_PREFIX = "lmnr.association.properties.metadata."
@@ -36,7 +36,7 @@ def _record_observe_kwargs(unbound_method: Any) -> dict[str, Any]:
                 return recorded
 
         with patch(
-            "openhands.sdk.observability.laminar.should_enable_observability",
+            "agentrt.sdk.observability.laminar.should_enable_observability",
             return_value=True,
         ):
             try:
@@ -86,9 +86,9 @@ def _probe_exported_spans() -> list[dict[str, Any]]:
     )
     from pydantic import SecretStr
 
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.conversation import Conversation
-    from openhands.sdk.llm import LLM, Message, TextContent
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.conversation import Conversation
+    from agentrt.sdk.llm import LLM, Message, TextContent
 
     Laminar.initialize(
         project_api_key="test-key",
@@ -116,7 +116,7 @@ def _probe_exported_spans() -> list[dict[str, Any]]:
     )
 
     with patch(
-        "openhands.sdk.llm.llm.litellm_completion", side_effect=mocked_completion
+        "agentrt.sdk.llm.llm.litellm_completion", side_effect=mocked_completion
     ):
         conversation.send_message(
             Message(role="user", content=[TextContent(text="fix the auth bug")])

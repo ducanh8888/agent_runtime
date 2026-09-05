@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.git.exceptions import GitCommandError, GitRepositoryError
-from openhands.sdk.git.git_changes import get_changes_in_repo, get_git_changes
-from openhands.sdk.git.models import GitChange, GitChangeStatus
+from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
+from agentrt.sdk.git.git_changes import get_changes_in_repo, get_git_changes
+from agentrt.sdk.git.models import GitChange, GitChangeStatus
 
 
 def run_bash_command(command: str, cwd: str) -> subprocess.CompletedProcess:
@@ -356,7 +356,7 @@ def test_get_git_changes_skips_vanished_nested_repo():
     """
     from unittest.mock import patch
 
-    from openhands.sdk.git.exceptions import GitRepositoryError
+    from agentrt.sdk.git.exceptions import GitRepositoryError
 
     with tempfile.TemporaryDirectory() as temp_dir:
         setup_git_repo(temp_dir)
@@ -384,7 +384,7 @@ def test_get_git_changes_skips_vanished_nested_repo():
             return original_fn(repo_dir, ref=ref)
 
         with patch(
-            "openhands.sdk.git.git_changes.get_changes_in_repo",
+            "agentrt.sdk.git.git_changes.get_changes_in_repo",
             side_effect=patched_get_changes,
         ):
             changes = get_git_changes(temp_dir)

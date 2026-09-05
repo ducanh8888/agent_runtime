@@ -9,14 +9,14 @@ import mcp.types
 import pytest
 from pydantic import BaseModel
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.llm import LLM
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
-from openhands.sdk.mcp.tool import MCPToolDefinition
-from openhands.sdk.tool.tool import ToolDefinition
-from openhands.sdk.utils.models import OpenHandsModel
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.config import coerce_mcp_config, dump_mcp_config
+from agentrt.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.tool.tool import ToolDefinition
+from agentrt.sdk.utils.models import OpenHandsModel
 
 
 def mcp_config_model(config: Mapping[str, object]):
@@ -137,7 +137,7 @@ def test_agent_serialization_exposes_mcp_config_with_expose_secrets() -> None:
 
 def test_agent_serialization_encrypts_mcp_config_with_cipher() -> None:
     """MCP SecretStr values are encrypted when cipher context is provided."""
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     llm = LLM(model="test-model", usage_id="test-llm")
     config = {
@@ -165,7 +165,7 @@ def test_agent_serialization_encrypts_mcp_config_with_cipher() -> None:
 
 def test_agent_mcp_config_encryption_decryption_roundtrip() -> None:
     """Test full roundtrip: encrypt on serialize, decrypt on deserialize."""
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     llm = LLM(model="test-model", usage_id="test-llm")
     config = {
@@ -214,7 +214,7 @@ def test_agent_mcp_config_decrypts_nested_env_and_headers_with_cipher() -> None:
     """Encrypted per-value MCP env/header settings decrypt at agent validation."""
     from pydantic import SecretStr
 
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     cipher = Cipher(secret_key="test-per-value-mcp-key")
     encrypted_env = cipher.encrypt(SecretStr("ghp-plaintext-token"))
@@ -268,7 +268,7 @@ def test_agent_mcp_config_rejects_non_dict_plaintext_config() -> None:
 
 
 def test_agent_mcp_config_rejects_malformed_secret_containers() -> None:
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     cipher = Cipher(secret_key="test-per-value-mcp-key")
     agent_dict = {

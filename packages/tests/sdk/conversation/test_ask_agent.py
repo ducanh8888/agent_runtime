@@ -8,16 +8,16 @@ import pytest
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.event.llm_convertible import (
     ActionEvent,
     MessageEvent,
     ObservationEvent,
     SystemPromptEvent,
 )
-from openhands.sdk.llm import (
+from agentrt.sdk.llm import (
     LLM,
     ImageContent,
     LLMResponse,
@@ -26,8 +26,8 @@ from openhands.sdk.llm import (
     MetricsSnapshot,
     TextContent,
 )
-from openhands.sdk.tool import Action, Observation
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.tool import Action, Observation
+from agentrt.sdk.workspace import RemoteWorkspace
 from tests.sdk.conversation.conftest import create_mock_http_client
 
 
@@ -106,7 +106,7 @@ def agent() -> Agent:
 # ---------------------------------------------------------------------------
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_local_conversation_ask_agent(mock_completion, tmp_path, agent):
     """ask_agent returns the LLM response and configures a dedicated ask-agent-llm."""
     mock_completion.return_value = create_mock_llm_response(
@@ -153,7 +153,7 @@ def test_local_conversation_ask_agent(mock_completion, tmp_path, agent):
     assert ask_agent_llm.caching_prompt is True
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_ask_agent_llm_refreshes_after_switch_llm(mock_completion, tmp_path, agent):
     """switch_llm() invalidates the cached ask-agent-llm so /btw follows the switch.
 
@@ -190,7 +190,7 @@ def test_ask_agent_llm_refreshes_after_switch_llm(mock_completion, tmp_path, age
     assert conv.llm_registry.get("ask-agent-llm").model == "gpt-4o"
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_local_conversation_ask_agent_copies_llm_config(mock_completion, tmp_path):
     """ask_agent creates LLM with parameters copied from original agent's LLM."""
     mock_completion.return_value = create_mock_llm_response("Test response")
@@ -242,7 +242,7 @@ def create_mock_model_response(content: str) -> ModelResponse:
     )
 
 
-@patch("openhands.sdk.llm.llm.LLM._transport_call", autospec=True)
+@patch("agentrt.sdk.llm.llm.LLM._transport_call", autospec=True)
 def test_ask_agent_disables_streaming_when_llm_streams(mock_transport, tmp_path):
     """Regression test (sibling of PR #3901): a ``stream=True`` agent LLM must
     still answer ask_agent even though the path passes no ``on_token`` callback.
@@ -275,7 +275,7 @@ def test_ask_agent_disables_streaming_when_llm_streams(mock_transport, tmp_path)
     assert conv.llm_registry.get("ask-agent-llm").stream is False
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_ask_agent(mock_ws_client, agent):
     mock_ws_client.return_value.wait_until_ready.return_value = True
 
@@ -328,7 +328,7 @@ def test_remote_conversation_ask_agent(mock_ws_client, agent):
         assert kwargs["json"] == {"question": "What is the weather?"}
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_ask_agent_with_existing_events_and_tool_calls(
     mock_completion, tmp_path, agent
 ):
@@ -438,12 +438,12 @@ def test_ask_agent_with_existing_events_and_tool_calls(
 # ---------------------------------------------------------------------------
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_local_conversation_ask_agent_raises_context_window_error(
     mock_completion, tmp_path, agent
 ):
     """ask_agent properly propagates LLMContextWindowExceedError from LLM completion."""
-    from openhands.sdk.llm.exceptions import LLMContextWindowExceedError
+    from agentrt.sdk.llm.exceptions import LLMContextWindowExceedError
 
     # Mock LLM completion to raise context window error
     mock_completion.side_effect = LLMContextWindowExceedError(
@@ -464,7 +464,7 @@ def test_local_conversation_ask_agent_raises_context_window_error(
     mock_completion.assert_called_once()
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_local_conversation_ask_agent_raises_failed_to_generate_summary(
     mock_completion, tmp_path, agent
 ):
@@ -488,7 +488,7 @@ def test_local_conversation_ask_agent_raises_failed_to_generate_summary(
     mock_completion.assert_called_once()
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_local_conversation_ask_agent_raises_failed_to_generate_summary_non_text(
     mock_completion, tmp_path, agent
 ):
@@ -514,7 +514,7 @@ def test_local_conversation_ask_agent_raises_failed_to_generate_summary_non_text
     mock_completion.assert_called_once()
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_ask_agent_raises_http_status_error(mock_ws_client, agent):
     """RemoteConversation ask_agent properly propagates HTTPStatusError from server."""
     mock_ws_client.return_value.wait_until_ready.return_value = True
@@ -567,7 +567,7 @@ def test_remote_conversation_ask_agent_raises_http_status_error(mock_ws_client, 
         assert "500 Internal Server Error" in str(exc_info.value)
 
 
-@patch("openhands.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
+@patch("agentrt.sdk.conversation.impl.remote_conversation.WebSocketCallbackClient")
 def test_remote_conversation_ask_agent_raises_request_error(mock_ws_client, agent):
     """RemoteConversation ask_agent properly propagates RequestError from network."""
     mock_ws_client.return_value.wait_until_ready.return_value = True
@@ -614,7 +614,7 @@ def test_remote_conversation_ask_agent_raises_request_error(mock_ws_client, agen
 # ---------------------------------------------------------------------------
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_ask_agent_template_dir_path_construction(mock_completion, tmp_path, agent):
     """Test that ask_agent correctly constructs template_dir path and finds template."""
     mock_completion.return_value = create_mock_llm_response(

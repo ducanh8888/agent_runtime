@@ -8,14 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server import profiles_router as profiles_router_module
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.persistence import reset_stores
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.llm.provider_connection_store import ProviderConnectionStore
-from openhands.sdk.profiles import AgentProfileStore, OpenHandsAgentProfile
+from agentrt.agent_server import profiles_router as profiles_router_module
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.persistence import reset_stores
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.llm.provider_connection_store import ProviderConnectionStore
+from agentrt.sdk.profiles import AgentProfileStore, OpenHandsAgentProfile
 
 
 @pytest.fixture
@@ -74,27 +74,27 @@ def client(temp_profiles_dir, temp_agent_profiles_dir, temp_settings_dir, monkey
 
     with (
         patch(
-            "openhands.agent_server.profiles_router.get_llm_profile_store",
+            "agentrt.agent_server.profiles_router.get_llm_profile_store",
             make_llm_store,
         ),
         patch(
-            "openhands.agent_server.profiles_router.get_agent_profile_store",
+            "agentrt.agent_server.profiles_router.get_agent_profile_store",
             lambda: AgentProfileStore(base_dir=temp_agent_profiles_dir),
         ),
         patch(
-            "openhands.agent_server.profiles_router.get_provider_connections_store",
+            "agentrt.agent_server.profiles_router.get_provider_connections_store",
             lambda config=None: provider_store,
         ),
         patch(
-            "openhands.agent_server.settings_router.get_llm_profile_store",
+            "agentrt.agent_server.settings_router.get_llm_profile_store",
             make_llm_store,
         ),
         patch(
-            "openhands.agent_server.provider_connections_router.get_llm_profile_store",
+            "agentrt.agent_server.provider_connections_router.get_llm_profile_store",
             make_llm_store,
         ),
         patch(
-            "openhands.agent_server.provider_connections_router."
+            "agentrt.agent_server.provider_connections_router."
             "get_provider_connections_store",
             lambda config=None: provider_store,
         ),
@@ -1079,11 +1079,11 @@ def client_with_cipher(
 
     with (
         patch(
-            "openhands.agent_server.profiles_router.get_llm_profile_store",
+            "agentrt.agent_server.profiles_router.get_llm_profile_store",
             lambda: LLMProfileStore(base_dir=temp_profiles_dir),
         ),
         patch(
-            "openhands.agent_server.profiles_router.get_agent_profile_store",
+            "agentrt.agent_server.profiles_router.get_agent_profile_store",
             lambda: AgentProfileStore(base_dir=temp_agent_profiles_dir),
         ),
     ):
@@ -1096,7 +1096,7 @@ def client_with_cipher(
 @pytest.fixture
 def cipher(secret_key):
     """Create a cipher instance for testing."""
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     return Cipher(secret_key)
 
@@ -1746,9 +1746,9 @@ def test_validate_profile_success(client):
     from unittest.mock import MagicMock
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             return_value=MagicMock(),
         ),
     ):
@@ -1781,10 +1781,10 @@ def test_validate_profile_responses_api(client):
 
     with (
         patch(
-            "openhands.sdk.llm.llm.LLM.uses_responses_api",
+            "agentrt.sdk.llm.llm.LLM.uses_responses_api",
             return_value=True,
         ),
-        patch("openhands.sdk.llm.llm.LLM.aresponses", side_effect=fake_append),
+        patch("agentrt.sdk.llm.llm.LLM.aresponses", side_effect=fake_append),
     ):
         response = client.post(
             "/api/profiles/responses-profile/validate",
@@ -1806,12 +1806,12 @@ def test_validate_profile_responses_api(client):
 
 def test_validate_profile_invalid_model_returns_error(client):
     """POST /api/profiles/{name}/validate returns valid=False on bad model."""
-    from openhands.sdk.llm.exceptions import LLMBadRequestError
+    from agentrt.sdk.llm.exceptions import LLMBadRequestError
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=LLMBadRequestError(
                 "The supported API model names are deepseek-v4-pro or "
                 "deepseek-v4-flash, but you passed deepseek-chat"
@@ -1832,12 +1832,12 @@ def test_validate_profile_invalid_model_returns_error(client):
 
 def test_validate_profile_auth_error_returns_error(client):
     """POST /api/profiles/{name}/validate returns valid=False on bad API key."""
-    from openhands.sdk.llm.exceptions import LLMAuthenticationError
+    from agentrt.sdk.llm.exceptions import LLMAuthenticationError
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=LLMAuthenticationError("Invalid or missing API credentials"),
         ),
     ):
@@ -1854,12 +1854,12 @@ def test_validate_profile_auth_error_returns_error(client):
 
 def test_validate_profile_rate_limit_does_not_block(client):
     """POST /api/profiles/{name}/validate returns valid=True on rate limit."""
-    from openhands.sdk.llm.exceptions import LLMRateLimitError
+    from agentrt.sdk.llm.exceptions import LLMRateLimitError
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=LLMRateLimitError("Rate limit exceeded"),
         ),
     ):
@@ -1876,12 +1876,12 @@ def test_validate_profile_rate_limit_does_not_block(client):
 
 def test_validate_profile_service_unavailable_blocks(client):
     """POST /api/profiles/{name}/validate returns valid=False on provider 503."""
-    from openhands.sdk.llm.exceptions import LLMServiceUnavailableError
+    from agentrt.sdk.llm.exceptions import LLMServiceUnavailableError
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=LLMServiceUnavailableError("Service unavailable"),
         ),
     ):
@@ -1900,9 +1900,9 @@ def test_validate_profile_unknown_error_returns_error(client):
     """POST /api/profiles/{name}/validate catches unexpected exceptions."""
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=RuntimeError("Connection refused"),
         ),
     ):
@@ -1936,14 +1936,14 @@ def test_validate_profile_redacts_api_key_in_error(client):
     sk-proj-…``), the validate endpoint must redact the key before returning it
     in the HTTP response or logging it.
     """
-    from openhands.sdk.llm.exceptions import LLMAuthenticationError
+    from agentrt.sdk.llm.exceptions import LLMAuthenticationError
 
     leaked_key = "sk-proj-abc123defGHIjklMNOpqrsTUVwxyz1234567890"
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=LLMAuthenticationError(
                 f"Incorrect API key provided: {leaked_key}"
             ),
@@ -1967,9 +1967,9 @@ def test_validate_profile_redacts_api_key_in_unknown_error(client):
     leaked_key = "sk-proj-abc123defGHIjklMNOpqrsTUVwxyz1234567890"
 
     with (
-        patch("openhands.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
+        patch("agentrt.sdk.llm.llm.LLM.uses_responses_api", return_value=False),
         patch(
-            "openhands.sdk.llm.llm.LLM.acompletion",
+            "agentrt.sdk.llm.llm.LLM.acompletion",
             side_effect=RuntimeError(f"Request failed with key {leaked_key}"),
         ),
     ):

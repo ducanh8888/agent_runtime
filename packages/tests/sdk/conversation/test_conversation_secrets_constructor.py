@@ -6,13 +6,13 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.impl.remote_conversation import RemoteConversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.secret import SecretSource
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.impl.remote_conversation import RemoteConversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.secret import SecretSource
+from agentrt.sdk.workspace import RemoteWorkspace
 
 from .conftest import create_mock_http_client
 
@@ -173,7 +173,7 @@ def test_remote_conversation_constructor_with_secrets(api_key):
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -216,7 +216,7 @@ def test_remote_conversation_constructor_with_callable_secrets():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -258,7 +258,7 @@ def test_remote_conversation_constructor_without_secrets():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -307,7 +307,7 @@ def test_conversation_factory_routing_with_secrets():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):

@@ -5,8 +5,8 @@ import mcp.types
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.tool import MCPToolDefinition
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.tool import MCPToolDefinition
 
 
 def _make_tool_with_schema(schema: dict, name: str = "fetch"):

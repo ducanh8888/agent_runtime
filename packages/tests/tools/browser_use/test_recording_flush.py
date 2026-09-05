@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from openhands.tools.browser_use.event_storage import EventStorage
-from openhands.tools.browser_use.recording import (
+from agentrt.tools.browser_use.event_storage import EventStorage
+from agentrt.tools.browser_use.recording import (
     DEFAULT_CONFIG,
     RecordingSession,
 )
-from openhands.tools.browser_use.server import CustomBrowserUseServer
+from agentrt.tools.browser_use.server import CustomBrowserUseServer
 
 
 # Get default config values for tests
@@ -145,7 +145,7 @@ class TestPeriodicFlush:
         self, mock_browser_session, mock_cdp_session
     ):
         """Test that periodic flush creates new file chunks every few seconds."""
-        from openhands.tools.browser_use.recording import RecordingConfig
+        from agentrt.tools.browser_use.recording import RecordingConfig
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create recording session with fast flush interval
@@ -261,7 +261,7 @@ class TestConcurrentFlushSafety:
         self, mock_browser_session, mock_cdp_session
     ):
         """Test that periodic flush creates timestamped files that are sortable."""
-        from openhands.tools.browser_use.recording import RecordingConfig
+        from agentrt.tools.browser_use.recording import RecordingConfig
 
         with tempfile.TemporaryDirectory() as temp_dir:
             config = RecordingConfig(flush_interval_seconds=0.05)

@@ -7,8 +7,8 @@ from typing import cast
 
 import pytest
 
-from openhands.agent_server import conversation_lease as conversation_lease_module
-from openhands.agent_server.conversation_lease import (
+from agentrt.agent_server import conversation_lease as conversation_lease_module
+from agentrt.agent_server.conversation_lease import (
     LEASE_FILE_NAME,
     ConversationLease,
     ConversationLeaseHeldError,

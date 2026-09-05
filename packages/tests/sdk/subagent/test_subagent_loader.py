@@ -3,11 +3,11 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from openhands.sdk.subagent.load import (
+from agentrt.sdk.subagent.load import (
     load_project_agents,
     load_user_agents,
 )
-from openhands.sdk.subagent.registry import (
+from agentrt.sdk.subagent.registry import (
     _reset_registry_for_tests,
 )
 
@@ -165,7 +165,7 @@ def test_load_user_agents(tmp_path: Path) -> None:
         "---\nname: global-agent\ndescription: Global\n---\nGlobal prompt."
     )
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=tmp_path):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=tmp_path):
         agents = load_user_agents()
 
     assert len(agents) == 1
@@ -181,7 +181,7 @@ def test_load_user_agents_from_openhands_dir(tmp_path: Path) -> None:
         "---\nname: legacy-user\ndescription: Legacy user\n---\nLegacy."
     )
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=tmp_path):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=tmp_path):
         agents = load_user_agents()
 
     assert len(agents) == 1
@@ -202,7 +202,7 @@ def test_load_user_agents_agents_dir_wins_over_openhands(tmp_path: Path) -> None
         "---\nname: shared\ndescription: From .openhands\n---\nOH."
     )
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=tmp_path):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=tmp_path):
         agents = load_user_agents()
 
     assert len(agents) == 1

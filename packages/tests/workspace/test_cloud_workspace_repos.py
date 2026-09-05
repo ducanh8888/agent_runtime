@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import from SDK repo module (cloud workspace re-exports these)
-from openhands.sdk.workspace.repo import (
+from agentrt.sdk.workspace.repo import (
     CloneResult,
     GitProvider,
     RepoMapping,
@@ -544,17 +544,17 @@ class TestCloneRepos:
 class TestCloudWorkspaceRepoMethods:
     """Tests for OpenHandsCloudWorkspace repo methods."""
 
-    @patch("openhands.sdk.workspace.remote.base._clone_repos_helper")
+    @patch("agentrt.sdk.workspace.remote.base._clone_repos_helper")
     @patch.object(
         __import__(
-            "openhands.workspace.cloud.workspace", fromlist=["OpenHandsCloudWorkspace"]
+            "agentrt.workspace.cloud.workspace", fromlist=["OpenHandsCloudWorkspace"]
         ).OpenHandsCloudWorkspace,
         "_get_secret_value",
         return_value=None,
     )
     def test_clone_repos_full_url_list(self, mock_secret, mock_clone):
         """Test clone_repos with list of full URL strings."""
-        from openhands.workspace import OpenHandsCloudWorkspace
+        from agentrt.workspace import OpenHandsCloudWorkspace
 
         mock_clone.return_value = CloneResult(0, [], {})
 
@@ -584,17 +584,17 @@ class TestCloudWorkspaceRepoMethods:
             assert len(repos) == 2
             assert all(isinstance(r, RepoSource) for r in repos)
 
-    @patch("openhands.sdk.workspace.remote.base._clone_repos_helper")
+    @patch("agentrt.sdk.workspace.remote.base._clone_repos_helper")
     @patch.object(
         __import__(
-            "openhands.workspace.cloud.workspace", fromlist=["OpenHandsCloudWorkspace"]
+            "agentrt.workspace.cloud.workspace", fromlist=["OpenHandsCloudWorkspace"]
         ).OpenHandsCloudWorkspace,
         "_get_secret_value",
         return_value=None,
     )
     def test_clone_repos_dict_list(self, mock_secret, mock_clone):
         """Test clone_repos with list of dicts."""
-        from openhands.workspace import OpenHandsCloudWorkspace
+        from agentrt.workspace import OpenHandsCloudWorkspace
 
         mock_clone.return_value = CloneResult(0, [], {})
 
@@ -625,7 +625,7 @@ class TestCloudWorkspaceRepoMethods:
 
     def test_get_repos_context_from_mappings(self):
         """Test get_repos_context with explicit mappings."""
-        from openhands.workspace import OpenHandsCloudWorkspace
+        from agentrt.workspace import OpenHandsCloudWorkspace
 
         with patch.object(
             OpenHandsCloudWorkspace, "model_post_init", lambda self, ctx: None

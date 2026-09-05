@@ -22,7 +22,7 @@ import subprocess
 
 import pytest
 
-from openhands.sdk.settings.acp_install_catalog import ACP_INSTALL_CATALOG
+from agentrt.sdk.settings.acp_install_catalog import ACP_INSTALL_CATALOG
 
 
 def _npm_registry_reachable(timeout: float = 3.0) -> bool:

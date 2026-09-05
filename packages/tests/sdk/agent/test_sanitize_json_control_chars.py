@@ -8,7 +8,7 @@ legal two-character JSON escape sequences, which causes json.loads() to fail.
 
 import json
 
-from openhands.sdk.agent.utils import sanitize_json_control_chars
+from agentrt.sdk.agent.utils import sanitize_json_control_chars
 
 
 def test_valid_json_unchanged():

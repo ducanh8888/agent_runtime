@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from litellm.types.utils import Message as LiteLLMMessage
 
-from openhands.sdk.llm.message import Message
+from agentrt.sdk.llm.message import Message
 
 
 # Default serialization options for to_chat_dict() - tests can override as needed
@@ -18,7 +18,7 @@ DEFAULT_SERIALIZATION_OPTS = {
 
 def test_content_base_class_not_implemented():
     """Test that Content base class cannot be instantiated due to abstract method."""
-    from openhands.sdk.llm.message import BaseContent
+    from agentrt.sdk.llm.message import BaseContent
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class BaseContent"):
         BaseContent()  # type: ignore[abstract]
@@ -26,7 +26,7 @@ def test_content_base_class_not_implemented():
 
 def test_text_content_with_cache_prompt():
     """Test TextContent with cache_prompt enabled."""
-    from openhands.sdk.llm.message import TextContent
+    from agentrt.sdk.llm.message import TextContent
 
     content = TextContent(text="Hello world", cache_prompt=True)
     result = content.to_llm_dict()
@@ -39,7 +39,7 @@ def test_text_content_with_cache_prompt():
 
 def test_image_content_with_cache_prompt():
     """Test ImageContent with cache_prompt enabled."""
-    from openhands.sdk.llm.message import ImageContent
+    from agentrt.sdk.llm.message import ImageContent
 
     content = ImageContent(
         image_urls=["data:image/png;base64,abc123", "data:image/jpeg;base64,def456"],
@@ -59,7 +59,7 @@ def test_image_content_with_cache_prompt():
 
 def test_message_contains_image_property():
     """Test Message.contains_image property."""
-    from openhands.sdk.llm.message import ImageContent, Message, TextContent
+    from agentrt.sdk.llm.message import ImageContent, Message, TextContent
 
     # Message with only text content
     text_message = Message(role="user", content=[TextContent(text="Hello")])
@@ -80,7 +80,7 @@ def test_message_contains_image_property():
 
 def test_message_tool_role_with_cache_prompt():
     """Test Message with tool role and cache_prompt."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="tool",
@@ -101,7 +101,7 @@ def test_message_tool_role_with_cache_prompt():
 
 def test_message_tool_role_with_image_cache_prompt():
     """Test Message with tool role and ImageContent with cache_prompt."""
-    from openhands.sdk.llm.message import ImageContent, Message
+    from agentrt.sdk.llm.message import ImageContent, Message
 
     message = Message(
         role="tool",
@@ -127,7 +127,7 @@ def test_message_tool_role_with_image_cache_prompt():
 
 def test_message_with_tool_calls():
     """Test Message with tool_calls."""
-    from openhands.sdk.llm.message import (
+    from agentrt.sdk.llm.message import (
         Message,
         MessageToolCall,
         TextContent,
@@ -158,7 +158,7 @@ def test_message_with_tool_calls():
 
 def test_message_tool_calls_drop_empty_string_content():
     """Assistant tool calls with no text should not include empty content strings."""
-    from openhands.sdk.llm.message import Message, MessageToolCall
+    from agentrt.sdk.llm.message import Message, MessageToolCall
 
     tool_call = MessageToolCall(
         id="call_empty",
@@ -179,7 +179,7 @@ def test_message_tool_calls_drop_empty_string_content():
 
 def test_message_tool_calls_strip_blank_list_content():
     """List-serialized tool call messages should drop blank text content blocks."""
-    from openhands.sdk.llm.message import Message, MessageToolCall, TextContent
+    from agentrt.sdk.llm.message import Message, MessageToolCall, TextContent
 
     tool_call = MessageToolCall(
         id="call_blank_list",
@@ -225,7 +225,7 @@ def test_empty_assistant_from_llm_chat_message_uses_string_content_in_list_seria
 
 def test_message_from_llm_chat_message_function_role_error():
     """Test Message.from_llm_chat_message with function role raises error."""
-    from openhands.sdk.llm.message import Message
+    from agentrt.sdk.llm.message import Message
 
     litellm_message = LiteLLMMessage(role="function", content="Function response")  # type: ignore
 
@@ -235,7 +235,7 @@ def test_message_from_llm_chat_message_function_role_error():
 
 def test_message_from_llm_chat_message_with_non_string_content():
     """Test Message.from_llm_chat_message with non-string content."""
-    from openhands.sdk.llm.message import Message
+    from agentrt.sdk.llm.message import Message
 
     # Create a message with non-string content (None or list)
     litellm_message = LiteLLMMessage(role="assistant", content=None)
@@ -247,7 +247,7 @@ def test_message_from_llm_chat_message_with_non_string_content():
 
 def test_text_content_truncation_under_limit():
     """Test TextContent doesn't truncate when under limit."""
-    from openhands.sdk.llm.message import TextContent
+    from agentrt.sdk.llm.message import TextContent
 
     content = TextContent(text="Short text")
     result = content.to_llm_dict()
@@ -258,12 +258,12 @@ def test_text_content_truncation_under_limit():
 
 def test_text_content_no_truncation_over_limit():
     """TextContent itself should not truncate; truncation is role=tool only."""
-    from openhands.sdk.llm.message import TextContent
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.llm.message import TextContent
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     long_text = "A" * (DEFAULT_TEXT_CONTENT_LIMIT + 1000)
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         content = TextContent(text=long_text)
         result = content.to_llm_dict()
 
@@ -274,12 +274,12 @@ def test_text_content_no_truncation_over_limit():
 
 def test_tool_message_truncates_text_over_limit():
     """Tool-role messages should truncate huge TextContent blocks."""
-    from openhands.sdk.llm.message import Message, TextContent
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     long_text = "A" * (DEFAULT_TEXT_CONTENT_LIMIT + 1000)
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         msg = Message(role="tool", content=[TextContent(text=long_text)])
         result = msg.to_chat_dict(
             cache_enabled=True,
@@ -305,12 +305,12 @@ def test_tool_message_truncates_text_over_limit():
 
 def test_user_message_does_not_truncate_text_over_limit():
     """User-role messages should not truncate at serialization."""
-    from openhands.sdk.llm.message import Message, TextContent
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     long_text = "A" * (DEFAULT_TEXT_CONTENT_LIMIT + 1000)
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         msg = Message(role="user", content=[TextContent(text=long_text)])
         result = msg.to_chat_dict(
             cache_enabled=False,
@@ -326,12 +326,12 @@ def test_user_message_does_not_truncate_text_over_limit():
 
 def test_tool_message_truncates_text_over_limit_with_string_serializer():
     """Tool-role truncation must also apply on the string-serializer path."""
-    from openhands.sdk.llm.message import Message, TextContent
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     long_text = "A" * (DEFAULT_TEXT_CONTENT_LIMIT + 1000)
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         msg = Message(role="tool", content=[TextContent(text=long_text)])
         result = msg.to_chat_dict(
             cache_enabled=False,
@@ -349,13 +349,13 @@ def test_tool_message_truncates_text_over_limit_with_string_serializer():
 
 def test_text_content_truncation_exact_limit():
     """Test TextContent doesn't truncate when exactly at limit."""
-    from openhands.sdk.llm.message import TextContent
-    from openhands.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
+    from agentrt.sdk.llm.message import TextContent
+    from agentrt.sdk.utils import DEFAULT_TEXT_CONTENT_LIMIT
 
     # Create text that is exactly at the limit
     exact_text = "A" * DEFAULT_TEXT_CONTENT_LIMIT
 
-    with patch("openhands.sdk.llm.message.logger") as mock_logger:
+    with patch("agentrt.sdk.llm.message.logger") as mock_logger:
         content = TextContent(text=exact_text)
         result = content.to_llm_dict()
 
@@ -369,7 +369,7 @@ def test_text_content_truncation_exact_limit():
 
 def test_message_with_reasoning_content_when_enabled():
     """Test that reasoning_content is included when send_reasoning_content is True."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -387,7 +387,7 @@ def test_message_with_reasoning_content_when_enabled():
 
 def test_message_with_reasoning_content_when_disabled():
     """Test that reasoning_content is NOT included when send_reasoning_content is False."""  # noqa: E501
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -403,7 +403,7 @@ def test_message_with_reasoning_content_when_disabled():
 
 def test_message_with_reasoning_content_default_disabled():
     """Test that reasoning_content is NOT included when send_reasoning_content=False."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -419,7 +419,7 @@ def test_message_with_reasoning_content_default_disabled():
 
 def test_message_with_reasoning_content_none():
     """Test that reasoning_content is NOT included when it's None even if enabled."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -437,7 +437,7 @@ def test_message_with_reasoning_content_none():
 
 def test_message_with_reasoning_content_empty_string():
     """Test that reasoning_content is NOT included when it's an empty string."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -455,7 +455,7 @@ def test_message_with_reasoning_content_empty_string():
 
 def test_message_with_reasoning_content_list_serializer():
     """Test that reasoning_content works with list serializer."""
-    from openhands.sdk.llm.message import Message, TextContent
+    from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
         role="assistant",
@@ -482,7 +482,7 @@ def test_message_deprecated_fields_silently_removed():
     Deprecated fields are kept permanently for backward compatibility and
     are silently removed (no warnings) to avoid noise when loading old events.
     """
-    from openhands.sdk.llm.message import Message
+    from agentrt.sdk.llm.message import Message
 
     deprecated_fields = [
         "cache_enabled",
@@ -505,7 +505,7 @@ def test_message_deprecated_fields_silently_removed():
 
 def test_message_deprecated_fields_are_ignored():
     """Test that deprecated fields are ignored and don't affect the Message."""
-    from openhands.sdk.llm.message import Message
+    from agentrt.sdk.llm.message import Message
 
     # Use model_validate to pass extra fields that pyright doesn't know about
     message = Message.model_validate(
@@ -539,7 +539,7 @@ def test_text_content_deprecated_enable_truncation_silently_removed():
     the deprecated enable_truncation field. The field is silently removed
     (no warnings) to avoid noise when loading old events.
     """
-    from openhands.sdk.llm.message import TextContent
+    from agentrt.sdk.llm.message import TextContent
 
     content = TextContent.model_validate(
         {"type": "text", "text": "Hello world", "enable_truncation": True}
@@ -561,7 +561,7 @@ def test_text_content_old_format_with_enable_truncation_loads_successfully():
     """
     import warnings
 
-    from openhands.sdk.llm.message import TextContent
+    from agentrt.sdk.llm.message import TextContent
 
     # Simulate the JSON structure of an old event
     old_event_text_content = {
@@ -590,7 +590,7 @@ def test_text_content_both_old_and_new_format_in_sequence():
     """
     import warnings
 
-    from openhands.sdk.llm.message import TextContent
+    from agentrt.sdk.llm.message import TextContent
 
     # Simulate loading multiple events from different SDK versions
     event_contents = [

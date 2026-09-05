@@ -1,4 +1,4 @@
-from openhands.sdk.context import Skill
+from agentrt.sdk.context import Skill
 
 
 def test_load_markdown_without_frontmatter(tmp_path):

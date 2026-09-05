@@ -5,14 +5,14 @@ from unittest.mock import Mock, patch
 
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.remote_conversation import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.remote_conversation import (
     RemoteConversation,
     WebSocketCallbackClient,
 )
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import RemoteWorkspace
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import RemoteWorkspace
 
 from ..conftest import create_mock_http_client
 
@@ -29,7 +29,7 @@ def test_conversation_factory_passes_api_key_to_remote():
     test_api_key = "test-api-key-123"
 
     with patch(
-        "openhands.sdk.conversation.impl.remote_conversation.RemoteConversation"
+        "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"
     ) as mock_remote:
         # Mock the RemoteConversation constructor
         mock_instance = Mock()
@@ -62,7 +62,7 @@ def test_remote_conversation_no_api_key_no_headers():
     with (
         patch("httpx.Client", return_value=mock_client_instance) as mock_httpx_client,
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ),
     ):
@@ -137,7 +137,7 @@ def test_remote_conversation_passes_api_key_to_websocket_client():
     with (
         patch("httpx.Client", return_value=mock_client_instance),
         patch(
-            "openhands.sdk.conversation.impl.remote_conversation"
+            "agentrt.sdk.conversation.impl.remote_conversation"
             ".WebSocketCallbackClient"
         ) as mock_ws_client,
     ):

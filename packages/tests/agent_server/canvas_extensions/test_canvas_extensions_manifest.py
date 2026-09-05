@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from openhands.agent_server.canvas_extensions.manifest import (
+from agentrt.agent_server.canvas_extensions.manifest import (
     CanvasExtensionContributes,
     CanvasExtensionManifest,
     CanvasExtensionPage,

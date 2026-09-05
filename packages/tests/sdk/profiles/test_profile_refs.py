@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.profiles import (
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.profiles import (
     ACPAgentProfile,
     AgentProfileStore,
     OpenHandsAgentProfile,

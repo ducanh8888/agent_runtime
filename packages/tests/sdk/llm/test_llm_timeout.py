@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 # Default timeout in seconds (5 minutes)
@@ -65,7 +65,7 @@ class TestLLMTimeoutDefaults:
 class TestLLMTimeoutPassthrough:
     """Tests that timeout is correctly passed to litellm."""
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_default_timeout_passed_to_litellm(self, mock_completion):
         """Test that the default timeout is passed to litellm completion calls."""
         from litellm.types.utils import (
@@ -111,7 +111,7 @@ class TestLLMTimeoutPassthrough:
             f"to litellm, but got {call_kwargs['timeout']}"
         )
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_custom_timeout_passed_to_litellm(self, mock_completion):
         """Test that a custom timeout is passed to litellm completion calls."""
         from litellm.types.utils import (
@@ -153,7 +153,7 @@ class TestLLMTimeoutPassthrough:
 
         assert call_kwargs["timeout"] == custom_timeout
 
-    @patch("openhands.sdk.llm.llm.litellm_completion")
+    @patch("agentrt.sdk.llm.llm.litellm_completion")
     def test_none_timeout_passed_to_litellm(self, mock_completion):
         """Test that None timeout is passed to litellm (no timeout)."""
         from litellm.types.utils import (

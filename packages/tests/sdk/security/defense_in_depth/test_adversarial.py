@@ -36,16 +36,16 @@ import json
 
 import pytest
 
-from openhands.sdk.event import ActionEvent
-from openhands.sdk.llm import MessageToolCall, TextContent, ThinkingBlock
-from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-from openhands.sdk.security.defense_in_depth.pattern import PatternSecurityAnalyzer
-from openhands.sdk.security.defense_in_depth.utils import (
+from agentrt.sdk.event import ActionEvent
+from agentrt.sdk.llm import MessageToolCall, TextContent, ThinkingBlock
+from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
+from agentrt.sdk.security.defense_in_depth.pattern import PatternSecurityAnalyzer
+from agentrt.sdk.security.defense_in_depth.utils import (
     _EXTRACT_HARD_CAP,
     _extract_content,
 )
-from openhands.sdk.security.ensemble import EnsembleSecurityAnalyzer
-from openhands.sdk.security.risk import SecurityRisk
+from agentrt.sdk.security.ensemble import EnsembleSecurityAnalyzer
+from agentrt.sdk.security.risk import SecurityRisk
 
 
 # Build test payload strings via concatenation to avoid triggering

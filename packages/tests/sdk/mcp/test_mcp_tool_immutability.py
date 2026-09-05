@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, Mock
 import mcp.types
 import pytest
 
-from openhands.sdk.mcp.client import MCPClient
-from openhands.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
+from agentrt.sdk.mcp.client import MCPClient
+from agentrt.sdk.mcp.tool import MCPToolDefinition, MCPToolExecutor
 
 
 class MockMCPClient(MCPClient):

@@ -5,13 +5,13 @@ import time
 
 import pytest
 
-from openhands.agent_server.conversation_service import ConversationService
-from openhands.agent_server.models import StartConversationRequest
-from openhands.agent_server.pub_sub import Subscriber
-from openhands.sdk import LLM, Agent, Event
-from openhands.sdk.credential import ResolvedCredential
-from openhands.sdk.security.confirmation_policy import NeverConfirm
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.models import StartConversationRequest
+from agentrt.agent_server.pub_sub import Subscriber
+from agentrt.sdk import LLM, Agent, Event
+from agentrt.sdk.credential import ResolvedCredential
+from agentrt.sdk.security.confirmation_policy import NeverConfirm
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 def _make_request(workspace_dir) -> StartConversationRequest:

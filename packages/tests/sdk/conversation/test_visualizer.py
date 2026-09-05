@@ -12,11 +12,11 @@ from pydantic import Field
 from rich.console import Group
 from rich.text import Text
 
-from openhands.sdk.conversation.conversation_stats import ConversationStats
-from openhands.sdk.conversation.visualizer import (
+from agentrt.sdk.conversation.conversation_stats import ConversationStats
+from agentrt.sdk.conversation.visualizer import (
     DefaultConversationVisualizer,
 )
-from openhands.sdk.event import (
+from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
     CondensationRequest,
@@ -27,20 +27,20 @@ from openhands.sdk.event import (
     SystemPromptEvent,
     UserRejectObservation,
 )
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.types import SourceType
-from openhands.sdk.llm import (
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.types import SourceType
+from agentrt.sdk.llm import (
     Message,
     MessageToolCall,
     ReasoningItemModel,
     TextContent,
 )
-from openhands.sdk.llm.utils.metrics import Metrics
-from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
+from agentrt.sdk.llm.utils.metrics import Metrics
+from agentrt.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+    from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 
 
 class _UnknownEventForVisualizerTest(Event):
@@ -554,8 +554,8 @@ def test_metrics_formatting():
     """Test metrics subtitle formatting."""
     from unittest.mock import MagicMock
 
-    from openhands.sdk.conversation.conversation_stats import ConversationStats
-    from openhands.sdk.llm.utils.metrics import Metrics
+    from agentrt.sdk.conversation.conversation_stats import ConversationStats
+    from agentrt.sdk.llm.utils.metrics import Metrics
 
     # Create conversation stats with metrics
     conversation_stats = ConversationStats()
@@ -628,8 +628,8 @@ def test_metrics_abbreviation_formatting():
     """Test number abbreviation with various edge cases."""
     from unittest.mock import MagicMock
 
-    from openhands.sdk.conversation.conversation_stats import ConversationStats
-    from openhands.sdk.llm.utils.metrics import Metrics
+    from agentrt.sdk.conversation.conversation_stats import ConversationStats
+    from agentrt.sdk.llm.utils.metrics import Metrics
 
     test_cases = [
         # (input_tokens, expected_abbr)
@@ -1017,7 +1017,7 @@ def test_event_base_fallback_visualize():
 
 def test_conversation_error_event_visualize():
     """Test that ConversationErrorEvent provides a specific visualization."""
-    from openhands.sdk.event.conversation_error import ConversationErrorEvent
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 
     event = ConversationErrorEvent(
         source="environment",

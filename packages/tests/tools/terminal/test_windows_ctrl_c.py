@@ -5,9 +5,9 @@ import platform
 import psutil
 import pytest
 
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.terminal import create_terminal_session
-from openhands.tools.terminal.terminal.terminal_session import TerminalCommandStatus
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.terminal import create_terminal_session
+from agentrt.tools.terminal.terminal.terminal_session import TerminalCommandStatus
 
 
 pytestmark = pytest.mark.skipif(

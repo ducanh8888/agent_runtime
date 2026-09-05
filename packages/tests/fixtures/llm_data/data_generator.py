@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from openhands.sdk import (
+from agentrt.sdk import (
     LLM,
     Agent,
     Conversation,
@@ -21,9 +21,9 @@ from openhands.sdk import (
     TextContent,
     get_logger,
 )
-from openhands.sdk.tool import Tool, register_tool
-from openhands.tools.file_editor import FileEditorTool
-from openhands.tools.terminal import TerminalTool
+from agentrt.sdk.tool import Tool, register_tool
+from agentrt.tools.file_editor import FileEditorTool
+from agentrt.tools.terminal import TerminalTool
 
 
 logger = get_logger(__name__)

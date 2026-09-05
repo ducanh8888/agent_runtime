@@ -10,13 +10,13 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, ClassVar, Literal
 from unittest.mock import Mock
 
-from openhands.sdk import Agent, Conversation
-from openhands.sdk.tool import Tool, ToolExecutor, register_tool
-from openhands.tools.terminal import TerminalExecutor, TerminalTool
+from agentrt.sdk import Agent, Conversation
+from agentrt.sdk.tool import Tool, ToolExecutor, register_tool
+from agentrt.tools.terminal import TerminalExecutor, TerminalTool
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 class _InjectedExecutorTerminalTool(TerminalTool):

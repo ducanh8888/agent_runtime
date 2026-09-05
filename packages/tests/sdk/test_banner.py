@@ -2,13 +2,13 @@
 
 import pytest
 
-from openhands.sdk.banner import _print_banner
+from agentrt.sdk.banner import _print_banner
 
 
 @pytest.fixture
 def reset_banner_state(monkeypatch):
     """Reset the banner state and env var before and after each test."""
-    import openhands.sdk.banner as banner_module
+    import agentrt.sdk.banner as banner_module
 
     # Remove suppress env var if set (e.g., from CI)
     monkeypatch.delenv("OPENHANDS_SUPPRESS_BANNER", raising=False)

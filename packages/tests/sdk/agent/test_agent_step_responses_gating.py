@@ -4,11 +4,11 @@ import pytest
 from litellm.types.utils import ModelResponse
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.llm import LLM, LLMResponse, Message
-from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.llm import LLM, LLMResponse, Message
+from agentrt.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
 
 
 class DummyLLM(LLM):

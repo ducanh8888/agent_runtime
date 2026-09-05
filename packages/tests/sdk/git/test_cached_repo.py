@@ -6,13 +6,13 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
-from openhands.sdk.git.cached_repo import (
+from agentrt.sdk.git.cached_repo import (
     GitHelper,
     _checkout_ref,
     _clone_repository,
     _update_repository,
 )
-from openhands.sdk.git.exceptions import GitCommandError
+from agentrt.sdk.git.exceptions import GitCommandError
 
 
 # -- _clone_repository ---------------------------------------------------------
@@ -228,7 +228,7 @@ def test_git_clone_timeout(tmp_path: Path):
     git = GitHelper()
     dest = tmp_path / "repo"
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
         with pytest.raises(GitCommandError, match="timed out"):
             git.clone("https://github.com/owner/repo.git", dest, timeout=1)
@@ -267,7 +267,7 @@ def test_git_fetch_timeout(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
         with pytest.raises(GitCommandError, match="timed out"):
             git.fetch(repo, timeout=1)
@@ -288,7 +288,7 @@ def test_git_checkout_timeout(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
         with pytest.raises(GitCommandError, match="timed out"):
             git.checkout(repo, "main", timeout=1)
@@ -309,7 +309,7 @@ def test_git_reset_hard_timeout(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
         with pytest.raises(GitCommandError, match="timed out"):
             git.reset_hard(repo, "HEAD", timeout=1)
@@ -329,7 +329,7 @@ def test_git_get_current_branch_timeout(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
         with pytest.raises(GitCommandError, match="timed out"):
             git.get_current_branch(repo, timeout=1)
@@ -343,7 +343,7 @@ def test_get_default_branch_returns_main(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git"],
             returncode=0,
@@ -362,7 +362,7 @@ def test_get_default_branch_returns_master(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git"],
             returncode=0,
@@ -379,7 +379,7 @@ def test_get_default_branch_returns_none_when_not_set(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git"],
             returncode=1,
@@ -398,7 +398,7 @@ def test_get_default_branch_returns_none_on_unexpected_format(
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    with patch("openhands.sdk.git.utils.subprocess.run") as mock_run:
+    with patch("agentrt.sdk.git.utils.subprocess.run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git"],
             returncode=0,
@@ -414,7 +414,7 @@ def test_get_default_branch_returns_none_on_unexpected_format(
 
 
 def test_lock_file_created_during_clone(tmp_path: Path):
-    from openhands.sdk.git.cached_repo import try_cached_clone_or_update
+    from agentrt.sdk.git.cached_repo import try_cached_clone_or_update
 
     cache_dir = tmp_path / "cache"
     repo_path = cache_dir / "test-repo"
@@ -440,7 +440,7 @@ def test_lock_file_created_during_clone(tmp_path: Path):
 def test_lock_timeout_returns_none(tmp_path: Path):
     from filelock import FileLock
 
-    from openhands.sdk.git.cached_repo import try_cached_clone_or_update
+    from agentrt.sdk.git.cached_repo import try_cached_clone_or_update
 
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir(parents=True)
@@ -469,7 +469,7 @@ def test_lock_timeout_returns_none(tmp_path: Path):
 def test_lock_released_after_operation(tmp_path: Path):
     from filelock import FileLock
 
-    from openhands.sdk.git.cached_repo import try_cached_clone_or_update
+    from agentrt.sdk.git.cached_repo import try_cached_clone_or_update
 
     cache_dir = tmp_path / "cache"
     repo_path = cache_dir / "test-repo"
@@ -491,7 +491,7 @@ def test_lock_released_after_operation(tmp_path: Path):
 def test_lock_released_on_error(tmp_path: Path):
     from filelock import FileLock
 
-    from openhands.sdk.git.cached_repo import try_cached_clone_or_update
+    from agentrt.sdk.git.cached_repo import try_cached_clone_or_update
 
     cache_dir = tmp_path / "cache"
     repo_path = cache_dir / "test-repo"

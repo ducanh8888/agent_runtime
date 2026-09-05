@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openhands.tools.terminal.constants import CMD_OUTPUT_METADATA_PS1_REGEX
-from openhands.tools.terminal.metadata import CmdOutputMetadata
-from openhands.tools.terminal.terminal.terminal_session import TerminalSession
+from agentrt.tools.terminal.constants import CMD_OUTPUT_METADATA_PS1_REGEX
+from agentrt.tools.terminal.metadata import CmdOutputMetadata
+from agentrt.tools.terminal.terminal.terminal_session import TerminalSession
 
 
 class TestPS1Corruption:
@@ -159,7 +159,7 @@ class RidgeClassifierCV(sklearn.linear_model.base.LinearClassifierMixin, _BaseRi
 
         This fix addresses the production errors seen in Datadog logs.
         """
-        from openhands.tools.terminal.terminal.interface import TerminalObservation
+        from agentrt.tools.terminal.terminal.interface import TerminalObservation
 
         # Create a mock terminal interface
         mock_terminal = MagicMock()
@@ -306,7 +306,7 @@ class TestPS1CorruptionIntegration:
         the session now returns a valid TerminalObservation with exit_code=-1
         instead of crashing with an AssertionError.
         """
-        from openhands.tools.terminal.terminal.interface import TerminalObservation
+        from agentrt.tools.terminal.terminal.interface import TerminalObservation
 
         mock_terminal = MagicMock()
         mock_terminal.work_dir = "/workspace"

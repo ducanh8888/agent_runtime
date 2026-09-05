@@ -10,12 +10,12 @@ with an actionable hint instead.
 
 import pytest
 
-from openhands.tools.terminal.definition import (
+from agentrt.tools.terminal.definition import (
     TerminalAction,
     TerminalObservation,
     looks_like_python_literal_argument,
 )
-from openhands.tools.terminal.impl import TerminalExecutor
+from agentrt.tools.terminal.impl import TerminalExecutor
 
 
 # --------------------------------------------------------------------------
@@ -146,7 +146,7 @@ def test_guard_warning_is_logged(
     """Operators should be able to grep for the guard firing in eval logs."""
     import logging
 
-    caplog.set_level(logging.WARNING, logger="openhands.tools.terminal.impl")
+    caplog.set_level(logging.WARNING, logger="agentrt.tools.terminal.impl")
     action = TerminalAction(command='["some code that should have been a script"]')
     executor_without_shell(action)
     assert any(

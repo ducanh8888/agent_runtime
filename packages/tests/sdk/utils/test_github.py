@@ -1,6 +1,6 @@
 """Tests for GitHub utility functions."""
 
-from openhands.sdk.utils.github import ZWJ, sanitize_openhands_mentions
+from agentrt.sdk.utils.github import ZWJ, sanitize_openhands_mentions
 
 
 def test_sanitize_basic_mention():

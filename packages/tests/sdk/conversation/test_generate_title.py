@@ -8,11 +8,11 @@ import pytest
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.title_utils import generate_title_with_llm
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import LLM, LLMResponse, Message, MetricsSnapshot, TextContent
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.title_utils import generate_title_with_llm
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import LLM, LLMResponse, Message, MetricsSnapshot, TextContent
 
 
 def create_test_agent() -> Agent:
@@ -67,7 +67,7 @@ def create_mock_llm_response(content: str) -> LLMResponse:
     )
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_without_llm_uses_agent_llm(mock_completion):
     """Without an explicit LLM, generate_title falls back to the agent's LLM.
 
@@ -102,7 +102,7 @@ def test_generate_title_no_user_messages():
         conv.generate_title()
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_llm_error_fallback(mock_completion):
     """Test generate_title falls back to simple truncation when LLM fails."""
     agent = create_test_agent()
@@ -125,7 +125,7 @@ def test_generate_title_llm_error_fallback(mock_completion):
     assert title == "Fix the bug in my application"
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_with_llm_invokes_on_error(mock_completion):
     """generate_title_with_llm reports the swallowed LLM error via on_error
     (the opt-in seam used to surface it to clients — issue #16686) while still
@@ -141,7 +141,7 @@ def test_generate_title_with_llm_invokes_on_error(mock_completion):
     assert str(seen[0]) == "model does not exist"
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_truncation_respects_max_length(mock_completion):
     """When LLM fails, truncation fallback respects max_length."""
     agent = create_test_agent()
@@ -161,7 +161,7 @@ def test_generate_title_truncation_respects_max_length(mock_completion):
     assert title.endswith("...")
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_with_llm_truncates_long_response(mock_completion):
     """Test generate_title truncates long LLM responses to max_length."""
     agent = create_test_agent()
@@ -188,7 +188,7 @@ def test_generate_title_with_llm_truncates_long_response(mock_completion):
     assert title.endswith("...")
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_with_custom_llm(mock_completion):
     """Test generate_title with a custom LLM provided."""
     agent = create_test_agent()
@@ -214,7 +214,7 @@ def test_generate_title_with_custom_llm(mock_completion):
     assert title == "Debug Code Issue"
 
 
-@patch("openhands.sdk.llm.llm.LLM.completion")
+@patch("agentrt.sdk.llm.llm.LLM.completion")
 def test_generate_title_empty_llm_response_fallback(mock_completion):
     """Test generate_title falls back when LLM returns empty response."""
     agent = create_test_agent()
@@ -257,7 +257,7 @@ def create_mock_model_response(content: str) -> ModelResponse:
     )
 
 
-@patch("openhands.sdk.llm.llm.LLM._transport_call", autospec=True)
+@patch("agentrt.sdk.llm.llm.LLM._transport_call", autospec=True)
 def test_generate_title_disables_streaming_when_llm_streams(mock_transport):
     """Regression test (sibling of PR #3901): a ``stream=True`` agent LLM must
     still generate a title even though title generation passes no ``on_token``

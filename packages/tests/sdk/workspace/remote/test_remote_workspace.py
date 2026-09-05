@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, Mock, patch
 import httpx
 import pytest
 
-from openhands.sdk.mcp.config import dump_mcp_config
-from openhands.sdk.workspace.models import CommandResult, FileOperationResult
-from openhands.sdk.workspace.remote.base import RemoteWorkspace
+from agentrt.sdk.mcp.config import dump_mcp_config
+from agentrt.sdk.workspace.models import CommandResult, FileOperationResult
+from agentrt.sdk.workspace.remote.base import RemoteWorkspace
 
 
 class MockHTTPResponse:
@@ -106,7 +106,7 @@ def test_execute_method():
     mock_client.request.assert_called_once_with(method="GET", url="http://test.com")
 
 
-@patch("openhands.sdk.workspace.remote.base.RemoteWorkspace._execute")
+@patch("agentrt.sdk.workspace.remote.base.RemoteWorkspace._execute")
 def test_execute_command(mock_execute):
     """Test execute_command method calls _execute with correct generator."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -130,7 +130,7 @@ def test_execute_command(mock_execute):
     assert hasattr(generator_arg, "__next__")
 
 
-@patch("openhands.sdk.workspace.remote.base.RemoteWorkspace._execute")
+@patch("agentrt.sdk.workspace.remote.base.RemoteWorkspace._execute")
 def test_file_upload(mock_execute):
     """Test file_upload method calls _execute with correct generator."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -153,7 +153,7 @@ def test_file_upload(mock_execute):
     assert hasattr(generator_arg, "__next__")
 
 
-@patch("openhands.sdk.workspace.remote.base.RemoteWorkspace._execute")
+@patch("agentrt.sdk.workspace.remote.base.RemoteWorkspace._execute")
 def test_file_download(mock_execute):
     """Test file_download method calls _execute with correct generator."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -237,8 +237,8 @@ def test_context_manager_protocol():
 
 def test_inheritance():
     """Test RemoteWorkspace inherits from correct base classes."""
-    from openhands.sdk.workspace.base import BaseWorkspace
-    from openhands.sdk.workspace.remote.remote_workspace_mixin import (
+    from agentrt.sdk.workspace.base import BaseWorkspace
+    from agentrt.sdk.workspace.remote.remote_workspace_mixin import (
         RemoteWorkspaceMixin,
     )
 
@@ -294,7 +294,7 @@ def test_execute_generator_completion():
     mock_client.request.assert_any_call(method="POST", url="http://test2.com")
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_true_on_successful_health_check(mock_urlopen):
     """Test alive property returns True when health endpoint returns 2xx status."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -307,7 +307,7 @@ def test_alive_returns_true_on_successful_health_check(mock_urlopen):
     mock_urlopen.assert_called_once_with("http://localhost:8000/health", timeout=5.0)
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_true_on_204_status(mock_urlopen):
     """Test alive property returns True when health endpoint returns 204 No Content."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -319,7 +319,7 @@ def test_alive_returns_true_on_204_status(mock_urlopen):
     assert result is True
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_false_on_server_error(mock_urlopen):
     """Test alive property returns False when health endpoint returns 5xx status."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -331,7 +331,7 @@ def test_alive_returns_false_on_server_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_false_on_client_error(mock_urlopen):
     """Test alive property returns False when health endpoint returns 4xx status."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -343,7 +343,7 @@ def test_alive_returns_false_on_client_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_false_on_connection_error(mock_urlopen):
     """Test alive property returns False when connection fails."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -355,7 +355,7 @@ def test_alive_returns_false_on_connection_error(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_returns_false_on_timeout(mock_urlopen):
     """Test alive property returns False when request times out."""
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/tmp")
@@ -369,7 +369,7 @@ def test_alive_returns_false_on_timeout(mock_urlopen):
     assert result is False
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_constructs_correct_health_url(mock_urlopen):
     """Test alive property constructs correct health URL from host."""
     workspace = RemoteWorkspace(
@@ -385,7 +385,7 @@ def test_alive_constructs_correct_health_url(mock_urlopen):
     )
 
 
-@patch("openhands.sdk.workspace.remote.base.urlopen")
+@patch("agentrt.sdk.workspace.remote.base.urlopen")
 def test_alive_with_normalized_host(mock_urlopen):
     """Test alive property works correctly when host was normalized."""
     # Host with trailing slash gets normalized in model_post_init
@@ -907,13 +907,13 @@ def test_get_secret_value_validates_secret_name():
 
 def test_clone_repos_calls_helper():
     """Test clone_repos delegates to helper function."""
-    from openhands.sdk.workspace.repo import CloneResult, RepoMapping
+    from agentrt.sdk.workspace.repo import CloneResult, RepoMapping
 
     workspace = RemoteWorkspace(
         host="http://localhost:8000", working_dir="/workspace", api_key="test-key"
     )
 
-    with patch("openhands.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
+    with patch("agentrt.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
         expected_result = CloneResult(
             success_count=1,
             failed_repos=[],
@@ -939,13 +939,13 @@ def test_clone_repos_calls_helper():
 
 def test_clone_repos_normalizes_input_formats():
     """Test clone_repos accepts strings, dicts, and RepoSource objects."""
-    from openhands.sdk.workspace.repo import CloneResult, RepoSource
+    from agentrt.sdk.workspace.repo import CloneResult, RepoSource
 
     workspace = RemoteWorkspace(
         host="http://localhost:8000", working_dir="/workspace", api_key="test-key"
     )
 
-    with patch("openhands.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
+    with patch("agentrt.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
         mock_clone.return_value = CloneResult(0, [], {})
 
         # Mix of input formats
@@ -966,13 +966,13 @@ def test_clone_repos_normalizes_input_formats():
 
 def test_clone_repos_uses_custom_target_dir():
     """Test clone_repos respects custom target directory."""
-    from openhands.sdk.workspace.repo import CloneResult
+    from agentrt.sdk.workspace.repo import CloneResult
 
     workspace = RemoteWorkspace(
         host="http://localhost:8000", working_dir="/workspace", api_key="test-key"
     )
 
-    with patch("openhands.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
+    with patch("agentrt.sdk.workspace.remote.base._clone_repos_helper") as mock_clone:
         mock_clone.return_value = CloneResult(0, [], {})
 
         workspace.clone_repos(
@@ -986,7 +986,7 @@ def test_clone_repos_uses_custom_target_dir():
 
 def test_get_repos_context_delegates_to_helper():
     """Test get_repos_context delegates to helper function."""
-    from openhands.sdk.workspace.repo import RepoMapping
+    from agentrt.sdk.workspace.repo import RepoMapping
 
     workspace = RemoteWorkspace(
         host="http://localhost:8000", working_dir="/workspace", api_key="test-key"
@@ -1355,8 +1355,8 @@ def test_send_completion_callback_omits_cost_when_not_registered(monkeypatch):
 
 def test_send_completion_callback_serializes_conversation_error(monkeypatch):
     """A ConversationRunError sends its authoritative ConversationErrorEvent."""
-    from openhands.sdk.conversation.exceptions import ConversationRunError
-    from openhands.sdk.event.conversation_error import ConversationErrorEvent
+    from agentrt.sdk.conversation.exceptions import ConversationRunError
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 
     monkeypatch.setenv("AUTOMATION_CALLBACK_URL", "https://svc.test/complete")
     workspace = RemoteWorkspace(host="http://localhost:8000", working_dir="/workspace")

@@ -1,25 +1,25 @@
 import uuid
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.conversation.stuck_detector import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.conversation.stuck_detector import (
     MAX_EVENTS_TO_SCAN_FOR_STUCK_DETECTION,
     StuckDetector,
 )
-from openhands.sdk.event import (
+from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
     MessageEvent,
     ObservationEvent,
 )
-from openhands.sdk.llm import (
+from agentrt.sdk.llm import (
     LLM,
     Message,
     MessageToolCall,
     TextContent,
 )
-from openhands.sdk.workspace import LocalWorkspace
-from openhands.tools.terminal.definition import (
+from agentrt.sdk.workspace import LocalWorkspace
+from agentrt.tools.terminal.definition import (
     TerminalAction,
     TerminalObservation,
 )

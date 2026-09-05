@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.utils.cipher import FERNET_TOKEN_PREFIX, Cipher
-from openhands.sdk.utils.pydantic_secrets import (
+from agentrt.sdk.utils.cipher import FERNET_TOKEN_PREFIX, Cipher
+from agentrt.sdk.utils.pydantic_secrets import (
     REDACTED_SECRET_VALUE,
     decrypt_str_with_cipher_or_keep,
     is_redacted_secret,
@@ -310,7 +310,7 @@ def test_roundtrip_plaintext_mode(mock_info):
 
 def test_real_pydantic_roundtrip_encrypted(cipher):
     """Test encryption via actual Pydantic serialization (not mocks)."""
-    from openhands.agent_server.persistence.models import CustomSecret
+    from agentrt.agent_server.persistence.models import CustomSecret
 
     # Create with plaintext
     secret = CustomSecret(name="TEST_KEY", secret=SecretStr("my-secret-value"))
@@ -333,7 +333,7 @@ def test_real_pydantic_roundtrip_encrypted(cipher):
 
 def test_real_pydantic_roundtrip_plaintext():
     """Test plaintext via actual Pydantic serialization (not mocks)."""
-    from openhands.agent_server.persistence.models import CustomSecret
+    from agentrt.agent_server.persistence.models import CustomSecret
 
     # Create with plaintext
     secret = CustomSecret(name="TEST_KEY", secret=SecretStr("my-secret-value"))
@@ -352,7 +352,7 @@ def test_real_pydantic_roundtrip_plaintext():
 
 def test_real_pydantic_redacted_mode():
     """Test redaction via actual Pydantic serialization (default behavior)."""
-    from openhands.agent_server.persistence.models import CustomSecret
+    from agentrt.agent_server.persistence.models import CustomSecret
 
     # Create with plaintext
     secret = CustomSecret(name="TEST_KEY", secret=SecretStr("my-secret-value"))
@@ -367,7 +367,7 @@ def test_real_pydantic_redacted_mode():
 
 def test_real_pydantic_nested_secrets_roundtrip(cipher):
     """Test encryption of nested secrets in Secrets model."""
-    from openhands.agent_server.persistence.models import CustomSecret, Secrets
+    from agentrt.agent_server.persistence.models import CustomSecret, Secrets
 
     # Create Secrets with multiple custom secrets
     secrets = Secrets(
@@ -408,7 +408,7 @@ def test_real_pydantic_persisted_settings_roundtrip(cipher):
     This tests the primary use case: full PersistedSettings with
     agent_settings.llm.api_key encrypted and round-tripped.
     """
-    from openhands.agent_server.persistence.models import PersistedSettings
+    from agentrt.agent_server.persistence.models import PersistedSettings
 
     # Create settings with secret
     settings = PersistedSettings()

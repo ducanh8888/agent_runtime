@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.bash_service import BashEventService
-from openhands.agent_server.config import Config
-from openhands.agent_server.dependencies import get_bash_event_service
-from openhands.agent_server.models import BashCommand
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.bash_service import BashEventService
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.dependencies import get_bash_event_service
+from agentrt.agent_server.models import BashCommand
 
 
 @pytest.fixture

@@ -2,10 +2,10 @@
 
 from pydantic import SecretStr
 
-from openhands.sdk import Agent, LocalConversation
-from openhands.sdk.event import ActionEvent, ObservationEvent
-from openhands.sdk.llm import LLM, MessageToolCall, TextContent
-from openhands.tools.terminal.definition import (
+from agentrt.sdk import Agent, LocalConversation
+from agentrt.sdk.event import ActionEvent, ObservationEvent
+from agentrt.sdk.llm import LLM, MessageToolCall, TextContent
+from agentrt.tools.terminal.definition import (
     TerminalAction,
     TerminalObservation,
 )

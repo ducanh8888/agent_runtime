@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, ImageContent, Message, TextContent
+from agentrt.sdk.llm import LLM, ImageContent, Message, TextContent
 
 
 @pytest.mark.parametrize(
@@ -33,11 +33,11 @@ def test_vision_is_active_supported_models(model):
 
 
 @patch(
-    "openhands.sdk.llm.llm.get_litellm_model_info",
+    "agentrt.sdk.llm.llm.get_litellm_model_info",
     return_value={"supports_vision": True},
 )
 @patch(
-    "openhands.sdk.llm.utils.model_features.litellm_supports_vision",
+    "agentrt.sdk.llm.utils.model_features.litellm_supports_vision",
     return_value=False,
 )
 def test_proxy_model_info_can_enable_vision(_mock_sv, _mock_model_info):
@@ -99,11 +99,11 @@ def test_chat_serializes_images_when_vision_supported(model):
 
 
 @patch(
-    "openhands.sdk.llm.llm.get_litellm_model_info",
+    "agentrt.sdk.llm.llm.get_litellm_model_info",
     return_value={"supports_vision": False},
 )
 @patch(
-    "openhands.sdk.llm.utils.model_features.litellm_supports_vision",
+    "agentrt.sdk.llm.utils.model_features.litellm_supports_vision",
     return_value=False,
 )
 def test_message_with_image_does_not_enable_vision_for_text_only_model(
@@ -171,11 +171,11 @@ def test_disable_vision_overrides_litellm_detection():
 
 
 @patch(
-    "openhands.sdk.llm.llm.get_litellm_model_info",
+    "agentrt.sdk.llm.llm.get_litellm_model_info",
     return_value={"supports_vision": False},
 )
 @patch(
-    "openhands.sdk.llm.utils.model_features.litellm_supports_vision",
+    "agentrt.sdk.llm.utils.model_features.litellm_supports_vision",
     return_value=False,
 )
 def test_message_with_image_in_responses_does_not_include_input_image(

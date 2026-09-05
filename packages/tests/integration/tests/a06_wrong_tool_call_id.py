@@ -9,7 +9,7 @@ Pattern:
     [tool_result id=B] → [tool_result id=A]  ← IDs swapped!
 """
 
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
 from tests.integration.api_compliance.base import BaseAPIComplianceTest
 
 

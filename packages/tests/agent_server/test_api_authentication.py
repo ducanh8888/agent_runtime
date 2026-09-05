@@ -9,10 +9,10 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import _find_http_exception, create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.dependencies import get_conversation_service
-from openhands.agent_server.openai.router import _parse_observability_overrides
+from agentrt.agent_server.api import _find_http_exception, create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.openai.router import _parse_observability_overrides
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def test_openai_routes_accept_bearer_session_key(client_with_auth, monkeypatch):
             return []
 
     monkeypatch.setattr(
-        "openhands.agent_server.openai.service.get_llm_profile_store", EmptyProfileStore
+        "agentrt.agent_server.openai.service.get_llm_profile_store", EmptyProfileStore
     )
 
     response = client_with_auth.get("/v1/models")
@@ -179,7 +179,7 @@ def test_openai_route_invalid_observability_header_returns_422(monkeypatch):
         raise AssertionError("run_chat_completion should not run for invalid headers")
 
     monkeypatch.setattr(
-        "openhands.agent_server.openai.router.run_chat_completion",
+        "agentrt.agent_server.openai.router.run_chat_completion",
         fail_if_called,
     )
     app = create_app(Config(session_api_keys=[]))

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from openhands.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
+from agentrt.agent_server.canvas_extensions.manifest import MANIFEST_FILENAME
 
 
 def write_extension(

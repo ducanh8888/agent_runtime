@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.tools.file_editor.editor import FileEditor
-from openhands.tools.file_editor.impl import file_editor
+from agentrt.tools.file_editor.editor import FileEditor
+from agentrt.tools.file_editor.impl import file_editor
 
 from .conftest import assert_error_result
 

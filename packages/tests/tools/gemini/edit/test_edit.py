@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from openhands.tools.gemini.edit.definition import EditAction, EditTool
-from openhands.tools.gemini.edit.impl import EditExecutor
+from agentrt.tools.gemini.edit.definition import EditAction, EditTool
+from agentrt.tools.gemini.edit.impl import EditExecutor
 
 
 def test_edit_basic_replacement(tmp_path):

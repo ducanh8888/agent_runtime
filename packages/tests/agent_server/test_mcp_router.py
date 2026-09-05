@@ -14,9 +14,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from openhands.agent_server.api import create_app
-from openhands.agent_server.config import Config
-from openhands.agent_server.mcp_router import (
+from agentrt.agent_server.api import create_app
+from agentrt.agent_server.config import Config
+from agentrt.agent_server.mcp_router import (
     _OAUTH_PROBE_JOB_TTL_SECONDS,
     MCPTestRequest,
     _BrowserCoordinatedOAuth,
@@ -25,8 +25,8 @@ from openhands.agent_server.mcp_router import (
     _oauth_probe_jobs_lock,
     _register_oauth_job,
 )
-from openhands.agent_server.persistence import reset_stores
-from openhands.sdk.mcp.config import MCPServer, to_fastmcp_mcp_config
+from agentrt.agent_server.persistence import reset_stores
+from agentrt.sdk.mcp.config import MCPServer, to_fastmcp_mcp_config
 
 # Reuse the real FastMCP-based test-server helper from the SDK tests; spinning
 # up a real subprocess MCP server inside a unit test is unreliable across CI
@@ -329,7 +329,7 @@ def test_mcp_test_decrypts_encrypted_remote_auth_before_connect(
         return FakeClient()
 
     monkeypatch.setattr(
-        "openhands.agent_server.mcp_router.create_mcp_tools",
+        "agentrt.agent_server.mcp_router.create_mcp_tools",
         fake_create_mcp_tools,
     )
 
@@ -622,7 +622,7 @@ def test_mcp_test_returns_encrypted_oauth_state_from_probe(
         return FakeClient()
 
     monkeypatch.setattr(
-        "openhands.agent_server.mcp_router.create_mcp_tools",
+        "agentrt.agent_server.mcp_router.create_mcp_tools",
         fake_create_mcp_tools,
     )
 
@@ -718,11 +718,11 @@ def test_mcp_oauth_start_returns_authorization_url_and_final_state(
         return FakeClient()
 
     monkeypatch.setattr(
-        "openhands.agent_server.mcp_router._oauth_auth_from_authentication",
+        "agentrt.agent_server.mcp_router._oauth_auth_from_authentication",
         fake_oauth_from_authentication,
     )
     monkeypatch.setattr(
-        "openhands.agent_server.mcp_router.create_mcp_tools",
+        "agentrt.agent_server.mcp_router.create_mcp_tools",
         fake_create_mcp_tools,
     )
 
@@ -807,7 +807,7 @@ def test_browser_coordinated_oauth_callback_handler_uses_fastmcp_callback_api(
         )
 
     monkeypatch.setattr(
-        "openhands.agent_server.mcp_router.create_oauth_callback_server",
+        "agentrt.agent_server.mcp_router.create_oauth_callback_server",
         fake_create_oauth_callback_server,
     )
 

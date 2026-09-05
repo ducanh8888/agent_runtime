@@ -193,11 +193,11 @@ async def test_sink_never_blocks_the_loop_under_load():
 def _subscriber(sink):
     import uuid
 
-    from openhands.agent_server.telemetry.factory import (
+    from agentrt.agent_server.telemetry.factory import (
         DiagnosticEventFactory,
         build_runtime_properties,
     )
-    from openhands.agent_server.telemetry.subscriber import (
+    from agentrt.agent_server.telemetry.subscriber import (
         ConversationTelemetryContext,
         TelemetrySubscriber,
     )
@@ -247,8 +247,8 @@ async def test_close_swallows_a_terminal_emit_failure():
 
 
 async def test_call_swallows_a_failure_from_any_event_type():
-    from openhands.sdk.event import AgentErrorEvent, ConversationStateUpdateEvent
-    from openhands.sdk.event.conversation_error import ConversationErrorEvent
+    from agentrt.sdk.event import AgentErrorEvent, ConversationStateUpdateEvent
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 
     sub = _subscriber(_ExplodingSink())
     for event in (
@@ -262,7 +262,7 @@ async def test_call_swallows_a_failure_from_any_event_type():
 
 async def test_capture_usage_swallows_a_malformed_stats_block():
     """A shape change in full_state must degrade, not raise."""
-    from openhands.sdk.event import ConversationStateUpdateEvent
+    from agentrt.sdk.event import ConversationStateUpdateEvent
 
     class _Collecting:
         enabled = True

@@ -3,16 +3,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openhands.sdk.context.condenser.utils import (
+from agentrt.sdk.context.condenser.utils import (
     get_shortest_prefix_above_token_count,
     get_suffix_length_for_token_reduction,
     get_total_token_count,
 )
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.event.llm_convertible.system import SystemPromptEvent
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.tool import ToolDefinition
-from openhands.sdk.tool.builtins.finish import FinishTool
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.event.llm_convertible.system import SystemPromptEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.tool import ToolDefinition
+from agentrt.sdk.tool.builtins.finish import FinishTool
 
 
 def message_event(content: str) -> MessageEvent:

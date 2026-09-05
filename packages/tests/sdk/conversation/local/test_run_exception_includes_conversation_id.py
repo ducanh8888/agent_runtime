@@ -2,19 +2,19 @@ import tempfile
 
 import pytest
 
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.exceptions import ISSUE_URL, ConversationRunError
-from openhands.sdk.conversation.impl.local_conversation import (
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.exceptions import ISSUE_URL, ConversationRunError
+from agentrt.sdk.conversation.impl.local_conversation import (
     _agent_already_surfaced_error,
 )
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
-from openhands.sdk.event import MessageEvent
-from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+from agentrt.sdk.llm import LLM, Message, TextContent
 
 
 class FailingAgent(AgentBase):

@@ -14,9 +14,9 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.mcp.config import dump_mcp_config
-from openhands.sdk.secret import LookupSecret
-from openhands.workspace.cloud.workspace import OpenHandsCloudWorkspace
+from agentrt.sdk.mcp.config import dump_mcp_config
+from agentrt.sdk.secret import LookupSecret
+from agentrt.workspace.cloud.workspace import OpenHandsCloudWorkspace
 
 
 SANDBOX_ID = "sb-test-123"

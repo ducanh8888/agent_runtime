@@ -17,13 +17,13 @@ import pytest
 from litellm.types.utils import ModelResponse
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.cancellation import CancellationToken
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import AgentErrorEvent, InterruptEvent
-from openhands.sdk.llm import LLM, LLMResponse, Message, MessageToolCall, TextContent
-from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.cancellation import CancellationToken
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import AgentErrorEvent, InterruptEvent
+from agentrt.sdk.llm import LLM, LLMResponse, Message, MessageToolCall, TextContent
+from agentrt.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
 
 
 def _make_response(model_name: str = "test-slow") -> LLMResponse:
@@ -340,7 +340,7 @@ async def test_cancel_token_stays_observable_after_interrupt(tmp_path):
 
 def _make_action_event(tool_name: str, call_id: str):
     """Build a minimal ActionEvent for executor tests."""
-    from openhands.sdk.event import ActionEvent
+    from agentrt.sdk.event import ActionEvent
 
     return ActionEvent(
         thought=[TextContent(text="test")],
@@ -358,7 +358,7 @@ def _make_action_event(tool_name: str, call_id: str):
 
 def test_run_safe_skips_cancelled_tool():
     """_run_safe should skip execution when token is already cancelled."""
-    from openhands.sdk.agent.parallel_executor import ParallelToolExecutor
+    from agentrt.sdk.agent.parallel_executor import ParallelToolExecutor
 
     executor = ParallelToolExecutor(max_workers=1)
     token = CancellationToken()
@@ -382,7 +382,7 @@ def test_run_safe_skips_cancelled_tool():
 
 def test_run_safe_runs_without_token():
     """_run_safe should execute normally when no token is provided."""
-    from openhands.sdk.agent.parallel_executor import ParallelToolExecutor
+    from agentrt.sdk.agent.parallel_executor import ParallelToolExecutor
 
     executor = ParallelToolExecutor(max_workers=1)
     action = _make_action_event("my_tool", "tc2")
@@ -400,7 +400,7 @@ def test_run_safe_runs_without_token():
 @pytest.mark.asyncio
 async def test_execute_batch_skips_all_on_pre_cancelled_token():
     """execute_batch with a pre-cancelled token skips all tool calls."""
-    from openhands.sdk.agent.parallel_executor import ParallelToolExecutor
+    from agentrt.sdk.agent.parallel_executor import ParallelToolExecutor
 
     executor = ParallelToolExecutor(max_workers=2)
     token = CancellationToken()

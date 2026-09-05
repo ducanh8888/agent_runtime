@@ -6,8 +6,8 @@ import tempfile
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.hooks.config import HookConfig, HookDefinition, HookMatcher, HookType
-from openhands.sdk.hooks.types import HookEventType
+from agentrt.sdk.hooks.config import HookConfig, HookDefinition, HookMatcher, HookType
+from agentrt.sdk.hooks.types import HookEventType
 
 
 def test_command_hook_requires_command():

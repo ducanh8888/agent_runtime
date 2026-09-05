@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.sdk.agent.acp_tracing import (
+from agentrt.sdk.agent.acp_tracing import (
     ACP_SERVER_METADATA_KEY,
     AGENT_KIND_METADATA_KEY,
     TURN_SPAN_NAME,
@@ -227,7 +227,7 @@ def test_finish_turn_closes_a_tool_call_the_server_never_terminated(exported):
 
 def test_tracing_is_inert_when_observability_is_disabled(monkeypatch, exported):
     monkeypatch.setattr(
-        "openhands.sdk.agent.acp_tracing.should_enable_observability",
+        "agentrt.sdk.agent.acp_tracing.should_enable_observability",
         lambda: False,
     )
     trace = ACPTurnTrace(acp_server="codex", model_id=None)
@@ -306,7 +306,7 @@ async def test_a_call_that_starts_terminal_closes_at_that_notification(exported)
 
     from acp.schema import ToolCallStart
 
-    from openhands.sdk.agent.acp_agent import _OpenHandsACPBridge
+    from agentrt.sdk.agent.acp_agent import _OpenHandsACPBridge
 
     start = MagicMock(spec=ToolCallStart)
     start.tool_call_id = "tc-terminal"

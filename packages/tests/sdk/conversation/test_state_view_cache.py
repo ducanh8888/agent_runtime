@@ -6,14 +6,14 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.view import View
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.event.condenser import Condensation, CondensationRequest
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.message import Message, TextContent
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.view import View
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.event.condenser import Condensation, CondensationRequest
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.message import Message, TextContent
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.marketplace import (
+from agentrt.sdk.marketplace import (
     AmbiguousPluginError,
     MarketplaceNotFoundError,
     MarketplaceRegistration,
@@ -179,7 +179,7 @@ def test_get_marketplace_with_resolution_preserves_resolved_ref(tmp_path: Path) 
     )
 
     with patch(
-        "openhands.sdk.marketplace.registry.fetch_plugin_with_resolution",
+        "agentrt.sdk.marketplace.registry.fetch_plugin_with_resolution",
         return_value=(marketplace_dir, "abc123"),
     ) as mock_fetch:
         fetched = registry.get_marketplace_with_resolution("team")

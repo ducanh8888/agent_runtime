@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.utils.path import (
+from agentrt.sdk.utils.path import (
     get_user_persistence_dir,
     is_absolute_path_source,
     is_host_absolute_path,
@@ -57,7 +57,7 @@ def test_get_user_persistence_dir_anchors_relative_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A relative value is pinned to the import-time CWD, not the current one."""
-    import openhands.sdk.utils.path as path_module
+    import agentrt.sdk.utils.path as path_module
 
     anchor = tmp_path / "anchor"
     anchor.mkdir()

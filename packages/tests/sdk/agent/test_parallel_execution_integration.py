@@ -13,19 +13,19 @@ from typing import TYPE_CHECKING, Self
 import pytest
 from pydantic import Field, ValidationError
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import ActionEvent, AgentErrorEvent, ObservationEvent
-from openhands.sdk.llm import Message, MessageToolCall, TextContent
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
-from openhands.sdk.tool.tool import DeclaredResources, ToolDefinition
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import ActionEvent, AgentErrorEvent, ObservationEvent
+from agentrt.sdk.llm import Message, MessageToolCall, TextContent
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool import Action, Observation, Tool, ToolExecutor, register_tool
+from agentrt.sdk.tool.tool import DeclaredResources, ToolDefinition
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.base import BaseConversation
-    from openhands.sdk.conversation.state import ConversationState
+    from agentrt.sdk.conversation.base import BaseConversation
+    from agentrt.sdk.conversation.state import ConversationState
 
 
 # --- Test tools ---

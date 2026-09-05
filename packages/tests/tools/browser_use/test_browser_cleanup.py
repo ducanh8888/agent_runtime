@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openhands.tools.browser_use import BrowserToolSet
-from openhands.tools.browser_use.impl import BrowserToolExecutor
+from agentrt.tools.browser_use import BrowserToolSet
+from agentrt.tools.browser_use.impl import BrowserToolExecutor
 
 
 class TestBrowserCleanup:
@@ -25,11 +25,11 @@ class TestBrowserCleanup:
                 return_value="/usr/bin/chromium",
             ),
             patch(
-                "openhands.tools.browser_use.impl.CustomBrowserUseServer",
+                "agentrt.tools.browser_use.impl.CustomBrowserUseServer",
                 return_value=mock_server,
             ),
             patch(
-                "openhands.tools.browser_use.impl.AsyncExecutor",
+                "agentrt.tools.browser_use.impl.AsyncExecutor",
                 return_value=mock_async_executor,
             ),
         ):

@@ -2,7 +2,7 @@
 
 import pytest
 
-from openhands.sdk.marketplace import (
+from agentrt.sdk.marketplace import (
     MARKETPLACE_MANIFEST_DIRS,
     MARKETPLACE_MANIFEST_FILE,
     Marketplace,
@@ -31,7 +31,7 @@ def test_new_import_location_has_all_exports():
 
 def test_removed_import_from_plugin_raises():
     """Test that importing marketplace classes from plugin raises AttributeError."""
-    from openhands.sdk import plugin
+    from agentrt.sdk import plugin
 
     with pytest.raises(AttributeError):
         plugin.Marketplace  # type: ignore[attr-defined]  # noqa: B018
@@ -39,7 +39,7 @@ def test_removed_import_from_plugin_raises():
 
 def test_removed_import_from_plugin_types_raises():
     """Test that importing marketplace classes from plugin.types raises."""
-    from openhands.sdk.plugin import types
+    from agentrt.sdk.plugin import types
 
     with pytest.raises(AttributeError):
         types.MarketplaceOwner  # type: ignore[attr-defined]  # noqa: B018

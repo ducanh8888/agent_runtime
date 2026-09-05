@@ -10,13 +10,13 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.context.memory import MEMORY_INDEX_RELPATH
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.event import SystemPromptEvent
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.testing import TestLLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.context.memory import MEMORY_INDEX_RELPATH
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.event import SystemPromptEvent
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.testing import TestLLM
 
 
 @pytest.fixture(autouse=True)
@@ -104,7 +104,7 @@ def test_load_memory_failure_does_not_prevent_startup(tmp_path: Path):
     _write_memory_index(workspace, "- SENTINEL_MEMORY_789\n")
 
     with patch(
-        "openhands.sdk.conversation.impl.local_conversation.load_memory",
+        "agentrt.sdk.conversation.impl.local_conversation.load_memory",
         side_effect=OSError("disk error"),
     ):
         event = _system_prompt_event(tmp_path, AgentContext(load_memory=True))

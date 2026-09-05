@@ -238,7 +238,7 @@ def test_main_fails_for_invalid_runway(monkeypatch, tmp_path, capsys):
     source_root = tmp_path / "pkg"
     source_root.mkdir()
     (source_root / "module.py").write_text(
-        "from openhands.sdk.utils.deprecation import warn_deprecated\n\n"
+        "from agentrt.sdk.utils.deprecation import warn_deprecated\n\n"
         "def trigger():\n"
         "    warn_deprecated(\n"
         "        'BadFeature',\n"

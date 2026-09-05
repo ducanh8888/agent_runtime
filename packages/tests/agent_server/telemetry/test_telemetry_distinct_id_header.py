@@ -8,7 +8,7 @@ anonymous per-process id.
 
 import pytest
 
-from openhands.agent_server.telemetry.factory import (
+from agentrt.agent_server.telemetry.factory import (
     ANONYMOUS_PREFIX,
     DISTINCT_ID_HEADER,
     DiagnosticEventFactory,
@@ -58,7 +58,7 @@ def _factory() -> DiagnosticEventFactory:
 
 
 def test_supplied_header_becomes_the_event_distinct_id():
-    from openhands.agent_server.telemetry import models as m
+    from agentrt.agent_server.telemetry import models as m
 
     factory = _factory()
     distinct_id = distinct_id_from_header("phc_user_42")
@@ -78,7 +78,7 @@ def test_supplied_header_becomes_the_event_distinct_id():
 
 
 def test_absent_header_falls_back_to_the_anonymous_id():
-    from openhands.agent_server.telemetry import models as m
+    from agentrt.agent_server.telemetry import models as m
 
     factory = _factory()
     event = factory.build(

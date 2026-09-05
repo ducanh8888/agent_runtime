@@ -3,8 +3,8 @@
 import os
 import urllib.request
 
-from openhands.sdk import get_logger
-from openhands.sdk.conversation.response_utils import get_agent_final_response
+from agentrt.sdk import get_logger
+from agentrt.sdk.conversation.response_utils import get_agent_final_response
 from tests.integration.base import BaseIntegrationTest, SkipTest, TestResult
 
 

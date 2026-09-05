@@ -3,8 +3,8 @@
 import pytest
 from deprecation import DeprecatedWarning
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.llm import LLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.llm import LLM
 
 
 def _agent() -> Agent:

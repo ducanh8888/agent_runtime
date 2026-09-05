@@ -28,26 +28,26 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
-from openhands.sdk import Agent
-from openhands.sdk.context import AgentContext, KeywordTrigger, Skill
-from openhands.sdk.context.condenser.llm_summarizing_condenser import (
+from agentrt.sdk import Agent
+from agentrt.sdk.context import AgentContext, KeywordTrigger, Skill
+from agentrt.sdk.context.condenser.llm_summarizing_condenser import (
     LLMSummarizingCondenser,
 )
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.event import ActionEvent, MessageEvent
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
-from openhands.sdk.event.types import ROOT_PARENT_ID
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.utils.openhands_provider import (
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.event import ActionEvent, MessageEvent
+from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+from agentrt.sdk.event.types import ROOT_PARENT_ID
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.utils.openhands_provider import (
     LITELLM_PROXY_PREFIX,
     OPENHANDS_LLM_PROXY_BASE_URL,
     OPENHANDS_PROVIDER_PREFIX,
 )
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
-from openhands.sdk.security.risk import SecurityRisk
-from openhands.sdk.tool import Tool, register_tool
-from openhands.tools.file_editor import FileEditorTool
-from openhands.tools.terminal import TerminalTool
+from agentrt.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+from agentrt.sdk.security.risk import SecurityRisk
+from agentrt.sdk.tool import Tool, register_tool
+from agentrt.tools.file_editor import FileEditorTool
+from agentrt.tools.terminal import TerminalTool
 from tests.conftest import create_mock_litellm_response
 
 
@@ -218,7 +218,7 @@ def _rewrite_openhands_llms_to_legacy_proxy(value: Any) -> None:
             _rewrite_openhands_llms_to_legacy_proxy(child)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_lifecycle_happy_path(mock_completion):
     """Baseline: restore should load prior events and allow further execution."""
 
@@ -280,7 +280,7 @@ def test_conversation_restore_lifecycle_happy_path(mock_completion):
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_preserves_security_risk_and_summary(mock_completion):
     """Restore should preserve action metadata derived from tool call arguments."""
 
@@ -384,7 +384,7 @@ def test_conversation_restore_preserves_security_risk_and_summary(mock_completio
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_fails_when_removing_tools(mock_completion):
     """Restore must fail when runtime tools remove a persisted tool."""
 
@@ -428,7 +428,7 @@ def test_conversation_restore_fails_when_removing_tools(mock_completion):
         assert "FileEditorTool" in str(exc.value)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_succeeds_when_adding_tools(mock_completion):
     """Restore must succeed when runtime tools add a new tool.
 
@@ -470,7 +470,7 @@ def test_conversation_restore_succeeds_when_adding_tools(mock_completion):
         assert conversation is not None
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_fails_when_agent_class_changes(mock_completion):
     """Restore must fail when persisted and runtime agent types differ."""
 
@@ -513,7 +513,7 @@ def test_conversation_restore_fails_when_agent_class_changes(mock_completion):
         assert "self is of type" in str(exc.value)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_fails_when_default_tools_removed(mock_completion):
     """Restore must fail if include_default_tools removes a built-in tool."""
 
@@ -559,7 +559,7 @@ def test_conversation_restore_fails_when_default_tools_removed(mock_completion):
         assert "think" in str(exc.value)
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_succeeds_when_default_tools_added(mock_completion):
     """Restore must succeed if include_default_tools adds a built-in tool.
 
@@ -603,7 +603,7 @@ def test_conversation_restore_succeeds_when_default_tools_added(mock_completion)
         assert conversation is not None
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_succeeds_when_llm_condenser_and_skills_change(
     mock_completion,
 ):
@@ -662,7 +662,7 @@ def test_conversation_restore_succeeds_when_llm_condenser_and_skills_change(
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_openhands_provider_restore_writes_public_model_shape(mock_completion):
     captured_completion_kwargs: list[dict[str, Any]] = []
 
@@ -706,7 +706,7 @@ def test_openhands_provider_restore_writes_public_model_shape(mock_completion):
         )
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_conversation_restore_rewrites_legacy_openhands_proxy_snapshot(
     mock_completion,
 ):
@@ -775,7 +775,7 @@ def test_conversation_restore_rewrites_legacy_openhands_proxy_snapshot(
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_restore_reasoning_effort_none_strips_temperature(mock_completion):
     """Reasoning models should accept reasoning_effort and ignore temperature/top_p."""
 
@@ -835,7 +835,7 @@ def test_restore_reasoning_effort_none_strips_temperature(mock_completion):
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_restore_pre_event_tree_conversation_with_artifact_tail_keeps_history(
     mock_completion,
 ):
@@ -924,7 +924,7 @@ def test_restore_pre_event_tree_conversation_with_artifact_tail_keeps_history(
             restored.close()
 
 
-@patch("openhands.sdk.llm.llm.litellm_completion")
+@patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_restore_event_tree_conversation_keeps_history(mock_completion):
     """Control for the pre-event-tree case: a normal 1.33.0+ restore is unaffected.
 

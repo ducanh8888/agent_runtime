@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from openhands.sdk.profiles import (
+from agentrt.sdk.profiles import (
     SEED_PROFILE_NAME,
     ACPAgentProfile,
     AgentProfileStoreProtocol,
@@ -31,7 +31,7 @@ from openhands.sdk.profiles import (
     save_profile_preserving_identity,
     validate_agent_profile,
 )
-from openhands.sdk.settings.model import VerificationSettings, validate_agent_settings
+from agentrt.sdk.settings.model import VerificationSettings, validate_agent_settings
 
 
 class InMemoryAgentProfileStore:

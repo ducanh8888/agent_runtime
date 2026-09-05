@@ -37,7 +37,7 @@ def test_extensions_ref_default():
 import os
 if "EXTENSIONS_REF" in os.environ:
     del os.environ["EXTENSIONS_REF"]
-from openhands.sdk.skills.skill import PUBLIC_SKILLS_REF
+from agentrt.sdk.skills.skill import PUBLIC_SKILLS_REF
 assert PUBLIC_SKILLS_REF == "main", (
     f"Expected 'main' but got '{PUBLIC_SKILLS_REF}'"
 )
@@ -48,7 +48,7 @@ assert PUBLIC_SKILLS_REF == "main", (
 def test_extensions_ref_custom_branch():
     """PUBLIC_SKILLS_REF should use EXTENSIONS_REF when set to a branch name."""
     code = """
-from openhands.sdk.skills.skill import PUBLIC_SKILLS_REF
+from agentrt.sdk.skills.skill import PUBLIC_SKILLS_REF
 assert PUBLIC_SKILLS_REF == "feature-branch", (
     f"Expected 'feature-branch' but got '{PUBLIC_SKILLS_REF}'"
 )
@@ -60,7 +60,7 @@ def test_extensions_ref_with_load_public_skills():
     """load_public_skills should respect EXTENSIONS_REF environment variable."""
     code = """
 from unittest import mock
-from openhands.sdk.skills.skill import (
+from agentrt.sdk.skills.skill import (
     PUBLIC_SKILLS_REF,
     load_public_skills,
 )
@@ -68,7 +68,7 @@ assert PUBLIC_SKILLS_REF == "test-branch", (
     f"Expected 'test-branch' but got '{PUBLIC_SKILLS_REF}'"
 )
 with mock.patch(
-    "openhands.sdk.skills.skill.update_skills_repository"
+    "agentrt.sdk.skills.skill.update_skills_repository"
 ) as mock_update:
     mock_update.return_value = None
     load_public_skills()
@@ -85,7 +85,7 @@ with mock.patch(
 def test_extensions_ref_with_tag():
     """PUBLIC_SKILLS_REF should accept a tag value via EXTENSIONS_REF."""
     code = """
-from openhands.sdk.skills.skill import PUBLIC_SKILLS_REF
+from agentrt.sdk.skills.skill import PUBLIC_SKILLS_REF
 assert PUBLIC_SKILLS_REF == "v1.2.3", (
     f"Expected 'v1.2.3' but got '{PUBLIC_SKILLS_REF}'"
 )
@@ -97,7 +97,7 @@ def test_extensions_ref_with_commit_sha():
     """PUBLIC_SKILLS_REF should accept a full commit SHA via EXTENSIONS_REF."""
     sha = "a" * 40
     code = f"""
-from openhands.sdk.skills.skill import PUBLIC_SKILLS_REF
+from agentrt.sdk.skills.skill import PUBLIC_SKILLS_REF
 assert PUBLIC_SKILLS_REF == "{sha}", (
     f"Expected '{sha}' but got '{{PUBLIC_SKILLS_REF}}'"
 )
@@ -108,7 +108,7 @@ assert PUBLIC_SKILLS_REF == "{sha}", (
 def test_extensions_ref_empty_string():
     """Empty EXTENSIONS_REF falls back to an empty string (os.environ.get behaviour)."""
     code = """
-from openhands.sdk.skills.skill import PUBLIC_SKILLS_REF
+from agentrt.sdk.skills.skill import PUBLIC_SKILLS_REF
 assert PUBLIC_SKILLS_REF == "", (
     f"Expected '' but got '{PUBLIC_SKILLS_REF}'"
 )
@@ -140,7 +140,7 @@ def test_pinned_cache_entry_never_expires():
     This verifies that immutable refs (tags, commit SHAs) do not trigger
     remote polling once their skills have been loaded once.
     """
-    from openhands.sdk.skills.skill import (
+    from agentrt.sdk.skills.skill import (
         _PUBLIC_SKILLS_CACHE,
         _PUBLIC_SKILLS_CACHE_LOCK,
         Skill,
@@ -160,7 +160,7 @@ def test_pinned_cache_entry_never_expires():
         timestamp=float("inf"),
     )
 
-    with patch("openhands.sdk.skills.skill.update_skills_repository") as mock_update:
+    with patch("agentrt.sdk.skills.skill.update_skills_repository") as mock_update:
         result = load_public_skills(ref="v1.0.0", marketplace_path=None)
         mock_update.assert_not_called()
 
@@ -170,7 +170,7 @@ def test_pinned_cache_entry_never_expires():
 
 def test_mutable_cache_entry_expires_after_ttl():
     """A branch entry (finite timestamp) IS re-fetched once the TTL has passed."""
-    from openhands.sdk.skills.skill import (
+    from agentrt.sdk.skills.skill import (
         _PUBLIC_SKILLS_CACHE,
         _PUBLIC_SKILLS_CACHE_LOCK,
         _PUBLIC_SKILLS_CACHE_TTL_SECONDS,
@@ -191,7 +191,7 @@ def test_mutable_cache_entry_expires_after_ttl():
         timestamp=time.monotonic() - _PUBLIC_SKILLS_CACHE_TTL_SECONDS - 1,
     )
 
-    with patch("openhands.sdk.skills.skill.update_skills_repository") as mock_update:
+    with patch("agentrt.sdk.skills.skill.update_skills_repository") as mock_update:
         mock_update.return_value = None  # simulates transient failure
         load_public_skills(ref="main", marketplace_path=None)
         mock_update.assert_called_once()

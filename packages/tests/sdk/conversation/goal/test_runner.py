@@ -2,12 +2,12 @@
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.base import BaseConversation
-from openhands.sdk.conversation.goal import GoalOutcome, run_goal
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.testing import TestLLM
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.base import BaseConversation
+from agentrt.sdk.conversation.goal import GoalOutcome, run_goal
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.testing import TestLLM
 
 
 def _text_llm(*texts: str) -> TestLLM:

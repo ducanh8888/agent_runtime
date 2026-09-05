@@ -1,6 +1,6 @@
 """Tests for local + installed plugin discovery.
 
-Covers ``openhands.sdk.plugin.discovery`` — the *ambient* plugin set that
+Covers ``agentrt.sdk.plugin.discovery`` — the *ambient* plugin set that
 auto-loads into conversations: plugins in the user/project directories plus
 enabled installed plugins. Mirrors the user/project skill discovery tests.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.plugin import (
+from agentrt.sdk.plugin import (
     disable_plugin,
     discovery,
     install_plugin,

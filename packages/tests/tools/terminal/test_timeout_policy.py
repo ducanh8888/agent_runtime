@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock
 
-from openhands.tools.terminal.definition import TerminalAction
-from openhands.tools.terminal.terminal.terminal_session import TerminalSession
-from openhands.tools.terminal.timeout_policy import (
+from agentrt.tools.terminal.definition import TerminalAction
+from agentrt.tools.terminal.terminal.terminal_session import TerminalSession
+from agentrt.tools.terminal.timeout_policy import (
     RUNTIME_IDLE_TIMEOUT_SECONDS_ENV,
     foreground_timeout_rejection_for,
     get_max_foreground_timeout_seconds,

@@ -4,10 +4,10 @@ from typing import Any
 import pytest
 from litellm import get_optional_params
 
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm import LLMCallContext
-from openhands.sdk.llm.options.chat_options import select_chat_options
-from openhands.sdk.llm.utils.model_features import ModelFeatures, get_features
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm import LLMCallContext
+from agentrt.sdk.llm.options.chat_options import select_chat_options
+from agentrt.sdk.llm.utils.model_features import ModelFeatures, get_features
 
 
 @dataclass

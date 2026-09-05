@@ -1,5 +1,5 @@
-from openhands.sdk.tool.spec import Tool
-from openhands.tools.preset import TaskOutcome
+from agentrt.sdk.tool.spec import Tool
+from agentrt.tools.preset import TaskOutcome
 
 
 def test_task_outcome_accepts_outcome_summary_alias():

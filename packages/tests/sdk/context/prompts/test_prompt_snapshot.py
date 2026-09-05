@@ -21,14 +21,14 @@ from uuid import uuid4
 
 import pytest
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.agent.base import _DEFAULT_SOUL
-from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.skills import Skill
-from openhands.sdk.tool.spec import Tool
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.agent.base import _DEFAULT_SOUL
+from agentrt.sdk.context.agent_context import AgentContext
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.tool.spec import Tool
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 SNAPSHOT_DIR: Final[Path] = Path(__file__).parent / "snapshots"

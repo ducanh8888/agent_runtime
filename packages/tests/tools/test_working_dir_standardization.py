@@ -14,12 +14,12 @@ from uuid import uuid4
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm import LLM
-from openhands.sdk.workspace import LocalWorkspace
-from openhands.tools.file_editor import FileEditorAction, FileEditorTool
-from openhands.tools.terminal import TerminalAction, TerminalTool
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.workspace import LocalWorkspace
+from agentrt.tools.file_editor import FileEditorAction, FileEditorTool
+from agentrt.tools.terminal import TerminalAction, TerminalTool
 
 
 pytestmark = pytest.mark.skipif(

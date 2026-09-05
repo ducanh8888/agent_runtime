@@ -9,7 +9,7 @@ import psutil
 import pytest
 from filelock import FileLock
 
-from openhands.tools.file_editor import file_editor
+from agentrt.tools.file_editor import file_editor
 from tests.platform_utils import (
     can_fork_test_process,
     set_address_space_limit_if_available,

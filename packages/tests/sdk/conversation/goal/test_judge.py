@@ -2,9 +2,9 @@
 
 import pytest
 
-from openhands.sdk.conversation.goal import GoalVerdict, judge_goal
-from openhands.sdk.llm import Message, TextContent
-from openhands.sdk.testing import TestLLM
+from agentrt.sdk.conversation.goal import GoalVerdict, judge_goal
+from agentrt.sdk.llm import Message, TextContent
+from agentrt.sdk.testing import TestLLM
 
 
 def _judge(text: str) -> TestLLM:

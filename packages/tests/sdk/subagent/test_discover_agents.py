@@ -3,8 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from openhands.sdk.subagent.load import discover_agents
-from openhands.sdk.subagent.registry import (
+from agentrt.sdk.subagent.load import discover_agents
+from agentrt.sdk.subagent.registry import (
     _agent_factories,
     _reset_registry_for_tests,
 )
@@ -31,7 +31,7 @@ def test_discover_agents_sets_level_and_source(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_agent(home / ".agents" / "agents", "user-agent")
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=home):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=home):
         agents = discover_agents(tmp_path)
 
     by_name = {a.name: a for a in agents}
@@ -47,7 +47,7 @@ def test_discover_agents_project_wins_over_user(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_agent(home / ".agents" / "agents", "shared", description="from user")
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=home):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=home):
         agents = discover_agents(tmp_path)
 
     shared = [a for a in agents if a.name == "shared"]
@@ -60,7 +60,7 @@ def test_discover_agents_does_not_mutate_registry(tmp_path: Path) -> None:
     """Discovery is read-only: the global registry stays untouched."""
     _write_agent(tmp_path / ".agents" / "agents", "project-agent")
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=tmp_path / "h"):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=tmp_path / "h"):
         agents = discover_agents(tmp_path, include_user=False)
 
     assert [a.name for a in agents] == ["project-agent"]
@@ -73,7 +73,7 @@ def test_discover_agents_respects_include_flags(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_agent(home / ".agents" / "agents", "user-agent")
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=home):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=home):
         only_user = discover_agents(tmp_path, include_project=False)
         only_project = discover_agents(tmp_path, include_user=False)
 
@@ -86,7 +86,7 @@ def test_discover_agents_none_project_dir(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_agent(home / ".agents" / "agents", "user-agent")
 
-    with patch("openhands.sdk.subagent.load.Path.home", return_value=home):
+    with patch("agentrt.sdk.subagent.load.Path.home", return_value=home):
         agents = discover_agents(None)
 
     assert [a.name for a in agents] == ["user-agent"]

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.conversation.types import (
     TAG_VALUE_MAX_LENGTH,
     ConversationObservabilityMetadata,
     ConversationObservabilityTags,

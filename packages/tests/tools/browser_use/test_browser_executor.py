@@ -12,14 +12,14 @@ from urllib.request import urlopen
 
 import pytest
 
-from openhands.sdk.utils.async_executor import AsyncExecutor
-from openhands.tools.browser_use.definition import (
+from agentrt.sdk.utils.async_executor import AsyncExecutor
+from agentrt.tools.browser_use.definition import (
     BrowserClickAction,
     BrowserGetStateAction,
     BrowserNavigateAction,
     BrowserObservation,
 )
-from openhands.tools.browser_use.impl import (
+from agentrt.tools.browser_use.impl import (
     DEFAULT_BROWSER_ACTION_TIMEOUT_SECONDS,
     BrowserToolExecutor,
 )
@@ -134,10 +134,10 @@ def test_browser_executor_config_passing():
 
 def test_browser_executor_rejects_non_positive_action_timeout():
     """Test that BrowserToolExecutor validates action timeouts."""
-    with patch("openhands.tools.browser_use.impl.run_with_timeout"):
+    with patch("agentrt.tools.browser_use.impl.run_with_timeout"):
         with patch.object(BrowserToolExecutor, "_ensure_chromium_available"):
-            with patch("openhands.tools.browser_use.impl.CustomBrowserUseServer"):
-                with patch("openhands.tools.browser_use.impl.AsyncExecutor"):
+            with patch("agentrt.tools.browser_use.impl.CustomBrowserUseServer"):
+                with patch("agentrt.tools.browser_use.impl.AsyncExecutor"):
                     with pytest.raises(
                         ValueError,
                         match="action_timeout_seconds must be greater than 0",
@@ -145,7 +145,7 @@ def test_browser_executor_rejects_non_positive_action_timeout():
                         BrowserToolExecutor(action_timeout_seconds=0)
 
 
-@patch("openhands.tools.browser_use.impl.BrowserToolExecutor.navigate")
+@patch("agentrt.tools.browser_use.impl.BrowserToolExecutor.navigate")
 async def test_browser_executor_action_routing_navigate(
     mock_navigate, mock_browser_executor
 ):
@@ -159,7 +159,7 @@ async def test_browser_executor_action_routing_navigate(
     assert_browser_observation_success(result, "Navigation successful")
 
 
-@patch("openhands.tools.browser_use.impl.BrowserToolExecutor.click")
+@patch("agentrt.tools.browser_use.impl.BrowserToolExecutor.click")
 async def test_browser_executor_action_routing_click(mock_click, mock_browser_executor):
     """Test that click actions are routed correctly."""
     mock_click.return_value = "Click successful"
@@ -171,7 +171,7 @@ async def test_browser_executor_action_routing_click(mock_click, mock_browser_ex
     assert_browser_observation_success(result, "Click successful")
 
 
-@patch("openhands.tools.browser_use.impl.BrowserToolExecutor.get_state")
+@patch("agentrt.tools.browser_use.impl.BrowserToolExecutor.get_state")
 async def test_browser_executor_action_routing_get_state(
     mock_get_state, mock_browser_executor
 ):
@@ -200,7 +200,7 @@ async def test_browser_executor_unsupported_action_handling(mock_browser_executo
     assert_browser_observation_error(result, "Unsupported action type")
 
 
-@patch("openhands.tools.browser_use.impl.BrowserToolExecutor.navigate")
+@patch("agentrt.tools.browser_use.impl.BrowserToolExecutor.navigate")
 async def test_browser_executor_error_wrapping(mock_navigate, mock_browser_executor):
     """Test that exceptions are properly wrapped in BrowserObservation."""
     mock_navigate.side_effect = Exception("Browser error occurred")
@@ -268,7 +268,7 @@ def test_issue_2412_consecutive_failures_reset_session(mock_browser_executor):
 
     See: https://github.com/OpenHands/software-agent-sdk/issues/2412
     """
-    from openhands.tools.browser_use.impl import MAX_CONSECUTIVE_FAILURES
+    from agentrt.tools.browser_use.impl import MAX_CONSECUTIVE_FAILURES
 
     mock_browser_executor._initialized = True
 
@@ -336,7 +336,7 @@ def test_issue_2412_action_errors_do_not_trigger_reset(mock_browser_executor):
 
     See: https://github.com/OpenHands/software-agent-sdk/issues/2412
     """
-    from openhands.tools.browser_use.impl import MAX_CONSECUTIVE_FAILURES
+    from agentrt.tools.browser_use.impl import MAX_CONSECUTIVE_FAILURES
 
     mock_browser_executor._initialized = True
 
@@ -360,7 +360,7 @@ def test_issue_2412_degraded_timeout_after_failures(mock_browser_executor):
 
     See: https://github.com/OpenHands/software-agent-sdk/issues/2412
     """
-    from openhands.tools.browser_use.impl import DEGRADED_TIMEOUT_SECONDS
+    from agentrt.tools.browser_use.impl import DEGRADED_TIMEOUT_SECONDS
 
     mock_browser_executor._initialized = True
     mock_browser_executor._action_timeout_seconds = 300.0
@@ -426,7 +426,7 @@ async def test_start_recording_initializes_session(mock_browser_executor):
     import tempfile
     from unittest.mock import AsyncMock
 
-    from openhands.tools.browser_use.recording import RecordingSession
+    from agentrt.tools.browser_use.recording import RecordingSession
 
     # Set up mock CDP session that simulates successful rrweb loading
     mock_cdp_session = AsyncMock()
@@ -471,7 +471,7 @@ async def test_stop_recording_returns_summary_with_event_counts():
     import tempfile
     from unittest.mock import AsyncMock
 
-    from openhands.tools.browser_use.recording import RecordingSession
+    from agentrt.tools.browser_use.recording import RecordingSession
 
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create a recording session in RECORDING state with some events
@@ -527,7 +527,7 @@ async def test_stop_recording_without_active_session_returns_error():
     """Test that stop_recording returns error when not recording."""
     from unittest.mock import AsyncMock
 
-    from openhands.tools.browser_use.recording import RecordingSession
+    from agentrt.tools.browser_use.recording import RecordingSession
 
     # Create a session that's not recording
     session = RecordingSession()

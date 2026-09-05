@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from openhands.sdk.utils.models import (
+from agentrt.sdk.utils.models import (
     DiscriminatedUnionMixin,
     OpenHandsModel,
 )

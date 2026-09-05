@@ -8,23 +8,23 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from openhands.sdk import Agent, Conversation
-from openhands.sdk.agent.base import AgentBase
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import (
+from agentrt.sdk import Agent, Conversation
+from agentrt.sdk.agent.base import AgentBase
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
 )
-from openhands.sdk.conversation.types import (
+from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
-from openhands.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
-from openhands.sdk.io import InMemoryFileStore
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.llm.llm_registry import RegistryEvent
-from openhands.sdk.security.confirmation_policy import AlwaysConfirm
-from openhands.sdk.workspace import LocalWorkspace
+from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
+from agentrt.sdk.io import InMemoryFileStore
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm.llm_registry import RegistryEvent
+from agentrt.sdk.security.confirmation_policy import AlwaysConfirm
+from agentrt.sdk.workspace import LocalWorkspace
 
 
 class _DifferentAgentForVerifyTest(AgentBase):
@@ -481,8 +481,8 @@ def test_agent_pydantic_validation_on_creation():
 
 def test_agent_verify_validates_tools_match():
     """Test that agent.verify() validates tools match between runtime and persisted."""
-    from openhands.sdk.agent import AgentBase
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import AgentBase
+    from agentrt.sdk.tool import Tool
 
     llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm")
 
@@ -510,8 +510,8 @@ def test_agent_verify_validates_tools_match():
 
 def test_agent_verify_allows_different_llm():
     """Test that agent.verify() allows different LLM configuration."""
-    from openhands.sdk.agent import AgentBase
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import AgentBase
+    from agentrt.sdk.tool import Tool
 
     tools = [Tool(name="TerminalTool")]
 
@@ -929,7 +929,7 @@ def test_conversation_state_secrets_with_cipher():
     be encrypted during serialization and decrypted during deserialization,
     preserving the actual secret values across save/restore cycles.
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     with tempfile.TemporaryDirectory() as temp_dir:
         llm = LLM(
@@ -1020,9 +1020,9 @@ def test_agent_context_seed_preserves_persisted_registry_secret_on_resume():
     persisted in the registry, reopening the conversation with no new request
     secrets should keep the registry value.
     """
-    from openhands.sdk.context.agent_context import AgentContext
-    from openhands.sdk.secret import StaticSecret
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.context.agent_context import AgentContext
+    from agentrt.sdk.secret import StaticSecret
+    from agentrt.sdk.utils.cipher import Cipher
 
     with tempfile.TemporaryDirectory() as temp_dir:
         llm = LLM(
@@ -1079,7 +1079,7 @@ def test_conversation_state_save_with_cipher_load_without():
     a cipher, the encrypted values should remain as-is (unusable) but the
     conversation should still load successfully.
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     with tempfile.TemporaryDirectory() as temp_dir:
         llm = LLM(
@@ -1136,7 +1136,7 @@ def test_conversation_state_save_without_cipher_load_with():
     When state is saved without a cipher (secrets redacted) but loaded with
     a cipher, the redacted secrets should deserialize to None values.
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     with tempfile.TemporaryDirectory() as temp_dir:
         llm = LLM(
@@ -1189,7 +1189,7 @@ def test_conversation_state_cipher_mismatch():
     fails gracefully - the conversation loads but secrets are set to None
     (with a warning logged).
     """
-    from openhands.sdk.utils.cipher import Cipher
+    from agentrt.sdk.utils.cipher import Cipher
 
     with tempfile.TemporaryDirectory() as temp_dir:
         llm = LLM(
@@ -1246,8 +1246,8 @@ def test_agent_verify_fails_when_explicit_tools_differ():
     Tools cannot be changed mid-conversation. This test verifies that
     changing explicit tools fails verification.
     """
-    from openhands.sdk.agent import AgentBase
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import AgentBase
+    from agentrt.sdk.tool import Tool
 
     llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm")
 
@@ -1282,8 +1282,8 @@ def test_agent_verify_fails_when_builtin_tools_differ():
     changing builtin tools (include_default_tools) fails verification,
     even when explicit tools match.
     """
-    from openhands.sdk.agent import AgentBase
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import AgentBase
+    from agentrt.sdk.tool import Tool
 
     llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm")
 
@@ -1311,8 +1311,8 @@ def test_agent_verify_fails_when_builtin_tools_differ():
 
 def test_agent_verify_fails_when_builtin_tool_removed():
     """Test that verify fails when a builtin tool is removed."""
-    from openhands.sdk.agent import AgentBase
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import AgentBase
+    from agentrt.sdk.tool import Tool
 
     llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm")
 
@@ -1344,8 +1344,8 @@ def test_v1_11_5_cli_default_conversation_resumes_when_runtime_adds_delegate(
 
     Adding new tools is allowed — only removing tools is rejected.
     """
-    from openhands.sdk.agent import Agent
-    from openhands.sdk.tool import Tool
+    from agentrt.sdk.agent import Agent
+    from agentrt.sdk.tool import Tool
 
     fixture_path = (
         Path(__file__).resolve().parents[3]

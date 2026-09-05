@@ -53,16 +53,16 @@ from litellm.types.utils import (  # noqa: E402
 )
 from pydantic import Field  # noqa: E402
 
-from openhands.sdk.agent import Agent  # noqa: E402
-from openhands.sdk.conversation import Conversation  # noqa: E402
-from openhands.sdk.event import MessageEvent  # noqa: E402
-from openhands.sdk.llm import (  # noqa: E402
+from agentrt.sdk.agent import Agent  # noqa: E402
+from agentrt.sdk.conversation import Conversation  # noqa: E402
+from agentrt.sdk.event import MessageEvent  # noqa: E402
+from agentrt.sdk.llm import (  # noqa: E402
     LLM,
     ImageContent,
     Message,
     TextContent,
 )
-from openhands.sdk.tool import (  # noqa: E402
+from agentrt.sdk.tool import (  # noqa: E402
     Action,
     Observation,
     Tool,
@@ -330,7 +330,7 @@ class TestMessageWhileFinishing:
         print(f"{elapsed_time()} Test started")
 
         with patch(
-            "openhands.sdk.llm.llm.litellm_completion",
+            "agentrt.sdk.llm.llm.litellm_completion",
             side_effect=self._mock_llm_response,
         ):
             # Start the conversation with a natural request

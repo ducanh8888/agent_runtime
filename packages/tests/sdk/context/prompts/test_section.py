@@ -8,7 +8,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.context.prompts.section import (
+from agentrt.sdk.context.prompts.section import (
     CacheTier,
     Platform,
     PromptContext,

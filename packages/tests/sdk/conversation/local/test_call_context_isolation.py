@@ -9,12 +9,12 @@ import tempfile
 
 from pydantic import SecretStr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm import LLMCallContext
-from openhands.sdk.llm.options.chat_options import select_chat_options
-from openhands.sdk.llm.options.responses_options import select_responses_options
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm import LLMCallContext
+from agentrt.sdk.llm.options.chat_options import select_chat_options
+from agentrt.sdk.llm.options.responses_options import select_responses_options
 
 
 def _llm(**kwargs) -> LLM:

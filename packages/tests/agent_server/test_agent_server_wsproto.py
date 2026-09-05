@@ -52,7 +52,7 @@ def run_agent_server(port, api_key):
     os.environ["OH_SESSION_API_KEYS_0"] = api_key
     os.environ["SESSION_API_KEY"] = api_key
     sys.argv = ["agent-server", "--port", str(port)]
-    from openhands.agent_server.__main__ import main
+    from agentrt.agent_server.__main__ import main
 
     main()
 

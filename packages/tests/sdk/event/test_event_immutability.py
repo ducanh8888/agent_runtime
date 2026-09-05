@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Self
 
 import pytest
 
-from openhands.sdk.event import (
+from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
     Condensation,
@@ -17,18 +17,18 @@ from openhands.sdk.event import (
     SystemPromptEvent,
     UserRejectObservation,
 )
-from openhands.sdk.llm import (
+from agentrt.sdk.llm import (
     ImageContent,
     Message,
     MessageToolCall,
     TextContent,
 )
-from openhands.sdk.tool import ToolDefinition, ToolExecutor
-from openhands.sdk.tool.schema import Action, Observation
+from agentrt.sdk.tool import ToolDefinition, ToolExecutor
+from agentrt.sdk.tool.schema import Action, Observation
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+    from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 
 
 class EventsImmutabilityMockAction(Action):

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from openhands.sdk.context.prompts.section import CacheTier, PromptContext
+from agentrt.sdk.context.prompts.section import CacheTier, PromptContext
 
 
 @dataclass

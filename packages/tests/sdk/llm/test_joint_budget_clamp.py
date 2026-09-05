@@ -16,8 +16,8 @@ from unittest.mock import patch
 
 from pydantic import SecretStr
 
-from openhands.sdk.llm import LLM, Message, TextContent
-from openhands.sdk.llm.llm import (
+from agentrt.sdk.llm import LLM, Message, TextContent
+from agentrt.sdk.llm.llm import (
     JOINT_BUDGET_MIN_OUTPUT_TOKENS,
     JOINT_BUDGET_SAFETY_MARGIN_TOKENS,
 )
@@ -41,7 +41,7 @@ def test_bedrock_clamps_max_tokens_when_input_is_large():
     llm = _make_llm("bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     call_kwargs = {"max_completion_tokens": 64_000}
 
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     # Headroom = 200_000 - 195_000 - 256 = 4_744; well above the floor.
@@ -56,7 +56,7 @@ def test_bedrock_does_not_clamp_when_input_is_small():
     call_kwargs = {"max_completion_tokens": 64_000}
 
     # 50k input + 64k output = 114k, well under the 200k window.
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=50_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=50_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out["max_completion_tokens"] == 64_000
@@ -70,7 +70,7 @@ def test_bedrock_floor_when_input_nearly_fills_window():
     call_kwargs = {"max_completion_tokens": 64_000}
 
     # 199.9k input leaves only ~100 tokens of true headroom, well below floor.
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=199_900):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=199_900):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out["max_completion_tokens"] == JOINT_BUDGET_MIN_OUTPUT_TOKENS
@@ -82,7 +82,7 @@ def test_anthropic_direct_is_never_clamped():
     call_kwargs = {"max_completion_tokens": 64_000}
 
     # Even a huge input must not clamp on a non-joint provider.
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out is call_kwargs
@@ -94,7 +94,7 @@ def test_clamps_max_tokens_key_too():
     llm = _make_llm("bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     call_kwargs = {"max_tokens": 64_000}
 
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert "max_completion_tokens" not in out
@@ -106,7 +106,7 @@ def test_no_clamp_when_no_budget_key_present():
     llm = _make_llm("bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     call_kwargs = {"temperature": 0.0}
 
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out == {"temperature": 0.0}
@@ -119,7 +119,7 @@ def test_user_supplied_smaller_budget_is_preserved():
 
     # 195k input + user-supplied 2k output = 197k, still fits the 200k window
     # after the safety margin. Should not be clamped.
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out["max_completion_tokens"] == 2_000
@@ -131,7 +131,7 @@ def test_clamp_skipped_when_token_counter_raises():
     call_kwargs = {"max_completion_tokens": 64_000}
 
     with patch(
-        "openhands.sdk.llm.llm.token_counter",
+        "agentrt.sdk.llm.llm.token_counter",
         side_effect=RuntimeError("boom"),
     ):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
@@ -148,7 +148,7 @@ def test_finalize_completion_params_applies_clamp_end_to_end():
     messages = [Message(role="user", content=[TextContent(text="hello")])]
     formatted = llm.format_messages_for_llm(messages)
 
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         (
             _formatted,
             _cc_tools,
@@ -180,7 +180,7 @@ def test_no_clamp_when_context_window_unknown():
     llm._effective_max_input_tokens = None
     call_kwargs = {"max_completion_tokens": 64_000}
 
-    with patch("openhands.sdk.llm.llm.token_counter", return_value=195_000):
+    with patch("agentrt.sdk.llm.llm.token_counter", return_value=195_000):
         out = llm._clamp_max_tokens_for_joint_budget(call_kwargs, [], [])
 
     assert out["max_completion_tokens"] == 64_000

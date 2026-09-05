@@ -5,10 +5,10 @@ access correctly across tool boundaries.
 
 from pathlib import Path
 
-from openhands.tools.file_editor.definition import FileEditorAction, FileEditorTool
-from openhands.tools.gemini.edit.definition import EditAction, EditTool
-from openhands.tools.gemini.read_file.definition import ReadFileAction, ReadFileTool
-from openhands.tools.gemini.write_file.definition import WriteFileAction, WriteFileTool
+from agentrt.tools.file_editor.definition import FileEditorAction, FileEditorTool
+from agentrt.tools.gemini.edit.definition import EditAction, EditTool
+from agentrt.tools.gemini.read_file.definition import ReadFileAction, ReadFileTool
+from agentrt.tools.gemini.write_file.definition import WriteFileAction, WriteFileTool
 
 
 def test_gemini_and_file_editor_produce_same_key(fake_conv_state):

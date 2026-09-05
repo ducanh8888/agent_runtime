@@ -12,11 +12,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk.agent import ACPAgent, Agent
-from openhands.sdk.llm import LLM
-from openhands.sdk.llm.llm_profile_store import LLMProfileStore
-from openhands.sdk.mcp.config import MCPServer, coerce_mcp_config
-from openhands.sdk.profiles import (
+from agentrt.sdk.agent import ACPAgent, Agent
+from agentrt.sdk.llm import LLM
+from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.mcp.config import MCPServer, coerce_mcp_config
+from agentrt.sdk.profiles import (
     ACPAgentProfile,
     DanglingMcpServerRef,
     OpenHandsAgentProfile,
@@ -24,9 +24,9 @@ from openhands.sdk.profiles import (
     resolve_agent_profile,
     resolve_agent_profile_dry_run,
 )
-from openhands.sdk.settings.model import ACPAgentSettings, OpenHandsAgentSettings
-from openhands.sdk.skills import Skill
-from openhands.sdk.tool import Tool
+from agentrt.sdk.settings.model import ACPAgentSettings, OpenHandsAgentSettings
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.tool import Tool
 
 
 _LLM_SECRET = "sk-LLM-SECRET-SHOULD-NOT-LEAK"
@@ -439,8 +439,8 @@ def test_seed_then_resolve_with_narrower_catalog_does_not_dangle(
     # would name that skill and then hard-fail at launch (DanglingSkillRef). The
     # deny-list seed disables nothing, so seed->resolve against the narrower
     # catalog succeeds and yields exactly the catalog skills.
-    from openhands.sdk.profiles import build_seed_profile
-    from openhands.sdk.settings.model import validate_agent_settings
+    from agentrt.sdk.profiles import build_seed_profile
+    from agentrt.sdk.settings.model import validate_agent_settings
 
     settings = validate_agent_settings(
         {

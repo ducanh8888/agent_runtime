@@ -11,8 +11,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.plugins_router import plugins_router
-from openhands.sdk.plugin import Plugin
+from agentrt.agent_server.plugins_router import plugins_router
+from agentrt.sdk.plugin import Plugin
 
 
 def _make_installable_plugin(plugin_dir: Path, name: str) -> Path:
@@ -31,7 +31,7 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     store = tmp_path / "installed-store"
     store.mkdir()
     monkeypatch.setattr(
-        "openhands.sdk.plugin.installed.DEFAULT_INSTALLED_PLUGINS_DIR", store
+        "agentrt.sdk.plugin.installed.DEFAULT_INSTALLED_PLUGINS_DIR", store
     )
     app = FastAPI()
     app.include_router(plugins_router)
@@ -162,7 +162,7 @@ def test_list_available_returns_plugin_summaries(
         _make_installable_plugin(tmp_path / "avail", "available-plugin")
     )
     monkeypatch.setattr(
-        "openhands.sdk.plugin.load_available_plugins",
+        "agentrt.sdk.plugin.load_available_plugins",
         lambda **kwargs: {plugin.name: plugin},
         raising=False,
     )

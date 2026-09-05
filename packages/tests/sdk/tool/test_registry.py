@@ -3,14 +3,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openhands.sdk import register_tool
-from openhands.sdk.conversation.state import ConversationState
-from openhands.sdk.llm.message import ImageContent, TextContent
-from openhands.sdk.tool import ToolDefinition
-from openhands.sdk.tool.registry import list_usable_tools, resolve_tool
-from openhands.sdk.tool.schema import Action, Observation
-from openhands.sdk.tool.spec import Tool
-from openhands.sdk.tool.tool import ToolExecutor
+from agentrt.sdk import register_tool
+from agentrt.sdk.conversation.state import ConversationState
+from agentrt.sdk.llm.message import ImageContent, TextContent
+from agentrt.sdk.tool import ToolDefinition
+from agentrt.sdk.tool.registry import list_usable_tools, resolve_tool
+from agentrt.sdk.tool.schema import Action, Observation
+from agentrt.sdk.tool.spec import Tool
+from agentrt.sdk.tool.tool import ToolExecutor
 
 
 def _create_mock_conv_state() -> ConversationState:

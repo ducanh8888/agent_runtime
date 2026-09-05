@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from openhands.sdk.llm import LLM
+from agentrt.sdk.llm import LLM
 
 
 def test_llm_config_defaults():

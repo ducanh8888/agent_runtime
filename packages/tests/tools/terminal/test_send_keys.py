@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from openhands.tools.terminal.terminal.interface import (
+from agentrt.tools.terminal.terminal.interface import (
     SUPPORTED_SPECIAL_KEYS,
     parse_ctrl_key,
 )
@@ -60,7 +60,7 @@ def test_supported_special_keys_contains_essentials() -> None:
 )
 def test_subprocess_specials_match_contract() -> None:
     """Backend specials dicts must stay in sync with SUPPORTED_SPECIAL_KEYS."""
-    from openhands.tools.terminal.terminal.subprocess_terminal import (
+    from agentrt.tools.terminal.terminal.subprocess_terminal import (
         _SUBPROCESS_SPECIALS,
     )
 
@@ -68,7 +68,7 @@ def test_subprocess_specials_match_contract() -> None:
 
 
 def test_tmux_specials_match_contract() -> None:
-    from openhands.tools.terminal.terminal.tmux_terminal import (
+    from agentrt.tools.terminal.terminal.tmux_terminal import (
         _TMUX_SPECIALS,
     )
 
@@ -84,7 +84,7 @@ def subprocess_terminal():
     if platform.system() == "Windows":
         pytest.skip("SubprocessTerminal not available on Windows")
 
-    from openhands.tools.terminal.terminal.subprocess_terminal import (
+    from agentrt.tools.terminal.terminal.subprocess_terminal import (
         SubprocessTerminal,
     )
 
@@ -130,7 +130,7 @@ def tmux_terminal():
     if shutil.which("tmux") is None:
         pytest.skip("tmux not installed")
 
-    from openhands.tools.terminal.terminal.tmux_terminal import TmuxTerminal
+    from agentrt.tools.terminal.terminal.tmux_terminal import TmuxTerminal
 
     with tempfile.TemporaryDirectory() as tmpdir:
         term = TmuxTerminal(work_dir=tmpdir)

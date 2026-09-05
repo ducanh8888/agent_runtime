@@ -10,14 +10,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from openhands.agent_server.api import (
+from agentrt.agent_server.api import (
     _default_server_tmux_tmpdir,
     _ensure_server_tmux_tmpdir,
     _get_root_path,
     api_lifespan,
     create_app,
 )
-from openhands.agent_server.config import Config
+from agentrt.agent_server.config import Config
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +29,7 @@ def clear_web_url_env(monkeypatch):
 
 def test_default_server_tmux_tmpdir_uses_current_pid(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "openhands.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
+        "agentrt.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
     )
 
     assert _default_server_tmux_tmpdir() == (
@@ -39,7 +39,7 @@ def test_default_server_tmux_tmpdir_uses_current_pid(tmp_path, monkeypatch):
 
 def test_ensure_server_tmux_tmpdir_defaults_per_process_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "openhands.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
+        "agentrt.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
     )
 
     tmux_tmpdir, was_defaulted = _ensure_server_tmux_tmpdir()
@@ -294,15 +294,15 @@ class TestServiceParallelization:
         # Mock the service getters
         with (
             patch(
-                "openhands.agent_server.api.get_default_conversation_service",
+                "agentrt.agent_server.api.get_default_conversation_service",
                 return_value=mock_conversation_service,
             ),
             patch(
-                "openhands.agent_server.api.get_vscode_service",
+                "agentrt.agent_server.api.get_vscode_service",
                 return_value=mock_vscode_service,
             ),
             patch(
-                "openhands.agent_server.api.get_tool_preload_service",
+                "agentrt.agent_server.api.get_tool_preload_service",
                 return_value=mock_tool_preload_service,
             ),
         ):
@@ -338,15 +338,15 @@ class TestServiceParallelization:
         # Mock the service getters
         with (
             patch(
-                "openhands.agent_server.api.get_default_conversation_service",
+                "agentrt.agent_server.api.get_default_conversation_service",
                 return_value=mock_conversation_service,
             ),
             patch(
-                "openhands.agent_server.api.get_vscode_service",
+                "agentrt.agent_server.api.get_vscode_service",
                 return_value=mock_vscode_service,
             ),
             patch(
-                "openhands.agent_server.api.get_tool_preload_service",
+                "agentrt.agent_server.api.get_tool_preload_service",
                 return_value=mock_tool_preload_service,
             ),
         ):
@@ -369,12 +369,12 @@ class TestServiceParallelization:
         # Mock all services as None (disabled)
         with (
             patch(
-                "openhands.agent_server.api.get_default_conversation_service",
+                "agentrt.agent_server.api.get_default_conversation_service",
                 return_value=mock_conversation_service,
             ),
-            patch("openhands.agent_server.api.get_vscode_service", return_value=None),
+            patch("agentrt.agent_server.api.get_vscode_service", return_value=None),
             patch(
-                "openhands.agent_server.api.get_tool_preload_service", return_value=None
+                "agentrt.agent_server.api.get_tool_preload_service", return_value=None
             ),
         ):
             # Create a mock FastAPI app
@@ -393,18 +393,18 @@ class TestServiceParallelization:
     ):
         """Test that lifespan defaults TMUX_TMPDIR per server instance."""
         monkeypatch.setattr(
-            "openhands.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
+            "agentrt.agent_server.api.tempfile.gettempdir", lambda: str(tmp_path)
         )
         mock_conversation_service = AsyncMock()
 
         with (
             patch(
-                "openhands.agent_server.api.get_default_conversation_service",
+                "agentrt.agent_server.api.get_default_conversation_service",
                 return_value=mock_conversation_service,
             ),
-            patch("openhands.agent_server.api.get_vscode_service", return_value=None),
+            patch("agentrt.agent_server.api.get_vscode_service", return_value=None),
             patch(
-                "openhands.agent_server.api.get_tool_preload_service", return_value=None
+                "agentrt.agent_server.api.get_tool_preload_service", return_value=None
             ),
         ):
             mock_app = AsyncMock()
@@ -555,7 +555,7 @@ class TestHttpExceptionLogging:
         app = self._build_app_with_failing_route(502)
         client = TestClient(app)
 
-        with caplog.at_level(logging.ERROR, logger="openhands.agent_server.api"):
+        with caplog.at_level(logging.ERROR, logger="agentrt.agent_server.api"):
             response = client.get("/__test__/raise_502")
 
         assert response.status_code == 502
@@ -565,7 +565,7 @@ class TestHttpExceptionLogging:
         api_error_records = [
             r
             for r in caplog.records
-            if r.name == "openhands.agent_server.api" and r.levelno == logging.ERROR
+            if r.name == "agentrt.agent_server.api" and r.levelno == logging.ERROR
         ]
         assert len(api_error_records) == 1, (
             "Expected exactly one ERROR log line for a 5xx HTTPException, "
@@ -593,19 +593,19 @@ class TestHttpExceptionLogging:
 
         # DEBUG is read at module import time in api.py, so monkeypatch
         # the bound name on the module rather than mutating the env.
-        monkeypatch.setattr("openhands.agent_server.api.DEBUG", True)
+        monkeypatch.setattr("agentrt.agent_server.api.DEBUG", True)
 
         app = self._build_app_with_failing_route(503)
         client = TestClient(app)
 
-        with caplog.at_level(logging.ERROR, logger="openhands.agent_server.api"):
+        with caplog.at_level(logging.ERROR, logger="agentrt.agent_server.api"):
             response = client.get("/__test__/raise_503")
 
         assert response.status_code == 503
         api_error_records = [
             r
             for r in caplog.records
-            if r.name == "openhands.agent_server.api" and r.levelno == logging.ERROR
+            if r.name == "agentrt.agent_server.api" and r.levelno == logging.ERROR
         ]
         assert len(api_error_records) == 1
         # In DEBUG mode the traceback is preserved as an opt-in debugging aid.
@@ -617,7 +617,7 @@ class TestHttpExceptionLogging:
         app = self._build_app_with_failing_route(404)
         client = TestClient(app)
 
-        with caplog.at_level(logging.INFO, logger="openhands.agent_server.api"):
+        with caplog.at_level(logging.INFO, logger="agentrt.agent_server.api"):
             response = client.get("/__test__/raise_404")
 
         assert response.status_code == 404
@@ -625,7 +625,7 @@ class TestHttpExceptionLogging:
         assert response.json() == {"detail": "boom from upstream"}
 
         api_records = [
-            r for r in caplog.records if r.name == "openhands.agent_server.api"
+            r for r in caplog.records if r.name == "agentrt.agent_server.api"
         ]
         # No ERROR-level noise for a routine 4xx.
         assert not any(r.levelno >= logging.ERROR for r in api_records)

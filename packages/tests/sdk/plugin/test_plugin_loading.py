@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from openhands.sdk.mcp.config import dump_mcp_config
-from openhands.sdk.plugin import (
+from agentrt.sdk.mcp.config import dump_mcp_config
+from agentrt.sdk.plugin import (
     ClaudeCodePluginFormat,
     Plugin,
     PluginManifest,
     detect_format,
 )
-from openhands.sdk.plugin.types import (
+from agentrt.sdk.plugin.types import (
     CommandDefinition,
     PluginAuthor,
 )
@@ -34,7 +34,7 @@ class TestPluginManifest:
 
     def test_manifest_with_author_object(self):
         """Test parsing manifest with author as object."""
-        from openhands.sdk.plugin.types import PluginAuthor
+        from agentrt.sdk.plugin.types import PluginAuthor
 
         manifest = PluginManifest(
             name="test-plugin",
@@ -371,7 +371,7 @@ Review the specified code and provide feedback.
 
     def test_command_to_skill_conversion(self, tmp_path: Path):
         """Test converting a command to a keyword-triggered skill."""
-        from openhands.sdk.skills.trigger import KeywordTrigger
+        from agentrt.sdk.skills.trigger import KeywordTrigger
 
         plugin_dir = tmp_path / "city-weather"
         plugin_dir.mkdir()
@@ -418,7 +418,7 @@ Fetch and display the current weather for the specified city.
 
     def test_get_all_skills_with_commands(self, tmp_path: Path):
         """Test get_all_skills returns both skills and command-derived skills."""
-        from openhands.sdk.skills.trigger import KeywordTrigger
+        from agentrt.sdk.skills.trigger import KeywordTrigger
 
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
@@ -1224,7 +1224,7 @@ class TestDetectFormat:
 
     def test_subclass_without_name_is_rejected(self):
         """A PluginFormat subclass must declare a class-level ``name``."""
-        from openhands.sdk.plugin.format.base import PluginFormat
+        from agentrt.sdk.plugin.format.base import PluginFormat
 
         with pytest.raises(TypeError, match="name"):
 

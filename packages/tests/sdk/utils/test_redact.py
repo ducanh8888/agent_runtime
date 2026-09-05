@@ -1,6 +1,6 @@
 """Tests for redact utility functions."""
 
-from openhands.sdk.utils.redact import (
+from agentrt.sdk.utils.redact import (
     SENSITIVE_URL_PARAMS,
     redact_text_secrets,
     redact_url_credentials,

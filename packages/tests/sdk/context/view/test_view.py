@@ -1,14 +1,14 @@
-from openhands.sdk.context.view import View
-from openhands.sdk.event.base import Event
-from openhands.sdk.event.condenser import (
+from agentrt.sdk.context.view import View
+from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.condenser import (
     Condensation,
     CondensationRequest,
     CondensationSummaryEvent,
 )
-from openhands.sdk.event.llm_convertible import (
+from agentrt.sdk.event.llm_convertible import (
     MessageEvent,
 )
-from openhands.sdk.llm import TextContent
+from agentrt.sdk.llm import TextContent
 from tests.sdk.context.view.conftest import message_event  # noqa: F401
 
 

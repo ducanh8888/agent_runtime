@@ -4,30 +4,30 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from pydantic import PrivateAttr
 
-from openhands.sdk.agent import Agent
-from openhands.sdk.conversation import Conversation
-from openhands.sdk.conversation.impl.local_conversation import LocalConversation
-from openhands.sdk.conversation.state import ConversationExecutionStatus
-from openhands.sdk.event import MessageEvent, ObservationEvent
-from openhands.sdk.llm import (
+from agentrt.sdk.agent import Agent
+from agentrt.sdk.conversation import Conversation
+from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import MessageEvent, ObservationEvent
+from agentrt.sdk.llm import (
     ImageContent,
     LLMResponse,
     Message,
     MessageToolCall,
     TextContent,
 )
-from openhands.sdk.llm.router.impl.multimodal import MultimodalRouter
-from openhands.sdk.llm.streaming import TokenCallbackType
-from openhands.sdk.testing import TestLLM
-from openhands.sdk.tool import ToolDefinition
-from openhands.sdk.tool.builtins.vision_inspect import (
+from agentrt.sdk.llm.router.impl.multimodal import MultimodalRouter
+from agentrt.sdk.llm.streaming import TokenCallbackType
+from agentrt.sdk.testing import TestLLM
+from agentrt.sdk.tool import ToolDefinition
+from agentrt.sdk.tool.builtins.vision_inspect import (
     VISION_PROFILE_USAGE_PREFIX,
     VisionInspectObservation,
 )
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.llm.llm import LLMCallContext
+    from agentrt.sdk.llm.llm import LLMCallContext
 
 
 class CapturingTestLLM(TestLLM):
@@ -93,7 +93,7 @@ def _last_agent_response_text(conversation: LocalConversation) -> str:
 
 def test_image_input_to_non_multimodal_model_returns_capability_message(monkeypatch):
     monkeypatch.setattr(
-        "openhands.sdk.agent.base.has_vision_profile_available", lambda: False
+        "agentrt.sdk.agent.base.has_vision_profile_available", lambda: False
     )
     llm = TestLLM.from_messages(
         [],
@@ -118,7 +118,7 @@ async def test_async_image_input_to_non_multimodal_model_returns_capability_mess
     monkeypatch,
 ):
     monkeypatch.setattr(
-        "openhands.sdk.agent.base.has_vision_profile_available", lambda: False
+        "agentrt.sdk.agent.base.has_vision_profile_available", lambda: False
     )
     llm = TestLLM.from_messages(
         [],
@@ -139,7 +139,7 @@ async def test_async_image_input_to_non_multimodal_model_returns_capability_mess
 
 def test_image_input_guard_does_not_preempt_multimodal_router(monkeypatch):
     monkeypatch.setattr(
-        "openhands.sdk.agent.base.has_vision_profile_available", lambda: False
+        "agentrt.sdk.agent.base.has_vision_profile_available", lambda: False
     )
     primary = TestLLM.from_messages(
         [Message(role="assistant", content=[TextContent(text="router handled image")])],
@@ -164,10 +164,10 @@ def test_image_input_guard_does_not_preempt_multimodal_router(monkeypatch):
 
 def test_nonvision_model_can_use_vision_profile_tool(monkeypatch):
     monkeypatch.setattr(
-        "openhands.sdk.agent.base.has_vision_profile_available", lambda: True
+        "agentrt.sdk.agent.base.has_vision_profile_available", lambda: True
     )
     monkeypatch.setattr(
-        "openhands.sdk.tool.builtins.vision_inspect._candidate_vision_profiles",
+        "agentrt.sdk.tool.builtins.vision_inspect._candidate_vision_profiles",
         lambda: ["vision-profile"],
     )
 
@@ -253,7 +253,7 @@ def test_nonvision_model_can_use_vision_profile_tool(monkeypatch):
 
 def test_profile_helper_registers_auxiliary_vision_llm(monkeypatch):
     monkeypatch.setattr(
-        "openhands.sdk.agent.base.has_vision_profile_available", lambda: False
+        "agentrt.sdk.agent.base.has_vision_profile_available", lambda: False
     )
     parent = TestLLM.from_messages([], model="text-only-model", disable_vision=True)
     conversation = Conversation(agent=Agent(llm=parent, tools=[]))

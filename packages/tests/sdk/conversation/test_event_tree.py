@@ -3,10 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from openhands.sdk.conversation.event_store import ROOT_PARENT_ID, EventLog
-from openhands.sdk.event.llm_convertible import MessageEvent
-from openhands.sdk.io.memory import InMemoryFileStore
-from openhands.sdk.llm import Message, TextContent
+from agentrt.sdk.conversation.event_store import ROOT_PARENT_ID, EventLog
+from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.io.memory import InMemoryFileStore
+from agentrt.sdk.llm import Message, TextContent
 
 
 def test_event_id_cannot_equal_reserved_root_sentinel():

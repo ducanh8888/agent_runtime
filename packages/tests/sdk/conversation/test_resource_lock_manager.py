@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from openhands.sdk.conversation.resource_lock_manager import (
+from agentrt.sdk.conversation.resource_lock_manager import (
     ResourceLockManager,
     ResourceLockTimeout,
 )

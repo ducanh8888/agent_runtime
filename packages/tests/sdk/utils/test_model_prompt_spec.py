@@ -2,7 +2,7 @@
 
 import pytest
 
-from openhands.sdk.llm.utils.model_prompt_spec import (
+from agentrt.sdk.llm.utils.model_prompt_spec import (
     get_model_prompt_spec,
 )
 
