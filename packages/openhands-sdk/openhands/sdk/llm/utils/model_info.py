@@ -1,0 +1,116 @@
+import time
+from collections.abc import Mapping
+from functools import lru_cache
+from logging import getLogger
+from typing import Any
+
+import httpx
+from litellm import model_cost
+from litellm.utils import get_model_info
+from pydantic import SecretStr
+
+from openhands.sdk.llm.utils.openhands_provider import litellm_call_kwargs
+
+
+logger = getLogger(__name__)
+
+
+def _merge_raw_model_metadata(model_info: Mapping[str, Any]) -> dict[str, Any]:
+    """Preserve raw LiteLLM capability fields."""
+    key = model_info.get("key")
+    raw = model_cost.get(key) if isinstance(key, str) else None
+    if not isinstance(raw, dict):
+        return dict(model_info)
+    return {**raw, **model_info}
+
+
+@lru_cache
+def _get_model_info_from_litellm_proxy(
+    secret_api_key: SecretStr | str | None,
+    base_url: str,
+    model: str,
+    cache_key: int | None = None,
+):
+    logger.debug(f"Get model_info_from_litellm_proxy:{cache_key}")
+    try:
+        headers = {}
+        if isinstance(secret_api_key, SecretStr):
+            secret_api_key = secret_api_key.get_secret_value()
+        if secret_api_key:
+            headers["Authorization"] = f"Bearer {secret_api_key}"
+
+        response = httpx.get(f"{base_url}/v1/model/info", headers=headers)
+        data = response.json().get("data", [])
+        # Match against either the public alias (`model_name`) or the
+        # underlying provider/model_name form (`litellm_params.model`). The proxy itself
+        # accepts requests by either form, and our proxy configs often
+        # advertise a short alias (e.g. `claude-opus-4-8`) for a provider
+        # id (`anthropic/claude-opus-4-8`). Without the second match,
+        # `model_info` overrides set on the proxy are invisible to clients
+        # that address the model by its provider id.
+        stripped = model.removeprefix("litellm_proxy/")
+        current = next(
+            (
+                info
+                for info in data
+                if info.get("model_name") == stripped
+                or info.get("litellm_params", {}).get("model") == stripped
+            ),
+            None,
+        )
+        if current:
+            model_info = current.get("model_info")
+            logger.debug(f"Got model info from litellm proxy: {model_info}")
+            return model_info
+    except Exception as e:
+        logger.debug(
+            f"Error fetching model info from proxy: {e}",
+            exc_info=True,
+            stack_info=True,
+        )
+
+
+def get_litellm_model_info(
+    secret_api_key: SecretStr | str | None, base_url: str | None, model: str
+) -> dict[str, Any] | None:
+    call_kwargs = litellm_call_kwargs(model, base_url)
+    model = call_kwargs["model"]
+    base_url = call_kwargs["api_base"]
+
+    # Try to get model info via openrouter or litellm proxy first
+    try:
+        if model.startswith("openrouter"):
+            model_info = get_model_info(model)
+            if model_info:
+                return _merge_raw_model_metadata(model_info)
+    except Exception as e:
+        logger.debug(f"get_model_info(openrouter) failed: {e}")
+
+    if model.startswith("litellm_proxy/") and base_url:
+        # Use the current hour as a cache key - only refresh hourly
+        cache_key = int(time.time() / 3600)
+
+        model_info = _get_model_info_from_litellm_proxy(
+            secret_api_key=secret_api_key,
+            base_url=base_url,
+            model=model,
+            cache_key=cache_key,
+        )
+        if model_info:
+            return model_info
+
+    # Fallbacks: try base name variants
+    try:
+        model_info = get_model_info(model.split(":")[0])
+        if model_info:
+            return _merge_raw_model_metadata(model_info)
+    except Exception:
+        pass
+    try:
+        model_info = get_model_info(model.split("/")[-1])
+        if model_info:
+            return _merge_raw_model_metadata(model_info)
+    except Exception:
+        pass
+
+    return None
