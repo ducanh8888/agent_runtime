@@ -1,4 +1,4 @@
-"""Installed skills management for OpenHands SDK.
+"""Installed skills management for Agentrt SDK.
 
 Public API for managing AgentSkills installed in the user's home directory.
 All heavy lifting is delegated to ``InstallationManager``.

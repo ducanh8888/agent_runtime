@@ -1,4 +1,4 @@
-"""Utility functions for the OpenHands SDK."""
+"""Utility functions for the Agentrt SDK."""
 
 from .command import sanitized_env
 from .datetime import OpenHandsUUID, utc_now

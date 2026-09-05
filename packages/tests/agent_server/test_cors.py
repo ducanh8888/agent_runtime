@@ -261,7 +261,7 @@ def test_workspace_wildcard_does_not_bleed_into_other_api(tmp_path):
 
 
 # Localhost / DOCKER_HOST_ADDR auto-allow regression coverage
-# (OpenHands/OpenHands#4624 intent vs the #8675 regression).
+# (Agentrt/Agentrt#4624 intent vs the #8675 regression).
 
 
 @pytest.mark.parametrize("origin", [LOCALHOST_ORIGIN, LOOPBACK_ORIGIN])
@@ -276,7 +276,7 @@ def test_localhost_allowed_with_empty_allow_origins(tmp_path, origin):
 
 @pytest.mark.parametrize("origin", [LOCALHOST_ORIGIN, LOOPBACK_ORIGIN])
 def test_localhost_allowed_when_allow_origins_is_set(tmp_path, origin):
-    """Regression for OpenHands/OpenHands#8675: explicit allowlist must
+    """Regression for Agentrt/Agentrt#8675: explicit allowlist must
     not disable the localhost auto-allow."""
     client = _build_client(
         tmp_path,

@@ -1,4 +1,4 @@
-"""GraySwan Cygnal security analyzer for OpenHands SDK.
+"""GraySwan Cygnal security analyzer for Agentrt SDK.
 
 This module provides a security analyzer that uses GraySwan's Cygnal API
 for AI safety monitoring. It analyzes agent actions and conversation history

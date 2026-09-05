@@ -1,6 +1,6 @@
 {
   "__expected__": {
-    "agent_kind": "openhands",
+    "agent_kind": "agentrt",
     "llm.model": "fixture-v3-llm",
     "tools": [
       {
@@ -12,7 +12,7 @@
     "verification.critic_enabled": true
   },
   "schema_version": 3,
-  "agent_kind": "openhands",
+  "agent_kind": "agentrt",
   "llm": {
     "model": "fixture-v3-llm",
     "reasoning_effort": "high"

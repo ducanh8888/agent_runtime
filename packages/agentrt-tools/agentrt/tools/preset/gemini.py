@@ -1,4 +1,4 @@
-"""Gemini preset configuration for OpenHands agents.
+"""Gemini preset configuration for Agentrt agents.
 
 This preset uses gemini-style file editing tools instead of the default
 claude-style file_editor tool.

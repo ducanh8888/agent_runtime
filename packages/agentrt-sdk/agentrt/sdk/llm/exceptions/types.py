@@ -78,7 +78,7 @@ class LLMMalformedConversationHistoryError(LLMError):
 
 
 class LLMContextWindowTooSmallError(LLMError):
-    """Raised when the model's context window is too small for OpenHands to work."""
+    """Raised when the model's context window is too small for Agentrt to work."""
 
     def __init__(
         self,
@@ -90,7 +90,7 @@ class LLMContextWindowTooSmallError(LLMError):
             message = (
                 f"The configured model has a context window of {context_window:,} "
                 f"tokens, which is below the minimum of {min_required:,} tokens "
-                "required for OpenHands to function properly.\n\n"
+                "required for Agentrt to function properly.\n\n"
                 "For local LLMs (Ollama, LM Studio, etc.), increase the context "
                 "window.\n"
                 "For cloud providers, verify you're using the correct model "

@@ -43,7 +43,7 @@ _TMUX_POOL_RECOVERY_MESSAGE = (
     "The terminal session was reset because the underlying tmux server/session "
     "disappeared while running the previous command. This often happens when a "
     "command terminates the persistent shell, for example by ending with a "
-    "top-level `exit` such as `exit $code`, or otherwise kills tmux. OpenHands "
+    "top-level `exit` such as `exit $code`, or otherwise kills tmux. Agentrt "
     "rebuilt the terminal pool, but the interrupted command's result is not "
     "reliable and was not retried. Avoid top-level `exit` in future terminal "
     'commands; use a non-shell-exiting status check like `test "$code" -eq 0` '

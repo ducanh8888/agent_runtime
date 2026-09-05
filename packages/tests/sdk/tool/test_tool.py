@@ -65,7 +65,7 @@ def test_issue_2199_1(request):
     same ``__name__``, causing ``_get_checked_concrete_subclasses(Action)``
     to raise ``ValueError("Duplicate class definition ...")``.
 
-    Ref: https://github.com/issues/assigned?issue=OpenHands%7Csoftware-agent-sdk%7C2199
+    Ref: https://github.com/issues/assigned?issue=Agentrt%7Csoftware-agent-sdk%7C2199
     """
     """Many threads wrapping the same type must all get the same class object."""
     saved_risk = dict(_action_types_with_risk)

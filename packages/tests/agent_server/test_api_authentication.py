@@ -149,14 +149,14 @@ def test_openai_observability_headers_parse_to_conversation_overrides():
     overrides = _parse_observability_overrides(
         span_name="pr_review_evaluation",
         tags="pr-review,evaluation",
-        metadata='{"repo":"OpenHands/software-agent-sdk","pr_number":123}',
+        metadata='{"repo":"Agentrt/software-agent-sdk","pr_number":123}',
     )
 
     assert overrides == {
         "observability_span_name": "pr_review_evaluation",
         "observability_tags": ["pr-review", "evaluation"],
         "observability_metadata": {
-            "repo": "OpenHands/software-agent-sdk",
+            "repo": "Agentrt/software-agent-sdk",
             "pr_number": 123,
         },
     }
@@ -188,7 +188,7 @@ def test_openai_route_invalid_observability_header_returns_422(monkeypatch):
 
     response = client.post(
         "/v1/chat/completions",
-        headers={"X-OpenHands-Observability-Span-Name": "bad span name"},
+        headers={"X-Agentrt-Observability-Span-Name": "bad span name"},
         json={
             "model": "openhands/test",
             "messages": [{"role": "user", "content": "hello"}],

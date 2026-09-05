@@ -1,6 +1,6 @@
 # Condenser
 
-The condenser is one of the systems used by OpenHands to manage the context window.
+The condenser is one of the systems used by Agentrt to manage the context window.
 
 At regular intervals, or when requested by the agent or a user, the context window is condensed by replacing the first half of all events with a single summary event. This strategy performs well in benchmarks and strikes a balance between:
 1. **Per-completion cost**: by regularly condensing, the context window stays bounded and completions use less tokens.

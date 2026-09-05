@@ -1,11 +1,11 @@
 ---
-title: OpenHands Agent SDK Tests
-description: Test suite structure and execution strategy for the OpenHands Agent SDK. Includes unit tests, integration tests, and CI configuration.
+title: Agentrt Agent SDK Tests
+description: Test suite structure and execution strategy for the Agentrt Agent SDK. Includes unit tests, integration tests, and CI configuration.
 ---
 
-# OpenHands Agent SDK Tests
+# Agentrt Agent SDK Tests
 
-This directory contains the test suite for the OpenHands Agent SDK.
+This directory contains the test suite for the Agentrt Agent SDK.
 
 ## Test Structure
 

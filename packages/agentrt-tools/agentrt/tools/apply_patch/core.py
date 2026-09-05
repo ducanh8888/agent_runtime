@@ -4,7 +4,7 @@ This module is an adaptation of the reference implementation from
 https://github.com/openai/openai-cookbook/blob/main/examples/gpt-5/apply_patch.py
 and provides pure functions and data models to parse and apply patches.
 
-Minimal modifications were made to fit within the OpenHands SDK tool ecosystem:
+Minimal modifications were made to fit within the Agentrt SDK tool ecosystem:
 - Types exposed here are used by the ApplyPatch tool executor
 - File I/O is injected via callables so the executor can enforce workspace safety
 """

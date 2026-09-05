@@ -1,4 +1,4 @@
-"""Delegate tools for OpenHands agents."""
+"""Delegate tools for Agentrt agents."""
 
 from agentrt.tools.delegate.definition import (
     DelegateAction,

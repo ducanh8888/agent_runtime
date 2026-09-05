@@ -101,7 +101,7 @@ class AgentContext(BaseModel):
     load_public_skills: bool = Field(
         default=False,
         description=(
-            "Whether to automatically load skills from the public OpenHands "
+            "Whether to automatically load skills from the public Agentrt "
             "skills repository at https://github.com/OpenHands/extensions. "
             "This allows you to get the latest skills without SDK updates."
         ),

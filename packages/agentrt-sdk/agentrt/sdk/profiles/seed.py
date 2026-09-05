@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from agentrt.sdk.profiles.agent_profile import (
     ACPAgentProfile,
-    OpenHandsAgentProfile,
+    AgentrtAgentProfile,
     build_profile_verification,
 )
 
@@ -31,11 +31,11 @@ def build_seed_profile(
     active_llm_profile: str | None,
     *,
     name: str = SEED_PROFILE_NAME,
-) -> OpenHandsAgentProfile | ACPAgentProfile:
+) -> AgentrtAgentProfile | ACPAgentProfile:
     """Build one behavior-preserving ``AgentProfile`` from ``agent_settings``.
 
     Branches on ``agent_kind`` so an ACP setup seeds an ACP profile.
-    ``mcp_server_refs=None`` exposes all of the user's MCP servers; an OpenHands
+    ``mcp_server_refs=None`` exposes all of the user's MCP servers; an Agentrt
     profile references ``active_llm_profile``, falling back to
     ``SEED_PROFILE_NAME`` (a soft ref the resolver checks at materialize time).
     """
@@ -59,7 +59,7 @@ def build_seed_profile(
             # ACP profiles carry no skill field — the subprocess owns its context.
         )
     context = agent_settings.agent_context
-    return OpenHandsAgentProfile(
+    return AgentrtAgentProfile(
         name=name,
         llm_profile_ref=active_llm_profile or SEED_PROFILE_NAME,
         agent=agent_settings.agent,

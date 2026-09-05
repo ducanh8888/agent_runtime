@@ -6,8 +6,8 @@ headers, URLs, etc.). It's the single source of truth for secret key detection
 across the SDK.
 
 Copies / consumers (keep in sync when changing):
-  - OpenHands/runtime-api  →  utils/redact.py  (partial copy)
-  - All-Hands-AI/OpenHands →  imports directly
+  - Agentrt/runtime-api  →  utils/redact.py  (partial copy)
+  - All-Hands-AI/Agentrt →  imports directly
 """
 
 import copy
@@ -357,7 +357,7 @@ _API_KEY_LITERAL_RE = re.compile(
     r"|tgp_v1_[A-Za-z0-9_-]{20,}"  # Together AI
     r"|ghp_[A-Za-z0-9]{20,}"  # GitHub PAT (classic)
     r"|github_pat_[A-Za-z0-9_]{20,}"  # GitHub PAT (fine-grained)
-    r"|sk-oh-[A-Za-z0-9]{20,}"  # OpenHands session tokens
+    r"|sk-oh-[A-Za-z0-9]{20,}"  # Agentrt session tokens
     r"|ctx7sk-[A-Za-z0-9_-]{10,}"  # Context7 MCP keys
     r"|cla_[A-Za-z0-9_-]{20,}"  # Claude.ai MCP tokens
     r"|sntryu_[A-Za-z0-9]{10,}"  # Sentry tokens
@@ -376,7 +376,7 @@ def redact_api_key_literals(text: str) -> str:
 
     Matches known key prefixes (OpenAI, Anthropic, OpenRouter, GROQ,
     HuggingFace, Together AI, GitHub, Sentry, Linear, Tavily, Slack,
-    OpenHands session tokens, etc.) anywhere in the text.
+    Agentrt session tokens, etc.) anywhere in the text.
 
     Args:
         text: The string to scan.

@@ -18,7 +18,7 @@ class SecurityAnalyzerBase(DiscriminatedUnionMixin, ABC):
     Security analyzers evaluate the risk of actions before they are executed
     and can influence the conversation flow based on security policies.
 
-    This is adapted from OpenHands SecurityAnalyzer but designed to work
+    This is adapted from Agentrt SecurityAnalyzer but designed to work
     with the agent-sdk's conversation-based architecture.
     """
 

@@ -1,4 +1,4 @@
-"""OpenHands Workspace - Docker and container-based workspace implementations."""
+"""Agentrt Workspace - Docker and container-based workspace implementations."""
 
 from typing import TYPE_CHECKING
 
@@ -8,7 +8,7 @@ from .apptainer import ApptainerWorkspace
 from .cloud import (
     CloneResult,
     GitProvider,
-    OpenHandsCloudWorkspace,
+    AgentrtCloudWorkspace,
     RepoMapping,
     RepoSource,
 )
@@ -26,7 +26,7 @@ __all__ = [
     "DockerDevWorkspace",
     "DockerWorkspace",
     "GitProvider",
-    "OpenHandsCloudWorkspace",
+    "AgentrtCloudWorkspace",
     "PlatformType",
     "RepoMapping",
     "RepoSource",

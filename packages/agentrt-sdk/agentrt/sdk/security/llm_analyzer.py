@@ -11,7 +11,7 @@ class LLMSecurityAnalyzer(SecurityAnalyzerBase):
     """LLM-based security analyzer.
 
     This analyzer respects the security_risk attribute that can be set by the LLM
-    when generating actions, similar to OpenHands' LLMRiskAnalyzer.
+    when generating actions, similar to Agentrt' LLMRiskAnalyzer.
 
     It provides a lightweight security analysis approach that leverages the LLM's
     understanding of action context and potential risks.

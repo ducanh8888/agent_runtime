@@ -22,7 +22,7 @@ ARG INSTALL_ACP_PROVIDERS=claude-code,codex,gemini-cli
 # Comma-separated capability keys to include in the `base-image` stage below
 # (`base-image-minimal` is unaffected). The default reproduces today's full
 # contents; an unknown key fails the build. The GitHub CLI is expected to
-# join this list later (see OpenHands/software-agent-sdk#4645) — the parsing
+# join this list later (see Agentrt/software-agent-sdk#4645) — the parsing
 # below is written so that's a one-case addition, not a signature change.
 ARG INSTALL_CAPABILITIES=vscode,browser,docker
 
@@ -40,7 +40,7 @@ ARG INSTALL_CAPABILITIES=vscode,browser,docker
 # had this flag set due to LLVM/BOLT bugs, causing glibc >= 2.41 and
 # DinD/sysbox/seccomp to reject dlopen() with "cannot enable executable
 # stack". No sanitizer or workaround is needed on fixed releases.
-# See OpenHands/software-agent-sdk#2761.
+# See Agentrt/software-agent-sdk#2761.
 ####################################################################################
 FROM python:3.13-bookworm AS builder
 ARG USERNAME UID GID ENABLE_VERTEX
@@ -284,9 +284,9 @@ WORKDIR /
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
 ENV LOG_JSON=true
-# The ACP CLIs run without the user's host home here, so OpenHands supplies the
+# The ACP CLIs run without the user's host home here, so Agentrt supplies the
 # managed skill catalog they cannot read for themselves (#4019).
-ENV AGENTRT_ACP_SKILL_SOURCING=openhands_managed
+ENV AGENTRT_ACP_SKILL_SOURCING=agentrt_managed
 EXPOSE ${PORT}
 
 ####################################################################################
@@ -446,9 +446,9 @@ RUN set -eux; \
 USER ${USERNAME}
 WORKDIR /
 ENV LOG_JSON=true
-# The ACP CLIs run without the user's host home here, so OpenHands supplies the
+# The ACP CLIs run without the user's host home here, so Agentrt supplies the
 # managed skill catalog they cannot read for themselves (#4019).
-ENV AGENTRT_ACP_SKILL_SOURCING=openhands_managed
+ENV AGENTRT_ACP_SKILL_SOURCING=agentrt_managed
 EXPOSE ${PORT}
 
 

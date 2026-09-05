@@ -283,7 +283,7 @@ class StartConversationRequest(ConversationConfig):
     """Payload to create a new conversation.
 
     Extends :class:`ConversationConfig` with the agent specification. Supports
-    any concrete :class:`AgentBase` implementation, including regular OpenHands
+    any concrete :class:`AgentBase` implementation, including regular Agentrt
     agents and ACP agents. Clients may provide either a concrete ``agent``
     payload or an ``agent_settings`` payload; when ``agent_settings`` is provided
     without ``agent``, the settings are validated with the ``agent_kind``

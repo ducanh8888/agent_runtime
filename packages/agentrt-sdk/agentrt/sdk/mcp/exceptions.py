@@ -1,4 +1,4 @@
-"""MCP-related exceptions for OpenHands SDK."""
+"""MCP-related exceptions for Agentrt SDK."""
 
 
 class MCPError(Exception):

@@ -167,7 +167,7 @@ def test_action_variants_have_proper_schemas(client):
 
 
 def test_conversation_contracts_use_unified_acp_capable_endpoint(client):
-    """The main conversation endpoint accepts both OpenHands and ACP agents."""
+    """The main conversation endpoint accepts both Agentrt and ACP agents."""
     response = client.get("/openapi.json")
     assert response.status_code == 200
 

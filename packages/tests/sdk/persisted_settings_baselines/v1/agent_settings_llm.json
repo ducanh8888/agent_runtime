@@ -1,6 +1,6 @@
 {
   "__expected__": {
-    "agent_kind": "openhands",
+    "agent_kind": "agentrt",
     "llm.model": "fixture-legacy-llm",
     "tools": [
       {

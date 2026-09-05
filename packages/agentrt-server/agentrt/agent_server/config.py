@@ -25,9 +25,9 @@ V1_SESSION_API_KEY_ENV = "AGENTRT_SESSION_API_KEYS_0"
 ENVIRONMENT_VARIABLE_PREFIX = "AGENTRT"
 CONFIG_PATH_ENV = "AGENTRT_AGENT_SERVER_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path("workspace/openhands_agent_server_config.json")
-# 20 minutes, matching the idle timeout used by OpenHands Cloud.
+# 20 minutes, matching the idle timeout used by Agentrt Cloud.
 DEFAULT_CONVERSATION_IDLE_TTL_SECONDS: Final[float] = 20 * 60.0
-ACPSkillSourcing = Literal["native", "openhands_managed"]
+ACPSkillSourcing = Literal["native", "agentrt_managed"]
 _logger = logging.getLogger(__name__)
 
 
@@ -147,7 +147,7 @@ class TelemetrySpec(BaseModel):
         default="local",
         description=(
             "Deployment kind attached to diagnostic events. Use 'remote' for "
-            "hosted OpenHands and 'local' for self-hosted or developer runs."
+            "hosted Agentrt and 'local' for self-hosted or developer runs."
         ),
     )
     exporter: TelemetryExporterKind = Field(
@@ -351,13 +351,13 @@ class Config(BaseModel):
         description=(
             "Who supplies an ACP agent's skills. 'native' (the default, for a "
             "host-local agent-server): nobody but the ACP CLI — it reads the "
-            "user's own home configuration and the repository, so OpenHands "
-            "injects none of its managed skills. 'openhands_managed' (for "
+            "user's own home configuration and the repository, so Agentrt "
+            "injects none of its managed skills. 'agentrt_managed' (for "
             "container runtimes, where that host configuration is absent): also "
             "inject the user/org/public/marketplace skills the server "
             "discovers. Project/repository skills are never injected either way "
             "— the CLI reads AGENTS.md itself (#4019). Set explicitly per "
-            "deployment; the agent-server image sets 'openhands_managed'."
+            "deployment; the agent-server image sets 'agentrt_managed'."
         ),
     )
     registered_marketplaces: list[MarketplaceRegistration] = Field(

@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 class ApptainerWorkspace(RemoteWorkspace):
     """Remote workspace that sets up and manages an Apptainer container.
 
-    This workspace creates an Apptainer container running a pre-built OpenHands
+    This workspace creates an Apptainer container running a pre-built Agentrt
     agent server image, waits for it to become healthy, and then provides remote
     workspace operations through the container's HTTP API.
 

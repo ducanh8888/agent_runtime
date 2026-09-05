@@ -1,5 +1,5 @@
 """
-WebSocket endpoints for OpenHands SDK.
+WebSocket endpoints for Agentrt SDK.
 
 These endpoints are separate from the main API routes to handle WebSocket-specific
 authentication.  Three auth methods are supported (highest to lowest precedence):

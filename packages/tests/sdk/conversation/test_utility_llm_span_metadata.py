@@ -112,7 +112,7 @@ def _probe_exported_spans() -> list[dict[str, Any]]:
     conversation = Conversation(
         agent=Agent(llm=llm, tools=[]),
         callbacks=[],
-        observability_metadata={"repo": "OpenHands/software-agent-sdk"},
+        observability_metadata={"repo": "Agentrt/software-agent-sdk"},
     )
 
     with patch(
@@ -195,7 +195,7 @@ def test_operation_metadata_reaches_the_exported_llm_span() -> None:
     # own trace metadata still reaches every span.
     assert OPERATION_METADATA_KEY not in _metadata(main_loop_llm)
     for span in llm_spans:
-        assert _metadata(span)["repo"] == "OpenHands/software-agent-sdk"
+        assert _metadata(span)["repo"] == "Agentrt/software-agent-sdk"
 
 
 if __name__ == "__main__":

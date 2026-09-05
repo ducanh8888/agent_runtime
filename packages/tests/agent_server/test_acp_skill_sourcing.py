@@ -1,7 +1,7 @@
 """ACP skill sourcing: who supplies an ACP agent's skills (#4019).
 
 An ACP CLI reads ``AGENTS.md`` / ``CLAUDE.md`` and its own project skills from
-the session cwd, so OpenHands never injects those. Whether it injects its
+the session cwd, so Agentrt never injects those. Whether it injects its
 *managed* catalog is a per-deployment choice (``Config.acp_skill_sourcing``):
 a host-local CLI reaches the user's own configuration, one in a container
 cannot.
@@ -97,7 +97,7 @@ def test_openhands_agent_keeps_load_project_skills() -> None:
     assert agent.agent_context.load_project_skills is True
 
 
-@pytest.mark.parametrize("sourcing", ["native", "openhands_managed"])
+@pytest.mark.parametrize("sourcing", ["native", "agentrt_managed"])
 def test_repo_context_never_reaches_the_acp_prompt(
     tmp_path: Path, sourcing: ACPSkillSourcing
 ) -> None:
@@ -124,7 +124,7 @@ def test_managed_sourcing_keeps_managed_skills(tmp_path: Path) -> None:
     project = _workspace(tmp_path)
     agent = _apply_acp_skill_sourcing(
         _acp_agent(skills=[_managed_skill()], load_project_skills=True),
-        "openhands_managed",
+        "agentrt_managed",
     )
     assert agent.agent_context is not None
     assert [s.name for s in agent.agent_context.skills] == [MANAGED_SKILL]

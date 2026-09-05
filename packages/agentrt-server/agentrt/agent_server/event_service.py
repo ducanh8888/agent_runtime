@@ -1032,7 +1032,7 @@ class EventService:
 
         # Create LocalConversation with plugins and hook_config.
         # Plugins are loaded lazily on first run()/send_message() call.
-        # Hook execution semantics: OpenHands runs hooks sequentially with early-exit
+        # Hook execution semantics: Agentrt runs hooks sequentially with early-exit
         # on block (PreToolUse), unlike Claude Code's parallel execution model.
 
         # Create and store callback wrapper to allow flushing pending events

@@ -253,7 +253,7 @@ def patched_llm(monkeypatch: pytest.MonkeyPatch) -> None:
             choices=[Choices(index=0, finish_reason="stop", message=litellm_msg)],
         )
 
-        # Convert to OpenHands Message
+        # Convert to Agentrt Message
         message = Message.from_llm_chat_message(litellm_msg)
 
         self.metrics.add_token_usage(
@@ -740,7 +740,7 @@ def test_openai_chat_completions_gateway_over_real_server(
                     "completion_tokens": 5,
                     "total_tokens": 12,
                 }
-                conversation_id = response.headers["X-OpenHands-ServerConversation-ID"]
+                conversation_id = response.headers["X-Agentrt-ServerConversation-ID"]
                 UUID(conversation_id)
                 persisted_response = client.get(
                     f"{env['host']}/api/conversations/{conversation_id}", timeout=2.0
@@ -752,7 +752,7 @@ def test_openai_chat_completions_gateway_over_real_server(
 
                 reused_response = client.post(
                     f"{env['host']}/v1/chat/completions",
-                    headers={"X-OpenHands-ServerConversation-ID": conversation_id},
+                    headers={"X-Agentrt-ServerConversation-ID": conversation_id},
                     json={
                         "model": "openhands_smoke",
                         "messages": [
@@ -763,7 +763,7 @@ def test_openai_chat_completions_gateway_over_real_server(
                 )
                 assert reused_response.status_code == 200
                 assert (
-                    reused_response.headers["X-OpenHands-ServerConversation-ID"]
+                    reused_response.headers["X-Agentrt-ServerConversation-ID"]
                     == conversation_id
                 )
                 assert reused_response.json()["choices"][0]["message"] == {
@@ -898,7 +898,7 @@ def test_openai_gateway_replays_frozen_llm_fixtures(
                     api_key="unused",
                     base_url=f"{env['host']}/v1",
                     default_headers={
-                        "X-OpenHands-ServerConversation-ID": str(conversation_id)
+                        "X-Agentrt-ServerConversation-ID": str(conversation_id)
                     },
                     timeout=10,
                 )
@@ -1048,7 +1048,7 @@ def test_conversation_stats_with_live_server(
             choices=[Choices(index=0, finish_reason="stop", message=litellm_msg)],
         )
 
-        # Convert to OpenHands Message
+        # Convert to Agentrt Message
         message = Message.from_llm_chat_message(litellm_msg)
 
         # Simulate cost accumulation in the LLM's metrics

@@ -1,5 +1,5 @@
 """
-Agent presets for OpenHands SDK.
+Agent presets for Agentrt SDK.
 
 This package provides predefined agent configurations (tool bundles)
 that can be used out of the box. Presets are intended as starting points

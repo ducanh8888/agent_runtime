@@ -1,4 +1,4 @@
-"""Utility for converting OpenHands SDK events to OpenAI message format.
+"""Utility for converting Agentrt SDK events to OpenAI message format.
 
 This module provides functions to convert SDK events into the OpenAI message
 format required by the GraySwan Cygnal API.
@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 def convert_events_to_openai_messages(
     events: Sequence[LLMConvertibleEvent],
 ) -> list[dict[str, Any]]:
-    """Convert OpenHands SDK events to OpenAI message format for LLM APIs.
+    """Convert Agentrt SDK events to OpenAI message format for LLM APIs.
 
     This function transforms SDK events into the message format expected by
     OpenAI-compatible APIs, which is required by the GraySwan Cygnal API.

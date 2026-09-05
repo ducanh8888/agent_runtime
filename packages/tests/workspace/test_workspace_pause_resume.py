@@ -51,11 +51,11 @@ def mock_api_workspace():
 
 @pytest.fixture
 def mock_cloud_workspace():
-    """Create a mocked OpenHandsCloudWorkspace with minimal setup."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    """Create a mocked AgentrtCloudWorkspace with minimal setup."""
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://app.all-hands.dev",
             cloud_api_key="test-key",
         )
@@ -217,7 +217,7 @@ def test_api_workspace_resume_raises_if_no_runtime():
 
 
 # =============================================================================
-# OpenHandsCloudWorkspace Tests
+# AgentrtCloudWorkspace Tests
 # =============================================================================
 
 
@@ -241,10 +241,10 @@ def test_cloud_workspace_resume_calls_resume_sandbox(mock_cloud_workspace):
 
 def test_cloud_workspace_resume_raises_if_no_sandbox():
     """Test that resume() raises RuntimeError if sandbox not running."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://app.all-hands.dev",
             cloud_api_key="test-key",
         )

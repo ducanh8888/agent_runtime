@@ -1,4 +1,4 @@
-"""Installed plugins management for OpenHands SDK.
+"""Installed plugins management for Agentrt SDK.
 
 Public API for managing plugins installed in the user's home directory.
 All heavy lifting is delegated to ``InstallationManager``.

@@ -58,7 +58,7 @@ class AgentPluginsFormat(PluginFormat):
     ```
 
     Only the manifest and skills are read today (skills via the shared
-    :meth:`PluginFormat.load_skills`). ``mcp.json`` and OpenHands' client
+    :meth:`PluginFormat.load_skills`). ``mcp.json`` and Agentrt' client
     extension are follow-ups under #4405, so their loaders return empty --
     spec-correct, since a client must ignore extensions it does not implement.
 

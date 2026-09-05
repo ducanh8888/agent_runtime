@@ -1,13 +1,13 @@
 {
   "__expected__": {
     "schema_version": 5,
-    "agent_kind": "openhands",
+    "agent_kind": "agentrt",
     "mcp_config.superhuman-mail.auth.strategy": "oauth2",
     "mcp_config.superhuman-mail.auth.state.tokens.access_token": "token-value",
     "mcp_config.superhuman-mail.auth.state.client_info.client_id": "client-id"
   },
   "schema_version": 5,
-  "agent_kind": "openhands",
+  "agent_kind": "agentrt",
   "llm": {
     "model": "openhands/gpt-5.5"
   },

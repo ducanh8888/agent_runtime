@@ -60,7 +60,7 @@ def test_planning_is_standalone_composition() -> None:
     ctx = _ctx(plan_structure=PLAN_STRUCTURE)
     static = create_registry(PromptPreset.PLANNING).build(ctx).static
     assert static.startswith("You are a Planning Agent")
-    # Standalone: none of the default OpenHands sections leak in.
+    # Standalone: none of the default Agentrt sections leak in.
     for tag in ("<SOUL>", "<SECURITY>", "<MEMORY>", "<VERSION_CONTROL>", "<IMPORTANT>"):
         assert tag not in static
     for tag in ("<ROLE>", "<PLANNING_WORKFLOW>", "<PLAN_SCOPE>", "<PLAN_STRUCTURE>"):

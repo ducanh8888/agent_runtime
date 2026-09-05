@@ -1,6 +1,6 @@
 # Terminal Tool
 
-The Terminal Tool provides a persistent shell session for executing bash commands within the OpenHands SDK.
+The Terminal Tool provides a persistent shell session for executing bash commands within the Agentrt SDK.
 
 ## Features
 

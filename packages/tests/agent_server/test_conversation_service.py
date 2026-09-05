@@ -158,7 +158,7 @@ def _init_git_repo(repo_dir: Path) -> None:
         [
             "git",
             "-c",
-            "user.name=OpenHands Test",
+            "user.name=Agentrt Test",
             "-c",
             "user.email=openhands@example.com",
             "commit",
@@ -2010,7 +2010,7 @@ class TestConversationServiceStartConversation:
             [
                 "git",
                 "-c",
-                "user.name=OpenHands Test",
+                "user.name=Agentrt Test",
                 "-c",
                 "user.email=openhands@example.com",
                 "commit",
@@ -4144,7 +4144,7 @@ async def test_search_live_conversation_does_not_wait_for_state_lock(tmp_path):
         live_state = await event_services[conversation_info.id].get_state()
 
         # Hold the same FIFOLock that LocalConversation.arun() holds across a
-        # native OpenHands agent step. The old listing path composed from the
+        # native Agentrt agent step. The old listing path composed from the
         # live state and blocked until this lock was released.
         acquired = threading.Event()
         release = threading.Event()

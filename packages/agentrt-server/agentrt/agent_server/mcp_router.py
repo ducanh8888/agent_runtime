@@ -1,4 +1,4 @@
-"""MCP router for OpenHands SDK.
+"""MCP router for Agentrt SDK.
 
 Exposes a single endpoint, ``POST /api/mcp/test``, that lets clients verify
 a candidate MCP server configuration in isolation -- before persisting it

@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 
 class APIRemoteWorkspace(RemoteWorkspace):
-    """Remote workspace using OpenHands runtime API.
+    """Remote workspace using Agentrt runtime API.
 
     Runtime API: https://runtime.all-hands.dev/
 

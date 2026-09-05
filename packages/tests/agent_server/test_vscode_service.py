@@ -243,7 +243,7 @@ def test_get_vscode_url_base_path_with_caller_supplied_base_url():
 def test_get_vscode_url_without_base_path_is_unchanged():
     """Test that URLs are byte-identical when no base path is configured.
 
-    Downstream clients (OpenHands-CLI, app-server, Enterprise) that do not set
+    Downstream clients (Agentrt-CLI, app-server, Enterprise) that do not set
     ``vscode_base_path`` must see exactly the previous output.
     """
     service = VSCodeService(port=8001)

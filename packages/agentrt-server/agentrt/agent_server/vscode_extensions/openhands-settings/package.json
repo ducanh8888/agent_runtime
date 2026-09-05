@@ -1,7 +1,7 @@
 {
   "name": "openhands-settings",
-  "displayName": "OpenHands Settings",
-  "description": "Auto-configure VSCode settings for OpenHands",
+  "displayName": "Agentrt Settings",
+  "description": "Auto-configure VSCode settings for Agentrt",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.80.0"

@@ -1,4 +1,4 @@
-"""Test OpenHandsCloudWorkspace implementation."""
+"""Test AgentrtCloudWorkspace implementation."""
 
 from unittest.mock import MagicMock, patch
 
@@ -7,11 +7,11 @@ import httpx
 
 def test_api_timeout_is_used_in_client():
     """Test that api_timeout parameter is used for the HTTP client timeout."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
         custom_timeout = 300.0
-        workspace = OpenHandsCloudWorkspace(
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
             api_timeout=custom_timeout,
@@ -38,10 +38,10 @@ def test_api_timeout_is_used_in_client():
 
 def test_api_timeout_default_value():
     """Test that the default api_timeout is 60 seconds."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -63,10 +63,10 @@ def test_api_timeout_default_value():
 
 def test_api_headers_uses_bearer_token():
     """Test that _api_headers uses Bearer token authentication."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -81,10 +81,10 @@ def test_api_headers_uses_bearer_token():
 
 def test_get_agent_server_url_extracts_correct_url():
     """Test that _get_agent_server_url extracts AGENT_SERVER URL."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -104,10 +104,10 @@ def test_get_agent_server_url_extracts_correct_url():
 
 def test_get_agent_server_url_returns_none_when_not_found():
     """Test that _get_agent_server_url returns None when AGENT_SERVER not found."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -126,10 +126,10 @@ def test_get_agent_server_url_returns_none_when_not_found():
 
 def test_get_agent_server_url_returns_none_when_empty():
     """Test that _get_agent_server_url returns None when exposed_urls is empty."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -146,10 +146,10 @@ def test_get_agent_server_url_returns_none_when_empty():
 
 def test_cleanup_deletes_sandbox():
     """Test that cleanup deletes the sandbox."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="api-key",
             keep_alive=False,
@@ -174,10 +174,10 @@ def test_cleanup_deletes_sandbox():
 
 def test_cleanup_keeps_sandbox_alive_when_configured():
     """Test that cleanup keeps sandbox alive when keep_alive is True."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="api-key",
             keep_alive=True,
@@ -196,10 +196,10 @@ def test_cleanup_keeps_sandbox_alive_when_configured():
 
 def test_cleanup_handles_missing_sandbox_id():
     """Test that cleanup handles missing sandbox_id gracefully."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="api-key",
             keep_alive=False,
@@ -217,10 +217,10 @@ def test_cleanup_handles_missing_sandbox_id():
 
 def test_send_api_request_includes_bearer_token():
     """Test that _send_api_request includes Bearer token header."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -248,10 +248,10 @@ def test_send_api_request_includes_bearer_token():
 
 def test_context_manager_calls_cleanup():
     """Test that context manager calls cleanup on exit."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="api-key",
             keep_alive=False,
@@ -270,10 +270,10 @@ def test_context_manager_calls_cleanup():
 
 def test_cloud_api_url_trailing_slash_removed():
     """Test that trailing slash is removed from cloud_api_url."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com/",
             cloud_api_key="test-api-key",
         )
@@ -287,10 +287,10 @@ def test_cloud_api_url_trailing_slash_removed():
 
 def test_sandbox_id_field_is_public():
     """Test that sandbox_id is a public field that can be set."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
             sandbox_id="existing-sandbox-123",
@@ -305,10 +305,10 @@ def test_sandbox_id_field_is_public():
 
 def test_sandbox_id_triggers_resume_instead_of_create():
     """Test that providing sandbox_id calls resume endpoint instead of create."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
             sandbox_id="existing-sandbox-123",
@@ -320,7 +320,7 @@ def test_sandbox_id_triggers_resume_instead_of_create():
         patch.object(workspace, "_create_new_sandbox") as mock_create,
         patch.object(workspace, "_wait_until_sandbox_ready"),
         patch.object(workspace, "_get_agent_server_url") as mock_get_url,
-        patch.object(OpenHandsCloudWorkspace, "reset_client"),
+        patch.object(AgentrtCloudWorkspace, "reset_client"),
     ):
         mock_get_url.return_value = "https://agent.example.com"
         workspace._start_sandbox()
@@ -337,10 +337,10 @@ def test_sandbox_id_triggers_resume_instead_of_create():
 
 def test_no_sandbox_id_creates_new_sandbox():
     """Test that without sandbox_id, a new sandbox is created."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
         )
@@ -351,7 +351,7 @@ def test_no_sandbox_id_creates_new_sandbox():
         patch.object(workspace, "_create_new_sandbox") as mock_create,
         patch.object(workspace, "_wait_until_sandbox_ready"),
         patch.object(workspace, "_get_agent_server_url") as mock_get_url,
-        patch.object(OpenHandsCloudWorkspace, "reset_client"),
+        patch.object(AgentrtCloudWorkspace, "reset_client"),
     ):
         mock_get_url.return_value = "https://agent.example.com"
         workspace._start_sandbox()
@@ -367,10 +367,10 @@ def test_no_sandbox_id_creates_new_sandbox():
 
 def test_resume_existing_sandbox_sets_internal_id():
     """Test that _resume_existing_sandbox sets _sandbox_id from sandbox_id."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    from agentrt.workspace import AgentrtCloudWorkspace
 
-    with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-        workspace = OpenHandsCloudWorkspace(
+    with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+        workspace = AgentrtCloudWorkspace(
             cloud_api_url="https://cloud.example.com",
             cloud_api_key="test-api-key",
             sandbox_id="my-sandbox-id",
@@ -393,8 +393,8 @@ _CLOUD_KEY = "test-key"
 
 
 def _make_local_workspace(**overrides):
-    """Helper to create an OpenHandsCloudWorkspace in local_agent_server_mode."""
-    from agentrt.workspace import OpenHandsCloudWorkspace
+    """Helper to create an AgentrtCloudWorkspace in local_agent_server_mode."""
+    from agentrt.workspace import AgentrtCloudWorkspace
 
     kwargs = {
         "local_agent_server_mode": True,
@@ -402,7 +402,7 @@ def _make_local_workspace(**overrides):
         "cloud_api_key": _CLOUD_KEY,
         **overrides,
     }
-    return OpenHandsCloudWorkspace(**kwargs)
+    return AgentrtCloudWorkspace(**kwargs)
 
 
 def test_local_agent_server_mode_skips_sandbox_creation():

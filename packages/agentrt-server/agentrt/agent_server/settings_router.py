@@ -59,7 +59,7 @@ settings_router = APIRouter(prefix="/settings", tags=["Settings"])
 @lru_cache(maxsize=1)
 def _get_agent_settings_schema() -> SettingsSchema:
     # ``AgentSettings`` is now a discriminated union over
-    # ``OpenHandsAgentSettings`` and ``ACPAgentSettings``; the combined
+    # ``AgentrtAgentSettings`` and ``ACPAgentSettings``; the combined
     # schema tags sections with a ``variant`` so the frontend can
     # show LLM-only or ACP-only sections based on the active
     # ``agent_kind`` value.

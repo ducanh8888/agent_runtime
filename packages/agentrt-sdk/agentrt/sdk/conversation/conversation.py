@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 
 
 class Conversation:
-    """Factory class for creating conversation instances with OpenHands agents.
+    """Factory class for creating conversation instances with Agentrt agents.
 
     This factory automatically creates either a LocalConversation or RemoteConversation
     based on the workspace type provided. LocalConversation runs the agent locally,

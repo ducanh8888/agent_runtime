@@ -4,7 +4,7 @@ arguments needed to invoke it.
 
 Deliberately dependency-free (stdlib only, no pydantic): the agent-server
 Dockerfile's ``acp-providers`` stage builds from a bare ``python:*-bookworm``
-image with no OpenHands package installed, so this file is COPYed into that
+image with no Agentrt package installed, so this file is COPYed into that
 stage on its own and executed with the system ``python3`` to render the ACP
 payload's npm-install/wrapper plan (see :func:`render_docker_install_plan` and
 the ``acp-providers`` stage in
@@ -192,7 +192,7 @@ DEFAULT_PREINSTALLED_ACP_PROVIDERS: tuple[str, ...] = (
 (``INSTALL_ACP_PROVIDERS`` default). Kept separate from
 :data:`ACP_INSTALL_CATALOG` so registering a new npm provider there does not,
 by itself, grow every published image — joining this default is a separate,
-deliberate decision per provider (see OpenHands/software-agent-sdk#4820)."""
+deliberate decision per provider (see Agentrt/software-agent-sdk#4820)."""
 
 
 def render_docker_install_plan(

@@ -200,12 +200,12 @@ class TestDeeplyNestedSchema:
 
 
 # ---------------------------------------------------------------------------
-# OpenHands-injected fields
+# Agentrt-injected fields
 # ---------------------------------------------------------------------------
 
 
 class TestInjectedFields:
-    """Verify that OpenHands-specific fields (security_risk, summary)
+    """Verify that Agentrt-specific fields (security_risk, summary)
     are correctly injected alongside nested MCP properties.
     """
 

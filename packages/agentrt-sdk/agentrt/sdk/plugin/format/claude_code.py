@@ -1,4 +1,4 @@
-"""The Claude Code plugin format (OpenHands' original layout).
+"""The Claude Code plugin format (Agentrt' original layout).
 
 This is the concrete :class:`~agentrt.sdk.plugin.format.base.PluginFormat`
 strategy for the Claude-Code-style plugin directory. It is the universal
@@ -36,7 +36,7 @@ PLUGIN_MANIFEST_FILE: Final[str] = "plugin.json"
 
 
 class ClaudeCodePluginFormat(PluginFormat):
-    """The Claude Code plugin layout (OpenHands' original format).
+    """The Claude Code plugin layout (Agentrt' original format).
 
     ```
     plugin-name/

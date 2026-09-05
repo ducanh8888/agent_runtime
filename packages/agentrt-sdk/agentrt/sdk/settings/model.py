@@ -490,7 +490,7 @@ class AgentSettingsBase(BaseModel):
     the metadata overrides would make a shared field awkward.
 
     Use :data:`AgentSettingsConfig` as the type for fields that may hold
-    either the :class:`OpenHandsAgentSettings` or :class:`ACPAgentSettings`
+    either the :class:`AgentrtAgentSettings` or :class:`ACPAgentSettings`
     variant. Use :func:`validate_agent_settings` to validate raw payloads.
     """
 
@@ -515,7 +515,7 @@ class AgentSettingsBase(BaseModel):
         subclasses; callers that want union dispatch across settings variants
         should use :func:`validate_agent_settings`. Current-schema payloads
         with the deprecated ``agent_kind='llm'`` discriminator are rejected by
-        :meth:`OpenHandsAgentSettings.from_persisted`.
+        :meth:`AgentrtAgentSettings.from_persisted`.
 
         When loading an encrypted persisted mapping, pass the same validation
         context used to write it (for example ``{"cipher": cipher}``) so
@@ -549,7 +549,7 @@ class AgentSettingsBase(BaseModel):
     def create_agent(self) -> AgentBase:
         """Build an agent from these settings.
 
-        Subclasses (:class:`OpenHandsAgentSettings`, :class:`ACPAgentSettings`)
+        Subclasses (:class:`AgentrtAgentSettings`, :class:`ACPAgentSettings`)
         override this to return the appropriate
         :class:`~agentrt.sdk.agent.base.AgentBase` subclass.
         Calling this on the base class directly raises :exc:`NotImplementedError`.
@@ -634,13 +634,13 @@ def _migrate_agent_settings_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
     """Canonicalize the deprecated ``agent_kind: 'llm'`` discriminator to
     ``'openhands'``.
 
-    Before the v1.19.0 ``LLMAgentSettings`` → ``OpenHandsAgentSettings`` rename,
+    Before the v1.19.0 ``LLMAgentSettings`` → ``AgentrtAgentSettings`` rename,
     persisted payloads carried ``agent_kind: 'llm'``. The two classes are
     field-compatible (``LLMAgentSettings`` is a subclass of
-    ``OpenHandsAgentSettings`` that only narrows the discriminator literal),
+    ``AgentrtAgentSettings`` that only narrows the discriminator literal),
     and ``LLMAgentSettings``'s import aliases were removed in v1.24.0. Rewriting
     the discriminator on read lets callers that explicitly validate as
-    ``OpenHandsAgentSettings`` (the canonical class) accept legacy data
+    ``AgentrtAgentSettings`` (the canonical class) accept legacy data
     without losing any fields.
     """
     migrated = dict(payload)
@@ -995,7 +995,7 @@ class ConversationSettings(BaseModel):
             "Agent settings used to build the Agent for the conversation. "
             "When set, create_request() will automatically build the agent "
             "and populate secrets from agent_context. Accepts either the "
-            "``OpenHandsAgentSettings`` or ``ACPAgentSettings`` variant."
+            "``AgentrtAgentSettings`` or ``ACPAgentSettings`` variant."
         ),
     )
     workspace: LocalWorkspace | None = Field(
@@ -1213,18 +1213,18 @@ the other choices map to a default npx command stored in
 """
 
 
-class OpenHandsAgentSettings(AgentSettingsBase):
+class AgentrtAgentSettings(AgentSettingsBase):
     """Settings for a standard LLM-backed :class:`Agent`.
 
     This is the long-standing ``AgentSettings`` shape; fields here build
     the default ``Agent`` (LLM + tools + MCP + condenser + critic).
     """
 
-    agent_kind: Literal["openhands"] = Field(
+    agent_kind: Literal["agentrt"] = Field(
         default="openhands",
         description=(
             "Discriminator for the ``AgentSettings`` union. ``'openhands'`` selects "
-            "the standard built-in OpenHands agent."
+            "the standard built-in Agentrt agent."
         ),
     )
     agent: str = Field(
@@ -1367,7 +1367,7 @@ class OpenHandsAgentSettings(AgentSettingsBase):
 
         Example::
 
-            settings = OpenHandsAgentSettings(
+            settings = AgentrtAgentSettings(
                 llm=LLM(model="m", api_key="k"),
                 tools=[Tool(name="TerminalTool")],
             )
@@ -1462,7 +1462,7 @@ class ACPAgentSettings(AgentSettingsBase):
     ``create_agent()`` returns an :class:`ACPAgent` that delegates to a
     subprocess ACP server.  The ACP server manages its own system prompt,
     tools, MCP, and (primary) LLM calls; those fields from
-    :class:`OpenHandsAgentSettings` do not apply here.
+    :class:`AgentrtAgentSettings` do not apply here.
 
     ``ACPAgent`` uses the :attr:`llm` field purely for cost/token attribution,
     never for LLM requests; :attr:`acp_model` is the model identity. Any
@@ -1622,7 +1622,7 @@ class ACPAgentSettings(AgentSettingsBase):
         default_factory=dict,
         description=(
             "MCP servers to make available to the ACP subprocess. Unlike the "
-            "OpenHands agent — where these become in-process MCP tools — the "
+            "Agentrt agent — where these become in-process MCP tools — the "
             "servers are forwarded to the ACP server at session creation and it "
             "owns the connection. Remote (http/sse) servers are only forwarded "
             "when the ACP server advertises support for that transport; stdio "
@@ -1862,13 +1862,13 @@ class ACPAgentSettings(AgentSettingsBase):
         )
 
 
-class LLMAgentSettings(OpenHandsAgentSettings):
-    """Legacy ``agent_kind='llm'`` variant of :class:`OpenHandsAgentSettings`.
+class LLMAgentSettings(AgentrtAgentSettings):
+    """Legacy ``agent_kind='llm'`` variant of :class:`AgentrtAgentSettings`.
 
     ``LLMAgentSettings`` was the public class name before the v1.19.0 rename.
     The public import aliases (``from agentrt.sdk import LLMAgentSettings`` and
     ``from agentrt.sdk.settings import LLMAgentSettings``) were removed in
-    v1.24.0 — use :class:`OpenHandsAgentSettings` for all new code.
+    v1.24.0 — use :class:`AgentrtAgentSettings` for all new code.
 
     The class itself is retained (reachable at
     ``agentrt.sdk.settings.model.LLMAgentSettings``) because it remains a
@@ -1881,7 +1881,7 @@ class LLMAgentSettings(OpenHandsAgentSettings):
     # field-value change compared with the PyPI release (which had this class
     # as the primary class with agent_kind="llm").  The discriminated union
     # routes "llm" payloads here; validate_agent_settings({}) still defaults
-    # to OpenHandsAgentSettings ("openhands").
+    # to AgentrtAgentSettings ("openhands").
     agent_kind: Literal["llm"] = Field(  # type: ignore[assignment]
         default="llm",
         description=(
@@ -1895,7 +1895,7 @@ def _agent_settings_discriminator(value: Any) -> str:
     """Discriminator for :data:`AgentSettingsConfig` — defaults to ``'openhands'``.
 
     Existing persisted payloads predate ``agent_kind`` and carry only
-    OpenHands-agent fields. Treating a missing discriminator as ``'openhands'``
+    Agentrt-agent fields. Treating a missing discriminator as ``'openhands'``
     lets those payloads validate without a migration.
 
     ``'llm'`` is still a valid tag, routed to the deprecated
@@ -1909,7 +1909,7 @@ def _agent_settings_discriminator(value: Any) -> str:
 
 
 AgentSettingsConfig = Annotated[
-    Annotated[OpenHandsAgentSettings, Tag("openhands")]
+    Annotated[AgentrtAgentSettings, Tag("openhands")]
     | Annotated[LLMAgentSettings, Tag("llm")]
     | Annotated[ACPAgentSettings, Tag("acp")],
     Discriminator(_agent_settings_discriminator),
@@ -1928,7 +1928,7 @@ variant.
 
 
 _AGENT_SETTINGS_ADAPTER: TypeAdapter[
-    OpenHandsAgentSettings | LLMAgentSettings | ACPAgentSettings
+    AgentrtAgentSettings | LLMAgentSettings | ACPAgentSettings
 ] = TypeAdapter(AgentSettingsConfig)
 
 
@@ -1936,14 +1936,14 @@ def validate_agent_settings(
     data: Any,
     *,
     context: Mapping[str, Any] | None = None,
-) -> OpenHandsAgentSettings | LLMAgentSettings | ACPAgentSettings:
+) -> AgentrtAgentSettings | LLMAgentSettings | ACPAgentSettings:
     """Load and validate an agent-settings payload.
 
     Persisted payloads are migrated to the current schema version before
     validation, including legacy ``agent_kind: "llm"`` payloads from before the
-    ``OpenHandsAgentSettings`` rename.
+    ``AgentrtAgentSettings`` rename.
     """
-    if isinstance(data, OpenHandsAgentSettings | ACPAgentSettings):
+    if isinstance(data, AgentrtAgentSettings | ACPAgentSettings):
         return data
     payload = _apply_persisted_migrations(
         data,
@@ -1984,14 +1984,14 @@ def apply_agent_settings_diff(
     diff: Mapping[str, Any] | None,
     *,
     context: Mapping[str, Any] | None = None,
-) -> OpenHandsAgentSettings | ACPAgentSettings:
+) -> AgentrtAgentSettings | ACPAgentSettings:
     """Apply a sparse agent-settings diff to a base, narrowing on ``agent_kind``.
 
     ``agent_kind`` is a one-way narrowing gate, never a conversion knob:
 
     * When ``diff`` changes ``agent_kind``, start from a *fresh* base for the
       target variant. Deep-merging across the union boundary would either fail
-      validation (ACP's nullable ``agent_context`` is invalid for OpenHands) or
+      validation (ACP's nullable ``agent_context`` is invalid for Agentrt) or
       silently drop the outgoing variant's fields (the variants ignore unknown
       keys), producing a mongrel row.
     * When ``agent_kind`` is unchanged or omitted, deep-merge the diff within
@@ -2017,17 +2017,17 @@ def apply_agent_settings_diff(
     return validate_agent_settings(merged, context=context)
 
 
-def default_agent_settings() -> OpenHandsAgentSettings:
-    """Return a default :class:`OpenHandsAgentSettings` instance.
+def default_agent_settings() -> AgentrtAgentSettings:
+    """Return a default :class:`AgentrtAgentSettings` instance.
 
     This is the drop-in replacement for the old bare ``AgentSettings()``
     constructor call — the default-ever-since variant is the LLM agent.
     """
-    return OpenHandsAgentSettings()
+    return AgentrtAgentSettings()
 
 
 def create_agent_from_settings(
-    settings: OpenHandsAgentSettings | ACPAgentSettings,
+    settings: AgentrtAgentSettings | ACPAgentSettings,
 ) -> AgentBase:
     """Dispatch to the variant's ``create_agent()`` method.
 
@@ -2048,7 +2048,7 @@ def export_agent_settings_schema() -> SettingsSchema:
     carry a ``variant`` tag (``'openhands'``, ``'acp'``, or ``None`` for
     shared) so the frontend can filter by the page's variant.
     """
-    llm_schema = OpenHandsAgentSettings.export_schema()
+    llm_schema = AgentrtAgentSettings.export_schema()
     acp_schema = ACPAgentSettings.export_schema()
 
     merged_sections: list[SettingsSectionSchema] = []

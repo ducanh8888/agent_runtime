@@ -3,7 +3,7 @@
 Verifies that 422 error responses do not leak sensitive fields such as
 ``api_key``, ``env``, or other secret-bearing request values.
 
-Refs: OpenHands/evaluation#385
+Refs: Agentrt/evaluation#385
 """
 
 import pytest

@@ -43,7 +43,7 @@ def check_openai_api_key(
     session_api_key: str | None = Depends(_SESSION_API_KEY_HEADER),
     authorization: HTTPAuthorizationCredentials | None = Depends(_AUTHORIZATION_HEADER),
 ) -> None:
-    """Accept the same session key through OpenHands and OpenAI auth shapes.
+    """Accept the same session key through Agentrt and OpenAI auth shapes.
 
     ``X-Session-API-Key`` preserves compatibility with existing agent-server
     clients, while ``Authorization: Bearer`` lets OpenAI-compatible clients use
@@ -101,7 +101,7 @@ def _parse_observability_overrides(
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=422,
-            detail="X-OpenHands-Observability-Metadata must be a JSON object",
+            detail="X-Agentrt-Observability-Metadata must be a JSON object",
         ) from exc
     except ValidationError as exc:
         raise HTTPException(
@@ -127,16 +127,16 @@ async def create_chat_completion(
     request: Request,
     response: Response,
     x_openhands_server_conversation_id: Annotated[
-        UUID | None, Header(alias="X-OpenHands-ServerConversation-ID")
+        UUID | None, Header(alias="X-Agentrt-ServerConversation-ID")
     ] = None,
     x_openhands_observability_span_name: Annotated[
-        str | None, Header(alias="X-OpenHands-Observability-Span-Name")
+        str | None, Header(alias="X-Agentrt-Observability-Span-Name")
     ] = None,
     x_openhands_observability_tags: Annotated[
-        str | None, Header(alias="X-OpenHands-Observability-Tags")
+        str | None, Header(alias="X-Agentrt-Observability-Tags")
     ] = None,
     x_openhands_observability_metadata: Annotated[
-        str | None, Header(alias="X-OpenHands-Observability-Metadata")
+        str | None, Header(alias="X-Agentrt-Observability-Metadata")
     ] = None,
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> OpenAIChatCompletionResponse | StreamingResponse:
@@ -162,8 +162,8 @@ async def create_chat_completion(
                 include_usage=include_usage,
             ),
             media_type="text/event-stream",
-            headers={"X-OpenHands-ServerConversation-ID": conversation_id},
+            headers={"X-Agentrt-ServerConversation-ID": conversation_id},
         )
 
-    response.headers["X-OpenHands-ServerConversation-ID"] = conversation_id
+    response.headers["X-Agentrt-ServerConversation-ID"] = conversation_id
     return result.response

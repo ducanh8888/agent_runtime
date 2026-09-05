@@ -1,4 +1,4 @@
-"""Skill management for OpenHands SDK.
+"""Skill management for Agentrt SDK.
 
 This module provides the unified API for working with skills:
 
@@ -8,7 +8,7 @@ This module provides the unified API for working with skills:
 - `load_skills_from_dir` - Load skills from a directory
 - `load_project_skills` - Load skills from project's .agents/skills/
 - `load_user_skills` - Load skills from ~/.openhands/skills/
-- `load_public_skills` - Load skills from the public OpenHands extensions repo
+- `load_public_skills` - Load skills from the public Agentrt extensions repo
 - `load_available_skills` - Load and merge skills from multiple sources
 - `merge_skills_by_name` - Merge two skill collections by name (primary wins)
 

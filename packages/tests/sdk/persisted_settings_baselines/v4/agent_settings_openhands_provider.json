@@ -1,6 +1,6 @@
 {
   "__expected__": {
-    "agent_kind": "openhands",
+    "agent_kind": "agentrt",
     "llm.model": "openhands/gpt-5.5",
     "tools": [
       {
@@ -10,7 +10,7 @@
     ]
   },
   "schema_version": 4,
-  "agent_kind": "openhands",
+  "agent_kind": "agentrt",
   "llm": {
     "model": "openhands/gpt-5.5"
   },

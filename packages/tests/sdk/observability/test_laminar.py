@@ -604,8 +604,8 @@ def test_root_span_sets_trace_metadata_and_tags():
         RootSpan(
             "conversation",
             session_id="session-1",
-            metadata={"repo_name": "OpenHands/software-agent-sdk"},
-            tags=["repo:OpenHands/software-agent-sdk"],
+            metadata={"repo_name": "Agentrt/software-agent-sdk"},
+            tags=["repo:Agentrt/software-agent-sdk"],
         )
 
         mock_laminar.start_span.assert_called_once_with("conversation")
@@ -616,10 +616,10 @@ def test_root_span_sets_trace_metadata_and_tags():
         )
         mock_laminar.set_trace_session_id.assert_called_once_with("session-1")
         mock_laminar.set_trace_metadata.assert_called_once_with(
-            {"repo_name": "OpenHands/software-agent-sdk"}
+            {"repo_name": "Agentrt/software-agent-sdk"}
         )
         mock_laminar.set_span_tags.assert_called_once_with(
-            ["repo:OpenHands/software-agent-sdk"]
+            ["repo:Agentrt/software-agent-sdk"]
         )
 
 

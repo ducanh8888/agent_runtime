@@ -825,13 +825,13 @@ class TestMarketplaceCatalogEndpoint:
                 MarketplaceSkillInfo(
                     name="github",
                     description="GitHub integration skill",
-                    source="github:OpenHands/extensions/skills/github",
+                    source="github:Agentrt/extensions/skills/github",
                     installed=True,
                 ),
                 MarketplaceSkillInfo(
                     name="docker",
                     description="Docker management skill",
-                    source="github:OpenHands/extensions/skills/docker",
+                    source="github:Agentrt/extensions/skills/docker",
                     installed=False,
                 ),
             ]

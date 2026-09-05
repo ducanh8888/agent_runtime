@@ -1,4 +1,4 @@
-"""Tests for OpenHandsCloudWorkspace automation tags functionality."""
+"""Tests for AgentrtCloudWorkspace automation tags functionality."""
 
 import json
 import os
@@ -13,10 +13,10 @@ class TestDefaultConversationTags:
     @pytest.fixture
     def workspace(self):
         """Create a workspace instance with mocked sandbox creation."""
-        from agentrt.workspace import OpenHandsCloudWorkspace
+        from agentrt.workspace import AgentrtCloudWorkspace
 
-        with patch.object(OpenHandsCloudWorkspace, "_start_sandbox"):
-            workspace = OpenHandsCloudWorkspace(
+        with patch.object(AgentrtCloudWorkspace, "_start_sandbox"):
+            workspace = AgentrtCloudWorkspace(
                 cloud_api_url="https://cloud.example.com",
                 cloud_api_key="test-api-key",
             )
@@ -126,7 +126,7 @@ class TestRemoteWorkspaceDefaultConversationTags:
     Local-mode automation runs use a plain RemoteWorkspace against the local
     agent server, so the base class itself must derive the automation tags
     from the dispatcher-injected env vars (the derivation edge cases are
-    covered above through the OpenHandsCloudWorkspace subclass, which
+    covered above through the AgentrtCloudWorkspace subclass, which
     inherits this implementation).
     """
 
@@ -300,14 +300,14 @@ class TestPluginSourceUrl:
         """Should convert github:owner/repo to full URL."""
         from agentrt.sdk.plugin import PluginSource
 
-        plugin = PluginSource(source="github:OpenHands/skills")
+        plugin = PluginSource(source="github:Agentrt/skills")
         assert plugin.source_url == "https://github.com/OpenHands/skills"
 
     def test_github_shorthand_with_ref(self):
         """Should add tree/ref for github: sources with ref."""
         from agentrt.sdk.plugin import PluginSource
 
-        plugin = PluginSource(source="github:OpenHands/skills", ref="v1.0.0")
+        plugin = PluginSource(source="github:Agentrt/skills", ref="v1.0.0")
         assert plugin.source_url == "https://github.com/OpenHands/skills/tree/v1.0.0"
 
     def test_github_shorthand_with_repo_path(self):
@@ -315,7 +315,7 @@ class TestPluginSourceUrl:
         from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(
-            source="github:OpenHands/monorepo", repo_path="plugins/security"
+            source="github:Agentrt/monorepo", repo_path="plugins/security"
         )
         assert (
             plugin.source_url
@@ -327,7 +327,7 @@ class TestPluginSourceUrl:
         from agentrt.sdk.plugin import PluginSource
 
         plugin = PluginSource(
-            source="github:OpenHands/monorepo",
+            source="github:Agentrt/monorepo",
             ref="feature-branch",
             repo_path="plugins/security",
         )
@@ -393,8 +393,8 @@ class TestPluginsTagInConversation:
         mock_workspace.default_conversation_tags = {}
 
         plugins = [
-            PluginSource(source="github:OpenHands/security-skill", ref="v1.0.0"),
-            PluginSource(source="github:OpenHands/review-skill"),
+            PluginSource(source="github:Agentrt/security-skill", ref="v1.0.0"),
+            PluginSource(source="github:Agentrt/review-skill"),
         ]
 
         with patch(
@@ -457,7 +457,7 @@ class TestPluginsTagInConversation:
         mock_workspace.default_conversation_tags = {}
 
         plugins = [
-            PluginSource(source="github:OpenHands/skill"),
+            PluginSource(source="github:Agentrt/skill"),
             PluginSource(source="/local/path/to/plugin"),  # Should be skipped
         ]
 
@@ -492,7 +492,7 @@ class TestPluginsTagInConversation:
             "automationid": "auto-123",
         }
 
-        plugins = [PluginSource(source="github:OpenHands/skill")]
+        plugins = [PluginSource(source="github:Agentrt/skill")]
 
         with patch(
             "agentrt.sdk.conversation.impl.remote_conversation.RemoteConversation"

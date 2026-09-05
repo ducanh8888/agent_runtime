@@ -77,7 +77,7 @@ _SEMVER_RELEASE_RE = re.compile(
 
 def _default_sdk_project_root() -> Path:
     """
-    Resolve top-level OpenHands UV workspace root:
+    Resolve top-level Agentrt UV workspace root:
 
     Order:
       1) Walk up from CWD
@@ -137,7 +137,7 @@ def _default_sdk_project_root() -> Path:
         root = _climb(p) or p
         if not _is_workspace_root(root):
             raise RuntimeError(
-                f"{src}: couldn't find the OpenHands UV workspace root "
+                f"{src}: couldn't find the Agentrt UV workspace root "
                 f"starting at '{p}'.\n\n"
                 "Expected setup (repo root):\n"
                 "  pyproject.toml  # has [tool.uv.workspace] with members\n"
@@ -162,7 +162,7 @@ def _default_sdk_project_root() -> Path:
 
     # Final, user-facing guidance
     raise RuntimeError(
-        "Could not resolve the OpenHands UV workspace root.\n\n"
+        "Could not resolve the Agentrt UV workspace root.\n\n"
         "Expected repo layout:\n"
         "  pyproject.toml  (with [tool.uv.workspace].members "
         "including openhands/* subprojects)\n"
@@ -432,7 +432,7 @@ class BuildOptions(BaseModel):
     git_ref: str = Field(default=_DEFAULT_GIT_REF)
     sdk_project_root: Path = Field(
         default_factory=_default_sdk_project_root,
-        description="Path to OpenHands SDK root. Auto if None.",
+        description="Path to Agentrt SDK root. Auto if None.",
     )
     prebuilt_sdist: Path | None = Field(
         default=None,
@@ -1123,7 +1123,7 @@ def main(argv: list[str]) -> int:
         "--sdk-project-root",
         type=Path,
         default=None,
-        help="Path to OpenHands SDK root (default: auto-detect).",
+        help="Path to Agentrt SDK root (default: auto-detect).",
     )
     parser.add_argument(
         "--prebuilt-sdist",

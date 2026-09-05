@@ -1,9 +1,9 @@
 """ACPAgent — an AgentBase subclass that delegates to an ACP server.
 
-The Agent Client Protocol (ACP) lets OpenHands power conversations using
+The Agent Client Protocol (ACP) lets Agentrt power conversations using
 ACP-compatible servers (Claude Code, Gemini CLI, etc.) instead of direct
 LLM calls.  The ACP server manages its own LLM, tools, and execution;
-the ACPAgent relays user messages and collects the response. OpenHands
+the ACPAgent relays user messages and collects the response. Agentrt
 can still append prompt-only context, such as a skill catalog, to the
 user message before it is sent to the ACP server.
 
@@ -717,7 +717,7 @@ def _mcp_config_to_acp_servers(
     mcp_config: dict[str, MCPServer],
     mcp_capabilities: Any,
 ) -> list[_ACPMcpServer]:
-    """Translate OpenHands MCP servers into ACP MCP server objects.
+    """Translate Agentrt MCP servers into ACP MCP server objects.
 
     Converts the native server map to the ACP protocol objects passed to
     ``new_session()`` / ``load_session()`` so the ACP
@@ -1218,7 +1218,7 @@ def _classify_acp_turn_error(exc: BaseException) -> str:
 
 
 class _OpenHandsACPBridge:
-    """Bridge between OpenHands and ACP that accumulates session updates.
+    """Bridge between Agentrt and ACP that accumulates session updates.
 
     Implements the ``Client`` protocol from ``agent_client_protocol``.
 
@@ -1843,7 +1843,7 @@ class ACPAgent(AgentBase):
         and their own project skills from the session cwd, so loading them here
         too would put that content in the prompt twice. Normalised rather than
         rejected: callers legitimately set the flag on a shared context they also
-        use for OpenHands agents (#4019).
+        use for Agentrt agents (#4019).
         """
         if value is None or not value.load_project_skills:
             return value
@@ -2077,7 +2077,7 @@ class ACPAgent(AgentBase):
 
     @property
     def supports_openhands_mcp(self) -> bool:
-        """``False`` — OpenHands does not create in-process MCP tools here.
+        """``False`` — Agentrt does not create in-process MCP tools here.
 
         ACP agents still honor ``mcp_config`` by forwarding configured servers
         to the ACP subprocess at session creation time.

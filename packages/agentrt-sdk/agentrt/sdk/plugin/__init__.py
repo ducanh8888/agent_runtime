@@ -1,4 +1,4 @@
-"""Plugin module for OpenHands SDK.
+"""Plugin module for Agentrt SDK.
 
 This module provides support for loading and managing plugins that bundle
 skills, hooks, MCP configurations, agents, and commands together.

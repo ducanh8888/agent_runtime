@@ -68,7 +68,7 @@ class AgentProfileInfo(BaseModel):
 
     id: str | None = None
     name: str
-    agent_kind: str = "openhands"
+    agent_kind: str = "agentrt"
     revision: int | None = None
     llm_profile_ref: str | None = None
     mcp_server_refs: list[str] | None = None
@@ -522,8 +522,8 @@ async def materialize_agent_profile(
     # own diagnostic below.
     discovery_error: str | None = None
     available_skills = None
-    if profile.agent_kind == "openhands" or (
-        config.acp_skill_sourcing == "openhands_managed"
+    if profile.agent_kind == "agentrt" or (
+        config.acp_skill_sourcing == "agentrt_managed"
     ):
         try:
             available_skills = await asyncio.to_thread(discover_profile_skills)

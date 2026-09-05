@@ -32,7 +32,7 @@ _OBSERVABILITY_ENV_KEYS: Final[tuple[str, ...]] = (
 )
 
 
-OPERATION_METADATA_KEY: Final[str] = "openhands.operation"
+OPERATION_METADATA_KEY: Final[str] = "agentrt.operation"
 """Metadata key naming the side-utility operation a span subtree belongs to."""
 
 

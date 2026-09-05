@@ -1,4 +1,4 @@
-"""Bash router for OpenHands SDK."""
+"""Bash router for Agentrt SDK."""
 
 import logging
 from datetime import datetime

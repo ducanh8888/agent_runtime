@@ -101,7 +101,7 @@ def test_and_or_shape_preserves_falsy_last_operand() -> None:
 
 
 def test_agent_server_binary_copies_openhands_distribution_metadata() -> None:
-    """The frozen binary should preserve OpenHands package metadata."""
+    """The frozen binary should preserve Agentrt package metadata."""
     spec_text = AGENT_SERVER_SPEC.read_text(encoding="utf-8")
 
     for distribution in (

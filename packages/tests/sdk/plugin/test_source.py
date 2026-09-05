@@ -18,7 +18,7 @@ class TestParseGitHubURL:
             "https://github.com/OpenHands/extensions/blob/main/skills/github"
         )
         assert result is not None
-        assert result.owner == "OpenHands"
+        assert result.owner == "Agentrt"
         assert result.repo == "extensions"
         assert result.branch == "main"
         assert result.path == "skills/github"

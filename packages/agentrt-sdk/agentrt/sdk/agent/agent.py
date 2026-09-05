@@ -373,7 +373,7 @@ class _ActionBatch:
 
 
 class Agent(CriticMixin, ResponseDispatchMixin, AgentBase):
-    """Main agent implementation for OpenHands.
+    """Main agent implementation for Agentrt.
 
     The Agent class provides the core functionality for running AI agents that can
     interact with tools, process messages, and execute actions. It inherits from
@@ -388,7 +388,7 @@ class Agent(CriticMixin, ResponseDispatchMixin, AgentBase):
             Mutually exclusive with a non-default ``system_prompt_filename``.
             **Not recommended** unless you know what you are doing (e.g.
             customising agent behaviour for a completely different task) —
-            this will override OpenHands' built-in system instructions.
+            this will override Agentrt' built-in system instructions.
         system_prompt_filename: Jinja2 template filename resolved relative to
             the agent's prompts directory, or an absolute path. Defaults to
             ``"system_prompt.j2"``.

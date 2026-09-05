@@ -9,7 +9,7 @@ based on path:
   authenticate via an ambient (cookie) credential.
 * Everything else — ``LocalhostCORSMiddleware``, which honors the
   operator's ``allow_cors_origins`` / ``allow_cors_origin_regex`` and always
-  allows localhost and ``DOCKER_HOST_ADDR`` (matches OpenHands/OpenHands#4624
+  allows localhost and ``DOCKER_HOST_ADDR`` (matches Agentrt/Agentrt#4624
   intent).
 """
 

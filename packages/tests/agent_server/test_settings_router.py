@@ -23,7 +23,7 @@ from agentrt.sdk.settings import (
     AGENT_SETTINGS_SCHEMA_VERSION,
     CONVERSATION_SETTINGS_SCHEMA_VERSION,
     ACPAgentSettings,
-    OpenHandsAgentSettings,
+    AgentrtAgentSettings,
 )
 from agentrt.sdk.utils.cipher import Cipher
 
@@ -151,7 +151,7 @@ def test_get_settings_returns_default_settings(client_with_settings):
 def test_get_settings_migrates_legacy_openhands_settings_and_resaves_current(
     client_with_settings, temp_persistence_dir, secret_key
 ):
-    """Old OpenHands settings files load, migrate, and remain editable."""
+    """Old Agentrt settings files load, migrate, and remain editable."""
     cipher = Cipher(secret_key)
     _write_settings_file(
         temp_persistence_dir,
@@ -209,9 +209,9 @@ def test_get_settings_migrates_legacy_openhands_settings_and_resaves_current(
     assert loaded.schema_version == PERSISTED_SETTINGS_SCHEMA_VERSION
 
     assert loaded.agent_settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
-    assert isinstance(loaded.agent_settings, OpenHandsAgentSettings)
+    assert isinstance(loaded.agent_settings, AgentrtAgentSettings)
 
-    assert loaded.agent_settings.agent_kind == "openhands"
+    assert loaded.agent_settings.agent_kind == "agentrt"
     assert loaded.agent_settings.llm.model == "legacy-model"
     assert isinstance(loaded.agent_settings.llm.api_key, SecretStr)
     assert loaded.agent_settings.llm.api_key.get_secret_value() == "sk-legacy-agent-key"
@@ -230,7 +230,7 @@ def test_get_settings_migrates_legacy_openhands_settings_and_resaves_current(
     assert body["active_profile"] == "legacy-profile"
     agent_settings = body["agent_settings"]
     assert agent_settings["schema_version"] == AGENT_SETTINGS_SCHEMA_VERSION
-    assert agent_settings["agent_kind"] == "openhands"
+    assert agent_settings["agent_kind"] == "agentrt"
     assert agent_settings["llm"]["api_key"] == "sk-legacy-agent-key"
     assert agent_settings["condenser"] == {
         "enabled": False,
@@ -277,7 +277,7 @@ def test_get_settings_migrates_legacy_openhands_settings_and_resaves_current(
     assert on_disk["schema_version"] == PERSISTED_SETTINGS_SCHEMA_VERSION
     assert on_disk["active_profile"] == "legacy-profile"
     assert on_disk["agent_settings"]["schema_version"] == AGENT_SETTINGS_SCHEMA_VERSION
-    assert on_disk["agent_settings"]["agent_kind"] == "openhands"
+    assert on_disk["agent_settings"]["agent_kind"] == "agentrt"
     assert on_disk["conversation_settings"]["max_iterations"] == 84
 
     response = client_with_settings.get(
@@ -803,7 +803,7 @@ def test_existing_settings_load_with_null_active_agent_profile_id(
         temp_persistence_dir,
         {
             "schema_version": PERSISTED_SETTINGS_SCHEMA_VERSION,
-            "agent_settings": {"agent_kind": "openhands"},
+            "agent_settings": {"agent_kind": "agentrt"},
             "active_profile": "legacy-profile",
         },
     )
@@ -1247,7 +1247,7 @@ def test_persisted_settings_v1_loads_with_empty_misc_settings(
             {
                 "schema_version": 1,
                 "agent_settings": {
-                    "agent_kind": "openhands",
+                    "agent_kind": "agentrt",
                     "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
                     "llm": {"model": "gpt-4o"},
                 },
@@ -1366,7 +1366,7 @@ def test_update_agent_settings_kind_switch_replaces_fresh() -> None:
 
 def test_update_agent_settings_switch_back_to_openhands() -> None:
     """Switching back to openhands starts fresh; ACP fields are not leaked."""
-    from agentrt.sdk.settings.model import OpenHandsAgentSettings
+    from agentrt.sdk.settings.model import AgentrtAgentSettings
 
     settings = PersistedSettings()
     settings.update(
@@ -1374,10 +1374,10 @@ def test_update_agent_settings_switch_back_to_openhands() -> None:
     )
 
     settings.update(
-        {"agent_settings_diff": {"agent_kind": "openhands", "llm": {"model": "gpt-4o"}}}
+        {"agent_settings_diff": {"agent_kind": "agentrt", "llm": {"model": "gpt-4o"}}}
     )
 
-    assert isinstance(settings.agent_settings, OpenHandsAgentSettings)
+    assert isinstance(settings.agent_settings, AgentrtAgentSettings)
     assert settings.agent_settings.llm.model == "gpt-4o"
 
 
@@ -1430,7 +1430,7 @@ def test_patch_settings_null_on_scalar_field_fails_loudly(client_with_settings):
 def test_patch_settings_switch_agent_kind_from_acp_to_openhands(
     client_with_settings, temp_persistence_dir
 ):
-    """PATCH /api/settings can switch from ACP to OpenHands.
+    """PATCH /api/settings can switch from ACP to Agentrt.
 
     When ``agent_kind`` changes, incompatible fields from the old variant
     (like ``acp_command``) must not be merged into the new variant.
@@ -1452,12 +1452,12 @@ def test_patch_settings_switch_agent_kind_from_acp_to_openhands(
     assert seeded["agent_kind"] == "acp"
     assert seeded["llm"]["model"] == "acp-only-model"
 
-    # Switch to OpenHands, restating ``llm`` with a new model.
+    # Switch to Agentrt, restating ``llm`` with a new model.
     response = client_with_settings.patch(
         "/api/settings",
         json={
             "agent_settings_diff": {
-                "agent_kind": "openhands",
+                "agent_kind": "agentrt",
                 "llm": {"model": "claude-3-5-sonnet-20241022"},
             }
         },
@@ -1466,7 +1466,7 @@ def test_patch_settings_switch_agent_kind_from_acp_to_openhands(
     # Should succeed — no validation error about leftover ACP-specific fields
     assert response.status_code == 200
     body = response.json()
-    assert body["agent_settings"]["agent_kind"] == "openhands"
+    assert body["agent_settings"]["agent_kind"] == "agentrt"
     # ACP-specific fields should not appear in the response
     assert "acp_command" not in body["agent_settings"]
     # The restated ``llm`` model wins — the ACP-seeded value is gone.
@@ -1493,28 +1493,28 @@ def test_patch_settings_switch_drops_shared_field_when_not_restated(
     payload = persisted.model_dump(mode="json", context={"expose_secrets": "plaintext"})
     _write_settings_file(temp_persistence_dir, payload)
 
-    # Switch to OpenHands WITHOUT restating llm.
+    # Switch to Agentrt WITHOUT restating llm.
     response = client_with_settings.patch(
         "/api/settings",
-        json={"agent_settings_diff": {"agent_kind": "openhands"}},
+        json={"agent_settings_diff": {"agent_kind": "agentrt"}},
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["agent_settings"]["agent_kind"] == "openhands"
+    assert body["agent_settings"]["agent_kind"] == "agentrt"
     # The ACP-seeded model is NOT carried over; llm falls back to the
-    # OpenHands variant's default model.
-    default_model = OpenHandsAgentSettings().llm.model
+    # Agentrt variant's default model.
+    default_model = AgentrtAgentSettings().llm.model
     assert body["agent_settings"]["llm"]["model"] == default_model
     assert body["agent_settings"]["llm"]["model"] != "acp-only-model"
 
 
 def test_patch_settings_switch_agent_kind_from_openhands_to_acp(client_with_settings):
-    """PATCH /api/settings can switch from OpenHands to ACP.
+    """PATCH /api/settings can switch from Agentrt to ACP.
 
     When switching to ACP, the new variant's required fields should be set
     without interference from the old variant's fields."""
-    # Seed with OpenHands settings (default)
+    # Seed with Agentrt settings (default)
     response = client_with_settings.patch(
         "/api/settings",
         json={
@@ -1536,7 +1536,7 @@ def test_patch_settings_switch_agent_kind_from_openhands_to_acp(client_with_sett
         },
     )
 
-    # Should succeed — no validation error about leftover OpenHands-specific fields
+    # Should succeed — no validation error about leftover Agentrt-specific fields
     assert response.status_code == 200
     body = response.json()
     assert body["agent_settings"]["agent_kind"] == "acp"
@@ -1551,7 +1551,7 @@ def test_patch_settings_same_kind_restated_still_deep_merges(client_with_setting
     deep-merge branch runs. This pins that a client which echoes back the
     current ``agent_kind`` alongside an incremental edit does not accidentally
     trigger a full variant replacement (which would reset sibling fields)."""
-    # Establish a model on the default OpenHands variant.
+    # Establish a model on the default Agentrt variant.
     response = client_with_settings.patch(
         "/api/settings",
         json={"agent_settings_diff": {"llm": {"model": "gpt-4o"}}},
@@ -1564,14 +1564,14 @@ def test_patch_settings_same_kind_restated_still_deep_merges(client_with_setting
         "/api/settings",
         json={
             "agent_settings_diff": {
-                "agent_kind": "openhands",
+                "agent_kind": "agentrt",
                 "llm": {"api_key": "sk-test-key"},
             }
         },
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["agent_settings"]["agent_kind"] == "openhands"
+    assert body["agent_settings"]["agent_kind"] == "agentrt"
     # The model set in the first PATCH survives — proving deep-merge ran.
     assert body["agent_settings"]["llm"]["model"] == "gpt-4o"
     assert body["llm_api_key_is_set"] is True
@@ -1583,7 +1583,7 @@ def test_patch_settings_same_kind_merge_after_a_switch(client_with_settings):
     The switch itself is a replacement, but the newly active variant must
     behave like any other for incremental edits afterwards — a follow-up
     field edit must not wipe the fields set during the switch."""
-    # Switch from default OpenHands to ACP, setting two ACP fields.
+    # Switch from default Agentrt to ACP, setting two ACP fields.
     response = client_with_settings.patch(
         "/api/settings",
         json={

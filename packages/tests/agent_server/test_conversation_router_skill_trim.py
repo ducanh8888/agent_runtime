@@ -172,7 +172,7 @@ class TestRouteIntegration:
         ``conversation.agent.agent_context.skills`` (notably via
         ``RemoteConversation``) now see ``[]`` unless they pass
         ``?include_skills=true``. No known client (agent-canvas,
-        OpenHands app-server, SDK examples) reads this field from
+        Agentrt app-server, SDK examples) reads this field from
         HTTP responses, so the change is documentation + opt-in
         rather than a coordinated migration.
         """

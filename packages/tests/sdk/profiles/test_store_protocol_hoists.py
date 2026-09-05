@@ -17,7 +17,7 @@ from agentrt.sdk.profiles import (
     SEED_PROFILE_NAME,
     ACPAgentProfile,
     AgentProfileStoreProtocol,
-    OpenHandsAgentProfile,
+    AgentrtAgentProfile,
     ProfileLimitExceeded,
     ProfileReferenced,
     ProfileVerificationSettings,
@@ -43,7 +43,7 @@ class InMemoryAgentProfileStore:
     """
 
     def __init__(self) -> None:
-        self._profiles: dict[str, OpenHandsAgentProfile | ACPAgentProfile] = {}
+        self._profiles: dict[str, AgentrtAgentProfile | ACPAgentProfile] = {}
 
     @contextmanager
     def lock(self, timeout: float = 30.0):
@@ -64,7 +64,7 @@ class InMemoryAgentProfileStore:
                     "agent_kind": kind,
                     "revision": d.get("revision"),
                     "llm_profile_ref": (
-                        d.get("llm_profile_ref") if kind == "openhands" else None
+                        d.get("llm_profile_ref") if kind == "agentrt" else None
                     ),
                     "mcp_server_refs": d.get("mcp_server_refs"),
                 }
@@ -98,7 +98,7 @@ class InMemoryAgentProfileStore:
 
     def set_llm_profile_ref(self, name, new_ref) -> None:
         p = self._profiles.get(name)
-        if isinstance(p, OpenHandsAgentProfile):
+        if isinstance(p, AgentrtAgentProfile):
             self._profiles[name] = p.model_copy(update={"llm_profile_ref": new_ref})
 
     def name_for_id(self, profile_id) -> str | None:
@@ -127,13 +127,13 @@ class FakeLLMStore:
 
 def _seed(store: InMemoryAgentProfileStore) -> None:
     save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="reviewer", llm_profile_ref="gpt")
+        store, AgentrtAgentProfile(name="reviewer", llm_profile_ref="gpt")
     )
     save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="coder", llm_profile_ref="gpt")
+        store, AgentrtAgentProfile(name="coder", llm_profile_ref="gpt")
     )
     save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="cheap", llm_profile_ref="haiku")
+        store, AgentrtAgentProfile(name="cheap", llm_profile_ref="haiku")
     )
     save_profile_preserving_identity(
         store, ACPAgentProfile(name="claude", acp_server="claude-code")
@@ -196,24 +196,24 @@ def test_rename_llm_profile_cascades_over_protocol_store():
 def test_save_preserving_identity_mints_then_keeps_id_and_bumps_revision():
     store = InMemoryAgentProfileStore()
     created = save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="p", llm_profile_ref="gpt")
+        store, AgentrtAgentProfile(name="p", llm_profile_ref="gpt")
     )
     assert created.revision == 0
     first_id = created.id
 
     # Overwrite keeps the id and bumps revision; a client-supplied id is ignored.
     again = save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="p", llm_profile_ref="haiku")
+        store, AgentrtAgentProfile(name="p", llm_profile_ref="haiku")
     )
     assert again.id == first_id
     assert again.revision == 1
     reloaded = store.load("p")
-    assert isinstance(reloaded, OpenHandsAgentProfile)
+    assert isinstance(reloaded, AgentrtAgentProfile)
     assert reloaded.llm_profile_ref == "haiku"
 
     # A different name mints a fresh id.
     other = save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="q", llm_profile_ref="gpt")
+        store, AgentrtAgentProfile(name="q", llm_profile_ref="gpt")
     )
     assert other.id != first_id
     assert other.revision == 0
@@ -222,24 +222,24 @@ def test_save_preserving_identity_mints_then_keeps_id_and_bumps_revision():
 def test_save_preserving_identity_enforces_limit():
     store = InMemoryAgentProfileStore()
     save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="a", llm_profile_ref="gpt"), max_profiles=1
+        store, AgentrtAgentProfile(name="a", llm_profile_ref="gpt"), max_profiles=1
     )
     with pytest.raises(ProfileLimitExceeded):
         save_profile_preserving_identity(
             store,
-            OpenHandsAgentProfile(name="b", llm_profile_ref="gpt"),
+            AgentrtAgentProfile(name="b", llm_profile_ref="gpt"),
             max_profiles=1,
         )
     # Overwriting the existing one is allowed at the cap.
     save_profile_preserving_identity(
-        store, OpenHandsAgentProfile(name="a", llm_profile_ref="haiku"), max_profiles=1
+        store, AgentrtAgentProfile(name="a", llm_profile_ref="haiku"), max_profiles=1
     )
 
 
 def test_build_seed_profile_openhands_branch():
-    settings = validate_agent_settings({"agent_kind": "openhands"})
+    settings = validate_agent_settings({"agent_kind": "agentrt"})
     profile = build_seed_profile(settings, active_llm_profile="my-llm")
-    assert isinstance(profile, OpenHandsAgentProfile)
+    assert isinstance(profile, AgentrtAgentProfile)
     assert profile.name == SEED_PROFILE_NAME
     assert profile.llm_profile_ref == "my-llm"
     assert profile.mcp_server_refs is None
@@ -253,7 +253,7 @@ def test_build_seed_profile_openhands_branch():
 
     # No active LLM profile -> soft fallback to SEED_PROFILE_NAME.
     fallback = build_seed_profile(settings, active_llm_profile=None)
-    assert isinstance(fallback, OpenHandsAgentProfile)
+    assert isinstance(fallback, AgentrtAgentProfile)
     assert fallback.llm_profile_ref == SEED_PROFILE_NAME
 
 
@@ -265,7 +265,7 @@ def test_build_seed_profile_disables_nothing_even_with_inline_global_skills():
     regression in test_resolver.py."""
     settings = validate_agent_settings(
         {
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "agent_context": {
                 "skills": [
                     {"name": "alpha", "content": "x"},
@@ -275,7 +275,7 @@ def test_build_seed_profile_disables_nothing_even_with_inline_global_skills():
         }
     )
     profile = build_seed_profile(settings, active_llm_profile="my-llm")
-    assert isinstance(profile, OpenHandsAgentProfile)
+    assert isinstance(profile, AgentrtAgentProfile)
     assert profile.disabled_skills == []
 
 
@@ -285,12 +285,12 @@ def test_build_seed_profile_copies_explicit_tools():
     the server default (#3978)."""
     settings = validate_agent_settings(
         {
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "tools": [{"name": "terminal"}, {"name": "browser_use"}],
         }
     )
     profile = build_seed_profile(settings, active_llm_profile="my-llm")
-    assert isinstance(profile, OpenHandsAgentProfile)
+    assert isinstance(profile, AgentrtAgentProfile)
     assert profile.tools is not None
     assert [t.name for t in profile.tools] == ["terminal", "browser_use"]
 

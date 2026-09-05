@@ -3,7 +3,7 @@
 Runs ``npm view <pkg>@<version>`` against the real npm registry so a yanked
 version or a security deprecation is caught here instead of breaking the next
 agent-server image build. Credential-free; needs ``npm`` and network access to
-the registry (skipped when unavailable). See OpenHands/software-agent-sdk#4830
+the registry (skipped when unavailable). See Agentrt/software-agent-sdk#4830
 P0-3.
 
 Deselected from the default run via the ``acp_live`` marker (see

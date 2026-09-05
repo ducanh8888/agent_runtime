@@ -38,7 +38,7 @@ from agentrt.sdk.context.agent_context import AgentContext
 from agentrt.sdk.mcp.config import MCPServer
 from agentrt.sdk.profiles.agent_profile import (
     ACPAgentProfile,
-    OpenHandsAgentProfile,
+    AgentrtAgentProfile,
 )
 from agentrt.sdk.settings.acp_providers import get_acp_provider
 from agentrt.sdk.settings.model import (
@@ -91,7 +91,7 @@ class AgentProfileDiagnostics(BaseModel):
     valid: bool = False
     errors: list[str] = Field(default_factory=list)
 
-    # OpenHands LLM reference.
+    # Agentrt LLM reference.
     llm_profile_ref: str | None = None
     llm_profile_resolved: bool = False
     llm_api_key_set: bool = False
@@ -101,7 +101,7 @@ class AgentProfileDiagnostics(BaseModel):
     resolved_mcp_config_keys: list[str] = Field(default_factory=list)
     dangling_mcp_server_refs: list[str] = Field(default_factory=list)
 
-    # Skill selection (OpenHands only). ``disabled_skills`` is a deny-list over
+    # Skill selection (Agentrt only). ``disabled_skills`` is a deny-list over
     # the discovered catalog, so — unlike ``mcp_server_refs`` — it can never
     # dangle: a disabled name absent from the catalog is a harmless no-op.
     # ``resolved_skills`` is what would actually reach the agent (catalog minus
@@ -219,12 +219,12 @@ def _acp_credential_channels(
 
 
 def _build_openhands_settings(
-    profile: OpenHandsAgentProfile,
+    profile: AgentrtAgentProfile,
     llm: LLM,
     mcp_config: dict[str, MCPServer],
     filtered_skills: list[Skill],
 ) -> AgentSettingsConfig:
-    """Compose the resolved ``OpenHandsAgentSettings`` from a profile + LLM.
+    """Compose the resolved ``AgentrtAgentSettings`` from a profile + LLM.
 
     ``filtered_skills`` (the discovered catalog minus ``disabled_skills``) is the
     sole user/public skill source (profiles no longer embed skills).
@@ -237,7 +237,7 @@ def _build_openhands_settings(
     """
     payload = {
         "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
-        "agent_kind": "openhands",
+        "agent_kind": "agentrt",
         "agent": profile.agent,
         "llm": llm,
         "mcp_config": mcp_config,
@@ -303,7 +303,7 @@ def _build_acp_settings(
 
 
 def resolve_agent_profile(
-    profile: OpenHandsAgentProfile | ACPAgentProfile,
+    profile: AgentrtAgentProfile | ACPAgentProfile,
     *,
     llm_store: LLMProfileLoader,
     mcp_config: dict[str, MCPServer],
@@ -316,7 +316,7 @@ def resolve_agent_profile(
     decrypted by the caller (the agent-server runs settings decryption
     before calling). ``available_skills`` is the server-discovered skill catalog
     (the agent-server caller passes the result of ``load_all_skills``); an
-    OpenHands profile keeps all of it except the names in ``disabled_skills``,
+    Agentrt profile keeps all of it except the names in ``disabled_skills``,
     and an ACP profile keeps all of it (it has no deny-list). ``None`` means the
     caller injected no catalog — discovery was not run, failed, or, for ACP, the
     deployment leaves skill sourcing to the CLI. Unlike the ``mcp_server_refs``
@@ -324,14 +324,14 @@ def resolve_agent_profile(
     never raises for skills. ``cipher`` decrypts the referenced LLM profile.
 
     Raises:
-        ProfileNotFound: ``llm_profile_ref`` does not exist (OpenHands path).
+        ProfileNotFound: ``llm_profile_ref`` does not exist (Agentrt path).
         DanglingMcpServerRef: an ``mcp_server_refs`` entry is not in ``mcp_config``.
     """
     filtered_mcp, _, dangling = _compute_mcp_filter(mcp_config, profile.mcp_server_refs)
     if dangling:
         raise DanglingMcpServerRef(dangling)
 
-    if isinstance(profile, OpenHandsAgentProfile):
+    if isinstance(profile, AgentrtAgentProfile):
         filtered_skills = _apply_disabled_skills(
             available_skills, profile.disabled_skills
         )
@@ -349,7 +349,7 @@ def resolve_agent_profile(
 
 
 def resolve_agent_profile_dry_run(
-    profile: OpenHandsAgentProfile | ACPAgentProfile,
+    profile: AgentrtAgentProfile | ACPAgentProfile,
     *,
     llm_store: LLMProfileLoader,
     mcp_config: dict[str, MCPServer],
@@ -384,7 +384,7 @@ def resolve_agent_profile_dry_run(
     # names, never dangling. An ACP profile has no deny-list of its own — its
     # catalog is whatever the deployment injects (empty unless the caller passes
     # one), and never includes project skills (#4019).
-    if isinstance(profile, OpenHandsAgentProfile):
+    if isinstance(profile, AgentrtAgentProfile):
         filtered_skills = _apply_disabled_skills(
             available_skills, profile.disabled_skills
         )
@@ -394,7 +394,7 @@ def resolve_agent_profile_dry_run(
     diagnostics.resolved_skills = [s.name for s in filtered_skills]
 
     llm: LLM | None = None
-    if isinstance(profile, OpenHandsAgentProfile):
+    if isinstance(profile, AgentrtAgentProfile):
         diagnostics.llm_profile_ref = profile.llm_profile_ref
         try:
             llm = llm_store.load(profile.llm_profile_ref, cipher=cipher)
@@ -427,12 +427,12 @@ def resolve_agent_profile_dry_run(
         # shlex.split rejects). Keep the dry-run total: surface such failures as
         # diagnostics rather than raising, matching the API contract.
         try:
-            if isinstance(profile, OpenHandsAgentProfile):
+            if isinstance(profile, AgentrtAgentProfile):
                 # valid here implies the LLM load above succeeded; gate
                 # explicitly rather than via assert (stripped under python -O).
                 if llm is None:
                     raise RuntimeError(
-                        "OpenHands profile marked valid without a resolved LLM"
+                        "Agentrt profile marked valid without a resolved LLM"
                     )
                 settings = _build_openhands_settings(
                     profile, llm, filtered_mcp, filtered_skills

@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec for OpenHands Agent Server with PEP 420 (implicit namespace) layout.
+PyInstaller spec for Agentrt Agent Server with PEP 420 (implicit namespace) layout.
 """
 
 from pathlib import Path
@@ -120,15 +120,15 @@ a = Analysis(
         *collect_data_files("fakeredis"),  # Required for commands.json used by fakeredis ACL
         *get_fakeredis_data(),  # Ensure fakeredis/model/ directory structure exists
 
-        # OpenHands SDK prompt templates (adjusted for shallow namespace layout)
+        # Agentrt SDK prompt templates (adjusted for shallow namespace layout)
         *collect_data_files("agentrt.sdk.agent", includes=["prompts/*.j2"]),
         *collect_data_files("agentrt.sdk.context.condenser", includes=["prompts/*.j2"]),
         *collect_data_files("agentrt.sdk.context.prompts", includes=["templates/*.j2"]),
 
-        # OpenHands Tools templates
+        # Agentrt Tools templates
         *collect_data_files("agentrt.tools.delegate", includes=["templates/*.j2"]),
 
-        # OpenHands Tools browser recording JS files
+        # Agentrt Tools browser recording JS files
         *collect_data_files("agentrt.tools.browser_use", includes=["js/*.js"]),
 
         # Built-in subagent definitions consumed by register_builtins_agents()
@@ -149,7 +149,7 @@ a = Analysis(
         *_vertex_datas,
     ],
     hiddenimports=[
-        # Pull all OpenHands modules from the namespace (PEP 420 safe once pathex is correct)
+        # Pull all Agentrt modules from the namespace (PEP 420 safe once pathex is correct)
         *collect_submodules("agentrt.sdk"),
         *collect_submodules("agentrt.tools"),
         *collect_submodules("agentrt.workspace"),

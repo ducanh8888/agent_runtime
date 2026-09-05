@@ -16,14 +16,14 @@ from agentrt.sdk.agent.base import _load_soul_md
 
 def test_load_soul_md_returns_default_when_missing(tmp_path: Path) -> None:
     with patch("agentrt.sdk.agent.base._SOUL_PATH", str(tmp_path / "SOUL.md")):
-        assert "OpenHands agent" in _load_soul_md()
+        assert "Agentrt agent" in _load_soul_md()
 
 
 def test_load_soul_md_returns_default_when_empty(tmp_path: Path) -> None:
     soul = tmp_path / "SOUL.md"
     soul.write_text("")
     with patch("agentrt.sdk.agent.base._SOUL_PATH", str(soul)):
-        assert "OpenHands agent" in _load_soul_md()
+        assert "Agentrt agent" in _load_soul_md()
 
 
 def test_load_soul_md_returns_default_when_whitespace_only(
@@ -32,7 +32,7 @@ def test_load_soul_md_returns_default_when_whitespace_only(
     soul = tmp_path / "SOUL.md"
     soul.write_text("   \n\n  \n")
     with patch("agentrt.sdk.agent.base._SOUL_PATH", str(soul)):
-        assert "OpenHands agent" in _load_soul_md()
+        assert "Agentrt agent" in _load_soul_md()
 
 
 def test_load_soul_md_returns_content(tmp_path: Path) -> None:

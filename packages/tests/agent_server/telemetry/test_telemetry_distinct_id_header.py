@@ -1,4 +1,4 @@
-"""The ``X-OpenHands-Telemetry-Distinct-Id`` request header.
+"""The ``X-Agentrt-Telemetry-Distinct-Id`` request header.
 
 Request-scoped activity (a failed request, and later e.g. LLM-profile creation)
 has no conversation ``user_id``. The frontend attaches its PostHog distinct id
@@ -18,7 +18,7 @@ from agentrt.agent_server.telemetry.factory import (
 
 
 def test_header_name_is_the_documented_one():
-    assert DISTINCT_ID_HEADER == "X-OpenHands-Telemetry-Distinct-Id"
+    assert DISTINCT_ID_HEADER == "X-Agentrt-Telemetry-Distinct-Id"
 
 
 @pytest.mark.parametrize(

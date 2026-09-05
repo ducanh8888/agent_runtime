@@ -1,5 +1,5 @@
 """
-OpenHands Hooks System - Event-driven hooks for automation and control.
+Agentrt Hooks System - Event-driven hooks for automation and control.
 
 Hooks are event-driven scripts that execute at specific lifecycle events
 during agent execution, enabling deterministic control over agent behavior.

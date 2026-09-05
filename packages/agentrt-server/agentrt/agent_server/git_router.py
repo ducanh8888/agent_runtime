@@ -1,4 +1,4 @@
-"""Git router for OpenHands SDK."""
+"""Git router for Agentrt SDK."""
 
 import asyncio
 import functools

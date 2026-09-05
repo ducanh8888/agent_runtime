@@ -88,14 +88,14 @@ def test_openhands_models_all_have_provider_list():
     """Every model in VERIFIED_OPENHANDS_MODELS must also appear in at least one
     provider-specific list so that the UI can display it under its actual provider.
 
-    Exception: models that are only available through the OpenHands provider
+    Exception: models that are only available through the Agentrt provider
     (e.g. ``trinity-large-thinking``) are not exposed under any other provider.
     """
     openhands_only_models = {"trinity-large-thinking"}
 
     provider_models = set()
     for provider, models in VERIFIED_MODELS.items():
-        if provider == "openhands":
+        if provider == "agentrt":
             continue
         provider_models.update(models)
 
@@ -136,9 +136,9 @@ def test_nemotron_3_super_uses_full_infra_name():
 
 
 def test_claude_opus_4_5_uses_full_infra_name():
-    """The OpenHands proxy serves the dated snapshot ``claude-opus-4-5-20251101``;
+    """The Agentrt proxy serves the dated snapshot ``claude-opus-4-5-20251101``;
     the bare alias ``claude-opus-4-5`` is not a valid proxy model name and must
-    not be offered under the OpenHands provider.
+    not be offered under the Agentrt provider.
     """
     assert "claude-opus-4-5-20251101" in VERIFIED_OPENHANDS_MODELS
     # Scope is intentionally narrower than test_nemotron_3_super_uses_full_infra_name
@@ -148,13 +148,13 @@ def test_claude_opus_4_5_uses_full_infra_name():
 
 
 def test_trinity_model_is_openhands_only():
-    """trinity-large-thinking should be available only via the OpenHands provider
+    """trinity-large-thinking should be available only via the Agentrt provider
     and must not be listed under any other provider.
     """
     assert "trinity-large-thinking" in VERIFIED_OPENHANDS_MODELS
     assert "trinity" not in VERIFIED_MODELS
     for provider, models in VERIFIED_MODELS.items():
-        if provider == "openhands":
+        if provider == "agentrt":
             continue
         assert "trinity-large-thinking" not in models, (
             f"trinity-large-thinking should not be in provider list {provider!r}"

@@ -1,4 +1,4 @@
-"""Skills router for OpenHands Agent Server.
+"""Skills router for Agentrt Agent Server.
 
 This module defines the HTTP API endpoints for skill operations.
 Business logic is delegated to skills_service.py.
@@ -85,7 +85,7 @@ class SkillsRequest(BaseModel):
     """Request body for loading skills."""
 
     load_public: bool = Field(
-        default=True, description="Load public skills from OpenHands/extensions repo"
+        default=True, description="Load public skills from Agentrt/extensions repo"
     )
     load_user: bool = Field(
         default=True, description="Load user skills from ~/.openhands/skills/"
@@ -153,7 +153,7 @@ class InstallSkillRequest(BaseModel):
             "Skill source - git URL, GitHub shorthand, or local path. "
             "Examples: "
             "'https://github.com/OpenHands/extensions/tree/main/skills/github', "
-            "'github:OpenHands/extensions/skills/github', "
+            "'github:Agentrt/extensions/skills/github', "
             "'/path/to/skill'"
         ),
     )
@@ -261,7 +261,7 @@ def get_skills(request: SkillsRequest, http_request: Request) -> SkillsResponse:
     Skills are loaded from multiple sources and merged with the following
     precedence (later overrides earlier for duplicate names):
     1. Sandbox skills (lowest) - Exposed URLs from sandbox
-    2. Public skills - From GitHub OpenHands/extensions repository
+    2. Public skills - From GitHub Agentrt/extensions repository
     3. User skills - From ~/.openhands/skills/
     4. Organization skills - From {org}/.agentrt or equivalent
     5. Project skills (highest) - From {workspace}/.openhands/skills/
@@ -314,7 +314,7 @@ def sync_skills() -> SyncResponse:
     """Force refresh of public skills from GitHub repository.
 
     This triggers a git pull on the cached skills repository to get
-    the latest skills from the OpenHands/extensions repository.
+    the latest skills from the Agentrt/extensions repository.
 
     Returns:
         SyncResponse indicating success or failure.
@@ -522,7 +522,7 @@ def refresh_skill_endpoint(skill_name: SkillNamePath) -> UpdateSkillResponse:
 def get_marketplace_catalog() -> MarketplaceCatalogResponse:
     """Get the marketplace catalog with installation status.
 
-    Returns a list of available skills from the OpenHands extensions
+    Returns a list of available skills from the Agentrt extensions
     repository marketplace, along with their installation status.
 
     This enables frontend applications to display a "Marketplace" tab

@@ -1,4 +1,4 @@
-"""Default preset configuration for OpenHands agents."""
+"""Default preset configuration for Agentrt agents."""
 
 from pathlib import Path
 from typing import Any

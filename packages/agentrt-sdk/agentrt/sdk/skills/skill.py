@@ -185,11 +185,11 @@ class Skill(BaseModel):
     - Agent reads full content on demand (progressive disclosure)
     - If has triggers: content is ALSO auto-injected when triggered
 
-    Legacy OpenHands format:
+    Legacy Agentrt format:
     - With triggers: Listed in <available_skills>, content injected on trigger
     - Without triggers (None): Full content in <REPO_CONTEXT>, always active
 
-    This model supports both OpenHands-specific fields and AgentSkills standard
+    This model supports both Agentrt-specific fields and AgentSkills standard
     fields (https://agentskills.io/specification) for cross-platform compatibility.
     """
 
@@ -364,7 +364,7 @@ class Skill(BaseModel):
         The agent's name is derived from its path relative to skill_base_dir,
         or from the directory name for AgentSkills-style SKILL.md files.
 
-        Supports both OpenHands-specific frontmatter fields and AgentSkills
+        Supports both Agentrt-specific frontmatter fields and AgentSkills
         standard fields (https://agentskills.io/specification).
 
         Args:
@@ -448,7 +448,7 @@ class Skill(BaseModel):
     def _load_legacy_openhands_skill(
         cls, path: Path, file_content: str, skill_base_dir: Path | None
     ) -> "Skill":
-        """Load a skill from a legacy OpenHands-format file.
+        """Load a skill from a legacy Agentrt-format file.
 
         Args:
             path: Path to the skill file.
@@ -851,7 +851,7 @@ def load_skills_from_dir(
     """Load all skills from the given directory.
 
     Supports both formats:
-    - OpenHands format: skills/*.md files
+    - Agentrt format: skills/*.md files
     - AgentSkills format: skills/skill-name/SKILL.md directories
 
     Note, legacy repo instructions will not be loaded here.
@@ -1037,7 +1037,7 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
     Skills are merged in priority order, with the *working directory* taking
     precedence over the Git repo root when duplicates exist.
 
-    Use .agents/skills for new skills. .openhands/skills is the legacy OpenHands
+    Use .agents/skills for new skills. .openhands/skills is the legacy Agentrt
     location, and .openhands/microagents is deprecated.
 
     Example: If "my-skill" exists in both .agents/skills/ and .openhands/skills/,
@@ -1206,7 +1206,7 @@ def load_public_skills(
     ref: str = PUBLIC_SKILLS_REF,
     marketplace_path: str | None = DEFAULT_MARKETPLACE_PATH,
 ) -> list[Skill]:
-    """Load skills from the public OpenHands skills repository.
+    """Load skills from the public Agentrt skills repository.
 
     This function maintains a local git clone of the public skills registry at
     https://github.com/OpenHands/extensions. On first run, it clones the repository
@@ -1226,7 +1226,7 @@ def load_public_skills(
 
     Args:
         repo_url: URL of the skills repository. Defaults to the official
-            OpenHands skills repository.
+            Agentrt skills repository.
         ref: Branch name, tag (e.g. ``"v1.0.0"``), or full 40-character commit
             SHA to load skills from. Defaults to ``'main'``. Tags and commit
             SHAs are treated as immutable: once loaded, the result is cached
@@ -1376,7 +1376,7 @@ def load_available_skills(
             project skills are skipped regardless of *include_project*.
         include_user: Load user-level skills (~/.agents/skills, etc.).
         include_project: Load project-level skills (requires *work_dir*).
-        include_public: Load public skills from the OpenHands extensions repo.
+        include_public: Load public skills from the Agentrt extensions repo.
         marketplace_path: Relative marketplace JSON path to use for public skills.
             Pass None to load all public skills without marketplace filtering.
 

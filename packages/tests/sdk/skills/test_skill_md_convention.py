@@ -122,7 +122,7 @@ def test_load_skills_from_dir_with_skill_md(tmp_path: Path) -> None:
 def test_skill_md_always_agent_skill(tmp_path: Path) -> None:
     """SKILL.md directories should always be agent_skills, even without triggers.
 
-    AgentSkills are a separate category from OpenHands skills. They follow the
+    AgentSkills are a separate category from Agentrt skills. They follow the
     AgentSkills standard and should be handled differently from regular .md files.
     """
     skills_dir = tmp_path / "skills"

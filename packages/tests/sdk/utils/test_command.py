@@ -42,7 +42,7 @@ def test_sanitized_env_preserves_explicit_ai_agent():
 
 def test_sanitized_env_replaces_blank_ai_agent():
     result = sanitized_env({"AI_AGENT": "  "})
-    assert result["AI_AGENT"] == "openhands"
+    assert result["AI_AGENT"] == "agentrt"
 
 
 def test_sanitized_env_defaults_to_os_environ(monkeypatch):

@@ -59,7 +59,7 @@ def test_subscription_codex_transport_does_not_use_top_level_instructions_and_pr
     instr, inputs = llm.format_messages_for_responses([m_sys, m_user])
 
     assert instr is not None
-    assert "OpenHands agent" in instr
+    assert "Agentrt agent" in instr
     assert len(inputs) >= 1
     first_user = next(it for it in inputs if it.get("role") == "user")
     content = first_user.get("content")
@@ -77,7 +77,7 @@ def test_subscription_codex_transport_injects_synthetic_user_message_when_none_e
     instr, inputs = llm.format_messages_for_responses([m_sys, m_asst])
 
     assert instr is not None
-    assert "OpenHands agent" in instr
+    assert "Agentrt agent" in instr
     assert len(inputs) >= 1
     first = inputs[0]
     assert first.get("role") == "user"

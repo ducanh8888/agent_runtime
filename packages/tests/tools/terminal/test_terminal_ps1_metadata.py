@@ -101,7 +101,7 @@ def test_ps1_metadata_parsing_string_real_example():
   "exit_code": "0",
   "username": "runner",
   "hostname": "fv-az1055-610",
-  "working_dir": "/home/runner/work/OpenHands/OpenHands",
+  "working_dir": "/home/runner/work/Agentrt/Agentrt",
   "py_interpreter_path": "/home/runner/.cache/pypoetry/virtualenvs/openhands-ai-ULPBlkAi-py3.13/bin/python"
 }
 ###PS1END###
@@ -112,7 +112,7 @@ def test_ps1_metadata_parsing_string_real_example():
     assert metadata.exit_code == 0
     assert metadata.username == "runner"
     assert metadata.hostname == "fv-az1055-610"
-    assert metadata.working_dir == "/home/runner/work/OpenHands/OpenHands"
+    assert metadata.working_dir == "/home/runner/work/Agentrt/Agentrt"
     assert (
         metadata.py_interpreter_path == "/home/runner/.cache/pypoetry/virtualenvs/"
         "openhands-ai-ULPBlkAi-py3.13/bin/python"

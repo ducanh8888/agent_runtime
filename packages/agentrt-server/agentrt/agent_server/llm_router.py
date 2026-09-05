@@ -153,7 +153,7 @@ async def list_verified_models() -> VerifiedModelsResponse:
     """List all verified LLM models organized by provider.
 
     Verified models are those that have been tested and confirmed to work well
-    with OpenHands.
+    with Agentrt.
     """
     return VerifiedModelsResponse(models=VERIFIED_MODELS)
 

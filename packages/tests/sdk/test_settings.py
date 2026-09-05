@@ -13,7 +13,7 @@ from agentrt.sdk import (
     AgentContext,
     AgentSettingsBase,
     ConversationSettings,
-    OpenHandsAgentSettings,
+    AgentrtAgentSettings,
     SettingProminence,
     Tool,
     default_agent_settings,
@@ -49,9 +49,9 @@ _LLM_EXCLUDED_FIELDS = {name for name, fi in LLM.model_fields.items() if fi.excl
 
 
 def test_llm_agent_settings_export_schema_groups_sections() -> None:
-    schema = OpenHandsAgentSettings.export_schema()
+    schema = AgentrtAgentSettings.export_schema()
 
-    assert schema.model_name == "OpenHandsAgentSettings"
+    assert schema.model_name == "AgentrtAgentSettings"
     section_keys = [section.key for section in schema.sections]
     assert section_keys == [
         "general",
@@ -187,7 +187,7 @@ def test_acp_agent_settings_export_schema_has_acp_section() -> None:
     assert acp_fields["acp_model"].prominence is SettingProminence.CRITICAL
     assert acp_fields["acp_command"].prominence is SettingProminence.MINOR
 
-    # mcp_config is exposed as a single object field (matching the OpenHands
+    # mcp_config is exposed as a single object field (matching the Agentrt
     # variant) rather than being expanded into nested per-server fields. The
     # servers are forwarded to the ACP subprocess at session creation.
     general_fields = {f.key: f for f in sections["general"].fields}
@@ -224,8 +224,8 @@ def test_conversation_settings_export_schema_groups_sections() -> None:
 
 
 def test_conversation_settings_validates_observability_metadata() -> None:
-    settings = ConversationSettings(observability_metadata={"repo": "OpenHands/sdk"})
-    assert settings.observability_metadata == {"repo": "OpenHands/sdk"}
+    settings = ConversationSettings(observability_metadata={"repo": "Agentrt/sdk"})
+    assert settings.observability_metadata == {"repo": "Agentrt/sdk"}
 
     with pytest.raises(ValidationError):
         ConversationSettings(observability_metadata={"": "missing-key"})
@@ -256,7 +256,7 @@ def test_conversation_settings_create_request() -> None:
         security_analyzer="llm",
     )
     workspace = LocalWorkspace(working_dir="/tmp")
-    agent = OpenHandsAgentSettings(llm=LLM(model="test-model")).create_agent()
+    agent = AgentrtAgentSettings(llm=LLM(model="test-model")).create_agent()
 
     request = settings.create_request(
         StartConversationRequest,
@@ -361,7 +361,7 @@ def test_export_agent_settings_schema_emits_variant_tagged_sections() -> None:
     # injects the discriminator on save.
     assert "agent_kind" not in general_keys
     for f in general.fields:
-        assert f.variant == "openhands", (
+        assert f.variant == "agentrt", (
             f"expected field {f.key} variant=openhands, got {f.variant}"
         )
 
@@ -370,7 +370,7 @@ def test_export_agent_settings_schema_emits_variant_tagged_sections() -> None:
     assert ("condenser", "openhands") in by_keyvariant
     assert ("verification", "openhands") in by_keyvariant
 
-    # Memory section is OpenHands-only: the GUI matches sections by key and
+    # Memory section is Agentrt-only: the GUI matches sections by key and
     # ignores variant, so tagging both variants would render the toggle twice.
     assert ("agent_context", "openhands") in by_keyvariant
     assert ("agent_context", "acp") not in by_keyvariant
@@ -412,8 +412,8 @@ def test_export_agent_settings_schema_emits_variant_tagged_sections() -> None:
 
 def test_default_agent_settings_returns_openhands_variant() -> None:
     s = default_agent_settings()
-    assert isinstance(s, OpenHandsAgentSettings)
-    assert s.agent_kind == "openhands"
+    assert isinstance(s, AgentrtAgentSettings)
+    assert s.agent_kind == "agentrt"
 
 
 def test_validate_agent_settings_defaults_to_openhands_when_discriminator_missing() -> (
@@ -421,22 +421,22 @@ def test_validate_agent_settings_defaults_to_openhands_when_discriminator_missin
 ):
     """Existing persisted payloads predate ``agent_kind`` — they must round-trip."""
     v = validate_agent_settings({"llm": {"model": "test-model"}})
-    assert isinstance(v, OpenHandsAgentSettings)
+    assert isinstance(v, AgentrtAgentSettings)
     assert v.llm.model == "test-model"
 
 
 def test_validate_agent_settings_dispatches_on_agent_kind() -> None:
     openhands = validate_agent_settings(
-        {"agent_kind": "openhands", "llm": {"model": "m"}}
+        {"agent_kind": "agentrt", "llm": {"model": "m"}}
     )
-    assert isinstance(openhands, OpenHandsAgentSettings)
-    assert openhands.agent_kind == "openhands"
+    assert isinstance(openhands, AgentrtAgentSettings)
+    assert openhands.agent_kind == "agentrt"
 
     legacy_llm = validate_agent_settings(
         {"agent_kind": "llm", "llm": {"model": "legacy-model"}}
     )
-    assert isinstance(legacy_llm, OpenHandsAgentSettings)
-    assert legacy_llm.agent_kind == "openhands"
+    assert isinstance(legacy_llm, AgentrtAgentSettings)
+    assert legacy_llm.agent_kind == "agentrt"
     assert legacy_llm.llm.model == "legacy-model"
 
     acp = validate_agent_settings(
@@ -453,9 +453,9 @@ def test_validate_agent_settings_dispatches_on_agent_kind() -> None:
 def test_validate_agent_settings_migrates_v0_llm_payload() -> None:
     settings = validate_agent_settings({"llm": {"model": "test-model"}})
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
-    assert settings.agent_kind == "openhands"
+    assert settings.agent_kind == "agentrt"
     assert settings.llm.model == "test-model"
 
 
@@ -486,9 +486,9 @@ def test_validate_agent_settings_canonicalizes_legacy_llm_kind() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
-    assert settings.agent_kind == "openhands"
+    assert settings.agent_kind == "agentrt"
     assert settings.llm.model == "legacy-model"
 
 
@@ -496,7 +496,7 @@ def test_validate_agent_settings_drops_legacy_verification_fields() -> None:
     settings = validate_agent_settings(
         {
             "schema_version": 2,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "verification": {
                 "critic_enabled": True,
                 "confirmation_mode": True,
@@ -505,7 +505,7 @@ def test_validate_agent_settings_drops_legacy_verification_fields() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     verification = settings.verification.model_dump(mode="json")
     assert verification["critic_enabled"] is True
@@ -517,7 +517,7 @@ def test_validate_agent_settings_migrates_legacy_openhands_proxy_llm() -> None:
     settings = validate_agent_settings(
         {
             "schema_version": 3,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "llm": {
                 "model": "litellm_proxy/claude-opus-4-8",
                 "base_url": "https://llm-proxy.app.all-hands.dev/",
@@ -525,7 +525,7 @@ def test_validate_agent_settings_migrates_legacy_openhands_proxy_llm() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     assert settings.llm.model == "openhands/claude-opus-4-8"
     assert settings.llm.base_url is None
@@ -535,7 +535,7 @@ def test_validate_agent_settings_migrates_legacy_mcp_auth_shapes() -> None:
     settings = validate_agent_settings(
         {
             "schema_version": 4,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "mcp_config": {
                 "mcpServers": {
                     "oauth-top-level": {
@@ -619,7 +619,7 @@ def test_validate_agent_settings_migrates_legacy_mcp_auth_shapes() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     servers = dump_mcp_config(settings.mcp_config)
 
@@ -680,7 +680,7 @@ def test_validate_agent_settings_migrates_mcp_type_to_transport() -> None:
     settings = validate_agent_settings(
         {
             "schema_version": 4,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "mcp_config": {
                 "http": {
                     "url": "https://mcp.example.com/mcp",
@@ -694,7 +694,7 @@ def test_validate_agent_settings_migrates_mcp_type_to_transport() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     assert dump_mcp_config(settings.mcp_config) == {
         "http": {
@@ -710,7 +710,7 @@ def test_validate_agent_settings_migrates_mcp_type_to_transport() -> None:
 
 def test_openhands_mcp_config_reject_unknown_server_fields() -> None:
     with pytest.raises(ValidationError):
-        OpenHandsAgentSettings.model_validate(
+        AgentrtAgentSettings.model_validate(
             {
                 "mcp_config": {
                     "server": {
@@ -727,7 +727,7 @@ def test_current_agent_settings_reject_legacy_mcp_wrapper_without_migration() ->
         validate_agent_settings(
             {
                 "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
-                "agent_kind": "openhands",
+                "agent_kind": "agentrt",
                 "mcp_config": {
                     "mcpServers": {"server": {"url": "https://mcp.example.com/mcp"}}
                 },
@@ -739,7 +739,7 @@ def test_validate_agent_settings_mcp_linear_migration_does_not_duplicate() -> No
     settings = validate_agent_settings(
         {
             "schema_version": 4,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "mcp_config": {
                 "mcpServers": {
                     "sse": {
@@ -756,7 +756,7 @@ def test_validate_agent_settings_mcp_linear_migration_does_not_duplicate() -> No
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert dump_mcp_config(settings.mcp_config) == {
         "shttp": {
             "url": "https://mcp.linear.app/mcp",
@@ -776,28 +776,28 @@ def test_validate_agent_settings_rejects_newer_schema_version() -> None:
 
 
 def test_openhands_agent_settings_from_persisted_migrates_legacy_payloads() -> None:
-    v0 = OpenHandsAgentSettings.from_persisted({"llm": {"model": "v0-model"}})
-    assert isinstance(v0, OpenHandsAgentSettings)
+    v0 = AgentrtAgentSettings.from_persisted({"llm": {"model": "v0-model"}})
+    assert isinstance(v0, AgentrtAgentSettings)
     assert v0.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
-    assert v0.agent_kind == "openhands"
+    assert v0.agent_kind == "agentrt"
     assert v0.llm.model == "v0-model"
 
-    v1 = OpenHandsAgentSettings.from_persisted(
+    v1 = AgentrtAgentSettings.from_persisted(
         {
             "schema_version": 1,
             "agent_kind": "llm",
             "llm": {"model": "legacy-model"},
         }
     )
-    assert isinstance(v1, OpenHandsAgentSettings)
+    assert isinstance(v1, AgentrtAgentSettings)
     assert v1.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
-    assert v1.agent_kind == "openhands"
+    assert v1.agent_kind == "agentrt"
     assert v1.llm.model == "legacy-model"
 
-    v2 = OpenHandsAgentSettings.from_persisted(
+    v2 = AgentrtAgentSettings.from_persisted(
         {
             "schema_version": 2,
-            "agent_kind": "openhands",
+            "agent_kind": "agentrt",
             "verification": {
                 "critic_enabled": True,
                 "confirmation_mode": True,
@@ -805,7 +805,7 @@ def test_openhands_agent_settings_from_persisted_migrates_legacy_payloads() -> N
             },
         }
     )
-    assert isinstance(v2, OpenHandsAgentSettings)
+    assert isinstance(v2, AgentrtAgentSettings)
     assert v2.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     assert v2.verification.critic_enabled is True
     verification = v2.verification.model_dump(mode="json")
@@ -830,7 +830,7 @@ def test_acp_agent_settings_from_persisted_returns_acp_subtype() -> None:
 
 def test_openhands_agent_settings_from_persisted_rejects_current_llm_kind() -> None:
     with pytest.raises(ValidationError):
-        OpenHandsAgentSettings.from_persisted(
+        AgentrtAgentSettings.from_persisted(
             {
                 "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
                 "agent_kind": "llm",
@@ -840,23 +840,23 @@ def test_openhands_agent_settings_from_persisted_rejects_current_llm_kind() -> N
 
 
 def test_agent_settings_from_persisted_current_payload_matches_model_validate() -> None:
-    payload = OpenHandsAgentSettings(llm=LLM(model="current-model")).model_dump(
+    payload = AgentrtAgentSettings(llm=LLM(model="current-model")).model_dump(
         mode="json"
     )
     original_payload = json.loads(json.dumps(payload))
 
-    settings = OpenHandsAgentSettings.from_persisted(payload)
+    settings = AgentrtAgentSettings.from_persisted(payload)
 
-    assert settings == OpenHandsAgentSettings.model_validate(payload)
+    assert settings == AgentrtAgentSettings.model_validate(payload)
     assert payload == original_payload
 
 
 def test_agent_settings_from_persisted_preserves_validated_instance_secrets() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="current-model", api_key=SecretStr("sk-test-key"))
     )
 
-    restored = OpenHandsAgentSettings.from_persisted(settings)
+    restored = AgentrtAgentSettings.from_persisted(settings)
 
     assert restored is settings
     assert isinstance(restored.llm.api_key, SecretStr)
@@ -867,7 +867,7 @@ def test_agent_settings_from_persisted_decrypts_mcp_secrets() -> None:
     from agentrt.sdk.utils.cipher import Cipher
 
     cipher = Cipher(secret_key="test-encryption-key")
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         mcp_config=coerce_mcp_config(
             {
                 "github": {
@@ -881,7 +881,7 @@ def test_agent_settings_from_persisted_decrypts_mcp_secrets() -> None:
     )
     persisted = settings.model_dump(mode="json", context={"cipher": cipher})
 
-    restored = OpenHandsAgentSettings.from_persisted(
+    restored = AgentrtAgentSettings.from_persisted(
         persisted, context={"cipher": cipher}
     )
 
@@ -897,7 +897,7 @@ def test_openhands_agent_settings_from_persisted_matches_union_validator() -> No
         "llm": {"model": "legacy-model"},
     }
 
-    from_persisted_settings = OpenHandsAgentSettings.from_persisted(payload)
+    from_persisted_settings = AgentrtAgentSettings.from_persisted(payload)
     union_settings = validate_agent_settings(payload)
 
     # agent_context.current_datetime defaults to now(); exclude it so the
@@ -910,10 +910,10 @@ def test_openhands_agent_settings_from_persisted_matches_union_validator() -> No
 
 def test_agent_settings_from_persisted_rejects_malformed_payload() -> None:
     with pytest.raises(ValidationError):
-        OpenHandsAgentSettings.from_persisted(
+        AgentrtAgentSettings.from_persisted(
             {
                 "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
-                "agent_kind": "openhands",
+                "agent_kind": "agentrt",
                 "llm": "not-an-llm-settings-payload",
             }
         )
@@ -939,7 +939,7 @@ def test_conversation_settings_from_persisted_rejects_newer_schema_version() -> 
 def test_llm_create_agent_uses_settings_llm_and_tools() -> None:
     llm = LLM(model="test-model")
     tools = [Tool(name="TerminalTool")]
-    settings = OpenHandsAgentSettings(llm=llm, tools=tools)
+    settings = AgentrtAgentSettings(llm=llm, tools=tools)
     agent = settings.create_agent()
     assert isinstance(agent, Agent)
     assert agent.llm is llm
@@ -947,7 +947,7 @@ def test_llm_create_agent_uses_settings_llm_and_tools() -> None:
 
 
 def test_llm_create_agent_defaults_tool_concurrency_limit_to_one() -> None:
-    agent = OpenHandsAgentSettings(llm=LLM(model="test-model")).create_agent()
+    agent = AgentrtAgentSettings(llm=LLM(model="test-model")).create_agent()
     assert agent.tool_concurrency_limit == 1
 
 
@@ -955,14 +955,14 @@ def test_create_agent_defaults_tools_when_none() -> None:
     """tools=None (the default) materializes the canonical exec set at
     create_agent — the single defaulting point (#3967 / #3978). Deterministic:
     browser is a serving-layer injection, never part of the default."""
-    settings = OpenHandsAgentSettings(llm=LLM(model="test-model"))
+    settings = AgentrtAgentSettings(llm=LLM(model="test-model"))
     assert settings.tools is None
     agent = settings.create_agent()
     assert [t.name for t in agent.tools] == ["terminal", "file_editor", "task_tracker"]
 
 
 def test_create_agent_default_tools_honor_enable_sub_agents() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="test-model"), enable_sub_agents=True
     )
     agent = settings.create_agent()
@@ -977,7 +977,7 @@ def test_create_agent_default_tools_honor_enable_sub_agents() -> None:
 def test_create_agent_empty_tools_stays_bare() -> None:
     """tools=[] is an explicit choice: no default injection (persisted-payload
     compatibility — [] predates the None default and keeps its old meaning)."""
-    settings = OpenHandsAgentSettings(llm=LLM(model="test-model"), tools=[])
+    settings = AgentrtAgentSettings(llm=LLM(model="test-model"), tools=[])
     agent = settings.create_agent()
     assert agent.tools == []
 
@@ -985,7 +985,7 @@ def test_create_agent_empty_tools_stays_bare() -> None:
 def test_tool_concurrency_limit_defaults_to_one_when_omitted_from_payload() -> None:
     # Backward compatibility: payloads persisted before the field existed must
     # still load and fall back to the sequential default.
-    settings = OpenHandsAgentSettings.model_validate({"agent_kind": "openhands"})
+    settings = AgentrtAgentSettings.model_validate({"agent_kind": "agentrt"})
     assert settings.tool_concurrency_limit == 1
 
 
@@ -1005,14 +1005,14 @@ def test_tool_concurrency_limit_defaults_to_one_when_omitted_from_payload() -> N
 def test_tool_concurrency_limit_valid_values_round_trip(
     raw: Any, expected: int
 ) -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="test-model"), tool_concurrency_limit=raw
     )
     assert settings.tool_concurrency_limit == expected
     assert type(settings.tool_concurrency_limit) is int
 
     # The value must survive a JSON serialization round-trip...
-    reloaded = OpenHandsAgentSettings.model_validate(settings.model_dump(mode="json"))
+    reloaded = AgentrtAgentSettings.model_validate(settings.model_dump(mode="json"))
     assert reloaded.tool_concurrency_limit == expected
 
     # ...and propagate to the constructed Agent.
@@ -1035,14 +1035,14 @@ def test_tool_concurrency_limit_valid_values_round_trip(
 )
 def test_tool_concurrency_limit_invalid_values_rejected(raw: Any) -> None:
     with pytest.raises(ValidationError) as exc_info:
-        OpenHandsAgentSettings(llm=LLM(model="test-model"), tool_concurrency_limit=raw)
+        AgentrtAgentSettings(llm=LLM(model="test-model"), tool_concurrency_limit=raw)
     assert any(
         err["loc"] == ("tool_concurrency_limit",) for err in exc_info.value.errors()
     )
 
 
 def test_llm_agent_settings_validates_mcp_config_as_typed_model() -> None:
-    settings = OpenHandsAgentSettings.model_validate(
+    settings = AgentrtAgentSettings.model_validate(
         {"mcp_config": {"fetch": {"command": "uvx", "args": ["mcp-server-fetch"]}}}
     )
 
@@ -1056,7 +1056,7 @@ def test_llm_create_agent_serializes_typed_mcp_config_compactly() -> None:
     mcp_config = coerce_mcp_config(
         {"fetch": {"command": "uvx", "args": ["mcp-server-fetch"]}}
     )
-    settings = OpenHandsAgentSettings(mcp_config=mcp_config)
+    settings = AgentrtAgentSettings(mcp_config=mcp_config)
 
     agent = settings.create_agent()
 
@@ -1067,7 +1067,7 @@ def test_llm_create_agent_serializes_typed_mcp_config_compactly() -> None:
 
 def test_disabled_mcp_server_survives_settings_round_trip() -> None:
     """A switched-off server stays off, and keeps its config, across reloads."""
-    settings = OpenHandsAgentSettings.model_validate(
+    settings = AgentrtAgentSettings.model_validate(
         {
             "mcp_config": {
                 "fetch": {
@@ -1079,7 +1079,7 @@ def test_disabled_mcp_server_survives_settings_round_trip() -> None:
         }
     )
 
-    reloaded = OpenHandsAgentSettings.model_validate(settings.model_dump(mode="json"))
+    reloaded = AgentrtAgentSettings.model_validate(settings.model_dump(mode="json"))
 
     assert reloaded.mcp_config["fetch"].enabled is False
     assert reloaded.mcp_config["fetch"].command == "uvx"
@@ -1088,7 +1088,7 @@ def test_disabled_mcp_server_survives_settings_round_trip() -> None:
 def test_llm_create_agent_builds_condenser_when_enabled() -> None:
     llm = LLM(model="test-model", usage_id="agent")
     agent_metrics = llm.metrics
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=llm,
         condenser=LLMSummarizingCondenserSettings(
             enabled=True,
@@ -1125,7 +1125,7 @@ def test_llm_summarizing_condenser_inherits_max_tokens_from_llm() -> None:
     without ever triggering summarization.
     """
     llm = LLM(model="test-model", usage_id="agent", max_input_tokens=65536)
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=llm,
         condenser=LLMSummarizingCondenserSettings(enabled=True),
     )
@@ -1140,7 +1140,7 @@ def test_llm_summarizing_condenser_respects_explicit_max_tokens_over_llm() -> No
     overridden by the LLM's ``effective_max_input_tokens``.
     """
     llm = LLM(model="test-model", usage_id="agent", max_input_tokens=65536)
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=llm,
         condenser=LLMSummarizingCondenserSettings(enabled=True, max_tokens=5000),
     )
@@ -1157,7 +1157,7 @@ def test_llm_summarizing_condenser_max_tokens_none_when_llm_has_no_limit() -> No
     ``max_input_tokens``.
     """
     llm = LLM(model="test-model", usage_id="agent")
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=llm,
         condenser=LLMSummarizingCondenserSettings(enabled=True),
     )
@@ -1173,7 +1173,7 @@ def test_llm_summarizing_condenser_explicit_none_max_tokens_remains_unset() -> N
     The active agent LLM's effective input limit still governs condensation at runtime.
     """
     llm = LLM(model="test-model", usage_id="agent", max_input_tokens=65536)
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=llm,
         condenser=LLMSummarizingCondenserSettings(enabled=True, max_tokens=None),
     )
@@ -1194,7 +1194,7 @@ def test_llm_summarizing_condenser_settings_match_condenser_fields() -> None:
 
 
 def test_openhands_agent_settings_defaults_legacy_condenser_payload() -> None:
-    settings = OpenHandsAgentSettings.model_validate(
+    settings = AgentrtAgentSettings.model_validate(
         {
             "condenser": {
                 "enabled": True,
@@ -1211,7 +1211,7 @@ def test_openhands_agent_settings_defaults_legacy_condenser_payload() -> None:
 
 
 def test_openhands_agent_settings_dispatches_no_op_condenser_payload() -> None:
-    settings = OpenHandsAgentSettings.model_validate(
+    settings = AgentrtAgentSettings.model_validate(
         {
             "condenser": {
                 "enabled": True,
@@ -1229,7 +1229,7 @@ def test_openhands_agent_settings_dispatches_no_op_condenser_payload() -> None:
 
 
 def test_openhands_agent_settings_upgrades_base_condenser_settings_instance() -> None:
-    settings = OpenHandsAgentSettings.model_validate(
+    settings = AgentrtAgentSettings.model_validate(
         {"condenser": CondenserSettings(enabled=True, max_size=100)}
     )
 
@@ -1243,7 +1243,7 @@ def test_condenser_settings_base_requires_concrete_build_method() -> None:
 
 
 def test_llm_create_agent_no_condenser_when_disabled() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         condenser=LLMSummarizingCondenserSettings(enabled=False),
     )
     agent = settings.create_agent()
@@ -1251,7 +1251,7 @@ def test_llm_create_agent_no_condenser_when_disabled() -> None:
 
 
 def test_llm_create_agent_builds_no_op_condenser_variant() -> None:
-    settings = OpenHandsAgentSettings(condenser=NoOpCondenserSettings())
+    settings = AgentrtAgentSettings(condenser=NoOpCondenserSettings())
 
     agent = settings.create_agent()
 
@@ -1259,7 +1259,7 @@ def test_llm_create_agent_builds_no_op_condenser_variant() -> None:
 
 
 def test_llm_create_agent_builds_critic_when_enabled() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=SecretStr("k")),
         verification=VerificationSettings(
             critic_enabled=True,
@@ -1273,7 +1273,7 @@ def test_llm_create_agent_builds_critic_when_enabled() -> None:
 
 
 def test_llm_create_agent_no_critic_without_api_key() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=None),
         verification=VerificationSettings(critic_enabled=True),
     )
@@ -1285,7 +1285,7 @@ def test_llm_create_agent_critic_uses_explicit_api_key() -> None:
     """When ``verification.critic_api_key`` is set, the critic authenticates
     with it instead of the LLM key. The LLM's own key is preserved untouched
     so the main agent loop still talks to its provider."""
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=SecretStr("llm-key")),
         verification=VerificationSettings(
             critic_enabled=True,
@@ -1304,7 +1304,7 @@ def test_llm_create_agent_critic_uses_explicit_api_key() -> None:
 def test_llm_create_agent_critic_falls_back_to_llm_api_key() -> None:
     """Without ``verification.critic_api_key``, the legacy behavior holds:
     the critic reuses the LLM key (auto-config path for the All-Hands proxy)."""
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=SecretStr("llm-key")),
         verification=VerificationSettings(critic_enabled=True),
     )
@@ -1317,7 +1317,7 @@ def test_llm_create_agent_critic_falls_back_to_llm_api_key() -> None:
 def test_llm_create_agent_critic_with_only_critic_api_key() -> None:
     """If the LLM has no key but ``critic_api_key`` is supplied, the critic
     is still built — its credential is independent of the LLM's."""
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=None),
         verification=VerificationSettings(
             critic_enabled=True,
@@ -1353,7 +1353,7 @@ def test_verification_settings_critic_api_key_roundtrip() -> None:
 
 
 def test_llm_create_agent_critic_with_iterative_refinement() -> None:
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         llm=LLM(model="m", api_key=SecretStr("k")),
         verification=VerificationSettings(
             critic_enabled=True,
@@ -1371,9 +1371,9 @@ def test_llm_create_agent_critic_with_iterative_refinement() -> None:
 
 
 def test_llm_roundtrip_preserves_llm_model() -> None:
-    settings = OpenHandsAgentSettings(llm=LLM(model="test-model"))
+    settings = AgentrtAgentSettings(llm=LLM(model="test-model"))
     data = settings.model_dump()
-    restored = OpenHandsAgentSettings.model_validate(data)
+    restored = AgentrtAgentSettings.model_validate(data)
     assert restored.llm.model == "test-model"
 
 
@@ -1755,9 +1755,9 @@ def test_llm_agent_settings_public_alias_removed() -> None:
     # and the API-breakage checker sees no field-value change.
     from agentrt.sdk.settings.model import LLMAgentSettings
 
-    assert issubclass(LLMAgentSettings, OpenHandsAgentSettings)
+    assert issubclass(LLMAgentSettings, AgentrtAgentSettings)
     settings = LLMAgentSettings(llm=LLM(model="test-model"))
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.agent_kind == "llm"
     assert settings.llm.model == "test-model"
 
@@ -1774,7 +1774,7 @@ def test_conversation_settings_create_request_for_llm_variant() -> None:
         security_analyzer="llm",
     )
     workspace = LocalWorkspace(working_dir="/tmp")
-    agent = OpenHandsAgentSettings(llm=LLM(model="test-model")).create_agent()
+    agent = AgentrtAgentSettings(llm=LLM(model="test-model")).create_agent()
 
     request = settings.create_request(
         StartConversationRequest,
@@ -1814,9 +1814,9 @@ def test_conversation_settings_create_request_with_acp_agent_variant() -> None:
 def test_conversation_settings_agent_settings_field_accepts_both_variants() -> None:
     """The agent_settings runtime field should accept either variant."""
     llm_conv = ConversationSettings(
-        agent_settings=OpenHandsAgentSettings(llm=LLM(model="m")),
+        agent_settings=AgentrtAgentSettings(llm=LLM(model="m")),
     )
-    assert isinstance(llm_conv.agent_settings, OpenHandsAgentSettings)
+    assert isinstance(llm_conv.agent_settings, AgentrtAgentSettings)
 
     acp_conv = ConversationSettings(
         agent_settings=ACPAgentSettings(acp_command=["x"]),
@@ -1840,7 +1840,7 @@ def test_openhands_agent_settings_mcp_config_redacts_env_and_headers() -> None:
             }
         }
     )
-    settings = OpenHandsAgentSettings(mcp_config=mcp_config)
+    settings = AgentrtAgentSettings(mcp_config=mcp_config)
 
     blob = settings.model_dump_json()
     assert "sk-mcp-secret" not in blob
@@ -1875,7 +1875,7 @@ def test_mcp_config_encrypts_env_and_headers_with_cipher() -> None:
             },
         }
     )
-    settings = OpenHandsAgentSettings(mcp_config=mcp_config)
+    settings = AgentrtAgentSettings(mcp_config=mcp_config)
     cipher = Cipher(secret_key="test-encryption-key")
 
     dumped = settings.model_dump(mode="json", context={"cipher": cipher})
@@ -1910,7 +1910,7 @@ def test_mcp_config_encrypts_env_and_headers_with_cipher() -> None:
     assert servers["fetch"]["url"] == "https://example.com/mcp"
 
     # Round-trip: decrypt with the same cipher recovers the originals.
-    restored = OpenHandsAgentSettings.model_validate(dumped, context={"cipher": cipher})
+    restored = AgentrtAgentSettings.model_validate(dumped, context={"cipher": cipher})
     restored_dump = dump_mcp_config(restored.mcp_config)
     restored_github_env = restored_dump["github"]["env"]
     restored_fetch_headers = restored_dump["fetch"]["headers"]
@@ -1935,7 +1935,7 @@ def test_mcp_config_encrypts_bearer_auth_with_cipher() -> None:
             },
         }
     )
-    settings = OpenHandsAgentSettings(mcp_config=mcp_config)
+    settings = AgentrtAgentSettings(mcp_config=mcp_config)
     cipher = Cipher(secret_key="test-encryption-key")
 
     dumped = settings.model_dump(mode="json", context={"cipher": cipher})
@@ -1953,7 +1953,7 @@ def test_mcp_config_encrypts_bearer_auth_with_cipher() -> None:
     }
     assert redacted["mcp_config"]["superhuman"]["auth"] == {"strategy": "oauth2"}
 
-    restored = OpenHandsAgentSettings.model_validate(dumped, context={"cipher": cipher})
+    restored = AgentrtAgentSettings.model_validate(dumped, context={"cipher": cipher})
     restored_servers = dump_mcp_config(restored.mcp_config)
     assert restored_servers["linear"]["auth"] == {
         "strategy": "bearer",
@@ -1984,7 +1984,7 @@ def test_openhands_agent_settings_create_agent_preserves_mcp_auth_model() -> Non
         }
     )
 
-    agent = OpenHandsAgentSettings(mcp_config=mcp_config).create_agent()
+    agent = AgentrtAgentSettings(mcp_config=mcp_config).create_agent()
 
     servers = dump_mcp_config(agent.mcp_config)
     assert servers["linear"]["auth"] == {
@@ -2020,7 +2020,7 @@ def test_openhands_agent_settings_mcp_config_decrypt_legacy_plaintext_on_disk() 
         }
     }
 
-    restored = OpenHandsAgentSettings.model_validate(
+    restored = AgentrtAgentSettings.model_validate(
         legacy_payload, context={"cipher": cipher}
     )
     restored_env = dump_mcp_config(restored.mcp_config)["github"]["env"]
@@ -2040,7 +2040,7 @@ def test_openhands_agent_settings_mcp_config_expose_encrypted_requires_cipher() 
 
     from agentrt.sdk.utils.pydantic_secrets import MissingCipherError
 
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         mcp_config=coerce_mcp_config(
             {
                 "github": {
@@ -2063,7 +2063,7 @@ def test_openhands_agent_settings_mcp_config_expose_plaintext_passes_through() -
     """
     from agentrt.sdk.utils.cipher import Cipher
 
-    settings = OpenHandsAgentSettings(
+    settings = AgentrtAgentSettings(
         mcp_config=coerce_mcp_config(
             {
                 "github": {
@@ -2095,7 +2095,7 @@ def test_openhands_agent_settings_create_agent_keeps_real_mcp_secrets() -> None:
             }
         }
     )
-    agent = OpenHandsAgentSettings(mcp_config=mcp_config).create_agent()
+    agent = AgentrtAgentSettings(mcp_config=mcp_config).create_agent()
 
     env = dump_mcp_config(agent.mcp_config)["leaky"]["env"]
     assert isinstance(env, dict)
@@ -2160,27 +2160,27 @@ def test_acp_agent_settings_create_agent_keeps_real_mcp_secrets() -> None:
 
 
 def test_agent_settings_base_is_parent_of_both_variants() -> None:
-    assert issubclass(OpenHandsAgentSettings, AgentSettingsBase)
+    assert issubclass(AgentrtAgentSettings, AgentSettingsBase)
     assert issubclass(ACPAgentSettings, AgentSettingsBase)
 
 
 def test_agent_settings_base_schema_version_inherited() -> None:
-    openhands = OpenHandsAgentSettings()
+    openhands = AgentrtAgentSettings()
     acp = ACPAgentSettings(acp_command=["x"])
     assert openhands.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     assert acp.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
 
 
 def test_agent_settings_base_export_schema_works_on_both_variants() -> None:
-    openhands_schema = OpenHandsAgentSettings.export_schema()
+    openhands_schema = AgentrtAgentSettings.export_schema()
     acp_schema = ACPAgentSettings.export_schema()
-    assert openhands_schema.model_name == "OpenHandsAgentSettings"
+    assert openhands_schema.model_name == "AgentrtAgentSettings"
     assert acp_schema.model_name == "ACPAgentSettings"
 
 
 def test_agent_settings_base_create_agent_is_callable_via_interface() -> None:
     """Both variants expose create_agent() through the shared base type."""
-    settings: AgentSettingsBase = OpenHandsAgentSettings(llm=LLM(model="test-model"))
+    settings: AgentSettingsBase = AgentrtAgentSettings(llm=LLM(model="test-model"))
     agent = settings.create_agent()
     assert isinstance(agent, Agent)
 
@@ -2280,10 +2280,10 @@ def test_acp_resolve_command_uses_registry_defaults(
 
 
 def test_regular_agent_supports_all_capabilities() -> None:
-    agent = OpenHandsAgentSettings(llm=LLM(model="test-model")).create_agent()
+    agent = AgentrtAgentSettings(llm=LLM(model="test-model")).create_agent()
     assert agent.supports_openhands_tools is True
     assert agent.supports_condenser is True
-    assert agent.agent_kind == "openhands"
+    assert agent.agent_kind == "agentrt"
 
 
 def test_acp_agent_reports_no_openhands_capabilities() -> None:
@@ -2306,7 +2306,7 @@ def test_llm_subscription_fields_roundtrip() -> None:
         }
     )
 
-    assert isinstance(settings, OpenHandsAgentSettings)
+    assert isinstance(settings, AgentrtAgentSettings)
     assert settings.llm.auth_type == "subscription"
     assert settings.llm.subscription_vendor == "openai"
     dumped = settings.model_dump(mode="json", exclude_none=True)
@@ -2336,7 +2336,7 @@ def test_llm_create_agent_resolves_subscription_llm(monkeypatch) -> None:
         fake_create_subscription_llm_from_config,
     )
 
-    agent = OpenHandsAgentSettings(llm=original_llm).create_agent()
+    agent = AgentrtAgentSettings(llm=original_llm).create_agent()
 
     assert agent.llm is runtime_llm
     assert agent.llm.is_subscription is True

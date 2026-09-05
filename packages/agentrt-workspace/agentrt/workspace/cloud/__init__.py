@@ -1,4 +1,4 @@
-"""OpenHands Cloud workspace implementation."""
+"""Agentrt Cloud workspace implementation."""
 
 # Re-export repo models and utilities from SDK for backward compatibility.
 # The original implementations have been moved to agentrt.sdk.workspace.repo.
@@ -11,13 +11,13 @@ from agentrt.sdk.workspace.repo import (
     get_repos_context,
 )
 
-from .workspace import OpenHandsCloudWorkspace
+from .workspace import AgentrtCloudWorkspace
 
 
 __all__ = [
     "CloneResult",
     "GitProvider",
-    "OpenHandsCloudWorkspace",
+    "AgentrtCloudWorkspace",
     "RepoMapping",
     "RepoSource",
     "clone_repos",
