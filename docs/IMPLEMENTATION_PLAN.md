@@ -3,6 +3,8 @@
 Date: 2026-09-06.
 Basis: [Pass 1](RESEARCH_PASS_1.md), [Pass 2](RESEARCH_PASS_2.md), [OSS Gap Reassessment](RESEARCH_OSS_GAP_REASSESSMENT.md), [Pre-Plan Decisions](PRE_PLAN_DECISIONS.md).
 
+Target: the runtime is finished when it is usable day to day, not when the phase list is ticked off. Phases order the work; they do not define done.
+
 Guiding rule: **reuse first, write only what no donor supplies.** Every task is labelled `REUSE` (runs as-is after vendoring), `PORT` (donor source adapted), or `NEW` (no donor exists). Anything not needed to reach a phase's done criteria is out of scope.
 
 ## 1. What is being built
@@ -122,7 +124,7 @@ Mostly wiring over endpoints that already exist.
 3. Transcript condensation plus cursor.
 4. Artifact convention: the system prompt asks the agent to list important files in its final result; `artifacts` returns those and serves content through the existing workspace route.
 
-**Done:** the full loop — dispatch, detach, list, transcript, send, interrupt, resume, result, artifacts — works from Claude Code **and** from Codex.
+**Done:** the full loop — dispatch, detach, list, transcript, send, interrupt, resume, result, artifacts — works from Claude Code. Codex is deferred; the MCP surface stays standard so adding it later needs no redesign.
 
 ### P4 — Permission, dispatcher boundary, cancellation
 
