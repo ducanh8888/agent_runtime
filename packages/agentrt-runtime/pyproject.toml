@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentrt-runtime"
+version = "0.1.0"
+description = "Agent Runtime — local daemon, MCP server and CLI over the vendored agent server"
+requires-python = ">=3.12"
+dependencies = [
+    "agentrt-sdk",
+    "agentrt-server",
+    "httpx>=0.28",
+    "mcp>=1.28",
+]
+
+[tool.setuptools.packages.find]
+include = ["agentrt.runtime*"]
+namespaces = true
+
+[project.scripts]
+agentrt = "agentrt.runtime.cli:main"

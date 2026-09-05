@@ -1,6 +1,6 @@
 # UV workspace configuration
 [tool.uv.workspace]
-members = ["agentrt-sdk", "agentrt-tools", "agentrt-workspace", "agentrt-server"]
+members = ["agentrt-sdk", "agentrt-tools", "agentrt-workspace", "agentrt-server", "agentrt-runtime"]
 
 # Security: Apply workspace-wide dependency guardrails.
 [tool.uv]
@@ -24,6 +24,7 @@ agentrt-sdk = { workspace = true }
 agentrt-tools = { workspace = true }
 agentrt-workspace = { workspace = true }
 agentrt-server = { workspace = true }
+agentrt-runtime = { workspace = true }
 
 [dependency-groups]
 dev = [
