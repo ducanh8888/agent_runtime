@@ -93,10 +93,11 @@ Each phase ends in something runnable. Nothing outside a phase's done criteria i
 ### P1 — Vendor and rename
 
 1. `git init -b main` in `agent_runtime`. Commit 1: move the four markdown files into `docs/`. Commit 2: pristine copy of `repos/software-agent-sdk` into `packages/`, unmodified, LICENSE kept, upstream ref `f47083cc` recorded.
-2. Run the **full** vendored test suite and record pass/fail per test as the baseline. Measured size: 695 files, roughly 8,200 test functions, 4 network-marked, 14 files touching Docker — so a full run is practical and environment failures are absorbed by comparing against the baseline rather than against zero.
-3. Rename `openhands.*` to `agentrt.*`: package names, imports, entry points, the `.openhands` config directory, environment-variable prefixes. Keep the four-package split.
-4. `uv lock` — renaming workspace members invalidates their own lock entries; third-party pins survive.
-5. Re-run the full suite.
+2. Make the vendored tree installable on Windows before measuring anything. Upstream pins `litellm==1.93.0`, one of exactly three releases with no Windows wheel; its only Windows path is an sdist that builds a Rust extension. The pin moves to `1.93.1` — the next patch, which publishes `cp313-win_amd64` — in its own commit, and the `exclude-newer-package` cutoff moves with it.
+3. Run the **full** vendored test suite from that commit and record pass/fail per test as the baseline, via `--junitxml` so the comparison is per-test rather than by summary line. Measured size: 695 files, roughly 8,200 test functions; `stress` and `acp_live` are deselected by upstream's own `addopts`. Environment failures are absorbed by comparing against the baseline rather than against zero — which matters, because upstream is evidently validated on Linux (Python 3.13 pin, Linux-only wheels, tmux) and a stable group of Windows failures is expected.
+4. Rename `openhands.*` to `agentrt.*`: package names, imports, entry points, the `.openhands` config directory, environment-variable prefixes. Keep the four-package split.
+5. `uv lock` — renaming workspace members invalidates their own lock entries; third-party pins survive.
+6. Re-run the full suite.
 
 **Done:** results match the baseline exactly. Any new failure is fixed or explained before P2 starts.
 
