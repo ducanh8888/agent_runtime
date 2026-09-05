@@ -5,9 +5,16 @@ Taken at commit `0187ce7` (vendored tree with the litellm pin bumped to 1.93.1),
 Command:
 
 ```
-uv run pytest -p no:cacheprovider -n auto --timeout=180 --timeout-method=thread \
+AGENTRT_PERSISTENCE_DIR=<scratch> uv run pytest -p no:cacheprovider -n auto --timeout=180 --timeout-method=thread \
   -q --tb=no -rf --junitxml=baseline.xml
 ```
+
+`AGENTRT_PERSISTENCE_DIR` is mandatory from here on and was added after the fact.
+Without it the suite writes into the real user state directory: these runs left a
+`gpt-4o` agent profile with a dummy key, plus `explicit-model.json` and
+`glm-default.json`, in `~/.openhands` and then `~/.agentrt`. Harmless while that
+directory held nothing, but P2 puts the real 9Router credential there and a test
+run would overwrite it.
 
 Upstream's own `addopts` deselects the `stress` and `acp_live` markers, so this is the suite as upstream defines it.
 
