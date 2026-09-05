@@ -167,3 +167,10 @@ Ghi chú kéo theo: bỏ hook khỏi đường policy không có nghĩa hook bi�
 | Thứ tự cắt module vs đổi namespace | Giữ nguyên: copy nguyên rồi đổi tên. Test suite đầy đủ mới là mốc đúng nghĩa; đổi tên là thao tác cơ học nên thêm module chỉ tốn thời gian chạy test |
 | Codex cho definition of done | Đã có sẵn, thử được ngay. Giữ nguyên tiêu chí verify cả hai orchestrator |
 | Hai session cùng một workspace | Không làm gì. Chia sẻ là cố ý; điều phối là việc của orchestrator. Đã ghi vào bảng rủi ro của plan |
+
+## Vòng 16
+
+| Câu hỏi | Quyết định |
+|---|---|
+| Donor repo khác | Giữ `repos/` làm tham chiếu chỉ-đọc. Chỉ vendor `software-agent-sdk`. Đến P4 mới port đoạn cần dùng, kèm ghi chú nguồn và LICENSE. Điều kiện: không xóa `repos/` |
+| Bước tiếp | Bắt đầu P1. Git init và docs đã do người dùng làm xong |
