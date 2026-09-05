@@ -51,7 +51,7 @@ def test_first_party_root_is_derived_not_hardcoded():
     import agentrt.agent_server.telemetry.sanitizer as sanitizer
 
     assert _FIRST_PARTY_ROOT == sanitizer.__name__.split(".", 1)[0]
-    assert _FIRST_PARTY_ROOT == "openhands"  # current value, for readability
+    assert _FIRST_PARTY_ROOT == "agentrt"  # current value, for readability
 
 
 def test_consent_literal_has_one_definition():
