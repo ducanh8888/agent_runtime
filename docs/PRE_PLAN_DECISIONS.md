@@ -250,3 +250,35 @@ Nguyên nhân thật khiến `client.py` tiêu 130K ký tự suy luận là nó 
 | Thêm tài liệu | `docs/ORCHESTRATOR_GUIDE.md` — hướng dẫn ngắn cho orchestrator dùng agentrt |
 
 Nguyên tắc rút ra: **tối ưu chất lượng đầu vào, không tối ưu hành vi mô hình.** Context là đòn bẩy rẻ nhất; mọi chỉ thị về việc nên nghĩ bao nhiêu đều đắt hơn và kém tin cậy hơn.
+
+## Vòng 24 — general use, và tự đóng vai người dùng
+
+| Câu hỏi | Quyết định |
+|---|---|
+| "General use" nghĩa là gì | Chạy được với bất kỳ repo nào, không giả định `agent_runtime` tồn tại; cài được như package thật |
+| Mức đóng gói | `uv tool install` từ đường dẫn/git local. Không publish PyPI. Làm sau P3 |
+| Tài liệu cho orchestrator nằm ở đâu | Nhồi hết vào MCP tool description |
+| Hình dạng bề mặt MCP | 5 tool phẳng (`dispatch`, `list`, `status`, `result`, `transcript`) + `control(action)` + `artifacts` = 7 |
+| Kiểm chứng bằng gì | Dùng chính agentrt để build repo này, không nghĩ task mới |
+
+Lý do chọn tool description làm nơi chứa tài liệu: một phiên Claude Code ở repo khác **không bao giờ** đọc `docs/*.md`, và MCP resource thì không được load nếu không ai hỏi. Tool description là chỗ duy nhất chắc chắn nằm trong context. Cái gì description không nói, người gọi phải đoán.
+
+### Hệ quả với credential
+
+Bắt buộc bởi cả hai quyết định trên: `config.repo_env_file()` đi ngược lên tìm `.env` cạnh repo là thứ duy nhất khiến runtime phụ thuộc vào checkout này. Thứ tự mới: biến môi trường → `<state-dir>/.env` → `.env` trong checkout (chỉ còn là tiện ích lúc phát triển). Credential đã chuyển vào state dir.
+
+Nói thẳng: việc này **không** làm cho dogfood trên chính repo này trở nên an toàn. Profile mà daemon ghi vẫn chứa key, `daemon.json` vẫn chứa token, và một session đọc được cả hai bất kể workspace ở đâu. Nó giảm lộ lọt do vô ý, không ngăn được một session cố tình đi tìm. Đây là rủi ro no-sandbox đã ghi ở §8 của plan.
+
+### Đo chi phí phải tính cache
+
+`tools/spend.py` ban đầu tính mọi prompt token theo giá input tươi. Một agent session gửi lại toàn bộ transcript mỗi lượt, và **91%** số đó là cache hit — giá bằng khoảng 1/10. Sai số này biến một khác biệt 2,6 lần so với single-shot thành 130 lần, và suýt dẫn tới quyết định bỏ dogfood vì "quá đắt".
+
+Con số đúng: tất cả những gì đã tiêu tới lúc này ≈ **0,19 USD**, và đó là chặn trên vì 9Router không công bố giá. Một giờ agent chạy tốn cỡ mười cent.
+
+Rút ra: **lý do phải theo dõi một session không phải là tiền, mà là nó có hội tụ hay không.** Session đầu tiên viết `client.py` chạy một tiếng, đọc đúng tài liệu được giao rồi đi kiểm chứng lại tài liệu đó với source, và không viết dòng nào.
+
+### Chỉ trỏ vào tài liệu là chưa đủ
+
+Nói "đọc file X, coi như có thẩm quyền" thì agent đọc X xong vẫn đi verify. "Có thẩm quyền" nói về thứ hạng của tài liệu, không nói rằng đọc thêm là thừa. Lần thử lại thành công khi thêm hai thứ: đưa thẳng sự kiện vào task, và cấm đọc bất kỳ file nào khác.
+
+Vẫn đúng nguyên tắc vòng 23 — đây là cấp thêm một sự kiện agent còn thiếu (tài liệu này là đủ), không phải ra lệnh cho nó nghĩ ít lại.
