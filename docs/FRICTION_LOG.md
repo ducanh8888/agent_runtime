@@ -147,6 +147,37 @@ silent — the list is simply wrong, in a direction that depends on the hour.
 Testing both directions, a file written before and a file written after, is what
 distinguishes a working filter from one that happens to include everything.
 
+## The first dispatch through MCP failed on the task, not the runtime
+
+Driving the tools as an orchestrator for real, the first dispatch carried two
+mistakes, and both came from following the `dispatch` description as written.
+
+**It told a `readonly` session to write a report file.** The description says to
+choose `readonly` for review work, and four lines later says to name the files
+the session should create. Both are good advice and together they produce an
+instruction the session cannot carry out. It now says so where the reader will
+be standing when it matters.
+
+**It located code by function name in a 737-line file.** The session read the
+whole file in its first seven seconds, then had to find `artifacts` again and
+spent two five-minute turns viewing ranges around `_token` and `_resolve_session`
+instead, reporting that "the range views seem to be returning odd output" -- the
+tool was fine, the ranges were wrong. Three line ranges from one `grep -n` would
+have cost a line of the task.
+
+That second one is the goal's own direction applied to the goal: the fix is
+better input, not a better-behaved agent. And it is now the pattern across every
+review dispatch made here. `70652c62` had to be interrupted for reading twenty
+files when it was given four. This one had to be interrupted for hunting through
+one file it had already read. **Review work needs tighter input than code
+generation, not looser**, because there is no failing test to pull it back.
+
+The redirect itself worked exactly as the `control` description promises:
+`interrupt` at 09:17:45, `send` with the line numbers at 09:17:55, and the
+session came back with "I have what I need from my initial full read" and took
+exactly the one look it was told it could. Ten seconds and one message to turn a
+session around, against the ten minutes it had already spent going the wrong way.
+
 ## `paused` is not a synonym for `residue`
 
 A probe left a paused session behind on every run, so the tidy-up was obvious:
