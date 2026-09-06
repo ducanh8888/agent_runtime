@@ -147,6 +147,52 @@ silent — the list is simply wrong, in a direction that depends on the hour.
 Testing both directions, a file written before and a file written after, is what
 distinguishes a working filter from one that happens to include everything.
 
+## Nine findings from the second review, and what each turned out to be
+
+Dispatched through MCP, `readonly`, against the `artifacts` rewrite and the
+probes. Recorded in full because the disposition is the interesting part: a
+report is a list of claims, and the work is deciding which ones are true.
+
+**Fixed, and the one that mattered.** The `path` branch of `artifacts` asked
+only whether a path was inside the workspace. `check_path` asks that and then
+whether the file is one of the runtime's credentials under another name. So a
+hard link in a workspace was refused to the agent and served to the
+orchestrator -- the same leak as last time, through the other door, and into a
+model's context rather than an agent's. Reproduced against the real credential
+before fixing. The branch now calls `check_path` instead of reimplementing half
+of it.
+
+**Fixed, three more.** `artifacts` reports `filtered`, because an unparseable
+`created_at` silently disabled the time filter and returned every file, which is
+the behaviour the rewrite replaced. `probe_artifacts` hard-coded a Windows
+absolute path, so its "absolute path is refused" case would have failed against
+correct code on Linux. `probe_parallel` dispatched into empty workspaces, so its
+"alpha wrote alpha.txt" check passed for a listing that filtered nothing at all.
+
+**True and already documented.** Coarse filesystem timestamps can drop a
+session's output on FAT: the no-grace trade-off, argued in `_started_at` and
+recorded above. A second writer in the same workspace is attributed to the
+session: that is the limitation the tool description now names fourth, and it
+demonstrated itself an hour later when `artifacts` on this very session listed
+six files, every one of them written by the orchestrator while it worked.
+
+**True, unfixed, and worth stating.** `os.stat` follows file symlinks, so a
+symlink in a workspace pointing outside it reports the target's size and
+modification time. Metadata only -- reading the content still goes through
+`check_path`, which resolves the link and finds it outside. Left alone because a
+symlink placed in a workspace is the operator's decision, but it is not nothing.
+
+**Checked and not true here.** The report hedged that `datetime.fromisoformat`
+rejects a trailing `Z` before Python 3.11. It does, and this project requires
+3.12; every form the daemon emits parses, measured. TOCTOU between the client's
+check and the daemon's open is real as a race and does not matter under a threat
+model where `workspace` already grants a shell -- the report said as much itself.
+
+The session reported its own line numbers as unreliable before giving them,
+having been unable to re-open the file. That is worth more than the findings it
+got right: an agent that flags the weakness in its own evidence is one whose
+other claims are worth the time it takes to check.
+
 ## The first dispatch through MCP failed on the task, not the runtime
 
 Driving the tools as an orchestrator for real, the first dispatch carried two
