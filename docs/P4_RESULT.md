@@ -80,6 +80,27 @@ unknown preset name is refused                      PASS
 ALL ADVERSARIAL CHECKS PASSED
 ```
 
+### One real bug, caught by the checklist
+
+The first full run failed on "file editor still works inside the workspace".
+The session's transcript said why — it had been refused creating `OK.txt`,
+because the path it was checked against was in the *repository*, not in its
+workspace.
+
+The agent had asked for `OK.txt`, a relative path, and `Path("OK.txt").resolve()`
+anchors to the daemon's own working directory — wherever the daemon happened to
+be started. The guard was comparing a path the agent never named. Its logic was
+right and its premise was wrong.
+
+Relative paths now resolve against the workspace root, and then reach the
+vendored editor's absolute-path requirement, which is the correct layering: the
+guard decides what is permitted, upstream decides what is well-formed.
+
+Worth noting how it surfaced. An earlier run passed because that session
+happened to use an absolute path; this one used a relative one. The check was
+non-deterministic in a way that exposed a real defect — and it was the
+transcript, not the pass/fail line, that identified it.
+
 The plugin gate is proven in both directions: with the switch off a planted
 hook does not run, with it on the same probe reproduces the hole. A test that
 cannot fail guards nothing, so `probe_plugin_hook.py` fails on either surprise.

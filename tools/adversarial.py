@@ -153,6 +153,12 @@ cases = [
     ("parent traversal is outside", os.path.join(root, "..", "x.txt"), False),
     ("different case is inside", os.path.join(root.upper(), "x.txt"), True),
     ("plain child is inside", os.path.join(root, "sub", "x.txt"), True),
+    # A relative path must land in the workspace, not in whatever directory the
+    # daemon was started from. Getting this wrong told an agent that OK.txt was
+    # outside its own workspace.
+    ("relative name is inside", "OK.txt", True),
+    ("relative subdirectory is inside", os.path.join("sub", "a.txt"), True),
+    ("relative traversal still escapes", os.path.join("..", "out.txt"), False),
     ("UNC path refused", r"\\server\share\x.txt", False),
     ("extended-length path refused", "\\\\?\\C:\\x.txt", False),
 ]
