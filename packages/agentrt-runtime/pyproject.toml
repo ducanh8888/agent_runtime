@@ -15,6 +15,10 @@ dependencies = [
     # for it: every workspace member is present in a development checkout, so
     # nothing here failed until the package was installed on its own.
     "agentrt-tools",
+    # server_launch registers DockerWorkspace so a container-backed session can
+    # be asked for over the REST API. The import is optional at runtime, but a
+    # normal install should be able to use it.
+    "agentrt-workspace",
     "httpx>=0.28",
     "mcp>=1.28",
 ]

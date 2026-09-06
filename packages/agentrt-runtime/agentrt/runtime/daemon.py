@@ -196,7 +196,11 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
         command = [
             sys.executable,
             "-m",
-            "agentrt.agent_server",
+            # Our launcher, not the server's own entry point: it registers the
+            # workspace kinds this runtime supports before handing over. See
+            # server_launch for why a missing import shows up as a validation
+            # error with an empty message.
+            "agentrt.runtime.server_launch",
             "--host",
             "127.0.0.1",
             "--port",
