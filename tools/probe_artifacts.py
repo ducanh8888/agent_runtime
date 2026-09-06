@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 
-from agentrt.runtime.client import Client
+from agentrt.runtime.client import Client, ClientError
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -87,6 +87,52 @@ check("the .venv was pruned from the walk entirely", out["total_in_workspace"] <
 if "FIXED.md" in names:
     body = client.artifacts(sid, path="FIXED.md")["content"]
     check("reading one file back by path works", bool(body.strip()), body.strip()[:60])
+
+# The read-one-file path takes a caller-supplied string. It used to answer the
+# containment question with a normalise-and-startswith of its own, next door to
+# the module written because that is the wrong way to answer it.
+print("\nreading a file back by path, with an escape attempt:")
+
+
+class _NoDaemon(Client):
+    """A client whose only working method is the path check.
+
+    `artifacts` reads `status` before it validates the path, so a stub that trips
+    on any request trips on the wrong one -- which is what the first version of
+    this did, reporting four failures against a check that was working. `status`
+    is answered from a value already fetched, and anything else reaching the
+    daemon means the path was approved.
+    """
+
+    def __init__(self, real: Client, status: dict) -> None:
+        self.__dict__.update(real.__dict__)
+        self._status = status
+
+    def _resolve_session(self, session: str) -> str:
+        return session
+
+    def status(self, session: str) -> dict:
+        return self._status
+
+    def _send(self, *args, **kwargs):
+        raise AssertionError("the path was approved and the request was sent")
+
+
+probe = _NoDaemon(client, client.status(sid))
+for label, bad in (
+    ("parent traversal", os.path.join("..", "..", "secret.txt")),
+    ("absolute path", r"C:\Windows\win.ini"),
+    ("UNC path", r"\server\share\x"),
+    ("traversal through a subdirectory", "src/../../escape.txt"),
+):
+    try:
+        probe.artifacts(sid, path=bad)
+    except AssertionError as exc:
+        check(label + " is refused", False, str(exc)[:50])
+    except ClientError:
+        check(label + " is refused", True)
+    else:
+        check(label + " is refused", False, "it was allowed")
 
 print()
 if failures:
