@@ -53,17 +53,38 @@ Separately verified:
 - **Daemon restart.** Killing the daemon mid-client-life brings it back on a new
   port and returns the same session list.
 
-## Not verified, and it is the stated criterion
+## The MCP layer, driven over stdio
 
-**"Works from Claude Code" has not been shown.** The MCP server process is a
-child of Claude Code, started when the session started, and holds the pre-P3
-module: three tools, no `list`, `transcript`, `control` or `artifacts`, and no
-reconnect fix. It cannot pick up new code without Claude Code restarting or
-reconnecting it.
+The MCP process inside a running Claude Code holds whatever code it started
+with, so the new surface cannot be exercised there without a restart. Spawning a
+fresh server and speaking the protocol to it covers everything except how the
+host renders the result (`scratchpad/mcp_e2e.py`):
 
-Everything above ran through the CLI and the client core, which is the same code
-the MCP tools call — but the MCP layer itself, and whether `instructions=`
-reaches the client at all, remain unchecked until that restart.
+```
+server      : agentrt 1.28.1
+instructions: 543 chars -> "agentrt runs coding agents in background sessions..."
+tools       : ['artifacts', 'control', 'dispatch', 'list', 'result', 'status', 'transcript']
+  list       -> 5 sessions
+  status     -> finished (e8d1dd8f)
+  transcript -> 4 events, cursor=None
+  result     -> 'The command `python tick.py` ran and finished with'
+  artifacts  -> 1 files
+  bad action   -> {'error': 'UnknownAction',   'message': "unknown action 'explode'; ..."}
+  send w/o msg -> {'error': 'MissingArgument', 'message': "action 'send' requires `message`"}
+  unknown id   -> {'error': 'SessionNotFound', 'message': "no session matches 'zzzzzzzz'"}
+```
+
+`instructions` does reach the client at initialize, so that parameter is
+carrying weight rather than sitting unused. All three failure modes arrive as
+data the model can read instead of protocol errors.
+
+## Not verified
+
+**Whether Claude Code surfaces this.** The protocol behaves; what a host does
+with `instructions`, and how it presents seven tools whose descriptions are the
+documentation, is only observable from inside a restarted Claude Code. Until
+then the plan's literal criterion — "works from Claude Code" — is unmet, and the
+gap is the host, not the code.
 
 ## What this phase cost
 
