@@ -235,3 +235,18 @@ Ghi chú kỹ thuật cho P2: `GET /models` qua `urllib` bị Cloudflare chặn 
 Bù cho việc không dừng hỏi: mọi phán đoán trong lúc chạy được ghi vào chính file này, và mọi sai lệch so với plan đi một commit riêng kèm lý do đầy đủ. `git log` là dấu vết kiểm tra.
 
 Rủi ro đã nêu và người dùng chấp nhận: đây đúng là chế độ mà một sai lầm kiểu tầng 4 sẽ đi rất xa mới lộ ra.
+
+## Vòng 23 — cách gọi agent
+
+Người dùng chỉ ra rằng ép mô hình suy luận ngắn là đòn bẩy sai. Đúng: câu "đừng cân nhắc dài" chống lại bản chất mô hình thay vì xử lý nguyên nhân.
+
+Nguyên nhân thật khiến `client.py` tiêu 130K ký tự suy luận là nó phải **đoán** hình dạng API. Đưa cho nó interface thật thì suy luận ngắn lại một cách tự nhiên, và quan trọng hơn là không còn đoán sai — chính việc đoán đã sinh ra lỗi `status` thay vì `execution_status`.
+
+| Thay đổi | Nội dung |
+|---|---|
+| Bỏ khỏi `delegate.py` | Chỉ thị ép mô hình không suy luận dài |
+| Thêm vào `delegate.py` | Quy tắc: interface trong phần tham chiếu là có thẩm quyền, không cần suy ra |
+| Thêm công cụ | `tools/api_context.py` trích OpenAPI của daemon đang chạy thành tài liệu tham chiếu gọn, dùng làm `--context` |
+| Thêm tài liệu | `docs/ORCHESTRATOR_GUIDE.md` — hướng dẫn ngắn cho orchestrator dùng agentrt |
+
+Nguyên tắc rút ra: **tối ưu chất lượng đầu vào, không tối ưu hành vi mô hình.** Context là đòn bẩy rẻ nhất; mọi chỉ thị về việc nên nghĩ bao nhiêu đều đắt hơn và kém tin cậy hơn.

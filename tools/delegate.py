@@ -61,10 +61,9 @@ Rules:
 - Write real docstrings that explain why, not what.
 - No TODO comments and no placeholder implementations.
 
-Do not deliberate at length. The specification is complete and unambiguous;
-treat it as settled and write the file. Long internal reasoning is billed
-against the same budget as the answer, so time spent second-guessing the spec
-is taken directly from the code you still have to write."""
+Where a reference section gives you an interface -- a function signature, a
+response shape, a field name -- use it exactly as shown. It was read from the
+running system, so it is authoritative and does not need to be inferred."""
 
 
 def main():
