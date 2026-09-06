@@ -170,6 +170,40 @@ for label, path, expect_ok in cases:
         got = False
     check(label, got == expect_ok, "allowed" if got else "refused")
 
+print("\n=== path aliasing the guard cannot see in the name ===")
+
+# A hard link inside the workspace is a second name for a file outside it. No
+# amount of path resolution reveals that, so this was allowed until a dispatched
+# review session pointed it out: a readonly session could read the provider
+# credential through a link it did not have to create.
+link = os.path.join(root, "leak.json")
+if os.path.exists(link):
+    os.remove(link)
+try:
+    os.link(str(CREDENTIAL), link)
+except OSError as exc:
+    check("hard link to the credential is refused", True, f"could not link: {exc}")
+else:
+    try:
+        permissions.check_path(link, root=root, permission="readonly", writing=False)
+        check("hard link to the credential is refused", False, "it was allowed")
+    except permissions.PermissionDenied:
+        check("hard link to the credential is refused", True)
+    finally:
+        os.remove(link)
+
+# Windows strips trailing dots and spaces when it opens a component, and Python
+# does not when it normalises one, so `.. ` can be two different things.
+for label, path in (
+    ("dot-space component refused", os.path.join(root, ".. ", "x.txt")),
+    ("triple-dot component refused", os.path.join(root, "...", "x.txt")),
+):
+    try:
+        permissions.check_path(path, root=root, permission="workspace", writing=True)
+        check(label, False, "it was allowed")
+    except permissions.PermissionDenied:
+        check(label, True)
+
 try:
     permissions.normalise("read-only")
     check("unknown preset name is refused", False, "it was accepted")

@@ -49,6 +49,36 @@ Not a defect — it follows from MCP being a stdio child — but it shapes how t
 work goes: build and verify through the CLI, and treat the MCP layer as
 something confirmed separately.
 
+## A dispatched review found a real hole; two of its three findings did not hold
+
+The first real use of `readonly` was reviewing the permission code itself. It
+reported three bypasses. One was a genuine hole that seventeen adversarial
+checks had missed — a hard link inside the workspace is a second name for a file
+outside it, and no path resolution can see that. Reproduced against the real
+credential, then fixed with an `st_nlink` check.
+
+The second was asserted as fact and was not: the guard did approve a path
+component of `.. `, but writing through it fails, because Windows does not strip
+the trailing space to make it `..`. The third was a fair criticism of the design
+rather than a bypass.
+
+Two things worth carrying:
+
+**The value was in the finding, not the report.** Taking the report at face
+value would have meant a rushed "fix" for the second item and an inflated
+account of the first. Testing each claim took three commands and separated them.
+This is the `result` tool description's own rule applied to the tool's own
+output.
+
+**A review agent will exceed its brief, and that was where the value came from.**
+Given four file paths, it read more than twenty, including the plan and the
+recon notes. It had to be interrupted to produce the report at all. For code
+generation that behaviour wasted an hour; for review it is what found the hard
+link, because the connection between "the guard resolves paths" and "the state
+directory sits on the same volume" is not in any one file. The lesson is not
+"stop agents exploring" but that the same behaviour is waste in one task and the
+whole point in another.
+
 ## One bug that was mine, not the product's
 
 A transcript rendered `# P4 — permission` as `# P4 â€” permission`, which looks

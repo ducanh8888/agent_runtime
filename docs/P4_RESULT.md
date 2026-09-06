@@ -80,9 +80,16 @@ relative subdirectory is inside                     PASS -- allowed
 relative traversal still escapes                    PASS -- refused
 UNC path refused                                    PASS -- refused
 extended-length path refused                        PASS -- refused
+hard link to the credential is refused              PASS
+dot-space component refused                         PASS
+triple-dot component refused                        PASS
 unknown preset name is refused                      PASS
 ALL ADVERSARIAL CHECKS PASSED
 ```
+
+The last three arrived after the run below found the guard letting a hard link
+through. They are here because a check that only ever passed would not have
+caught it.
 
 The second line matters as much as the refusals. Every other check is a
 refusal, so a preset that denied everything would have passed the lot while
@@ -171,6 +178,47 @@ Worth building later for the accidental case. Not claimed now.
 
 Each of these is a decision not to write code, recorded so the next person does
 not read the plan and assume they were forgotten.
+
+## What a dispatched review found that the checklist did not
+
+A `readonly` session was dispatched to review this code — the first use of that
+preset for real work rather than as a test subject. It reported three problems.
+Each was verified rather than believed, and they did not all survive.
+
+**Confirmed and serious: a hard link defeated the guard.** A hard link is a
+second name for one file, and no path resolution reveals it. `resolve()` returns
+the name it was given, that name is inside the workspace, and the bytes belong
+to a file that is not. Reproduced against the real credential:
+
+```
+GUARD        : ALLOWED -> ...\hardlink_ws\leak.json
+content read : {   "model": "openai/ds/deepseek-v4-flash",   "api_key": "sk...
+KEY EXPOSED  : True
+```
+
+That contradicted the claim above that `readonly` keeps a session away from the
+credential. A `readonly` session cannot create such a link — it has no terminal
+and cannot write — but it does not need to when the directory it was pointed at
+already contains one, which is exactly the "dispatch into a repository you have
+not read" case. `check_path` now refuses a file whose `st_nlink` exceeds one.
+
+**Half right: a path component of dots and spaces.** The guard did approve
+`workspace\.. \.. \Windows\Temp\x.txt`, as reported. But the escape does not
+follow: writing through that path fails with `FileNotFoundError`, because
+Windows does not strip the trailing space to make it `..`. The report asserted
+the escape as fact; it is not. The component is refused now regardless, since
+the guard should not depend on that detail of one API on one OS.
+
+**Confirmed as a design weakness: the checked value was discarded.**
+`check_path` returns the resolved path so a caller can act on what was checked,
+and the executor threw it away and passed the original string on. The module
+docstring justified this and was too confident. The editor is now handed the
+approved path.
+
+Three findings, two real, one overstated. The report was treated as a set of
+claims to test, which is the same standard the `result` tool description asks an
+orchestrator to apply to any session — and it earned its keep: seventeen
+adversarial checks had passed against a guard that a hard link walked through.
 
 ## Residual risk, stated plainly
 

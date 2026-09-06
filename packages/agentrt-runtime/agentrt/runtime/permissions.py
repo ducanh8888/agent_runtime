@@ -140,11 +140,48 @@ def check_path(
             "this session is readonly; it may view files but not change them"
         )
 
+    # Windows strips trailing dots and spaces from a path component when it
+    # opens it, but Python's normalisation does not, so `.. ` survives as a
+    # literal name here and could be read as `..` further down. Measured, the
+    # open then fails rather than escaping -- but the guard should not be
+    # relying on that, since it is a detail of one API on one OS.
+    for part in Path(text).parts:
+        if part in (".", ".."):
+            # resolve() handles these correctly; it is the near-misses that
+            # survive normalisation as literal names.
+            continue
+        if part and set(part) <= {".", " "}:
+            raise PermissionDenied(
+                f"refusing a path component made only of dots and spaces: {part!r}"
+            )
+
     workspace = _real(root)
     resolved = _real(text, base=workspace)
     if not contains(workspace, resolved):
         raise PermissionDenied(
             f"path is outside the workspace: {resolved} is not inside {workspace}"
+        )
+
+    # A hard link is a second name for one file, and no amount of path
+    # resolution can see it: `resolve()` returns the name it was given, that
+    # name is inside the workspace, and the bytes belong to a file that is not.
+    # A workspace holding a hard link to the credential therefore reads it
+    # through an approved path -- demonstrated against a real `readonly`
+    # session, which cannot create such a link but does not need to when the
+    # directory it was pointed at already contains one.
+    #
+    # st_nlink is the only cheap signal: a file with more than one name may be
+    # that alias. Directories are exempt, since they legitimately carry higher
+    # link counts on some filesystems.
+    try:
+        info = resolved.stat()
+    except OSError:
+        # Being created, or unreadable. Nothing to alias yet.
+        return resolved
+    if not resolved.is_dir() and getattr(info, "st_nlink", 1) > 1:
+        raise PermissionDenied(
+            f"refusing {resolved}: it has {info.st_nlink} hard links, so the "
+            "name is inside the workspace but the file it names may not be"
         )
     return resolved
 

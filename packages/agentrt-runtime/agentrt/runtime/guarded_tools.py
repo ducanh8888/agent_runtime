@@ -5,11 +5,18 @@ sandbox and is not one: `FileEditor` uses it only to suggest paths in error
 messages, and `allowed_edits_files` is skipped entirely for `view`. So nothing
 confines the editor today.
 
-The guard wraps the executor rather than editing it, which is safe here for a
-specific reason: `validate_path` requires an absolute path and passes it through
-unchanged, so the editor opens exactly `Path(action.path)`. There is no separate
-resolution step for a wrapper to diverge from. Were the editor to start deriving
-paths itself, this would have to move inside it.
+The guard wraps the executor rather than editing it, and closes the gap that
+normally makes a wrapper unsafe by handing the editor the path it checked rather
+than the string it was given. An earlier version passed the original string and
+justified it by noting that `validate_path` passes paths through unchanged --
+true, and not sufficient: the string checked and the file opened could still
+differ through a relative name or a component the OS normalises later.
+
+What remains outside its reach is aliasing that no path carries. A hard link is
+a second name for one file, so a workspace containing one is a workspace
+containing that file; `st_nlink` is checked for exactly that reason. A symlink
+retargeted between the check and the open is a race this cannot win, and needs
+a sandbox rather than a better guard.
 
 A refusal comes back as an observation, not an exception. The agent can read an
 observation and choose differently; an exception ends the session, which turns a
@@ -55,12 +62,17 @@ class GuardedFileEditorExecutor(ToolExecutor):
         # else -- create, str_replace, insert, undo_edit -- is a write.
         writing = action.command != "view"
         try:
-            permissions.check_path(
+            approved = permissions.check_path(
                 action.path,
                 root=self._root,
                 permission=self._permission,
                 writing=writing,
             )
+            # Hand the editor the path that was checked, not the string that
+            # was asked for. They can differ -- a relative name, a trailing
+            # separator, a component the OS normalises later -- and every
+            # difference is a chance to approve one file and open another.
+            action = action.model_copy(update={"path": str(approved)})
         except permissions.PermissionDenied as denied:
             return FileEditorObservation.from_text(
                 text=(

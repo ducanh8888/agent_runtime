@@ -89,12 +89,19 @@ when a session fails for no visible reason.
 
 ## Limits worth knowing
 
-- **Only `readonly` actually contains a session.** It has no terminal, and its
-  file editor may view inside the workspace and nothing else, so it cannot
-  reach the credential in the state directory. `workspace` confines the file
-  editor but still grants a terminal, and `python -c` opens any file the user
-  can — it constrains ordinary behaviour, not a determined session. `broad`
-  confines nothing.
+- **Only `readonly` actually contains a session**, and even that is confinement
+  by path. It has no terminal and its file editor may view inside the workspace
+  and nothing else. But a path names a file, and a file can have more than one
+  name: a hard link inside the workspace to something outside it was readable
+  through the guard until `st_nlink` was checked — a `readonly` session read the
+  provider credential that way, without being able to create the link itself.
+  That is fixed; the shape of the problem is not. Confinement by path cannot see
+  aliasing it is not told about, so the workspace you point a session at is part
+  of its authority.
+
+  `workspace` confines the file editor but still grants a terminal, and
+  `python -c` opens any file the user can — it constrains ordinary behaviour,
+  not a determined session. `broad` confines nothing.
 
   This is not a gap waiting to be closed in-process. A rule evaluated over
   shell command text is defeated by any interpreter the machine already has.
