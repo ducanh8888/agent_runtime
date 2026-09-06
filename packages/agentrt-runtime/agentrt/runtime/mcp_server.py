@@ -163,9 +163,18 @@ def dispatch(
 def list_sessions(limit: int = 20) -> dict:
     """List recent sessions, newest first.
 
-    Returns id, short_id, title, status and timestamps for each. Use it to find
-    a session whose short_id you no longer have, or to see what is still
-    running before dispatching more work.
+    Returns id, short_id, title, status, timestamps and tags for each. Use it
+    to find a session whose short_id you no longer have, or to see what is
+    still running before dispatching more work.
+
+    Titles are auto-generated and repetitive, so after a few dozen sessions
+    they stop telling them apart. `tags` is what does -- set them with
+    `control` and read them here. Check them before deleting anything in bulk.
+
+    `limit` is how many of the most recent to return, not a search. Sessions
+    are kept until deleted and nothing expires, so an old one falls off the end
+    of any listing you ask for; addressing it by short id still works, because
+    that looks through all of them.
     """
     return {"sessions": _guard(_get_client().list_sessions, limit)}
 
@@ -263,7 +272,18 @@ def control(session: str, action: str, message: str | None = None) -> dict:
       more work, use send.
     - delete -- remove the session and its history permanently. This is the
       only action here that destroys anything and it cannot be undone. Files
-      the session wrote in its workspace are left alone.
+      the session wrote in its workspace are left alone. Read the session's
+      tags first if you are deleting in bulk; nothing here stops you removing
+      one you meant to keep.
+    - tag -- attach notes to a session. Requires message, as `key=value` pairs
+      separated by commas: `keep=evidence for the guide, round=3`. A key with
+      an empty value removes it. Tags merge with what is already there, and
+      show up in `list` and `status`.
+
+      This is the only durable place to record why a session matters. Sessions
+      are kept until deleted and a title is auto-generated, so after fifty of
+      them a listing is fifty similar titles; a tag is what tells you which one
+      is evidence and which is a probe you can throw away.
 
     Reach for interrupt when a session is going the wrong way: it is faster and
     cheaper than letting it finish, and its history survives, so you can
@@ -277,13 +297,38 @@ def control(session: str, action: str, message: str | None = None) -> dict:
                 "message": "action 'send' requires `message`",
             }
         return _guard(client.send, session, message)
+    if action == "tag":
+        if not message:
+            return {
+                "error": "MissingArgument",
+                "message": "action 'tag' requires `message`, as key=value pairs "
+                           "separated by commas",
+            }
+        parsed: dict[str, str] = {}
+        for pair in message.split(","):
+            pair = pair.strip()
+            if not pair:
+                continue
+            key, sep, value = pair.partition("=")
+            # A bare word is a key with an empty value, which `tag` reads as a
+            # removal -- so it is rejected here rather than silently deleting
+            # the tag the caller was trying to set.
+            if not sep:
+                return {
+                    "error": "MalformedTag",
+                    "message": f"{pair!r} is not key=value; write "
+                               f"'{pair}=yes' to set it, or '{pair}=' to remove it",
+                }
+            parsed[key.strip()] = value.strip()
+        return _guard(client.tag, session, parsed)
+
     if action in ("interrupt", "stop", "resume", "delete"):
         return _guard(getattr(client, action), session)
     return {
         "error": "UnknownAction",
         "message": (
             f"unknown action {action!r}; expected one of: "
-            "send, interrupt, stop, resume, delete"
+            "send, interrupt, stop, resume, delete, tag"
         ),
     }
 

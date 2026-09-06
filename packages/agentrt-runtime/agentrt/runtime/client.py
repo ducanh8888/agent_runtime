@@ -46,6 +46,20 @@ PRUNED_DIRS = frozenset(
 )
 
 
+def _clean_tags(tags: dict) -> dict[str, str]:
+    """Coerce a tag map to what the daemon accepts.
+
+    Values must be strings: a non-string value is a 500 from the daemon, which
+    reaches a caller as an opaque server error rather than as "that is not a
+    tag". Measured. Coercing here turns `{"attempt": 2}` into something that
+    works instead of something that fails at the wire.
+    """
+    out: dict[str, str] = {}
+    for key, value in (tags or {}).items():
+        out[str(key)] = "" if value is None else str(value)
+    return out
+
+
 def _started_at(status: dict) -> float | None:
     """When the session began, as a POSIX timestamp, or None if unknown.
 
@@ -316,7 +330,15 @@ class Client:
 
         prefix = str(session).casefold()
         matches: list[str] = []
-        for item in self.list_sessions():
+        # Every page, not the default one. This used `list_sessions()` with its
+        # default limit of 50, so a session older than the fifty most recent
+        # could not be addressed by short id at all -- and the message said "no
+        # session matches", which reads exactly like "it was deleted". Hit for
+        # real: a session the docs name as evidence not to delete was reported
+        # missing, and it was sitting at row 53 of 58. Nothing expires here, so
+        # every runtime crosses that line eventually and then quietly loses
+        # its own history.
+        for item in self._all_sessions():
             full = item.get("id")
             if full is None:
                 continue
@@ -375,6 +397,7 @@ class Client:
         title: str | None = None,
         permission: str | None = None,
         max_iterations: int | None = None,
+        tags: dict[str, str] | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task."""
         workspace = os.path.abspath(os.path.expanduser(workspace))
@@ -411,6 +434,8 @@ class Client:
             body["title"] = title
         if max_iterations is not None:
             body["max_iterations"] = max_iterations
+        if tags:
+            body["tags"] = _clean_tags(tags)
 
         data = self._send("POST", "/api/conversations", json=body).json()
         full_id = data.get("id")
@@ -421,6 +446,36 @@ class Client:
             "workspace": workspace,
             "permission": preset,
         }
+
+    def _all_sessions(self) -> list[dict]:
+        """Every session the daemon knows, paged.
+
+        Resolving a prefix has to see all of them: a partial view turns a real
+        session into a "not found", and would also miss the case where a prefix
+        is ambiguous because the second match is on a later page -- which would
+        pick one of two sessions silently, the worse of the two failures.
+
+        Bounded at 50 pages so a runtime with a pathological number of sessions
+        degrades into a wrong answer rather than an unbounded loop; a caller
+        that far out should be using full ids.
+        """
+        out: list[dict] = []
+        page: str | None = None
+        for _ in range(50):
+            params: dict[str, object] = {"limit": 100}
+            if page:
+                params["page_id"] = page
+            data = self._send(
+                "GET", "/api/conversations/search", params=params
+            ).json()
+            items = data.get("items") if isinstance(data, dict) else None
+            if not isinstance(items, list) or not items:
+                break
+            out.extend(item for item in items if isinstance(item, dict))
+            page = data.get("next_page_id") if isinstance(data, dict) else None
+            if not page:
+                break
+        return out
 
     def list_sessions(self, limit: int = 50) -> list[dict]:
         """Return the most recent sessions from the daemon."""
@@ -455,6 +510,7 @@ class Client:
                     "status": _status_of(session),
                     "created_at": session.get("created_at") if isinstance(session, dict) else None,
                     "updated_at": session.get("updated_at") if isinstance(session, dict) else None,
+                    "tags": (session.get("tags") or {}) if isinstance(session, dict) else {},
                 }
             )
         return result
@@ -493,6 +549,7 @@ class Client:
         # limit knows to go and read the transcript.
         if data.get("max_iterations") is not None:
             result["max_iterations"] = data.get("max_iterations")
+        result["tags"] = data.get("tags") or {}
         return result
 
     def result(self, session: str) -> dict:
@@ -650,6 +707,36 @@ class Client:
         resolved = self._resolve_session(session)
         self._send("DELETE", f"/api/conversations/{quote(resolved, safe='')}")
         return {"id": resolved, "short_id": short_id(resolved), "deleted": True}
+
+    def tag(self, session: str, tags: dict[str, str]) -> dict:
+        """Merge tags onto a session and return the result.
+
+        Merge, although the daemon's PATCH replaces: it takes the whole map and
+        writes it, so a caller adding one tag with the obvious call silently
+        drops every tag already there. Measured before this was written. Reading
+        first and merging costs one extra request and makes the operation mean
+        what its name says.
+
+        An empty string as a value removes that key, which is the only way to
+        remove one when the write is a merge.
+        """
+        current = dict(self.status(session).get("tags") or {})
+        for key, value in _clean_tags(tags).items():
+            if value == "":
+                current.pop(key, None)
+            else:
+                current[key] = value
+        resolved = self._resolve_session(session)
+        self._send(
+            "PATCH",
+            f"/api/conversations/{quote(resolved, safe='')}",
+            json={"tags": current},
+        )
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "tags": current,
+        }
 
     def artifacts(self, session: str, path: str | None = None) -> dict:
         """What this session wrote, or the contents of one file it wrote.
