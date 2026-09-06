@@ -75,3 +75,37 @@ a cp1252 console raises `UnicodeEncodeError`, so any front end that writes
 session data to stdout must reconfigure it to UTF-8 first.
 
 A dispatched workspace gets a `.git` directory created in it.
+
+## Event shapes
+
+A 5-turn session produced 21 events in five kinds. Counts from that session:
+
+| Kind | Source | n | Carries |
+|---|---|---|---|
+| `ConversationStateUpdateEvent` | environment | 9 | `key`, `value` |
+| `ActionEvent` | agent | 5 | `tool_name`, `thought[]`, `reasoning_content`, `action`, `tool_call` |
+| `ObservationEvent` | environment | 5 | `tool_name`, `observation.content[]` |
+| `SystemPromptEvent` | agent | 1 | `system_prompt.text`, `tools` |
+| `MessageEvent` | user or agent | 1 | `llm_message.role`, `llm_message.content[]` |
+
+Text is never a plain string. It is a list of content blocks, each
+`{"type": "text", "text": ...}`, reached at `llm_message.content` on a
+`MessageEvent`, `observation.content` on an `ObservationEvent`, and `thought`
+on an `ActionEvent`.
+
+### What a transcript must drop
+
+Two fields dominate the payload and neither helps the orchestrator:
+
+- `SystemPromptEvent.system_prompt.text` — kilobytes of fixed instructions,
+  identical in every session.
+- `ActionEvent.reasoning_content` — the model's private deliberation, routinely
+  longer than the code it produced.
+
+`ConversationStateUpdateEvent` is internal bookkeeping — nearly half the events
+here — and carries nothing a reader wants.
+
+Returning events raw would put all of that into the context of whoever asked
+for a transcript, which is the opposite of the point. Condensation keeps: user
+and agent messages, each action as its tool name plus its short `thought`, and
+each observation truncated.
