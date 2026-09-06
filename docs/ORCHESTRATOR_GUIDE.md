@@ -69,6 +69,33 @@ costs one message. A session heading the wrong way will not correct itself, and
 letting it finish to see what it produces is the expensive option. Watch
 `transcript` early rather than waiting on `result`.
 
+## A thinking session and a stuck one look identical
+
+Watched live, a review session read four files in seven seconds and then emitted
+nothing for five minutes: `status` said `running`, the transcript tail did not
+move, and `updated_at` stood still at the same second throughout. Then events
+resumed and it carried on working. It had been generating one long response the
+whole time.
+
+So `updated_at` tracks events, not activity, and during a reasoning turn there
+is **no progress signal at all** -- both things you can look at freeze together,
+and a session composing an answer is indistinguishable from one that has hung.
+
+The practical consequence is about `interrupt`, which is otherwise the right
+reflex. Interrupting during that window throws away a turn that was about to
+land. What is worth doing instead:
+
+- Wait longer than you think before interrupting a session that has read its
+  inputs and gone quiet. Five minutes of silence was normal here.
+- Judge by what it did *before* going quiet, which the transcript still shows.
+  A session that read the right files and went quiet is thinking; one that read
+  the wrong files and went quiet is going to come back with the wrong answer.
+- If it has been quiet far longer than a turn takes, `interrupt` and `send` a
+  correction. The history survives, so this costs one message, not a restart.
+
+The daemon log is the third place to look and it distinguishes these: a failing
+provider call leaves an error there while `status` still says `running`.
+
 ## Verifying an agent's work
 
 A session's `result` is its own account of what it did. Sessions have reported
