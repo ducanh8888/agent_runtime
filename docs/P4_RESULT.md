@@ -80,16 +80,27 @@ relative subdirectory is inside                     PASS -- allowed
 relative traversal still escapes                    PASS -- refused
 UNC path refused                                    PASS -- refused
 extended-length path refused                        PASS -- refused
+the refusal is marked is_error, not shown as success PASS
 hard link to the credential is refused              PASS
+a legitimately hard-linked library file is allowed  PASS
 dot-space component refused                         PASS
 triple-dot component refused                        PASS
 unknown preset name is refused                      PASS
 ALL ADVERSARIAL CHECKS PASSED
 ```
 
-The last three arrived after the run below found the guard letting a hard link
-through. They are here because a check that only ever passed would not have
-caught it.
+The last five arrived after the review below, and one of them is there because
+the first fix was wrong. Refusing any file with `st_nlink > 1` closes the
+hard-link hole and makes the runtime unusable: `uv` hard-links packages from its
+global cache, so **30,656 of the 31,402 files in this project's own virtualenv
+have more than one name**, and the guard would have refused to read almost any
+library source. That was measured before shipping rather than discovered after.
+
+`check_path` compares `(st_dev, st_ino)` against the runtime's own credential
+files instead. The attack is refused; a library file with three names is not.
+The limit is written into the docstring: this protects the runtime's secrets and
+nothing else, because confinement by path cannot see aliasing it is not told
+about, and closing that in general needs a sandbox.
 
 The second line matters as much as the refusals. Every other check is a
 refusal, so a preset that denied everything would have passed the lot while

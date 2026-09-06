@@ -70,6 +70,22 @@ One finding was asserted as fact and was false: the guard did approve a path
 component of `.. `, but writing through it fails, because Windows does not strip
 the trailing space to make it `..`.
 
+## The obvious fix for the hard link would have broken the runtime
+
+Refusing any file whose `st_nlink` exceeds one is the general form of the fix
+and it closes the hole. It also makes the file editor useless: `uv` hard-links
+packages from its global cache, so 30,656 of the 31,402 files in this project's
+own virtualenv have more than one name. An agent asking to read a library's
+source would have been refused.
+
+Counting before shipping took one command. The version that reached the
+repository compares device and inode against the runtime's own credential files,
+which is narrower and honest about being narrow.
+
+**The general lesson:** a security fix is a change like any other, and "does
+this break ordinary use" is a question with a measurable answer. The instinct
+that a stricter guard is a safer one is what makes that question easy to skip.
+
 Two things worth carrying:
 
 **The value was in the finding, not the report.** Taking the report at face
