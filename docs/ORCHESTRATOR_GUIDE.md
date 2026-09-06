@@ -104,13 +104,18 @@ sessions dispatched from threads, the dispatching process exits while they are
 still running, and a second process that has never seen them collects all three
 by id, reads their output, and finds each one confined to its own workspace.
 
-Two practical notes from doing it. Dispatch is not instant: each call waits for
-the daemon to create the conversation, and three dispatched from threads took
-twelve seconds between them. Whether threading bought anything is unmeasured --
-that number is consistent with each call taking twelve seconds or four, and only
-one of those makes threading worth it. What is safe to say is the order of
-magnitude: seconds, not milliseconds, so a fan-out is not free. And a session id
-is the whole handoff: write the ids down and any later
+Two practical notes from doing it. **Starting sessions does not parallelise.**
+Three dispatched from threads had their conversations created 1.3 seconds apart,
+spread 2.7 seconds end to end -- measured across two runs, from the `created_at`
+the daemon records. The threads submit at once and the daemon lays them down in
+a queue, so threading does not make a fan-out start faster. What it buys is
+everything after that: the three then run at the same time, which is the part
+that matters. Budget roughly a second and a half per session before any of them
+has done anything, and do not expect ten sessions to start in the time one does.
+
+Where exactly the queueing happens is not established here -- the client submits
+concurrently and the timestamps come back sequential, which is consistent with
+several things and proves none of them. And a session id is the whole handoff: write the ids down and any later
 process can pick the work up, which is what makes "dispatch and come back" real
 rather than a manner of speaking.
 
