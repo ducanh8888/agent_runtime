@@ -109,3 +109,24 @@ Returning events raw would put all of that into the context of whoever asked
 for a transcript, which is the opposite of the point. Condensation keeps: user
 and agent messages, each action as its tool name plus its short `thought`, and
 each observation truncated.
+
+## Workspace files
+
+`GET /api/conversations/{id}/workspace/{path}` serves one file, 200 with
+`text/plain; charset=utf-8` for text, 404 `{"detail": "File not found"}` when
+absent.
+
+`GET /api/conversations/{id}/workspace` — the root — **does not list the
+directory.** It is a static mount and answers 404 `{"detail": "No index.html in
+directory"}`. There is no listing endpoint anywhere on the daemon.
+
+So `artifacts` cannot enumerate over HTTP. It reads the workspace path from the
+conversation record and lists that directory on the local filesystem, which is
+sound here for the reason the daemon exists at all: it runs on this machine, and
+the workspace is a real local directory. Content is still fetched through the
+file route, so the daemon stays the one thing that reads session state.
+
+Path traversal has to be guarded in the client. The obvious probe is
+inconclusive — an HTTP client normalises `../` out of the URL before the server
+sees it — so a caller must reject absolute paths and anything that escapes the
+workspace root after normalisation, rather than assume the server does.
