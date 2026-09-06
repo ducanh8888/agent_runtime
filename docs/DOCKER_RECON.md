@@ -69,10 +69,48 @@ So the honest estimate: a vendored change to the conversation service, in the
 core of the daemon, not an integration. That is a scope decision rather than a
 task, and it is recorded here rather than half-built.
 
+## The experiment, and why it stopped
+
+The estimate above was tested rather than left as an estimate. Widening the one
+field to `BaseWorkspace` took a line, and it worked in the sense that mattered:
+the 422 disappeared and the daemon went all the way to `docker run` with the
+right image, the right mount and the right port mapping. So the type really was
+the only thing preventing the request from being expressed.
+
+It stopped one step further on. Every container the daemon launches fails with
+`Bind for 0.0.0.0:<port> failed: port is already allocated` -- for a port picked
+by the workspace, and equally for an explicit `host_port` verified free
+beforehand. The same picker followed by the same `docker run` succeeds three
+times out of three from an ordinary process, and publishing ports in that range
+by hand works every time. No container or stale endpoint holds them; the only
+container on this machine belongs to something else. So it is specific to the
+daemon process, and it is not the port range, not the picker, and not the
+check-then-use race.
+
+That was the boundary set for the experiment, so it was reverted. What it
+bought is a better answer than the estimate: **the architecture is not the
+obstacle, the environment is.** A Linux host, where docker is not reached
+through a WSL port proxy, would very likely get further on the same code.
+
+Two corrections to what is written above, both found by doing it:
+
+- `_prepare_request_workspace` returns the request untouched unless `worktree`
+  is set, which defaults to false. It does not unconditionally rebuild the
+  workspace as a `LocalWorkspace`; that path is opt-in. The host-path
+  assumptions are real but narrower than stated.
+- The claim that our guard cannot run inside the container was never verified.
+  `DockerWorkspace` is a `RemoteWorkspace`, which may keep the agent loop local
+  and ship only execution into the container -- in which case the guard applies
+  as it does now. It is moot while this is blocked, but it was presented as
+  established and it was not.
+
+The two fixes made getting here -- `.cmd` resolution on Windows, and
+registering the workspace kinds -- are independent of all this and stay.
+
 ## What to do instead, for now
 
 Nothing here changes the standing advice. `readonly` genuinely contains a
 session, because it has no terminal. `workspace` constrains ordinary behaviour
 and not a determined session, and the documentation says so in those words. The
-sandbox that would change that is available, reachable, and blocked on one
-vendored assumption.
+sandbox that would change that is available, reachable, and blocked on the
+environment rather than on the design.
