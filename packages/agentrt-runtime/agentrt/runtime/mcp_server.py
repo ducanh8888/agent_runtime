@@ -84,8 +84,8 @@ def dispatch(task: str, workspace: str, title: str | None = None) -> dict:
       Then say how far the reference goes -- "this file is complete for this
       task, do not verify it against the source". Calling a document
       authoritative says where it ranks, not that reading further is
-      unnecessary, and an agent that keeps checking can spend ten times the
-      cost of the code confirming what you already told it.
+      unnecessary. An agent that keeps checking can burn an hour confirming
+      what you already told it and write nothing.
     - Say what it must not touch -- committing, pushing, files outside its
       remit -- if that matters. It will not infer your conventions.
     - Do not describe its tools. It has a terminal, a file editor and a task

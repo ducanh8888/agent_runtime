@@ -23,21 +23,25 @@ the surface does not reveal.
 
 ## What dispatching actually costs
 
-Measured on this project, one session against `ds/deepseek-v4-flash`:
+Measured against `ds/deepseek-v4-flash`, with `tools/spend.py`:
 
-| Session | Prompt tokens | Completion |
-|---|---|---|
-| Small, well-specified task (FizzBuzz, verified) | 80,622 | 2,364 |
-| Seven methods against a documented interface | 857,156 | 17,744 |
+| Session | Fresh input | Cached input | Output | Estimate |
+|---|---|---|---|---|
+| FizzBuzz, specified and verified | 19,438 | 61,184 | 2,364 | ~$0.008 |
+| Seven methods, ran an hour, wrote nothing | 161,360 | 2,153,600 | 36,578 | ~$0.12 |
 
-The second session was interrupted before it wrote a line of code. It had spent
-that budget re-reading the vendored server to confirm facts it had already been
-handed in writing.
+**Read prompt-token counts with caching in mind or you will reach the wrong
+conclusion.** A session re-sends its transcript every turn, so a long one
+accumulates enormous prompt totals — but 91% of them here were cache hits,
+billed at roughly a tenth of fresh input. Pricing prompt tokens at one flat
+rate made the second session look six times more expensive than it was, and
+turned a 2.6x difference against single-shot generation into an apparent 130x.
 
-Prompt tokens dominate, and most of them are the session re-reading its own
-context each turn. The lever that matters is therefore how many turns a session
-takes, and the thing that most reliably inflates that number is an agent that
-does not trust what it was given.
+The real figures are small. An hour of agent work costs on the order of ten
+cents. Cost is therefore not the reason to be careful about what you dispatch —
+convergence is. The second session above spent its hour re-reading the vendored
+server to confirm facts it had already been handed in writing, and produced
+nothing. What it wasted was an hour, not a budget.
 
 ## Pointing at a document is not enough
 
