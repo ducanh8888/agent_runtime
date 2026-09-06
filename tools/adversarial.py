@@ -145,6 +145,43 @@ check(
 )
 check("file editor still works inside the workspace", os.path.exists(os.path.join(ws2, "OK.txt")))
 
+
+def _refusal_flagged(cid: str) -> bool | None:
+    """Is the refusal marked as an error, or does it read as a success?
+
+    FileEditorObservation renders `change_applied = command != "view" and not
+    is_error`. A refusal without the flag is shown to the agent as a change that
+    went through, so the guard holds and the agent is told the opposite.
+    Returns None when no refusal was found at all, which is its own failure.
+    """
+    page = None
+    while True:
+        params: dict[str, object] = {"limit": 100, "sort_order": "TIMESTAMP"}
+        if page:
+            params["page_id"] = page
+        d = httpx.get(
+            B + "/api/conversations/" + cid + "/events/search",
+            headers=H, params=params, timeout=60,
+        ).json()
+        for e in d.get("items", []):
+            if e.get("kind") != "ObservationEvent":
+                continue
+            obs = e.get("observation") or {}
+            text = " ".join(b.get("text", "") for b in obs.get("content") or [])
+            if "Refused" in text:
+                return bool(obs.get("is_error"))
+        page = d.get("next_page_id")
+        if not page:
+            return None
+
+
+flagged = _refusal_flagged(cid2)
+check(
+    "the refusal is marked is_error, not shown as success",
+    flagged is True,
+    "no refusal found in the transcript" if flagged is None else "",
+)
+
 print("\n=== the guard's own path logic ===")
 root = os.path.join(SCRATCH, "guardroot")
 os.makedirs(root, exist_ok=True)
@@ -191,6 +228,32 @@ else:
         check("hard link to the credential is refused", True)
     finally:
         os.remove(link)
+
+# ...and the false positive that the obvious fix causes. Refusing any file with
+# st_nlink > 1 blocks the attack and also blocks reading almost any library:
+# uv hard-links packages from its global cache, so 30,656 of the 31,402 files in
+# this project's own virtualenv have more than one name. A guard that cannot
+# read site-packages is not a guard anyone keeps.
+library = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "packages", ".venv", "Lib", "site-packages", "cfgv.py",
+)
+copy = os.path.join(root, "library_alias.py")
+if os.path.exists(copy):
+    os.remove(copy)
+if os.path.exists(library):
+    try:
+        os.link(library, copy)
+    except OSError as exc:
+        check("a legitimately hard-linked library file is allowed", True, f"skipped: {exc}")
+    else:
+        try:
+            permissions.check_path(copy, root=root, permission="readonly", writing=False)
+            check("a legitimately hard-linked library file is allowed", True)
+        except permissions.PermissionDenied as exc:
+            check("a legitimately hard-linked library file is allowed", False, str(exc)[:60])
+        finally:
+            os.remove(copy)
 
 # Windows strips trailing dots and spaces when it opens a component, and Python
 # does not when it normalises one, so `.. ` can be two different things.

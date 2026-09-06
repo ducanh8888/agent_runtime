@@ -162,28 +162,65 @@ def check_path(
             f"path is outside the workspace: {resolved} is not inside {workspace}"
         )
 
-    # A hard link is a second name for one file, and no amount of path
-    # resolution can see it: `resolve()` returns the name it was given, that
-    # name is inside the workspace, and the bytes belong to a file that is not.
-    # A workspace holding a hard link to the credential therefore reads it
-    # through an approved path -- demonstrated against a real `readonly`
-    # session, which cannot create such a link but does not need to when the
-    # directory it was pointed at already contains one.
-    #
-    # st_nlink is the only cheap signal: a file with more than one name may be
-    # that alias. Directories are exempt, since they legitimately carry higher
-    # link counts on some filesystems.
+    if _is_runtime_secret(resolved):
+        raise PermissionDenied(
+            f"refusing {resolved}: it is the same file as one of the runtime's "
+            "own credential files, reached under a different name"
+        )
+    return resolved
+
+
+def _secret_identities() -> set[tuple[int, int]]:
+    """(device, inode) of every file in the state directory holding a secret.
+
+    Identity rather than path, because that is the thing a second name cannot
+    disguise. Recomputed per call: these files are few, and caching them would
+    mean a credential rewritten after startup stopped being recognised.
+    """
+    from agentrt.runtime import config
+
+    state = config.state_dir()
+    candidates = [state / ".env", state / "daemon.json", *(state / "profiles").glob("*.json")]
+    out: set[tuple[int, int]] = set()
+    for path in candidates:
+        try:
+            info = path.stat()
+        except OSError:
+            continue
+        if info.st_ino:  # 0 means the filesystem does not report one
+            out.add((info.st_dev, info.st_ino))
+    return out
+
+
+def _is_runtime_secret(resolved: Path) -> bool:
+    """Is this path another name for one of the runtime's credential files?
+
+    A hard link is a second name for one file, and no path resolution reveals
+    it: ``resolve()`` returns the name it was given, that name is inside the
+    workspace, and the bytes belong to a file that is not. A workspace holding a
+    link to the credential therefore reads it through an approved path --
+    demonstrated against a real ``readonly`` session, which cannot create such a
+    link but does not need to when the directory it was pointed at already has
+    one.
+
+    Matching on identity catches that. An earlier attempt refused any file whose
+    ``st_nlink`` exceeded one, which is the general form of the problem and
+    unusable in practice: ``uv`` hard-links packages from its global cache, so
+    30,656 of the 31,402 files in this project's own virtualenv have more than
+    one name. That guard would have refused to read almost any library source.
+
+    Stated plainly, this protects the runtime's own secrets and nothing else. A
+    hard link to some other file outside the workspace stays invisible, because
+    confinement by path cannot see aliasing it is not told about. Closing that
+    properly needs a sandbox, not a cleverer check.
+    """
     try:
         info = resolved.stat()
     except OSError:
-        # Being created, or unreadable. Nothing to alias yet.
-        return resolved
-    if not resolved.is_dir() and getattr(info, "st_nlink", 1) > 1:
-        raise PermissionDenied(
-            f"refusing {resolved}: it has {info.st_nlink} hard links, so the "
-            "name is inside the workspace but the file it names may not be"
-        )
-    return resolved
+        return False
+    if not info.st_ino:
+        return False
+    return (info.st_dev, info.st_ino) in _secret_identities()
 
 
 def tools_for(permission: Permission) -> list[str]:
