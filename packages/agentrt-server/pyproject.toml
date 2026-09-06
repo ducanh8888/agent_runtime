@@ -10,6 +10,10 @@ dependencies = [
   "docker>=7.1,<8",
   "fastapi>=0.104",
   "agentrt-sdk",
+  # api.py imports libtmux directly. It was declared only by agentrt-tools,
+  # which this package does not depend on, so installing the server without
+  # the tools package gave an ImportError at first request.
+  "libtmux>=0.53.0",
   "openai>=2.33.0,<3",
   "pydantic>=2",
   "sqlalchemy>=2",

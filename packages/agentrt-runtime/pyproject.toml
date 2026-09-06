@@ -10,6 +10,11 @@ requires-python = ">=3.12"
 dependencies = [
     "agentrt-sdk",
     "agentrt-server",
+    # bootstrap.py imports agentrt.tools.preset.default to register the terminal,
+    # file editor and task tracker. Undeclared until a clean install went looking
+    # for it: every workspace member is present in a development checkout, so
+    # nothing here failed until the package was installed on its own.
+    "agentrt-tools",
     "httpx>=0.28",
     "mcp>=1.28",
 ]

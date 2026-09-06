@@ -111,6 +111,37 @@ able from the right answer. Point it at a real repository and it is not: with a
 session wrote appears, because `.` sorts before every letter. It now lists what
 changed since the session started, newest first, and prunes dependency trees.
 
+## Installing it somewhere else
+
+    uv tool install path/to/agent_runtime/packages/agentrt-runtime
+
+That installs two commands, `agentrt` and `agentrt-mcp`, into an environment of
+their own. Point an MCP client at the second and the eight tools are available
+in any repository; the first is the same thing from a shell. Nothing needs the
+checkout afterwards -- configuration comes from the process environment or the
+state directory, and only falls back to a development `.env` when there is one
+above the working directory.
+
+Two things that only showed up when it was installed for real, both now fixed
+and both worth knowing about as a shape:
+
+**The first start can take minutes.** Importing the model stack cold on Windows
+took longer than the old sixty-second ceiling, so the daemon was killed
+mid-startup and the first command a new user ran failed with what looked like a
+real error. The same start warm takes 37 seconds. The wait is now generous, and
+a child process that has actually exited is detected at once rather than waited
+out, so a genuine failure still reports immediately.
+
+**Two packages imported things they never declared.** `agentrt-runtime` used
+`agentrt.tools.preset.default` without depending on `agentrt-tools`, and
+`agentrt-server` imports `libtmux` while only `agentrt-tools` declared it. Both
+worked in a development checkout for the same reason: a uv workspace installs
+every member, so nothing is ever missing there. An installed package is the only
+thing that tests what a package actually says it needs.
+
+The installed copy is a snapshot. Changing the source does not change it --
+`uv tool install --reinstall` does.
+
 ## Configuration and state
 
 Configuration resolves from the process environment, then `<state-dir>/.env`,

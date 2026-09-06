@@ -137,10 +137,16 @@ def _log_tail() -> str:
     return "\n".join(lines[-30:])
 
 
-def ensure_running(startup_timeout: float = 60.0) -> DaemonInfo:
+def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
     """Start the daemon if needed, or return the already-running instance."""
     lock_path = config.state_dir() / "daemon.lock"
     lock_fd: int | None = None
+    # The startup default is 240s rather than 60s. Measured on a fresh
+    # `uv tool install`: the first daemon start took longer than a minute and
+    # was killed, so the very first thing a new user does failed, with a message
+    # that read like a real failure. The same start warm takes 37 seconds. A
+    # generous ceiling costs nothing now that a child which has exited is
+    # detected immediately instead of being waited out.
     acquire_deadline = time.monotonic() + 30.0
 
     try:
@@ -232,6 +238,15 @@ def ensure_running(startup_timeout: float = 60.0) -> DaemonInfo:
         while time.monotonic() < alive_deadline:
             if is_alive(info, timeout=0.5):
                 return info
+            # A child that has exited is never going to answer, so stop waiting
+            # on it. Separating "died" from "slow" is what lets the timeout be
+            # generous without making a genuine failure take minutes to report.
+            if proc.poll() is not None:
+                _remove_daemon_file()
+                raise RuntimeError(
+                    "agent server daemon exited during startup; log tail:\n"
+                    + _log_tail()
+                )
             time.sleep(0.3)
 
         try:
@@ -240,7 +255,11 @@ def ensure_running(startup_timeout: float = 60.0) -> DaemonInfo:
             pass
         _remove_daemon_file()
         raise RuntimeError(
-            "agent server daemon failed to start; log tail:\n" + _log_tail()
+            f"agent server daemon did not answer within {startup_timeout:.0f}s "
+            "and was stopped. It was still running, so it may simply have "
+            "needed longer: a first start after installation imports the whole "
+            "model stack cold. Try again, or pass a larger startup_timeout.\n"
+            "log tail:\n" + _log_tail()
         )
     finally:
         if lock_fd is not None:
