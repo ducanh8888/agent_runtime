@@ -180,8 +180,11 @@ PASS: the planted agent definition ran nothing.
 Intersection logic on top of that would guard a door with no handle on it. It
 belongs with whatever enables sub-agents.
 
-**The dispatcher boundary is only half built, and the criterion quoted at the
-top of this file is therefore not fully met.** The plan asks that a `broad`
+**The dispatcher boundary is only half built.** The criterion was withdrawn
+from the plan's done conditions by decision once the analysis below was read,
+and moved to the accepted-risk table: it cannot be met without a sandbox, so
+holding the phase open against it was holding it open against the wrong thing.
+What follows is why. The plan asks that a `broad`
 session cannot create another session through shell, HTTP or MCP, and names
 three guards for it: strip the token from tool environments, reject requests
 carrying `parent_conversation_id`, and keep agentrt out of a worker's MCP
