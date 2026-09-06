@@ -110,6 +110,14 @@ class GuardedFileEditorTool(FileEditorTool):
         return guarded
 
 
+# ToolDefinition.__init_subclass__ derives `name` from the class name, so this
+# subclass would introduce itself to the model as `guarded_file_editor` while
+# every profile, description and system prompt says `file_editor`. Found by
+# reading a session's transcript, not by any test: the guard worked, and the
+# tool it guarded had quietly been renamed.
+GuardedFileEditorTool.name = FileEditorTool.name
+
+
 def install() -> None:
     """Replace the registered `file_editor` with the guarded one.
 
