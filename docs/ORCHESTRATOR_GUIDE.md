@@ -96,6 +96,28 @@ Windows and `~/.agentrt` elsewhere.
 `agentrt daemon logs` tails `daemon.log`, which holds server-side tracebacks
 when a session fails for no visible reason.
 
+## Fanning out, and outliving the process that dispatched
+
+Sessions do survive the orchestrator exiting, which is the reason this runs as a
+daemon at all. Verified rather than assumed, in `tools/probe_parallel.py`: three
+sessions dispatched from threads, the dispatching process exits while they are
+still running, and a second process that has never seen them collects all three
+by id, reads their output, and finds each one confined to its own workspace.
+
+Two practical notes from doing it. Dispatch is not instant -- three took twelve
+seconds to start, because each call waits for the daemon to create the
+conversation, so an orchestrator should start them from threads and not one at a
+time. And a session id is the whole handoff: write the ids down and any later
+process can pick the work up, which is what makes "dispatch and come back" real
+rather than a manner of speaking.
+
+A concurrent cap (`AGENTRT_MAX_SESSIONS`, default 5, non-positive means no
+limit) refuses a dispatch when that many are already running. **It is read in
+the process that dispatches, not on the daemon** -- for MCP that is the server
+Claude Code spawns, so it belongs in the MCP entry's environment. The refusal
+message used to point at the daemon, which is the one place setting it does
+nothing.
+
 ## Test workspaces are not repositories
 
 Two defects here had the same shape, and neither was subtle once seen.

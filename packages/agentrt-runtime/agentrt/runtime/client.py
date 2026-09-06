@@ -388,7 +388,9 @@ class Client:
                 raise ClientError(
                     f"{len(running)} sessions are already running and the limit "
                     f"is {cap}. Wait for one to finish, stop one, or raise "
-                    "AGENTRT_MAX_SESSIONS on the daemon's environment."
+                    "AGENTRT_MAX_SESSIONS in the environment of whatever "
+                    "dispatches -- this check runs here, not on the daemon, so "
+                    "setting it on the daemon has no effect."
                 )
 
         body: dict = {
