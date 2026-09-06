@@ -26,9 +26,17 @@ The open question was whether a preset with no terminal could navigate a
 repository at all. It can: given four file paths in the task, a `readonly`
 session read all four and worked from them.
 
-The limit is real, though. Without a terminal there is no `ls` and no `grep`, so
-a `readonly` session cannot *find* anything it was not told about. Naming the
-files in the task is not a nicety for this preset, it is the precondition.
+It also navigates on its own, which was not obvious: the file editor's `view`
+command works on a directory and returns "the files and directories up to 2
+levels deep", so a `readonly` session can explore without a shell. Watching the
+transcript showed it walking into `agentrt-sdk` and `agentrt-tools` — files the
+task never named.
+
+An earlier draft of this entry claimed the opposite, that without a terminal the
+session could not find anything it had not been told about. That was written
+from what the preset omits rather than from what the session did, and the
+transcript contradicted it within the hour. What remains true is narrower: there
+is no `grep`, so finding a *string* rather than a *path* is still hard.
 
 ## Iterating on the MCP surface needs an orchestrator restart
 
