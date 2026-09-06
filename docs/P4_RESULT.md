@@ -180,3 +180,38 @@ running tests — needs exactly that. So the credential remains exposed to any
 session doing real work, and the mitigation is choosing what to dispatch, not a
 preset. `readonly` is genuinely safe and is the right default for review,
 summarisation, and any question that only needs reading.
+
+## Regression against the vendored suite
+
+The SDK was edited, so the full suite was re-run and compared per test id
+against `final.xml`, the accepted post-rename reference.
+
+```
+reference failing: 101   after: 113
+NEW failures: 14   newly passing: 2   ids removed: 0   ids added: 0
+```
+
+Twelve of the fourteen are the groups already characterised in
+[P2_RESULT.md](P2_RESULT.md): tests asserting a *default* path while the run
+exported `AGENTRT_PERSISTENCE_DIR`, the known flaky async-hook pair, and tests
+that fetch model metadata or a GitHub repository at run time. Two of those were
+re-run in isolation without the environment override and passed.
+
+**Two were caused by P4**, and both assert exactly the behaviour the plugin gate
+removes:
+
+```
+TestAmbientPluginAutoLoad::test_enabled_installed_plugin_auto_loads_into_conversation
+TestAmbientPluginAutoLoad::test_ambient_plugins_are_not_recorded_in_resolved_plugins
+```
+
+They were fixed rather than deleted. Their shared `_isolate` helper — the one
+that already redirects discovery at test directories — now also sets
+`AGENTRT_AMBIENT_PLUGINS=1`, so the tests cover the path as an operator who
+turned it back on would use it. The behaviour still exists and is still worth
+testing; what changed is that it no longer happens without being asked for.
+`tests/sdk/conversation/test_local_conversation_plugins.py` passes 35 of 35.
+
+Running the plugin, subagent and conversation-service plugin tests earlier had
+given 335 passed and missed this: the failing module was not among them. Only
+the full suite, compared per id, found it.

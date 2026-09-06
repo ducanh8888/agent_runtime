@@ -1557,7 +1557,17 @@ class TestAmbientPluginAutoLoad:
     """
 
     def _isolate(self, monkeypatch, user_dirs: list[Path], install_store: Path):
-        """Point discovery at test directories instead of the real home."""
+        """Point discovery at test directories instead of the real home.
+
+        agentrt turns ambient discovery off by default -- a plugin's hooks are
+        shell commands, and discovery reaches the session's workspace and the
+        enclosing git repository, so dispatching an agent into unread code would
+        run that code's commands. These tests cover the behaviour when an
+        operator has deliberately turned it back on, so they set the switch
+        rather than being deleted: the path still exists and is still worth
+        testing.
+        """
+        monkeypatch.setenv("AGENTRT_AMBIENT_PLUGINS", "1")
         monkeypatch.setattr(discovery, "USER_PLUGINS_DIRS", user_dirs)
         monkeypatch.setattr(installed, "DEFAULT_INSTALLED_PLUGINS_DIR", install_store)
 
