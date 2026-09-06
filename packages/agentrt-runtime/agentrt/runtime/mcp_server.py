@@ -153,10 +153,14 @@ def result(session: str) -> dict:
 def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict:
     """Read what a session actually did, condensed.
 
-    Returns up to limit events oldest first: messages, each action as its tool
-    name and short intent, and each observation truncated. next_cursor pages
-    backwards into older events; pass it back as cursor. limit is capped at
-    100.
+    Returns events oldest first: messages, each action as its tool name and
+    short intent, and each observation truncated. next_cursor pages backwards
+    into older events; pass it back as cursor.
+
+    limit counts raw events, and roughly half of those are internal bookkeeping
+    that gets dropped, so you will get noticeably fewer than you asked for --
+    limit=30 typically returns 11 to 15. It is capped at 100. When next_cursor
+    is not null there are older events regardless of how few came back.
 
     The agent's private reasoning and its system prompt are excluded. They are
     the bulk of the raw payload and would cost you far more context than they

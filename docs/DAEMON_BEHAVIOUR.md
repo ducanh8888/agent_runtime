@@ -88,6 +88,11 @@ A 5-turn session produced 21 events in five kinds. Counts from that session:
 | `SystemPromptEvent` | agent | 1 | `system_prompt.text`, `tools` |
 | `MessageEvent` | user or agent | 1 | `llm_message.role`, `llm_message.content[]` |
 
+A sixth kind, `InterruptEvent`, appears only in a session that was actually
+interrupted, so a probe that never interrupts will not see it. Treat the list
+above as the kinds a normal run produces, not as exhaustive: condensation should
+skip unknown kinds rather than fail on them.
+
 Text is never a plain string. It is a list of content blocks, each
 `{"type": "text", "text": ...}`, reached at `llm_message.content` on a
 `MessageEvent`, `observation.content` on an `ObservationEvent`, and `thought`
@@ -130,3 +135,11 @@ Path traversal has to be guarded in the client. The obvious probe is
 inconclusive — an HTTP client normalises `../` out of the URL before the server
 sees it — so a caller must reject absolute paths and anything that escapes the
 workspace root after normalisation, rather than assume the server does.
+
+### limit counts raw events, not condensed ones
+
+Roughly half of a session's events are `ConversationStateUpdateEvent` and are
+dropped, so a page of `limit` raw events yields far fewer. Measured: a 21-event
+session returns 11 condensed. A caller asking for 30 typically receives 11 to
+15, and `next_cursor` -- not the number returned -- is what says whether older
+events remain.
