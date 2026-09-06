@@ -29,7 +29,7 @@ SCRATCH = os.path.join(tempfile.gettempdir(), "agentrt-checks")
 info = daemon.ensure_running()
 H = {"X-Session-API-Key": info.token}
 B = info.base_url
-PROFILE = str(bootstrap.ensure_profiles())
+PROFILE = str(bootstrap.ensure_profiles()["workspace"])
 
 
 def dispatch(task: str, title: str, name: str) -> str:

@@ -83,7 +83,7 @@ cid = httpx.post(
     timeout=120,
     json={
         "workspace": {"working_dir": WS},
-        "agent_profile_id": str(bootstrap.ensure_profiles()),
+        "agent_profile_id": str(bootstrap.ensure_profiles()["workspace"]),
         "initial_message": {
             "role": "user",
             "content": [{"type": "text", "text":

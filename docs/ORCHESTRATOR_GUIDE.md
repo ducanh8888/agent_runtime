@@ -89,11 +89,24 @@ when a session fails for no visible reason.
 
 ## Limits worth knowing
 
-- **No permission control yet.** Every session runs with the authority of the
-  user who started the daemon. A session can read the credential in the state
-  directory whatever workspace it is given. Moving the credential out of a
-  repository reduces accidental exposure; it does not contain a session that
-  goes looking.
+- **Only `readonly` actually contains a session.** It has no terminal, and its
+  file editor may view inside the workspace and nothing else, so it cannot
+  reach the credential in the state directory. `workspace` confines the file
+  editor but still grants a terminal, and `python -c` opens any file the user
+  can — it constrains ordinary behaviour, not a determined session. `broad`
+  confines nothing.
+
+  This is not a gap waiting to be closed in-process. A rule evaluated over
+  shell command text is defeated by any interpreter the machine already has.
+  Confining a session that has a shell needs a sandbox, which is a separate
+  layer and deliberately out of scope.
+
+- **Ambient plugins and file-based agents are off by default.** A plugin's
+  hooks are shell commands, and discovery scanned the session's workspace, the
+  enclosing git repository root, and the user's home directory — so dispatching
+  into a repository that carried `.agents/plugins` ran its commands, whatever
+  tools the profile granted. `AGENTRT_AMBIENT_PLUGINS=1` restores upstream
+  behaviour; leave it unset unless you trust every directory you dispatch into.
 - **Shared workspaces are not coordinated.** Two sessions in one directory can
   overwrite each other, and sequencing them is the orchestrator's job.
 - **Sessions are kept until deleted.** Nothing expires.
