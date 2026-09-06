@@ -74,15 +74,25 @@ def normalise(permission: str | None) -> Permission:
     return value  # type: ignore[return-value]
 
 
-def _real(path: str | os.PathLike[str]) -> Path:
+def _real(path: str | os.PathLike[str], *, base: str | os.PathLike[str] | None = None) -> Path:
     """Resolve a path the way the filesystem will.
 
     ``resolve()`` rather than ``normpath`` because it follows symlinks and
     Windows junctions; a check against the unresolved name would approve a link
     whose target is elsewhere. ``strict=False`` because a path being created
     does not exist yet, and refusing to check it would leave `create` unguarded.
+
+    A relative path is joined onto ``base`` rather than left to ``resolve()``,
+    which would anchor it to the daemon's own working directory. That directory
+    is wherever the daemon happened to be started, so an agent asking for
+    ``OK.txt`` in its workspace was told the file was outside the workspace --
+    true of the path that had been constructed, and nothing to do with what it
+    asked for.
     """
-    return Path(path).resolve()
+    candidate = Path(path)
+    if base is not None and not candidate.is_absolute():
+        candidate = Path(base) / candidate
+    return candidate.resolve()
 
 
 def contains(root: Path, target: Path) -> bool:
@@ -115,7 +125,7 @@ def check_path(
     checked, rather than re-deriving it and possibly getting a different one.
     """
     if permission == "broad":
-        return _real(raw_path)
+        return _real(raw_path, base=root)
 
     text = str(raw_path)
     # Extended-length and UNC prefixes bypass the normalisation everything else
@@ -130,8 +140,8 @@ def check_path(
             "this session is readonly; it may view files but not change them"
         )
 
-    resolved = _real(text)
     workspace = _real(root)
+    resolved = _real(text, base=workspace)
     if not contains(workspace, resolved):
         raise PermissionDenied(
             f"path is outside the workspace: {resolved} is not inside {workspace}"
