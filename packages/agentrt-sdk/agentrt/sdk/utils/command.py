@@ -1,5 +1,6 @@
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -91,9 +92,22 @@ def execute_command(
         use_shell = True
         cmd_str = cmd
     else:
-        cmd_to_run = cmd
+        cmd_to_run = list(cmd)
         use_shell = False
         cmd_str = " ".join(shlex.quote(c) for c in cmd)
+        # Resolve the program through PATH ourselves on Windows. CreateProcess
+        # only appends `.exe`, so a program installed as a `.cmd` or `.bat`
+        # shim -- which is how `docker` arrives on this machine, and how npm
+        # and friends arrive generally -- raises FileNotFoundError from a list
+        # form that `shutil.which` resolves happily. Without this,
+        # `DockerWorkspace` fails on its first call, `["docker", "version"]`,
+        # with an error that says the file does not exist while `docker` works
+        # in any shell. No effect on POSIX, where `which` returns the same path
+        # CreateProcess would have found.
+        if os.name == "nt" and cmd_to_run:
+            resolved = shutil.which(cmd_to_run[0])
+            if resolved:
+                cmd_to_run[0] = resolved
 
     # Log the command with sensitive values redacted
     logger.info("$ %s", redact_text_secrets(cmd_str))
