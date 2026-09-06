@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 import httpx
@@ -43,6 +43,16 @@ def _status_of(data: object) -> str | None:
     if not isinstance(data, dict):
         return None
     return data.get("execution_status") or data.get("status")
+
+def _join_text(blocks: object) -> str:
+    """Join the ``"text"`` fields of content blocks, tolerating non-lists."""
+    if not isinstance(blocks, list):
+        return ""
+    return "".join(
+        b.get("text", "")
+        for b in blocks
+        if isinstance(b, dict) and isinstance(b.get("text"), str)
+    )
 
 
 def _text_from_response(data: object) -> str | None:
@@ -407,3 +417,187 @@ class Client:
             "status": status,
             "result": _text_from_response(data),
         }
+
+    def transcript(
+        self, session: str, *, limit: int = 30, cursor: str | None = None
+    ) -> dict:
+        """Return conversation events oldest first; ``next_cursor`` pages
+        backwards into older events."""
+        resolved = self._resolve_session(session)
+
+        params: dict[str, object] = {
+            "sort_order": "TIMESTAMP_DESC",
+            "limit": min(limit, 100),
+        }
+        if cursor:
+            params["page_id"] = cursor
+
+        data = self._send(
+            "GET",
+            f"/api/conversations/{quote(resolved, safe='')}/events/search",
+            params=params,
+        ).json()
+
+        events: list[dict] = []
+        items = data.get("items") if isinstance(data, dict) else None
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            kind = item.get("kind")
+            if kind == "MessageEvent":
+                message = item.get("llm_message") or {}
+                events.append(
+                    {
+                        "type": "message",
+                        "role": message.get("role"),
+                        "text": _join_text(message.get("content")),
+                    }
+                )
+            elif kind == "ActionEvent":
+                events.append(
+                    {
+                        "type": "action",
+                        "tool": item.get("tool_name"),
+                        "thought": _capped(_join_text(item.get("thought")), 400),
+                    }
+                )
+            elif kind == "ObservationEvent":
+                observation = item.get("observation") or {}
+                events.append(
+                    {
+                        "type": "observation",
+                        "tool": item.get("tool_name"),
+                        "output": _capped(
+                            _join_text(observation.get("content")), 600
+                        ),
+                    }
+                )
+
+        events.reverse()
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+            "events": events,
+            "next_cursor": data.get("next_page_id") if isinstance(data, dict) else None,
+        }
+
+    def send(self, session: str, message: str) -> dict:
+        """Post a user message and start a run (``run=True`` is required)."""
+        resolved = self._resolve_session(session)
+        self._send(
+            "POST",
+            f"/api/conversations/{quote(resolved, safe='')}/events",
+            json={
+                "role": "user",
+                "content": [{"type": "text", "text": message}],
+                "run": True,
+            },
+        )
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+        }
+
+    def interrupt(self, session: str) -> dict:
+        """Cancel work in flight; the session becomes "paused", still resumable."""
+        resolved = self._resolve_session(session)
+        self._send(
+            "POST", f"/api/conversations/{quote(resolved, safe='')}/interrupt"
+        )
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+        }
+
+    def stop(self, session: str) -> dict:
+        """Pause a session. Maps to /pause, not /goal/stop -- /goal/stop
+        belongs to a separate objective subsystem and does nothing to an
+        ordinary conversation."""
+        resolved = self._resolve_session(session)
+        self._send("POST", f"/api/conversations/{quote(resolved, safe='')}/pause")
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+        }
+
+    def resume(self, session: str) -> dict:
+        """Resume a paused session. Maps to /run, not /goal/resume, which
+        returns HTTP 400 "no_resumable_goal" on an ordinary conversation."""
+        resolved = self._resolve_session(session)
+        self._send("POST", f"/api/conversations/{quote(resolved, safe='')}/run")
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+        }
+
+    def delete(self, session: str) -> dict:
+        """Delete a session."""
+        resolved = self._resolve_session(session)
+        self._send("DELETE", f"/api/conversations/{quote(resolved, safe='')}")
+        return {"id": resolved, "short_id": short_id(resolved), "deleted": True}
+
+    def artifacts(self, session: str, path: str | None = None) -> dict:
+        """List workspace files locally, or fetch one file when ``path`` is given.
+
+        The daemon has no directory-listing endpoint, so listing is done
+        locally, which is correct because the daemon runs on this machine.
+        """
+        resolved = self._resolve_session(session)
+        workspace = self.status(resolved).get("workspace")
+        if not workspace:
+            raise ClientError(f"no workspace known for session {short_id(resolved)}")
+
+        if path is not None:
+            if os.path.isabs(path):
+                raise ClientError(f"absolute paths are not allowed: {path!r}")
+            root = os.path.abspath(workspace)
+            joined = os.path.normpath(os.path.join(root, path))
+            if joined != root and not joined.startswith(root.rstrip(os.sep) + os.sep):
+                raise ClientError(f"path escapes the workspace: {path!r}")
+            response = self._send(
+                "GET",
+                f"/api/conversations/{quote(resolved, safe='')}/workspace/{quote(path, safe='/')}",
+            )
+            return {
+                "id": resolved,
+                "short_id": short_id(resolved),
+                "path": path,
+                "content": response.text,
+            }
+
+        found: list[dict] = []
+        for dirpath, dirnames, filenames in os.walk(workspace):
+            dirnames[:] = sorted(
+                d for d in dirnames if d not in (".git", "__pycache__")
+            )
+            for name in filenames:
+                full = os.path.join(dirpath, name)
+                try:
+                    entry_stat = os.stat(full)
+                except OSError:
+                    continue
+                found.append(
+                    {
+                        "path": os.path.relpath(full, workspace).replace(
+                            os.sep, "/"
+                        ),
+                        "size": entry_stat.st_size,
+                        "modified": datetime.fromtimestamp(
+                            entry_stat.st_mtime, tz=timezone.utc
+                        ).isoformat(),
+                    }
+                )
+        found.sort(key=lambda entry: entry["path"])
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "workspace": workspace,
+            "files": found[:200],
+            "truncated": len(found) > 200,
+        }
+
