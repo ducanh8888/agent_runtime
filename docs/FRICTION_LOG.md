@@ -52,15 +52,23 @@ something confirmed separately.
 ## A dispatched review found a real hole; two of its three findings did not hold
 
 The first real use of `readonly` was reviewing the permission code itself. It
-reported three bypasses. One was a genuine hole that seventeen adversarial
-checks had missed — a hard link inside the workspace is a second name for a file
-outside it, and no path resolution can see that. Reproduced against the real
-credential, then fixed with an `st_nlink` check.
+reported six problems; five were real.
 
-The second was asserted as fact and was not: the guard did approve a path
+The one that mattered most for security had gone past seventeen adversarial
+checks: a hard link inside the workspace is a second name for a file outside it,
+and no path resolution can see that. Reproduced against the real credential,
+then fixed with an `st_nlink` check.
+
+The one that mattered most in practice was duller. A refusal was returned
+without `is_error`, and the observation's rendering computes
+`change_applied = command != "view" and not is_error` — so the guard refused the
+write and then told the agent it had succeeded. Nothing about that is a security
+boundary; it just meant the enforcement was invisible to the thing being
+enforced against.
+
+One finding was asserted as fact and was false: the guard did approve a path
 component of `.. `, but writing through it fails, because Windows does not strip
-the trailing space to make it `..`. The third was a fair criticism of the design
-rather than a bypass.
+the trailing space to make it `..`.
 
 Two things worth carrying:
 

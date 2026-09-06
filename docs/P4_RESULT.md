@@ -215,10 +215,29 @@ and the executor threw it away and passed the original string on. The module
 docstring justified this and was too confident. The editor is now handed the
 approved path.
 
-Three findings, two real, one overstated. The report was treated as a set of
-claims to test, which is the same standard the `result` tool description asks an
-orchestrator to apply to any session — and it earned its keep: seventeen
-adversarial checks had passed against a guard that a hard link walked through.
+It also raised three correctness problems that had nothing to do with the guard,
+and all three were real:
+
+- **A refusal was returned without `is_error`.** The observation's own rendering
+  computes `change_applied = command != "view" and not is_error`, so a denied
+  write was shown to the agent as a change that went through. It was told the
+  write succeeded and carried on. This was the worst of the six: the guard
+  worked and the agent was misinformed about it.
+- **`_tighten` covered one file and claimed to cover all of them.** It ran on
+  the profile the daemon writes, while the operator's key also sits in
+  `<state-dir>/.env` — moved there earlier this same session — which on POSIX
+  kept the default umask.
+- **`ensure_profiles` minted new UUIDs on every rebuild.** The `id` field is
+  documented as "a stable provenance handle ... it never changes"; conversations
+  record it and an orchestrator may hold one from an earlier `profiles` call.
+  Rebuilding because one preset was missing silently re-identified the other
+  two. Verified before and after: ids now survive two forced rebuilds.
+
+Six findings, five real, one asserted as fact and false. The report was treated
+as a set of claims to test, which is the standard the `result` tool description
+asks an orchestrator to apply to any session — including this one. It earned its
+keep several times over: seventeen adversarial checks had passed against a guard
+a hard link walked through, and against a refusal the agent could not see.
 
 ## Residual risk, stated plainly
 
