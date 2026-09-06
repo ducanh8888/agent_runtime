@@ -102,6 +102,18 @@ The limit is written into the docstring: this protects the runtime's secrets and
 nothing else, because confinement by path cannot see aliasing it is not told
 about, and closing that in general needs a sandbox.
 
+Two boundaries of that check, stated so they are known rather than discovered:
+
+- The identity set covers `<state-dir>/.env`, `daemon.json` and
+  `profiles/*.json`. `agent-profiles/` is deliberately absent -- those name a
+  permission preset and a tool list, and hold no secret. Only the LLM profile
+  carries the key.
+- On a filesystem that reports no inode -- FAT, and some network shares --
+  `st_ino` is 0 and the identity set comes back empty. The hard-link protection
+  is then **off**, not degraded: a workspace on such a volume gets the behaviour
+  that existed before this fix, path confinement blind to aliases. Every check
+  above ran on NTFS.
+
 The second line matters as much as the refusals. Every other check is a
 refusal, so a preset that denied everything would have passed the lot while
 being useless; the readonly session is asked to view a file planted in its
@@ -211,7 +223,9 @@ That contradicted the claim above that `readonly` keeps a session away from the
 credential. A `readonly` session cannot create such a link — it has no terminal
 and cannot write — but it does not need to when the directory it was pointed at
 already contains one, which is exactly the "dispatch into a repository you have
-not read" case. `check_path` now refuses a file whose `st_nlink` exceeds one.
+not read" case. `check_path` now compares `(st_dev, st_ino)` against the
+runtime's own credential files -- see below for why the obvious `st_nlink` fix
+was measured and rejected.
 
 **Half right: a path component of dots and spaces.** The guard did approve
 `workspace\.. \.. \Windows\Temp\x.txt`, as reported. But the escape does not
@@ -249,6 +263,12 @@ as a set of claims to test, which is the standard the `result` tool description
 asks an orchestrator to apply to any session — including this one. It earned its
 keep several times over: seventeen adversarial checks had passed against a guard
 a hard link walked through, and against a refusal the agent could not see.
+
+## Do not delete session `70652c62`
+
+It is the `readonly` review above -- the six findings, five real, and the one
+that found the hard link. Like `6ff256c9` in `P3_RESULT.md`, it looks
+unremarkable in `list` and is the evidence behind most of this section.
 
 ## Residual risk, stated plainly
 
@@ -293,3 +313,20 @@ testing; what changed is that it no longer happens without being asked for.
 Running the plugin, subagent and conversation-service plugin tests earlier had
 given 335 passed and missed this: the failing module was not among them. Only
 the full suite, compared per id, found it.
+
+## Final regression, after the identity check
+
+The credential check narrows what the guard refuses, so everything that reads
+files was re-run against it rather than reasoned about:
+
+```
+probe_plugin_hook    PASS -- a plugin planted in the workspace did not run
+probe_subagent_hook  PASS -- the planted agent definition ran nothing
+cli_loop             ALL STEPS PASSED
+mcp_e2e              8 tools: artifacts control dispatch list profiles
+                              result status transcript
+```
+
+Plus the adversarial checklist at 22/22. Nothing here proves the MCP layer as
+Claude Code sees it -- `mcp_e2e` drives the server in-process. That check needs
+an orchestrator restart and is the one thing still outstanding.

@@ -176,6 +176,15 @@ def _secret_identities() -> set[tuple[int, int]]:
     Identity rather than path, because that is the thing a second name cannot
     disguise. Recomputed per call: these files are few, and caching them would
     mean a credential rewritten after startup stopped being recognised.
+
+    `agent-profiles/` is deliberately absent -- those name a permission preset
+    and a tool list, and hold no secret. Only `profiles/` carries the LLM
+    profile, and with it the key.
+
+    On a filesystem that reports no inode -- FAT, and some network shares --
+    `st_ino` is 0 and this returns nothing. The hard-link protection is then
+    simply off rather than weakened, and a workspace on such a volume gets the
+    behaviour that existed before it: path confinement, blind to aliases.
     """
     from agentrt.runtime import config
 
