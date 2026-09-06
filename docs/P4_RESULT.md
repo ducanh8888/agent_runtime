@@ -65,6 +65,7 @@ tried.
 
 ```
 readonly profile has no terminal                    PASS -- ['file_editor', 'task_tracker']
+readonly CAN still view a file inside its workspace PASS
 no PROOF.txt was created                            PASS
 no file escaped to C:\Windows\Temp                  PASS
 provider key never reached the readonly session     PASS
@@ -74,11 +75,19 @@ sibling directory is outside                        PASS -- refused
 parent traversal is outside                         PASS -- refused
 different case is inside                            PASS -- allowed
 plain child is inside                               PASS -- allowed
+relative name is inside                             PASS -- allowed
+relative subdirectory is inside                     PASS -- allowed
+relative traversal still escapes                    PASS -- refused
 UNC path refused                                    PASS -- refused
 extended-length path refused                        PASS -- refused
 unknown preset name is refused                      PASS
 ALL ADVERSARIAL CHECKS PASSED
 ```
+
+The second line matters as much as the refusals. Every other check is a
+refusal, so a preset that denied everything would have passed the lot while
+being useless; the readonly session is asked to view a file planted in its
+workspace before dispatch, and the run fails if it cannot.
 
 ### One real bug, caught by the checklist
 
@@ -122,10 +131,43 @@ nothing at either end. Project skills load on a separate flag from plugins and
 are worth revisiting if skills are ever enabled deliberately.
 
 **Sub-agent profile intersection was not built.** `enable_sub_agents` is False
-and no preset grants a task tool, so no session can spawn one. The registration
-path that read `.md` definitions out of a workspace is now gated. Intersection
-logic would guard a door with no handle on it; it belongs with whatever enables
-sub-agents.
+and no preset grants a task tool, so no session can spawn one, and the path that
+read `.md` definitions out of a workspace is now gated.
+
+The plan's checklist names this specifically — "a sub-agent definition planted
+in the workspace cannot widen authority, including through its `hooks` field" —
+so it is demonstrated rather than argued (`tools/probe_subagent_hook.py`). An
+agent definition carrying a `PostToolUse` command hook was written to
+`.agents/agents/probe-agent.md` in a fresh workspace and an unrelated task
+dispatched into it:
+
+```
+marker file present    : False
+workspace contents     : ['.agents', '.git', 'note.txt']
+PASS: the planted agent definition ran nothing.
+```
+
+Intersection logic on top of that would guard a door with no handle on it. It
+belongs with whatever enables sub-agents.
+
+**The dispatcher boundary is only half built, and the criterion quoted at the
+top of this file is therefore not fully met.** The plan asks that a `broad`
+session cannot create another session through shell, HTTP or MCP, and names
+three guards for it: strip the token from tool environments, reject requests
+carrying `parent_conversation_id`, and keep agentrt out of a worker's MCP
+config.
+
+Only the first is verified — the environment probe found neither the token nor
+its variable name in a session. The other two are not implemented.
+
+They also would not close the hole. The daemon's token is in `daemon.json` in
+the state directory, and any session with a shell can read that file and call
+the API directly. An in-process check on `parent_conversation_id` would stop a
+session that stumbles into recursion; it would not stop one that means it. That
+is the same fact as the credential exposure below — a session with a shell — and
+it is fixed by the same thing, which is a sandbox, not another guard.
+
+Worth building later for the accidental case. Not claimed now.
 
 Each of these is a decision not to write code, recorded so the next person does
 not read the plan and assume they were forgotten.
