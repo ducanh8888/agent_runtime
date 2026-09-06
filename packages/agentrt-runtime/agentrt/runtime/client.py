@@ -179,12 +179,35 @@ class Client:
         self._ensure_ready()
         assert self._http is not None
 
-        url = f"{self._base_url()}{path}"
-        headers = {"X-Session-API-Key": self._token()}
-        headers.update(kwargs.pop("headers", None) or {})  # type: ignore[arg-type]
+        extra = kwargs.pop("headers", None) or {}
+
+        def attempt() -> httpx.Response:
+            assert self._http is not None
+            headers = {"X-Session-API-Key": self._token()}
+            headers.update(extra)  # type: ignore[arg-type]
+            return self._http.request(
+                method, f"{self._base_url()}{path}", headers=headers, **kwargs
+            )
 
         try:
-            response = self._http.request(method, url, headers=headers, **kwargs)
+            response = attempt()
+        except httpx.TransportError as exc:
+            # The cached port and token come from daemon.json as it read at
+            # first use. A daemon that restarts picks a new ephemeral port, so
+            # a long-lived client -- the MCP server lives as long as the
+            # orchestrator does -- would go on addressing a port nobody is
+            # listening on, and every tool would fail until the orchestrator
+            # itself was restarted. Re-read and try once more.
+            self._daemon_info = None
+            self._profile_ref = None
+            if self._http is not None:
+                self._http.close()
+                self._http = None
+            try:
+                self._ensure_ready()
+                response = attempt()
+            except httpx.HTTPError as retry_exc:
+                raise ClientError(str(retry_exc)) from retry_exc
         except httpx.HTTPError as exc:
             raise ClientError(str(exc)) from exc
 
