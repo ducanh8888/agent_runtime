@@ -71,6 +71,11 @@ def dispatch(
     summarising, answering a question about code. It is the only preset that
     cannot reach the provider credential, because it has no terminal at all.
 
+    A `readonly` session cannot write its answer to a file. Ask it to report in
+    its final message and read that with `result`; telling it to produce a
+    report file gives it an instruction it cannot carry out. `artifacts` on such
+    a session correctly lists nothing.
+
     `workspace` confines the file editor to the workspace but still grants a
     terminal, and a terminal can open any file you can. Treat it as constraining
     ordinary behaviour, not as containment.
@@ -90,8 +95,14 @@ def dispatch(
     - State the finished condition, not the steps. "OUTPUT.txt contains the
       result of fizzbuzz(15), one entry per line" beats "run it and save the
       output".
-    - Name the files it should create or change. Otherwise it invents names and
-      you will not know what to look for.
+    - Name the files it should create or change -- unless the preset is
+      `readonly`, which cannot create any. Otherwise it invents names and you
+      will not know what to look for.
+    - Give line ranges, not just function names, when you point at part of a
+      large file. An agent that reads a 737-line file and is then asked about a
+      function by name has to find it again, and a review session spent two
+      five-minute turns viewing wrong ranges before it was redirected. One
+      `grep -n` before dispatching is cheaper than that.
     - Tell it how to check itself, and to report what the check printed. Ask
       for evidence and you get work that was tested; ask for nothing and you
       get work that looks finished.
@@ -261,12 +272,17 @@ def artifacts(session: str, path: str | None = None) -> dict:
     the size of the workspace -- a repository with a 400-file virtualenv in it
     reports 4.
 
-    Three things it does not show. Deletions -- a file removed leaves nothing to
+    Four things it does not show. Deletions -- a file removed leaves nothing to
     list, so a session asked to remove something must be checked another way.
     Copies that preserve timestamps, which keep the original's time. And
     anything written inside a pruned directory: dependency trees and tool caches
     (`pruned` names them) are skipped, because a session that runs `npm install`
     would otherwise bury its own output under thirty thousand files.
+
+    Fourth, it cannot tell your edits from the session's. It reports what
+    changed, not who changed it, so anything you write in that workspace while
+    the session runs appears in its list. Either leave the workspace alone until
+    it finishes, or read the list knowing your own files are in it.
     """
     return _guard(_get_client().artifacts, session, path=path)
 
