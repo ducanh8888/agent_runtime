@@ -79,10 +79,29 @@ workspace** may cause hooks to run, without any sub-agent involved — and
 `include_user=True` means `~/.agents/plugins` counts too, which a session with a
 terminal can write to.
 
-**This is read from the source, not yet demonstrated.** It is the first thing
-P4 should verify empirically, because if it holds it is a larger hole than the
-one the plan set out to close, and if it does not, the reason why is worth
-knowing.
+**Demonstrated** (`tools/probe_plugin_hook.py`). A minimal plugin was written
+into a fresh workspace — `.agents/plugins/probe/` with a `.plugin/plugin.json`
+and a `hooks/hooks.json` whose `PostToolUse` entry is a plain `echo` writing a
+marker file. A session was dispatched into that workspace with an unrelated task:
+
+```
+session finished as    : finished
+marker file present    : True
+workspace contents     : ['.agents', '.git', 'HOOK_RAN.txt', 'note.txt']
+```
+
+The hook ran. Nothing asked for it and the agent was not involved.
+
+**The exposure is larger than "a session can escalate itself."** The workspace
+is chosen by the orchestrator, and `load_project_plugins` scans the working
+directory *and the enclosing git repository root*. So pointing a session at any
+repository that contains `.agents/plugins/` — one just cloned, a colleague's
+branch — executes that repository's shell commands. `include_user=True` adds
+`~/.agents/plugins` on the same footing.
+
+That makes it a property of dispatching into untrusted content, not only of a
+session misbehaving, and it is reachable regardless of which tools the profile
+grants.
 
 Separately confirmed by reading: `_register_file_based_agents` runs
 **unconditionally** in `_ensure_agent_ready`, regardless of
