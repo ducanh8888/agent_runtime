@@ -1,91 +1,95 @@
-# Using agentrt — a guide for the orchestrator
+# Using agentrt — notes for the orchestrator
 
-You are the orchestrator. agentrt gives you background agent sessions that keep
-running after your conversation ends. This is what it is for and how to use it
-well.
+**The tool descriptions in `mcp_server.py` are the reference, not this file.**
+They reach an orchestrator working in any repository; a file under `docs/` does
+not. Operational guidance belongs there and is deliberately not repeated here.
 
-## When to dispatch, and when not to
+This file holds what does not fit in a tool description: why the surface is
+shaped as it is, and what using it has actually taught.
 
-Dispatch when the work is **long, separable, and verifiable**. A session costs
-about ten seconds of overhead before the agent's first action, so anything you
-could finish in one or two tool calls is faster done yourself.
+## The principle
 
-Good reasons to dispatch:
+Optimise the input, not the model's behaviour.
 
-- The work will take longer than you want to sit and wait for.
-- You want several independent pieces of work happening at once.
-- The work should survive you closing the conversation.
-- You want the work isolated in its own directory with its own history.
+Instructions about how much an agent should think are the expensive, unreliable
+lever. Telling a model to deliberate less does not make it correct; it makes it
+guess sooner. The cheap lever is context: an agent that can see the interface it
+must call does not have to reason its way to one, and reasoning is billed at the
+same rate as code.
 
-Bad reasons:
+`tools/api_context.py` and `docs/DAEMON_BEHAVIOUR.md` exist for that reason. The
+first extracts the daemon's live REST surface; the second records behaviour that
+the surface does not reveal.
 
-- To avoid a task you could do directly. A session is not cheaper than you.
-- To parallelise work that touches the same files. Sessions share a workspace
-  if you give them the same path, and nothing coordinates their writes.
+## What dispatching actually costs
 
-## Writing a task
+Measured on this project, one session against `ds/deepseek-v4-flash`:
 
-The agent gets your task text and nothing else. It cannot see your conversation,
-your reasoning, or the file you were just looking at.
+| Session | Prompt tokens | Completion |
+|---|---|---|
+| Small, well-specified task (FizzBuzz, verified) | 80,622 | 2,364 |
+| Seven methods against a documented interface | 857,156 | 17,744 |
 
-Write a task the way you would brief someone who has the repository but not the
-discussion:
+The second session was interrupted before it wrote a line of code. It had spent
+that budget re-reading the vendored server to confirm facts it had already been
+handed in writing.
 
-- **State the finished condition, not the steps.** "OUTPUT.txt contains the
-  result of fizzbuzz(15), one entry per line" beats "run the function and write
-  the output".
-- **Name the files.** The agent will invent names otherwise, and you will not
-  know what to look for.
-- **Say how it can check itself.** "Verify by importing the function and
-  comparing" produces work that has been tested. Without it you get work that
-  merely looks finished.
-- **Do not describe the tools.** It has a terminal, a file editor and a task
-  tracker, and it knows.
+Prompt tokens dominate, and most of them are the session re-reading its own
+context each turn. The lever that matters is therefore how many turns a session
+takes, and the thing that most reliably inflates that number is an agent that
+does not trust what it was given.
 
-## Workspace
+## Pointing at a document is not enough
 
-`workspace` is an absolute path. It is created if missing.
+The obvious economy is to put reference material in the repository and name the
+path, rather than pasting it into the task. That is right, and it is not
+sufficient.
 
-Give each session its own directory unless you specifically want them sharing
-one. Nothing coordinates concurrent writes: two sessions in the same directory
-can overwrite each other silently, and sequencing them is your job.
+An agent given "read `X`, treat it as authoritative" read `X` and then spent
+most of an hour verifying it against source anyway. "Authoritative" describes
+the document's standing; it does not tell the agent that reading further is
+unnecessary. Both have to be said:
 
-Do not point a session at the agentrt repository itself. It contains `.env` with
-the provider credential, and until permission profiles exist a session can read
-anything you can.
+> `docs/DAEMON_BEHAVIOUR.md` is complete and authoritative for this task —
+> routes, limits, enum values, field shapes. Do not verify it against the
+> server source.
 
-## Reading back
+The second sentence is the one that changes behaviour. Note that this is still
+optimising the input: it supplies a fact the agent lacked — that the reference
+is exhaustive — rather than instructing it to think less.
 
-`dispatch` returns immediately with a `short_id`. That id is how you refer to
-the session from then on; the full UUID also works.
+## Interrupt early
 
-`status` tells you the lifecycle state. `finished` means the agent stopped on
-its own; `error` means it failed and the message says why.
+`interrupt` kills work in flight and keeps the history, so redirecting a session
+costs one message. A session heading the wrong way will not correct itself, and
+letting it finish to see what it produces is the expensive option. Watch
+`transcript` early rather than waiting on `result`.
 
-`result` returns the agent's closing summary. It is `null` while the session is
-still working, so check `status` first to tell "still running" from "finished
-with nothing to say".
+## Verifying an agent's work
 
-**The result is the agent's own account of what it did. It is not evidence.**
-An agent that says it verified its output has sometimes only said so. If the
-work matters, check the artifacts yourself — read the file, run the test, diff
-against what you expected. This costs you one tool call and is the difference
-between believing and knowing.
+A session's `result` is its own account of what it did. Sessions have reported
+verifying output they had not verified. `artifacts` reads the files it actually
+wrote; that is the check, and it costs one call.
 
-## What it cannot do yet
+## Configuration and state
 
-- **No permission control.** Every session runs with the same authority you
-  have. Do not dispatch work you would not run yourself.
-- **No interruption or steering.** Once dispatched, a session runs to
-  completion. You cannot redirect it or stop it mid-flight.
-- **No listing through MCP.** `dispatch`, `status` and `result` only. Use
-  `agentrt list` on the command line to see everything.
+Configuration resolves from the process environment, then `<state-dir>/.env`,
+then a `.env` in a development checkout. State — sessions, profiles, the
+credential, `daemon.json`, `daemon.log` — lives in `%LOCALAPPDATA%\agentrt` on
+Windows and `~/.agentrt` elsewhere.
 
-## When something is wrong
-
-The daemon writes to `daemon.log` in the state directory
-(`%LOCALAPPDATA%\agentrt` on Windows, `~/.agentrt` elsewhere). If a session
-fails for no visible reason, that log holds the server-side traceback.
-
+`agentrt config` prints what is configured without revealing the key.
 `agentrt daemon status` says whether the daemon is up and on which port.
-`agentrt config` shows which model is configured, without revealing the key.
+`agentrt daemon logs` tails `daemon.log`, which holds server-side tracebacks
+when a session fails for no visible reason.
+
+## Limits worth knowing
+
+- **No permission control yet.** Every session runs with the authority of the
+  user who started the daemon. A session can read the credential in the state
+  directory whatever workspace it is given. Moving the credential out of a
+  repository reduces accidental exposure; it does not contain a session that
+  goes looking.
+- **Shared workspaces are not coordinated.** Two sessions in one directory can
+  overwrite each other, and sequencing them is the orchestrator's job.
+- **Sessions are kept until deleted.** Nothing expires.

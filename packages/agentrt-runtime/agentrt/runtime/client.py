@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime
 from urllib.parse import quote
 
 import httpx
@@ -70,6 +71,30 @@ def _text_from_response(data: object) -> str | None:
             return "\n".join(parts)
         return str(value)
     return None
+
+
+def _join_blocks(blocks: object) -> str:
+    """Join the text of content blocks shaped ``{"type": "text", "text": ...}``."""
+    if isinstance(blocks, str):
+        return blocks
+    if not isinstance(blocks, list):
+        return ""
+    parts: list[str] = []
+    for block in blocks:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text")
+            if text is not None:
+                parts.append(str(text))
+    return "\n".join(parts)
+
+
+def _capped(text: str, limit: int) -> str:
+    """Truncate to ``limit`` characters, marking the cut."""
+    if len(text) <= limit:
+        return text
+    return text[:limit] + " ... [truncated]"
 
 
 class Client:

@@ -76,6 +76,57 @@ def _cmd_result(args: argparse.Namespace) -> dict:
     return client.result(args.session)
 
 
+def _cmd_transcript(args: argparse.Namespace) -> dict:
+    """Return a condensed transcript, one page at a time."""
+    client = client_mod.Client()
+    return client.transcript(args.session, limit=args.limit, cursor=args.cursor)
+
+
+def _cmd_send(args: argparse.Namespace) -> dict:
+    """Append an instruction and let the agent act on it."""
+    client = client_mod.Client()
+    return client.send(args.session, args.message)
+
+
+def _cmd_interrupt(args: argparse.Namespace) -> dict:
+    """Cancel whatever the session is executing right now."""
+    client = client_mod.Client()
+    return client.interrupt(args.session)
+
+
+def _cmd_stop(args: argparse.Namespace) -> dict:
+    """Suspend a session, leaving it resumable."""
+    client = client_mod.Client()
+    return client.stop(args.session)
+
+
+def _cmd_resume(args: argparse.Namespace) -> dict:
+    """Continue a paused session."""
+    client = client_mod.Client()
+    return client.resume(args.session)
+
+
+def _cmd_delete(args: argparse.Namespace) -> dict:
+    """Permanently remove a session.
+
+    Requires ``--yes``. This is the only destructive command, and a scheduler
+    invoking the CLI has no way to answer a prompt, so refusal is the only safe
+    default when confirmation is absent.
+    """
+    if not args.yes:
+        raise client_mod.ClientError(
+            "refusing to delete without --yes; this cannot be undone"
+        )
+    client = client_mod.Client()
+    return client.delete(args.session)
+
+
+def _cmd_artifacts(args: argparse.Namespace) -> dict:
+    """List the session's workspace, or read one file from it."""
+    client = client_mod.Client()
+    return client.artifacts(args.session, path=args.path)
+
+
 def _cmd_daemon_start(_args: argparse.Namespace) -> dict:
     """Start the daemon if it is not already running, then report its state."""
     daemon.ensure_running()
@@ -160,6 +211,59 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     result_parser.add_argument("session")
     result_parser.set_defaults(func=_cmd_result)
+
+    transcript_parser = _add_subparser(
+        subparsers, "transcript", help="show a condensed session transcript"
+    )
+    transcript_parser.add_argument("session")
+    transcript_parser.add_argument("--limit", type=int, default=30)
+    transcript_parser.add_argument(
+        "--cursor", help="next_cursor from a previous page, for older events"
+    )
+    transcript_parser.set_defaults(func=_cmd_transcript)
+
+    send_parser = _add_subparser(
+        subparsers, "send", help="send an instruction to a session"
+    )
+    send_parser.add_argument("session")
+    send_parser.add_argument("message")
+    send_parser.set_defaults(func=_cmd_send)
+
+    interrupt_parser = _add_subparser(
+        subparsers, "interrupt", help="cancel what a session is doing now"
+    )
+    interrupt_parser.add_argument("session")
+    interrupt_parser.set_defaults(func=_cmd_interrupt)
+
+    stop_parser = _add_subparser(
+        subparsers, "stop", help="suspend a session, keeping it resumable"
+    )
+    stop_parser.add_argument("session")
+    stop_parser.set_defaults(func=_cmd_stop)
+
+    resume_parser = _add_subparser(
+        subparsers, "resume", help="continue a paused session"
+    )
+    resume_parser.add_argument("session")
+    resume_parser.set_defaults(func=_cmd_resume)
+
+    delete_parser = _add_subparser(
+        subparsers, "delete", help="permanently remove a session"
+    )
+    delete_parser.add_argument("session")
+    delete_parser.add_argument(
+        "--yes", action="store_true", help="confirm this cannot be undone"
+    )
+    delete_parser.set_defaults(func=_cmd_delete)
+
+    artifacts_parser = _add_subparser(
+        subparsers, "artifacts", help="list or read a session's workspace files"
+    )
+    artifacts_parser.add_argument("session")
+    artifacts_parser.add_argument(
+        "--path", help="file to read, relative to the workspace root"
+    )
+    artifacts_parser.set_defaults(func=_cmd_artifacts)
 
     daemon_parser = _add_subparser(subparsers, "daemon", help="manage the daemon")
     daemon_subparsers = daemon_parser.add_subparsers(
