@@ -180,3 +180,26 @@ def read_dotenv(path: Path) -> dict[str, str]:
         values[key] = value
 
     return values
+
+
+DEFAULT_MAX_RUNNING_SESSIONS = 5
+
+
+def max_running_sessions() -> int:
+    """How many sessions may run at once before dispatch refuses.
+
+    Each running session holds a terminal and an open provider stream, so the
+    ceiling that matters is the machine's, not the daemon's. Refusing with a
+    clear message is better than accepting work that will make every session
+    slower, including the ones already running.
+
+    Zero or negative means no limit, for an operator who would rather find the
+    real ceiling than guess at one.
+    """
+    raw = os.environ.get("AGENTRT_MAX_SESSIONS", "").strip()
+    if not raw:
+        return DEFAULT_MAX_RUNNING_SESSIONS
+    try:
+        return int(raw)
+    except ValueError:
+        return DEFAULT_MAX_RUNNING_SESSIONS

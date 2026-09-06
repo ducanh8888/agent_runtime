@@ -1556,8 +1556,28 @@ class LocalConversation(BaseConversation):
           4. User-level file agents (`~/.agents/agents/*.md`,
                 then `~/.agentrt/agents/*.md`)
         """
-        # register project-level and then user-level file-based agents
-        register_file_agents(self.workspace.working_dir)
+        # agentrt: file-based agent discovery is off unless the operator turns
+        # it on, on the same switch as ambient plugins and for the same reason.
+        #
+        # This ran unconditionally, including when enable_sub_agents is False.
+        # It reads .md agent definitions out of the session's workspace and the
+        # user's home directory into a registry that is global to the daemon
+        # process -- so a definition planted by one session is visible to every
+        # other session sharing that daemon. With no task tool in the profile a
+        # session cannot invoke one, which makes this defence in depth rather
+        # than a demonstrated hole; it is gated because a workspace is content
+        # the operator often has not read.
+        if os.environ.get("AGENTRT_AMBIENT_PLUGINS", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            register_file_agents(self.workspace.working_dir)
+        else:
+            logger.debug(
+                "File-based agent discovery is disabled; set "
+                "AGENTRT_AMBIENT_PLUGINS=1 to enable it"
+            )
 
     def _ensure_agent_ready(self) -> None:
         """Ensure the agent is fully initialized with plugins and agents loaded.

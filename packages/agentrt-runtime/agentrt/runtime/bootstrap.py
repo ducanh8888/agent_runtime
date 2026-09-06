@@ -22,7 +22,7 @@ from uuid import UUID
 
 from pydantic import SecretStr
 
-from agentrt.runtime import config
+from agentrt.runtime import config, permissions
 
 LLM_PROFILE_NAME = "default"
 AGENT_PROFILE_NAME = "default"
@@ -55,27 +55,61 @@ def _build_llm(router: config.RouterConfig):
     )
 
 
-def ensure_profiles(*, force: bool = False) -> UUID:
-    """Create the LLM and agent profiles if absent; return the agent profile id.
+GUARD_MODULE = "agentrt.runtime.guarded_tools"
 
-    Existing profiles are left alone unless ``force`` is set, so restarting the
-    daemon never silently discards configuration.
+
+def _tools_for(preset: str):
+    """Build the tool specs a preset grants.
+
+    Round 7 fixed the set at terminal, file editor and task tracker: browser
+    drags in Playwright and has the weakest cancellation story of any executor,
+    and sub-agents are attached per dispatch, never by default. A preset narrows
+    that set; it never widens it.
+
+    The permission travels as a tool parameter rather than as daemon-wide state
+    so two sessions with different presets can run at once.
+    """
+    from agentrt.sdk.tool import Tool
+    from agentrt.tools.preset.default import register_default_tools
+
+    # Registers terminal / file_editor / task_tracker under their own names.
+    # The guarded file editor replaces one of them, so this has to run first.
+    register_default_tools(enable_browser=False)
+
+    specs = []
+    for name in permissions.tools_for(preset):
+        if name == "file_editor":
+            specs.append(Tool(name=name, params={"permission": preset}))
+        else:
+            specs.append(Tool(name=name))
+    return specs
+
+
+def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
+    """Create the LLM and agent profiles if absent; return id per preset.
+
+    One agent profile per permission preset, named for it. Existing profiles are
+    left alone unless ``force`` is set, so restarting the daemon never silently
+    discards configuration.
     """
     from agentrt.agent_server.persistence import (
         get_agent_profile_store,
         get_llm_profile_store,
     )
     from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
-    from agentrt.tools.preset.default import get_default_tools
 
     state = _use_state_dir()
-
     agent_store = get_agent_profile_store()
+
     if not force:
-        # ``list()`` returns file names, not objects, so the profile has to be
-        # loaded to learn its id.
+        # ``list()`` returns file names, not objects, so each profile has to be
+        # loaded to learn its id. All or nothing: a partial set means a preset
+        # added since the last run is missing, and dispatching to it would fail
+        # at the point of use rather than here.
         try:
-            return agent_store.load(AGENT_PROFILE_NAME).id
+            return {
+                preset: agent_store.load(preset).id for preset in permissions.PRESETS
+            }
         except Exception:
             pass
 
@@ -88,17 +122,17 @@ def ensure_profiles(*, force: bool = False) -> UUID:
     llm_store.save(LLM_PROFILE_NAME, _build_llm(router), include_secrets=True)
     _tighten(state / "profiles" / f"{LLM_PROFILE_NAME}.json")
 
-    profile = OpenHandsAgentProfile(
-        name=AGENT_PROFILE_NAME,
-        llm_profile_ref=LLM_PROFILE_NAME,
-        # Round 7: terminal, file editor and task tracker only. Browser drags in
-        # Playwright and has the weakest cancellation story of any executor;
-        # sub-agents are attached per dispatch, never by default.
-        tools=get_default_tools(enable_browser=False, enable_sub_agents=False),
-        enable_sub_agents=False,
-    )
-    agent_store.save(profile)
-    return profile.id
+    ids: dict[str, UUID] = {}
+    for preset in permissions.PRESETS:
+        profile = OpenHandsAgentProfile(
+            name=preset,
+            llm_profile_ref=LLM_PROFILE_NAME,
+            tools=_tools_for(preset),
+            enable_sub_agents=False,
+        )
+        agent_store.save(profile)
+        ids[preset] = profile.id
+    return ids
 
 
 def _tighten(path: Path) -> None:
@@ -128,12 +162,18 @@ def summary() -> dict:
         out["api_key_present"] = llm.api_key is not None
     except Exception:
         out["llm_profile"] = None
-    try:
-        profile = get_agent_profile_store().load(AGENT_PROFILE_NAME)
-        out["agent_profile"] = profile.name
-        out["agent_profile_id"] = str(profile.id)
-        out["llm_profile_ref"] = profile.llm_profile_ref
-        out["tools"] = [t.name for t in (profile.tools or [])]
-    except Exception:
-        out["agent_profile"] = None
+    store = get_agent_profile_store()
+    out["permissions"] = {}
+    for preset in permissions.PRESETS:
+        try:
+            profile = store.load(preset)
+        except Exception:
+            out["permissions"][preset] = None
+            continue
+        out["permissions"][preset] = {
+            "id": str(profile.id),
+            "tools": [t.name for t in (profile.tools or [])],
+            "description": permissions.DESCRIPTIONS[preset],
+        }
+    out["default_permission"] = permissions.DEFAULT_PERMISSION
     return out

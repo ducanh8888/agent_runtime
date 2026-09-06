@@ -55,6 +55,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         task=args.task,
         workspace=args.workspace,
         title=args.title,
+        permission=args.permission,
     )
 
 
@@ -74,6 +75,11 @@ def _cmd_result(args: argparse.Namespace) -> dict:
     """Return the final result produced by a session."""
     client = client_mod.Client()
     return client.result(args.session)
+
+
+def _cmd_profiles(_args: argparse.Namespace) -> dict:
+    """List the permission presets and what each grants."""
+    return client_mod.Client().profiles()
 
 
 def _cmd_transcript(args: argparse.Namespace) -> dict:
@@ -194,6 +200,11 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("task")
     dispatch_parser.add_argument("--workspace", required=True)
     dispatch_parser.add_argument("--title")
+    dispatch_parser.add_argument(
+        "--permission",
+        choices=["readonly", "workspace", "broad"],
+        help="permission preset (default: workspace)",
+    )
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 
     list_parser = _add_subparser(subparsers, "list", help="list known sessions")
@@ -211,6 +222,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     result_parser.add_argument("session")
     result_parser.set_defaults(func=_cmd_result)
+
+    profiles_parser = _add_subparser(
+        subparsers, "profiles", help="list permission presets"
+    )
+    profiles_parser.set_defaults(func=_cmd_profiles)
 
     transcript_parser = _add_subparser(
         subparsers, "transcript", help="show a condensed session transcript"

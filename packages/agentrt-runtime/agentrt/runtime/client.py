@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import httpx
 
-from agentrt.runtime import bootstrap, config, daemon
+from agentrt.runtime import bootstrap, config, daemon, permissions
 
 
 class ClientError(Exception):
@@ -142,16 +142,9 @@ class Client:
 
         if self._profile_ref is None:
             profiles = bootstrap.ensure_profiles()
-            if isinstance(profiles, (list, tuple)):
-                if not profiles:
-                    raise ClientError("bootstrap returned no agent profiles")
-                profile = profiles[0]
-            else:
-                profile = profiles
-            self._profile_ref = getattr(profile, "id", profile)
-
-        if self._profile_ref is None:
-            raise ClientError("bootstrap did not produce an agent profile id")
+            if not isinstance(profiles, dict) or not profiles:
+                raise ClientError("bootstrap did not produce agent profiles")
+            self._profile_ref = profiles
 
         if self._http is None:
             self._http = httpx.Client(timeout=self._timeout, follow_redirects=True)
@@ -281,10 +274,34 @@ class Client:
 
         return matches[0]
 
-    def _profile_id(self) -> str:
+    def _profile_id(self, permission: str | None = None) -> str:
+        """Resolve a preset name to the agent profile the daemon should use."""
         if self._profile_ref is None:
             self._ensure_ready()
-        return str(self._profile_ref)
+        preset = permissions.normalise(permission)
+        profiles = self._profile_ref
+        assert isinstance(profiles, dict)
+        if preset not in profiles:
+            raise ClientError(
+                f"no agent profile for permission {preset!r}; "
+                "run `agentrt config` to see what exists"
+            )
+        return str(profiles[preset])
+
+    def profiles(self) -> dict:
+        """List the permission presets and what each one grants."""
+        self._ensure_ready()
+        return {
+            "default": permissions.DEFAULT_PERMISSION,
+            "presets": [
+                {
+                    "name": preset,
+                    "description": permissions.DESCRIPTIONS[preset],
+                    "tools": permissions.tools_for(preset),
+                }
+                for preset in permissions.PRESETS
+            ],
+        }
 
     # ------------------------------------------------------------------
     # Public API
@@ -296,14 +313,32 @@ class Client:
         workspace: str,
         *,
         title: str | None = None,
+        permission: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task."""
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
+        preset = permissions.normalise(permission)
+
+        cap = config.max_running_sessions()
+        if cap > 0:
+            running = [s for s in self.list_sessions(limit=100)
+                       if (s.get("status") or "").lower() == "running"]
+            if len(running) >= cap:
+                raise ClientError(
+                    f"{len(running)} sessions are already running and the limit "
+                    f"is {cap}. Wait for one to finish, stop one, or raise "
+                    "AGENTRT_MAX_SESSIONS on the daemon's environment."
+                )
 
         body: dict = {
             "workspace": {"working_dir": workspace},
-            "agent_profile_id": self._profile_id(),
+            "agent_profile_id": self._profile_id(preset),
+            # The daemon imports these modules "to trigger tool auto
+            # registration". Naming the guard module is what installs the
+            # permission-aware file editor inside the daemon process, which is
+            # a different process from this one.
+            "tool_module_qualnames": {"file_editor": bootstrap.GUARD_MODULE},
             "initial_message": {
                 "role": "user",
                 "content": [{"type": "text", "text": task}],
@@ -319,6 +354,7 @@ class Client:
             "short_id": short_id(full_id) if full_id else None,
             "status": _status_of(data),
             "workspace": workspace,
+            "permission": preset,
         }
 
     def list_sessions(self, limit: int = 50) -> list[dict]:

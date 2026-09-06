@@ -53,11 +53,27 @@ def _guard(fn, *args, **kwargs) -> dict:
 
 
 @mcp.tool()
-def dispatch(task: str, workspace: str, title: str | None = None) -> dict:
+def dispatch(
+    task: str,
+    workspace: str,
+    title: str | None = None,
+    permission: str | None = None,
+) -> dict:
     """Start a background agent session and return immediately.
 
     The session keeps running after this conversation ends. Returns a
     short_id -- how you refer to the session in every other tool here.
+
+    PERMISSION. One of `readonly`, `workspace` (the default) or `broad`; call
+    `profiles` for what each grants.
+
+    Choose `readonly` when the session only needs to look -- reviewing,
+    summarising, answering a question about code. It is the only preset that
+    cannot reach the provider credential, because it has no terminal at all.
+
+    `workspace` confines the file editor to the workspace but still grants a
+    terminal, and a terminal can open any file you can. Treat it as constraining
+    ordinary behaviour, not as containment.
 
     WHEN THIS IS WORTH IT. Dispatching costs about ten seconds of startup plus
     the session's own model spend. It pays off when the work is long, when
@@ -96,11 +112,16 @@ def dispatch(task: str, workspace: str, title: str | None = None) -> dict:
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
 
-    A session runs with the same authority you do. It can read anything you
-    can, including credentials elsewhere on this machine, whatever workspace
-    you name. Do not dispatch work you would not run yourself.
+    Unless the preset is `readonly`, a session runs with the same authority
+    you do. Do not dispatch work you would not run yourself.
     """
-    return _guard(_get_client().dispatch, task, workspace, title=title)
+    return _guard(
+        _get_client().dispatch,
+        task,
+        workspace,
+        title=title,
+        permission=permission,
+    )
 
 
 # Named `list` for the orchestrator but not defined as `list` here: a
@@ -234,6 +255,16 @@ def artifacts(session: str, path: str | None = None) -> dict:
     This is how you check a session's work instead of taking its word for it.
     """
     return _guard(_get_client().artifacts, session, path=path)
+
+
+@mcp.tool()
+def profiles() -> dict:
+    """List the permission presets and what each one grants.
+
+    Call this before dispatching work whose authority matters, rather than
+    guessing a preset name -- an unknown name is refused, not quietly widened.
+    """
+    return _guard(_get_client().profiles)
 
 
 def main() -> None:
