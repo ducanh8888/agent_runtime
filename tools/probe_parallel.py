@@ -55,6 +55,12 @@ def phase_dispatch() -> None:
         name, task = item
         ws = os.path.join(ROOT, name)
         os.makedirs(ws, exist_ok=True)
+        # Seeded before dispatch so the artifacts check below can fail. With an
+        # empty workspace, "alpha.txt is in the list" is satisfied by a listing
+        # that filters nothing at all -- including the behaviour the filter was
+        # written to replace -- so the check asserted less than its label said.
+        with open(os.path.join(ws, "PRE_EXISTING.txt"), "w", encoding="utf-8") as fh:
+            fh.write("written before dispatch; must not appear as session work\n")
         return name, client.dispatch(workspace=ws, task=task, permission="workspace",
                                      title="probe parallel: " + name)
 
@@ -102,6 +108,8 @@ def phase_collect() -> None:
         expected = name + ".txt"
         written = [f["path"] for f in client.artifacts(sid)["files"]]
         check("%s wrote %s" % (name, expected), expected in written, str(written))
+        check("%s: the pre-existing file is not reported as its work" % name,
+              "PRE_EXISTING.txt" not in written, str(written))
         on_disk = os.path.join(ROOT, name, expected)
         check("%s content is right on disk" % name,
               os.path.exists(on_disk) and open(on_disk, encoding="utf-8").read().strip().lower().startswith(name))
@@ -109,7 +117,7 @@ def phase_collect() -> None:
     # Each session must have stayed in its own workspace.
     for name in ids:
         strays = [f for f in os.listdir(os.path.join(ROOT, name))
-                  if f not in (".git", name + ".txt")]
+                  if f not in (".git", "PRE_EXISTING.txt", name + ".txt")]
         check("%s workspace holds nothing from the others" % name, not strays, str(strays))
 
 

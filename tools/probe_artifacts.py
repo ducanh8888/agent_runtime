@@ -119,11 +119,19 @@ class _NoDaemon(Client):
 
 
 probe = _NoDaemon(client, client.status(sid))
+# An absolute path built for whatever platform this is running on. `C:\...` is
+# absolute on Windows and an ordinary relative filename on POSIX, so hard-coding
+# it made this case fail against correct code off Windows -- the probe would
+# join it onto the workspace, approve it, and report the approval as a bug.
+outside = os.path.join(os.path.abspath(os.sep), "Windows", "win.ini")
 for label, bad in (
     ("parent traversal", os.path.join("..", "..", "secret.txt")),
-    ("absolute path", r"C:\Windows\win.ini"),
+    ("absolute path", outside),
     ("UNC path", r"\server\share\x"),
     ("traversal through a subdirectory", "src/../../escape.txt"),
+    # The guard refuses these two wherever it runs, so unlike the absolute case
+    # they exercise containment rather than the platform's idea of a path.
+    ("dot-and-space component", os.path.join(".. ", "x.txt")),
 ):
     try:
         probe.artifacts(sid, path=bad)

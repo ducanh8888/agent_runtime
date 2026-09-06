@@ -663,13 +663,27 @@ class Client:
         if path is not None:
             if os.path.isabs(path):
                 raise ClientError(f"absolute paths are not allowed: {path!r}")
+            # `check_path` rather than a containment test of our own. An
+            # earlier version asked only "is it inside the workspace", which is
+            # most of the guard's job and not all of it: a hard link inside the
+            # workspace is a second name for a file outside it, so the same
+            # credential leak that `_is_runtime_secret` was written to close
+            # stayed open on this path -- reachable not by the agent but by the
+            # orchestrator reading what it thought was a workspace file, which
+            # puts the key in a model's context. Found by a dispatched review
+            # and reproduced against the real credential before fixing.
+            #
+            # Asking the guard is also the only way these two stay in step. The
+            # dot-and-space and UNC rules arrived in `check_path` and never
+            # reached the copy here; routing through it means the next rule
+            # does not have to be remembered twice.
             root = permissions._real(workspace)
-            # `permissions.contains` rather than a `startswith`: this is the same
-            # containment question the guard answers, and answering it a second
-            # way here meant a junction inside the workspace was approved,
-            # since the old check normalised the path without resolving it.
-            if not permissions.contains(root, permissions._real(path, base=root)):
-                raise ClientError(f"path escapes the workspace: {path!r}")
+            try:
+                permissions.check_path(
+                    path, root=root, permission="readonly", writing=False
+                )
+            except permissions.PermissionDenied as denied:
+                raise ClientError(f"refusing {path!r}: {denied}") from denied
             response = self._send(
                 "GET",
                 f"/api/conversations/{quote(resolved, safe='')}/workspace/{quote(path, safe='/')}",
@@ -722,6 +736,12 @@ class Client:
                 if since is not None
                 else None
             ),
+            # Says out loud that the filter did not run. If `created_at` is
+            # missing or unparseable there is no cutoff, every file in the
+            # workspace is listed, and that is precisely the behaviour this
+            # function was rewritten to stop -- silently, and looking like a
+            # correct answer. A caller reading `files` alone cannot tell.
+            "filtered": since is not None,
             "files": files[:200],
             "truncated": len(files) > 200,
             # Files seen outside the pruned directories, which is not the

@@ -266,6 +266,11 @@ def artifacts(session: str, path: str | None = None) -> dict:
 
     This is how you check a session's work instead of taking its word for it.
 
+    Check `filtered`. It is true in normal use. False means the session's start
+    time could not be read, so nothing was filtered and `files` is every file in
+    the workspace rather than the session's -- which looks like a plausible
+    answer and is not one.
+
     An empty `files` with a non-zero `total_scanned` is a real answer, not a
     failure: the session ran and wrote nothing. That is worth knowing early.
     `total_scanned` counts files outside the pruned directories, so it is not
