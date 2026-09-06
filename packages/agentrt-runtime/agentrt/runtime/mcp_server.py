@@ -88,8 +88,10 @@ def dispatch(
     Measured, so you know what you are buying:
 
     - Running out puts the session in `error`, not `finished`, and nothing says
-      why. `status` reports `max_iterations` back to you so the two cases can be
-      told apart.
+      why. There is no counter and no message: a session that exhausted its
+      steps and one that genuinely failed report the same state. `status` shows
+      the ceiling, and the transcript ending mid-task after about that many
+      steps is what distinguishes them.
     - The agent is not warned. It is cut between steps, mid-task, with no chance
       to summarise -- so a session that stops this way has done part of the work
       and told you nothing about which part. Check `artifacts`.
@@ -194,12 +196,15 @@ def status(session: str) -> dict:
     so there is usually no error key and nothing here says what went wrong. Two
     things distinguish the cases:
 
-    - `max_iterations` appears here whenever the session was given one. Seeing
-      it next to `error` means the session most likely ran out of steps rather
-      than failing -- that is what running out looks like from outside.
-    - Otherwise read `transcript`. A session that failed stops mid-work and the
-      last events show where. Server-side tracebacks go to the daemon log
-      (`agentrt daemon logs`), not into this response.
+    - `max_iterations` is always here -- 500 unless you chose otherwise at
+      dispatch -- so its presence tells you nothing on its own. What it gives
+      you is the number to compare against: a session that ran out stops in
+      `error` with a transcript that ends mid-task after about that many steps.
+      No counter is exposed, so that comparison is the only signal.
+    - Read `transcript` either way. A session that failed stops mid-work and its
+      last events show where, and one that ran out looks like a task abandoned
+      in the middle rather than one that went wrong. Server-side tracebacks go
+      to the daemon log (`agentrt daemon logs`), not into this response.
 
     Check this before result, which is null both while a session is still
     working and when a finished session had nothing to say.
