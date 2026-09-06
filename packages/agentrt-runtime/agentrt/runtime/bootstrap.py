@@ -122,13 +122,32 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
     llm_store.save(LLM_PROFILE_NAME, _build_llm(router), include_secrets=True)
     _tighten(state / "profiles" / f"{LLM_PROFILE_NAME}.json")
 
+    # The credential is in the state directory's .env as well as in the profile
+    # the daemon writes, and only the latter was being tightened. On POSIX the
+    # .env kept the default umask, so the file the runtime actually reads its
+    # key from stayed group- and world-readable while the copy beside it was
+    # locked to owner-only.
+    _tighten(config.config_file())
+
     ids: dict[str, UUID] = {}
     for preset in permissions.PRESETS:
+        # Reuse the existing id. `OpenHandsAgentProfile.id` is documented as a
+        # "stable provenance handle ... it never changes", conversations record
+        # it, and an orchestrator may be holding one from an earlier `profiles`
+        # call. Constructing a fresh profile mints a new UUID, so rebuilding
+        # because *one* preset was missing silently re-identified the other two.
+        kwargs: dict = {}
+        try:
+            kwargs["id"] = agent_store.load(preset).id
+        except Exception:
+            pass  # Genuinely new; let the default factory mint one.
+
         profile = OpenHandsAgentProfile(
             name=preset,
             llm_profile_ref=LLM_PROFILE_NAME,
             tools=_tools_for(preset),
             enable_sub_agents=False,
+            **kwargs,
         )
         agent_store.save(profile)
         ids[preset] = profile.id
@@ -136,7 +155,11 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
 
 
 def _tighten(path: Path) -> None:
-    """Owner-only permissions on anything holding the credential.
+    """Owner-only permissions on a file holding the credential.
+
+    Called for every such file, which is the point: an earlier version named
+    only the profile the daemon writes and left the operator's own .env at the
+    default umask.
 
     A no-op on Windows, where the POSIX mode bits carry no meaning; the file is
     inside the user profile there and inherits its ACL.

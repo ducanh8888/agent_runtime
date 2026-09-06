@@ -74,6 +74,10 @@ class GuardedFileEditorExecutor(ToolExecutor):
             # difference is a chance to approve one file and open another.
             action = action.model_copy(update={"path": str(approved)})
         except permissions.PermissionDenied as denied:
+            # is_error must be set. The observation's own rendering computes
+            # `change_applied = command != "view" and not is_error`, so a
+            # refusal without it is displayed as a change that went through --
+            # the agent is told its write succeeded and carries on.
             return FileEditorObservation.from_text(
                 text=(
                     f"Refused: {denied}. This session runs under the "
@@ -81,6 +85,7 @@ class GuardedFileEditorExecutor(ToolExecutor):
                 ),
                 command=action.command,
                 path=str(action.path),
+                is_error=True,
             )
         return self._inner(action, conversation)
 
