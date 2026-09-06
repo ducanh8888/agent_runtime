@@ -22,7 +22,7 @@ every session for nothing. It returns when P4 adds permission presets.
 ## Evidence
 
 The whole lifecycle driven through the CLI against a live session
-(`scratchpad/cli_loop.py`), each status observed rather than assumed:
+(`tools/cli_loop.py`), each status observed rather than assumed:
 
 ```
 status                       -> running
@@ -43,11 +43,14 @@ ALL STEPS PASSED
 
 Separately verified:
 
-- **Condensation.** A 21-event session returns 11 events — 1 message, 5 actions,
-  5 observations. `reasoning_content` and the system prompt appear nowhere in
-  the output.
-- **Pagination.** The 95-event runaway session pages 64 then 31, and the cursor
-  terminates cleanly at None.
+- **Condensation.** A 21-event session returns 11 — 1 message, 5 actions, 5
+  observations — and a long one condenses two raw pages to 64 then 31.
+  `reasoning_content` and the system prompt appear nowhere in the output. The
+  ratio is not fixed: a short session returns everything it has, two or three
+  events, however large `limit` is. `next_cursor` is the only reliable signal
+  that more exist.
+- **Pagination.** The runaway session yields 64 condensed events on the first
+  page and 31 on the second, and the cursor terminates cleanly at None.
 - **Traversal.** `..\..\daemon.json`, `C:\Windows\win.ini` and
   `../../../etc/passwd` are all refused before any request is made.
 - **Daemon restart.** Killing the daemon mid-client-life brings it back on a new
@@ -58,7 +61,7 @@ Separately verified:
 The MCP process inside a running Claude Code holds whatever code it started
 with, so the new surface cannot be exercised there without a restart. Spawning a
 fresh server and speaking the protocol to it covers everything except how the
-host renders the result (`scratchpad/mcp_e2e.py`):
+host renders the result (`tools/mcp_e2e.py`):
 
 ```
 server      : agentrt 1.28.1
@@ -112,3 +115,10 @@ Recorded in `DAEMON_BEHAVIOUR.md`; the ones that changed the design:
 Each of those is something a reasonable person infers wrongly from the endpoint
 name, and each was found by probing before writing rather than by debugging
 after.
+
+## Do not delete session `6ff256c9`
+
+It is the runaway that ran an hour without writing a line, and it is the
+evidence behind both the cost table in `ORCHESTRATOR_GUIDE.md` and the "pointing at a document is not
+enough" finding in `ORCHESTRATOR_GUIDE.md`. It looks like junk in `list` and is
+not.

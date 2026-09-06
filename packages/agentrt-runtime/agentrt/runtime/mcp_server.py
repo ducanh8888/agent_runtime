@@ -157,10 +157,13 @@ def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict
     short intent, and each observation truncated. next_cursor pages backwards
     into older events; pass it back as cursor.
 
-    limit counts raw events, and roughly half of those are internal bookkeeping
-    that gets dropped, so you will get noticeably fewer than you asked for --
-    limit=30 typically returns 11 to 15. It is capped at 100. When next_cursor
-    is not null there are older events regardless of how few came back.
+    Expect fewer events than you asked for. limit counts raw events and about
+    half of those are internal bookkeeping that gets dropped, so a long session
+    returns roughly half of limit; a short one returns everything it has, which
+    may be two or three. It is capped at 100.
+
+    Judge "is there more" by next_cursor, never by how few events came back. A
+    non-null cursor means older events exist no matter how short the page.
 
     The agent's private reasoning and its system prompt are excluded. They are
     the bulk of the raw payload and would cost you far more context than they

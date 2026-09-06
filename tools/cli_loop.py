@@ -8,6 +8,7 @@ evidence rather than an assumption.
 import json
 import os
 import shutil
+import tempfile
 import subprocess
 import sys
 import time
@@ -15,9 +16,13 @@ import time
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Session workspaces go to a temp directory, never inside the repository:
+# a dispatched session writes into its workspace, and this repository is
+# not a scratch area.
+SCRATCH = os.path.join(tempfile.gettempdir(), "agentrt-checks")
 REPO = r"C:\Users\ADMIN\Desktop\ORCHESTRATOR\agent_runtime"
 PY = os.path.join(REPO, "packages", ".venv", "Scripts", "python.exe")
-WS = os.path.join(HERE, "cli_loop_ws")
+WS = os.path.join(SCRATCH, "cli_loop_ws")
 
 FAILURES = []
 

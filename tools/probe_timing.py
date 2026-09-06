@@ -1,11 +1,17 @@
 """Time the pause and interrupt calls themselves.
 
-The tick counts implied that POST /pause blocks for tens of seconds while
-POST /interrupt returns at once, but that was arithmetic on sleep intervals,
-not a measurement. This measures it.
+Both verbs leave a session at `paused`, so the names suggest they are
+interchangeable. They are not: this measures how long each call takes and
+whether the command the agent is running survives it. Counting ticks between
+sleeps was not enough -- it could not separate "the call returned quickly" from
+"the call blocked while work continued".
+
+Run it with the daemon configured; it dispatches two short sessions and deletes
+them.
 """
 import os
 import shutil
+import tempfile
 import sys
 import time
 
@@ -16,6 +22,8 @@ from agentrt.runtime import bootstrap, daemon
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Workspaces go to a temp directory, not into the repository.
+SCRATCH = os.path.join(tempfile.gettempdir(), "agentrt-checks")
 info = daemon.ensure_running()
 H = {"X-Session-API-Key": info.token}
 B = info.base_url
@@ -23,7 +31,7 @@ PROFILE = str(bootstrap.ensure_profiles())
 
 
 def probe(verb: str) -> None:
-    ws = os.path.join(HERE, "timing_" + verb)
+    ws = os.path.join(SCRATCH, "timing_" + verb)
     shutil.rmtree(ws, ignore_errors=True)
     os.makedirs(ws, exist_ok=True)
     shutil.copy(os.path.join(HERE, "tick.py"), os.path.join(ws, "tick.py"))
