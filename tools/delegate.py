@@ -17,7 +17,6 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ENV = r"C:\Users\ADMIN\Desktop\ORCHESTRATOR\agent_runtime\.env"
 SPEND = os.path.join(HERE, "spend.json")
 
 # ds/deepseek-v4-flash pricing is not published through the router, so this is
@@ -27,13 +26,18 @@ USD_PER_1K_OUT = 0.0012
 
 
 def load_env():
-    cfg = {}
-    for line in io.open(ENV, encoding="utf-8"):
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            cfg[k.strip()] = v.strip().strip('"').strip("'")
-    return cfg
+    """Read provider settings through the runtime's own resolver.
+
+    Not by reading a path of its own: the runtime decides where
+    configuration lives, and a second answer here is a second thing to
+    keep in step -- and the one that breaks the moment agentrt is used
+    from anywhere but this checkout.
+    """
+    from agentrt.runtime import config
+
+    values, source = config.resolve_settings()
+    print("config from: %s" % source)
+    return values
 
 
 def record(usage):
