@@ -56,6 +56,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         workspace=args.workspace,
         title=args.title,
         permission=args.permission,
+        max_iterations=args.max_iterations,
     )
 
 
@@ -204,6 +205,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--permission",
         choices=["readonly", "workspace", "broad"],
         help="permission preset (default: workspace)",
+    )
+    dispatch_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        help="stop the run after this many agent steps (default: no limit)",
     )
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 

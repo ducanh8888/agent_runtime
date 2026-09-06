@@ -58,6 +58,7 @@ def dispatch(
     workspace: str,
     title: str | None = None,
     permission: str | None = None,
+    max_iterations: int | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -79,6 +80,26 @@ def dispatch(
     `workspace` confines the file editor to the workspace but still grants a
     terminal, and a terminal can open any file you can. Treat it as constraining
     ordinary behaviour, not as containment.
+
+    MAX_ITERATIONS bounds one run of the agent. Left unset there is no limit,
+    which is the default and matches how this behaved before the option existed.
+
+    Measured, so you know what you are buying:
+
+    - Running out puts the session in `error`, not `finished`, and nothing says
+      why. `status` reports `max_iterations` back to you so the two cases can be
+      told apart.
+    - The agent is not warned. It is cut between steps, mid-task, with no chance
+      to summarise -- so a session that stops this way has done part of the work
+      and told you nothing about which part. Check `artifacts`.
+    - The budget is per run, not per session. `control` with `send` starts a
+      fresh allowance of the same size, so a limit of 5 and three follow-ups is
+      up to twenty steps, not five.
+
+    It is a circuit breaker, not a cost control: it stops a session that would
+    otherwise run unattended, at the price of cutting it off mid-thought. For
+    work you are watching, `interrupt` is better -- it keeps the history and
+    lets you redirect. Reach for this when nobody will be watching.
 
     WHEN THIS IS WORTH IT. Dispatching costs about ten seconds of startup plus
     the session's own model spend. It pays off when the work is long, when
@@ -132,6 +153,7 @@ def dispatch(
         workspace,
         title=title,
         permission=permission,
+        max_iterations=max_iterations,
     )
 
 
@@ -156,7 +178,18 @@ def status(session: str) -> dict:
 
     The states you will see: running means the agent is working; paused means
     it was interrupted or stopped and can be resumed; finished means it stopped
-    on its own; error means it failed, and the error key says why.
+    on its own; error means it stopped without finishing.
+
+    `error` arrives with no explanation. The daemon carries no message for it,
+    so there is usually no error key and nothing here says what went wrong. Two
+    things distinguish the cases:
+
+    - `max_iterations` appears here whenever the session was given one. Seeing
+      it next to `error` means the session most likely ran out of steps rather
+      than failing -- that is what running out looks like from outside.
+    - Otherwise read `transcript`. A session that failed stops mid-work and the
+      last events show where. Server-side tracebacks go to the daemon log
+      (`agentrt daemon logs`), not into this response.
 
     Check this before result, which is null both while a session is still
     working and when a finished session had nothing to say.

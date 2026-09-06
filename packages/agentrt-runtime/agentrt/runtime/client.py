@@ -374,6 +374,7 @@ class Client:
         *,
         title: str | None = None,
         permission: str | None = None,
+        max_iterations: int | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task."""
         workspace = os.path.abspath(os.path.expanduser(workspace))
@@ -408,6 +409,8 @@ class Client:
         }
         if title is not None:
             body["title"] = title
+        if max_iterations is not None:
+            body["max_iterations"] = max_iterations
 
         data = self._send("POST", "/api/conversations", json=body).json()
         full_id = data.get("id")
@@ -481,6 +484,15 @@ class Client:
         }
         if data.get("error") is not None:
             result["error"] = data.get("error")
+        # Reported whenever the session was given one, because it is the only
+        # thing that distinguishes the two ways a session reaches `error`. The
+        # daemon carries no message with that state -- measured: a session that
+        # hit its limit came back with `execution_status: "error"` and no error
+        # field anywhere in the payload -- so a caller seeing `error` alongside
+        # a limit it set has an explanation, and one seeing `error` without a
+        # limit knows to go and read the transcript.
+        if data.get("max_iterations") is not None:
+            result["max_iterations"] = data.get("max_iterations")
         return result
 
     def result(self, session: str) -> dict:
