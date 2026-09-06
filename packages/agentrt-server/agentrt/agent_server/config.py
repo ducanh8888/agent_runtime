@@ -435,7 +435,7 @@ _default_config: Config | None = None
 def _read_config_file(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"Config file must contain a JSON object: {path}")
     return data

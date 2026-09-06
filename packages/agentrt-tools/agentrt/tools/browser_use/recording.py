@@ -82,7 +82,7 @@ DEFAULT_CONFIG = RecordingConfig()
 def _load_js_file(filename: str) -> str:
     """Load a JavaScript file from the js/ directory with caching."""
     filepath = _JS_DIR / filename
-    return filepath.read_text()
+    return filepath.read_text(encoding="utf-8")
 
 
 def get_rrweb_loader_js(cdn_url: str) -> str:

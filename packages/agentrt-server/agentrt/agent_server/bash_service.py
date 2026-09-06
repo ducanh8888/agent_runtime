@@ -84,7 +84,7 @@ class BashEventService:
     def _load_event_from_file(self, filepath: Path) -> BashEventBase | None:
         """Load an event from a file."""
         try:
-            json_data = filepath.read_text()
+            json_data = filepath.read_text(encoding="utf-8")
             return BashEventBase.model_validate_json(json_data)
         except Exception as e:
             logger.error(f"Error loading event from {filepath}: {e}")

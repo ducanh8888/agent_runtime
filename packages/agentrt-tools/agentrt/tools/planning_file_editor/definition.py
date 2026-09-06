@@ -121,7 +121,7 @@ class PlanningFileEditorTool(
 
             # Ensure parent directory exists
             plan_file.parent.mkdir(parents=True, exist_ok=True)
-            plan_file.write_text(get_plan_headers())
+            plan_file.write_text(get_plan_headers(), encoding="utf-8")
             logger.info(f"Created new PLAN.md at {plan_path}")
 
         # Create executor with restricted edit access to PLAN.md only

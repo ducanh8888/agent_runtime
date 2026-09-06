@@ -54,7 +54,7 @@ class CanvasExtensionInstallationInterface(
     def load_from_dir(extension_dir: Path) -> CanvasExtensionManifest:
         manifest_path = extension_dir / MANIFEST_FILENAME
         manifest = CanvasExtensionManifest.model_validate_json(
-            manifest_path.read_text()
+            manifest_path.read_text(encoding="utf-8")
         )
         # Containment must hold too -- a parseable manifest alone isn't enough.
         resolve_entrypoint(manifest, extension_dir)

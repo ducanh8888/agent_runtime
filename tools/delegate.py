@@ -59,7 +59,12 @@ Rules:
 - The code must run on both Windows and Linux.
 - Prefer the standard library. Only import third-party packages the spec names.
 - Write real docstrings that explain why, not what.
-- No TODO comments and no placeholder implementations."""
+- No TODO comments and no placeholder implementations.
+
+Do not deliberate at length. The specification is complete and unambiguous;
+treat it as settled and write the file. Long internal reasoning is billed
+against the same budget as the answer, so time spent second-guessing the spec
+is taken directly from the code you still have to write."""
 
 
 def main():
@@ -67,7 +72,7 @@ def main():
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--context", nargs="*", default=[])
-    ap.add_argument("--max-tokens", type=int, default=32000)
+    ap.add_argument("--max-tokens", type=int, default=48000)
     args = ap.parse_args()
 
     cfg = load_env()

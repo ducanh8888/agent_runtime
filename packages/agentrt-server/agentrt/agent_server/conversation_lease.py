@@ -235,7 +235,7 @@ class ConversationLease:
         if not self._lease_path.exists():
             return None
         try:
-            raw_payload = json.loads(self._lease_path.read_text())
+            raw_payload = json.loads(self._lease_path.read_text(encoding="utf-8"))
             if not isinstance(raw_payload, dict):
                 raise ValueError("lease payload must be an object")
 
@@ -277,5 +277,5 @@ class ConversationLease:
             "owner_pid": os.getpid(),
         }
         tmp_path = self._lease_path.with_suffix(".tmp")
-        tmp_path.write_text(json.dumps(payload))
+        tmp_path.write_text(json.dumps(payload), encoding="utf-8")
         tmp_path.replace(self._lease_path)

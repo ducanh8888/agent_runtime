@@ -180,6 +180,13 @@ def ensure_running(startup_timeout: float = 60.0) -> DaemonInfo:
         # its LLM credential, somewhere the bootstrap never wrote.
         env["AGENTRT_PERSISTENCE_DIR"] = str(config.state_dir())
         env["AGENTRT_SUPPRESS_BANNER"] = "1"
+        # Conversations default to a path relative to the process working
+        # directory, so without this the daemon's session catalog would move
+        # whenever it was started from somewhere else -- sessions would appear
+        # to vanish rather than fail loudly.
+        state = config.state_dir()
+        env["AGENTRT_CONVERSATIONS_PATH"] = str(state / "conversations")
+        env["AGENTRT_WORKSPACE_PATH"] = str(state / "workspace")
         command = [
             sys.executable,
             "-m",
