@@ -20,3 +20,4 @@ namespaces = true
 
 [project.scripts]
 agentrt = "agentrt.runtime.cli:main"
+agentrt-mcp = "agentrt.runtime.mcp_server:main"
