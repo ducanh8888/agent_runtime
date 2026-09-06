@@ -209,7 +209,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--max-iterations",
         type=int,
-        help="stop the run after this many agent steps (default: no limit)",
+        help="stop the run after this many agent steps (daemon default: 500)",
     )
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 

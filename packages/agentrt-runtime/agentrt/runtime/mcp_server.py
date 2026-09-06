@@ -81,8 +81,9 @@ def dispatch(
     terminal, and a terminal can open any file you can. Treat it as constraining
     ordinary behaviour, not as containment.
 
-    MAX_ITERATIONS bounds one run of the agent. Left unset there is no limit,
-    which is the default and matches how this behaved before the option existed.
+    MAX_ITERATIONS bounds one run of the agent. Left unset, the daemon applies
+    its own default of 500 -- there is no such thing as an unlimited session
+    here, only one whose ceiling you did not choose. Setting it lowers that.
 
     Measured, so you know what you are buying:
 
