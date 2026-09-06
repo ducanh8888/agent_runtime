@@ -59,3 +59,45 @@ One lesson worth keeping: the model spends its entire token budget on reasoning
 unless told not to. A single instruction to treat the specification as settled
 cut thinking from 130,000 characters to 66,000 and turned a truncated file into
 a complete one.
+
+---
+
+## Regression check on the 17 encoding changes
+
+The P2 fixes added `encoding="utf-8"` to 17 unencoded `read_text()`/`write_text()`
+calls in vendored code. The full suite was re-run and compared per test id
+against `final.xml`, the accepted post-rename reference.
+
+```
+reference failing: 101   after: 111
+NEW failures: 12   newly passing: 2   ids removed: 0   ids added: 0
+```
+
+The 12 fall into three groups, none of which touches text encoding.
+
+**Group 1 — contamination from the test command itself (4 tests, re-verified).**
+`test_get_credentials_dir_default`, `test_get_credentials_dir_xdg`,
+`test_get_installed_plugins_dir_returns_default_path`,
+`test_get_installed_skills_dir_returns_default_path`. Each asserts a *default*
+path, and the run exported `AGENTRT_PERSISTENCE_DIR` to a scratch directory, so
+they saw the override and failed. Re-run with that variable unset: 4 passed in
+0.09s. This group is an artefact of how the suite was invoked.
+
+**Group 2 — the known flaky async group (3 tests, not re-run).**
+`test_hook_config_sent_to_server`, `test_execute_async_hook_process_tracked`,
+`test_mixed_sync_async_hooks_in_post_tool_use`. Same modules and same shape as
+the three characterised as timing-sensitive in P1: a hook writes a file
+asynchronously and the assertion arrives first.
+
+**Group 3 — live network fetches (5 tests, not re-run).** Two
+`ExtensionFetchError: Subdirectory not found in extension repository`, plus
+`test_reasoning_effort_support[openrouter/moonshotai/kimi-k2-thinking]` and
+`test_effective_unchanged_before_resolution`, which assert against LiteLLM's
+model metadata. These depend on data fetched at run time, which changed
+upstream between the two runs.
+
+**Conclusion.** Group 1 is verified by re-running. Groups 2 and 3 are attributed
+by module and message signature and were *not* individually re-run, so they are
+a reasoned attribution rather than proof. No new failure involves a file read or
+write, which is the only thing the 17 changes altered. The encoding fixes
+regressed nothing.
