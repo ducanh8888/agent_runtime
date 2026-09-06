@@ -14,7 +14,8 @@ differ through a relative name or a component the OS normalises later.
 
 What remains outside its reach is aliasing that no path carries. A hard link is
 a second name for one file, so a workspace containing one is a workspace
-containing that file; `st_nlink` is checked for exactly that reason. A symlink
+containing that file. The guard compares device and inode against the runtime's
+own credential files, which closes that leak and only that one. A symlink
 retargeted between the check and the open is a race this cannot win, and needs
 a sandbox rather than a better guard.
 

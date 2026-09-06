@@ -248,11 +248,22 @@ def control(session: str, action: str, message: str | None = None) -> dict:
 def artifacts(session: str, path: str | None = None) -> dict:
     """List or read the files a session produced.
 
-    With no path, lists the session's workspace -- relative path, size and
-    modification time for each file, skipping .git and __pycache__. With a path
-    relative to that workspace, returns the file's content.
+    With no path, lists what changed: every file in the workspace created or
+    modified since the session started, newest first, with relative path, size
+    and modification time. `since` is the cutoff it used. With a path relative
+    to that workspace, returns that file's content.
 
     This is how you check a session's work instead of taking its word for it.
+
+    An empty `files` with a non-zero `total_in_workspace` is a real answer, not
+    a failure: the session ran and wrote nothing. That is worth knowing early.
+
+    Three things it does not show. Deletions -- a file removed leaves nothing to
+    list, so a session asked to remove something must be checked another way.
+    Copies that preserve timestamps, which keep the original's time. And
+    anything written inside a pruned directory: dependency trees and tool caches
+    (`pruned` names them) are skipped, because a session that runs `npm install`
+    would otherwise bury its own output under thirty thousand files.
     """
     return _guard(_get_client().artifacts, session, path=path)
 

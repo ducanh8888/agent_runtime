@@ -57,7 +57,8 @@ reported six problems; five were real.
 The one that mattered most for security had gone past seventeen adversarial
 checks: a hard link inside the workspace is a second name for a file outside it,
 and no path resolution can see that. Reproduced against the real credential,
-then fixed with an `st_nlink` check.
+then fixed by comparing device and inode against the runtime's own credential
+files -- the `st_nlink` version is the next entry.
 
 The one that mattered most in practice was duller. A refusal was returned
 without `is_error`, and the observation's rendering computes
@@ -102,6 +103,46 @@ link, because the connection between "the guard resolves paths" and "the state
 directory sits on the same volume" is not in any one file. The lesson is not
 "stop agents exploring" but that the same behaviour is waste in one task and the
 whole point in another.
+
+## The verification step did not work on any real repository
+
+`artifacts` is the answer to "did the session actually do it", and the `result`
+tool description points at it in as many words. It listed every file in the
+workspace, sorted by path, first two hundred.
+
+For an empty scratch directory that is indistinguishable from the right answer,
+and every workspace used while building this was one. Measured against a
+repository it is not merely noisy. With a `.venv` at the root, all two hundred
+returned files are dependency files and nothing the session wrote appears at
+all, because `.` sorts before every letter. Simulated over this project's own
+tree: the agent's output would have been entry 31,512 of 31,514.
+
+It now reports what changed since the session started, newest first, and prunes
+dependency trees and tool caches. Two files came back from a four-hundred-file
+workspace in `tools/probe_artifacts.py`, which seeds a `.venv` and pre-existing
+sources *before* dispatching so the empty-directory case can never be the only
+one tested again.
+
+Three things fell out of building it:
+
+**The wrong question passed every test because the test shared its premise.**
+Nothing here was subtle. The defect is visible by reading the function — if you
+read it while thinking about a repository, which nobody does while dogfooding a
+runtime in scratch directories.
+
+**A grace period was added and then removed by measurement.** Two seconds of
+slack covers FAT's timestamp resolution. It also attributes a file the
+orchestrator seeded immediately before dispatching to the session, which is the
+common case: `tools/adversarial.py` seeds and dispatches microseconds apart. The
+first test written caught it. Insuring the rare case by being wrong about the
+common one is the wrong trade, and the FAT limitation is documented instead.
+
+**Timezone was the trap worth naming.** The daemon reports `created_at` in UTC
+with a `Z`; this machine runs at UTC+7. Comparing that to a local clock puts
+every file on the wrong side of the boundary by seven hours, and the failure is
+silent — the list is simply wrong, in a direction that depends on the hour.
+Testing both directions, a file written before and a file written after, is what
+distinguishes a working filter from one that happens to include everything.
 
 ## One bug that was mine, not the product's
 

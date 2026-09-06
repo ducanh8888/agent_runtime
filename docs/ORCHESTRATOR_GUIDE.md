@@ -75,6 +75,15 @@ A session's `result` is its own account of what it did. Sessions have reported
 verifying output they had not verified. `artifacts` reads the files it actually
 wrote; that is the check, and it costs one call.
 
+That sentence was false for most of this project's life, and the reason it went
+unnoticed is worth more than the bug. `artifacts` listed every file in the
+workspace by path and returned the first two hundred. Every workspace used
+during development was an empty scratch directory, where that is indistinguish-
+able from the right answer. Point it at a real repository and it is not: with a
+`.venv` at the root, all two hundred are dependency files and nothing the
+session wrote appears, because `.` sorts before every letter. It now lists what
+changed since the session started, newest first, and prunes dependency trees.
+
 ## Configuration and state
 
 Configuration resolves from the process environment, then `<state-dir>/.env`,
@@ -93,9 +102,12 @@ when a session fails for no visible reason.
   by path. It has no terminal and its file editor may view inside the workspace
   and nothing else. But a path names a file, and a file can have more than one
   name: a hard link inside the workspace to something outside it was readable
-  through the guard until `st_nlink` was checked — a `readonly` session read the
-  provider credential that way, without being able to create the link itself.
-  That is fixed; the shape of the problem is not. Confinement by path cannot see
+  through the guard — a `readonly` session read the provider credential that
+  way, without being able to create the link itself. The guard now compares
+  device and inode against the runtime's own credential files, so that specific
+  leak is closed and nothing wider is. A link to any *other* file outside the
+  workspace is still invisible, and on a filesystem that reports no inode the
+  check does nothing at all. Confinement by path cannot see
   aliasing it is not told about, so the workspace you point a session at is part
   of its authority.
 

@@ -17,6 +17,66 @@ import httpx
 from agentrt.runtime import bootstrap, config, daemon, permissions
 
 
+#: Directories skipped when reporting what a session wrote.
+#:
+#: These are dependency trees and tool caches: never authored, frequently
+#: enormous. Pruning them is a correctness measure before it is a speed one. A
+#: session that runs ``uv sync`` or ``npm install`` gives thirty thousand files
+#: a modification time inside its own run, and without this the one file it
+#: wrote is buried in them. It is also 35x faster -- 1.43s to 0.04s over this
+#: repository -- which matters because this runs inside a tool call.
+#:
+#: Build outputs (``dist``, ``build``, ``target``) are deliberately absent: a
+#: session can legitimately be asked to produce one, and the modification-time
+#: filter already excludes a stale one.
+PRUNED_DIRS = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+    }
+)
+
+
+def _started_at(status: dict) -> float | None:
+    """When the session began, as a POSIX timestamp, or None if unknown.
+
+    The daemon reports ``created_at`` as ISO 8601 with an explicit ``Z``, and
+    this machine runs at UTC+7. Comparing that text to a local clock -- or
+    parsing it as naive -- puts every file on the wrong side of the boundary by
+    seven hours, so the parse is to an aware datetime and the comparison is
+    epoch to epoch.
+
+    No grace period, which was tried and removed. FAT records modification times
+    to a two-second resolution, so on such a volume a file written just after
+    dispatch can report a stamp just before it and be missed. Two seconds of
+    slack covers that and costs more than it saves: seeding a workspace and then
+    dispatching into it happens microseconds apart -- `tools/adversarial.py`
+    does exactly that -- so the slack attributed the orchestrator's own seed
+    file to the session on every such run. Being wrong about the common case to
+    insure the rare one is the wrong trade, and the rare one is documented
+    instead.
+    """
+    raw = status.get("created_at")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
 class ClientError(Exception):
     """Base class for all errors raised by :class:`Client`."""
 
@@ -578,22 +638,35 @@ class Client:
         return {"id": resolved, "short_id": short_id(resolved), "deleted": True}
 
     def artifacts(self, session: str, path: str | None = None) -> dict:
-        """List workspace files locally, or fetch one file when ``path`` is given.
+        """What this session wrote, or the contents of one file it wrote.
 
         The daemon has no directory-listing endpoint, so listing is done
         locally, which is correct because the daemon runs on this machine.
+
+        The question an orchestrator asks here is "what did this session
+        produce", and an earlier version answered a different one -- every file
+        in the workspace, sorted by path, first two hundred. That is the same
+        answer for an empty scratch directory, which is why it survived: every
+        workspace dogfooded during development was one. Measured against a real
+        repository it is not merely noisy but useless. With a `.venv` at the
+        root, all two hundred slots are dependency files and nothing the session
+        wrote appears at all, because `.` sorts before every letter.
         """
         resolved = self._resolve_session(session)
-        workspace = self.status(resolved).get("workspace")
+        status = self.status(resolved)
+        workspace = status.get("workspace")
         if not workspace:
             raise ClientError(f"no workspace known for session {short_id(resolved)}")
 
         if path is not None:
             if os.path.isabs(path):
                 raise ClientError(f"absolute paths are not allowed: {path!r}")
-            root = os.path.abspath(workspace)
-            joined = os.path.normpath(os.path.join(root, path))
-            if joined != root and not joined.startswith(root.rstrip(os.sep) + os.sep):
+            root = permissions._real(workspace)
+            # `permissions.contains` rather than a `startswith`: this is the same
+            # containment question the guard answers, and answering it a second
+            # way here meant a junction inside the workspace was approved,
+            # since the old check normalised the path without resolving it.
+            if not permissions.contains(root, permissions._real(path, base=root)):
                 raise ClientError(f"path escapes the workspace: {path!r}")
             response = self._send(
                 "GET",
@@ -606,34 +679,54 @@ class Client:
                 "content": response.text,
             }
 
-        found: list[dict] = []
+        since = _started_at(status)
+        found: list[tuple[float, dict]] = []
+        total = 0
         for dirpath, dirnames, filenames in os.walk(workspace):
-            dirnames[:] = sorted(
-                d for d in dirnames if d not in (".git", "__pycache__")
-            )
+            dirnames[:] = sorted(d for d in dirnames if d not in PRUNED_DIRS)
             for name in filenames:
                 full = os.path.join(dirpath, name)
                 try:
                     entry_stat = os.stat(full)
                 except OSError:
                     continue
+                total += 1
+                if since is not None and entry_stat.st_mtime < since:
+                    continue
                 found.append(
-                    {
-                        "path": os.path.relpath(full, workspace).replace(
-                            os.sep, "/"
-                        ),
-                        "size": entry_stat.st_size,
-                        "modified": datetime.fromtimestamp(
-                            entry_stat.st_mtime, tz=timezone.utc
-                        ).isoformat(),
-                    }
+                    (
+                        entry_stat.st_mtime,
+                        {
+                            "path": os.path.relpath(full, workspace).replace(
+                                os.sep, "/"
+                            ),
+                            "size": entry_stat.st_size,
+                            "modified": datetime.fromtimestamp(
+                                entry_stat.st_mtime, tz=timezone.utc
+                            ).isoformat(),
+                        },
+                    )
                 )
-        found.sort(key=lambda entry: entry["path"])
+        # Newest first, so the file the session finished with is the one read
+        # first. Path order buries it behind whatever the repository is called.
+        found.sort(key=lambda entry: entry[0], reverse=True)
+        files = [entry[1] for entry in found]
         return {
             "id": resolved,
             "short_id": short_id(resolved),
             "workspace": workspace,
-            "files": found[:200],
-            "truncated": len(found) > 200,
+            "since": (
+                datetime.fromtimestamp(since, tz=timezone.utc).isoformat()
+                if since is not None
+                else None
+            ),
+            "files": files[:200],
+            "truncated": len(files) > 200,
+            # Distinguishes "walked the workspace and the session wrote nothing"
+            # from "the walk found nothing at all". The first is a real and
+            # common answer -- a session can run for an hour and produce no file
+            # -- and it should not look like a broken call.
+            "total_in_workspace": total,
+            "pruned": sorted(PRUNED_DIRS),
         }
 
