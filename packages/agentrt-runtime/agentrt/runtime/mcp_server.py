@@ -184,9 +184,15 @@ def control(session: str, action: str, message: str | None = None) -> dict:
     - interrupt -- cancel what the agent is doing right now. Any command it is
       running is killed. The session becomes paused with its history intact, so
       you can send a correction and then resume.
-    - stop -- suspend the session. The same resumable paused state as
-      interrupt, without killing work already in flight.
-    - resume -- continue a paused session from where it stopped.
+    - stop -- suspend the session at the next safe boundary. It reaches the
+      same resumable paused state as interrupt but does not kill work in
+      flight, so a command the agent is running carries on to completion and
+      THIS CALL BLOCKS UNTIL THE BOUNDARY IS REACHED -- measured at 28 seconds
+      against a long-running command, where interrupt returned in 2. Prefer
+      interrupt unless you specifically want the current work finished.
+    - resume -- continue a paused session from where it stopped. It does
+      nothing to a session that already finished; to give a finished session
+      more work, use send.
     - delete -- remove the session and its history permanently. This is the
       only action here that destroys anything and it cannot be undone. Files
       the session wrote in its workspace are left alone.

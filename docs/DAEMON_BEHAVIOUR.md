@@ -32,6 +32,26 @@ a tool that never works.
 The real verbs are `pause` to suspend, `run` to continue, `interrupt` to cancel
 what is executing right now.
 
+### interrupt and pause are genuinely different verbs
+
+Measured against an identical fixed script appending one line per second, so
+the two runs compare the same command:
+
+| Call | POST duration | Ticks before / just after / +15s | In-flight command |
+|---|---|---|---|
+| `interrupt` | 2.1s | 3 / 4 / 4 | killed |
+| `pause` | **28.3s** | 3 / 31 / 46 | kept running |
+
+Both end at `paused`, but only `interrupt` stops the work, and `pause` blocks
+the caller until the agent reaches a safe boundary. A front end that presents
+`pause` as "stop" must say that the call can take tens of seconds and that the
+running command finishes regardless.
+
+An earlier attempt at this comparison let each session compose its own loop and
+measured two different commands; a third run with a script written in advance
+produced the table above. The lesson is narrow but real: when timing is the
+thing under test, the command has to be fixed, not described.
+
 **`interrupt` really cancels in-flight work.** A session was set running a shell
 loop appending one line per second to a file. At interrupt the file had 3 lines;
 3 seconds later 3; 11 seconds later still 3. The child process is killed, not
