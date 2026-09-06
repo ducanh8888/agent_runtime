@@ -104,10 +104,13 @@ sessions dispatched from threads, the dispatching process exits while they are
 still running, and a second process that has never seen them collects all three
 by id, reads their output, and finds each one confined to its own workspace.
 
-Two practical notes from doing it. Dispatch is not instant -- three took twelve
-seconds to start, because each call waits for the daemon to create the
-conversation, so an orchestrator should start them from threads and not one at a
-time. And a session id is the whole handoff: write the ids down and any later
+Two practical notes from doing it. Dispatch is not instant: each call waits for
+the daemon to create the conversation, and three dispatched from threads took
+twelve seconds between them. Whether threading bought anything is unmeasured --
+that number is consistent with each call taking twelve seconds or four, and only
+one of those makes threading worth it. What is safe to say is the order of
+magnitude: seconds, not milliseconds, so a fan-out is not free. And a session id
+is the whole handoff: write the ids down and any later
 process can pick the work up, which is what makes "dispatch and come back" real
 rather than a manner of speaking.
 

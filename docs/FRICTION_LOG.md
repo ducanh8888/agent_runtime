@@ -147,6 +147,34 @@ silent — the list is simply wrong, in a direction that depends on the hour.
 Testing both directions, a file written before and a file written after, is what
 distinguishes a working filter from one that happens to include everything.
 
+## `paused` is not a synonym for `residue`
+
+A probe left a paused session behind on every run, so the tidy-up was obvious:
+list the sessions, delete the paused ones. That loop deleted one and then
+crashed on an emoji in a title before reaching the second, which was
+`6ff256c9` -- the session `P3_RESULT.md` names in a heading as the one not to
+delete. It is paused because it was interrupted, which is exactly why it is
+evidence.
+
+Nothing documented was lost: the one that went, `12023d33`, is referenced
+nowhere. That is luck, not method. The rule that would have prevented it is one
+already written down -- look at what you are deleting before you delete it --
+and the filter that felt like a description of residue was a description of
+state.
+
+Two things follow.
+
+**A probe should clean up what it creates, at the time it creates it.** The
+cap check now deletes its own holder in the same function that dispatches it,
+so there is never a pile to tidy and never a reason to write a filter over
+somebody else's sessions.
+
+**"Do not delete" living in prose is the underlying problem.** Two sessions are
+load-bearing evidence and the only thing protecting them is a heading in a
+document, which no tool reads. The daemon accepts `tags` on dispatch and
+`PATCH` updates them, so a durable marker is available and unexposed. Whether
+to spend surface on it is a decision, not a fix.
+
 ## One bug that was mine, not the product's
 
 A transcript rendered `# P4 — permission` as `# P4 â€” permission`, which looks

@@ -170,6 +170,9 @@ def phase_cap() -> None:
 
     stopped = client.stop(holder["id"])
     print("  stopped the holder:", stopped.get("status", "ok"))
+    # `stop` maps to /pause, and a paused session is kept until deleted -- so a
+    # probe that only stopped it left one more behind on every run.
+    client.delete(holder["id"])
 
 
 if __name__ == "__main__":
