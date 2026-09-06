@@ -3,6 +3,7 @@ import atexit
 import contextlib
 import copy
 import json
+import os
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePath
@@ -116,6 +117,16 @@ from agentrt.sdk.workspace import LocalWorkspace
 
 
 logger = get_logger(__name__)
+
+
+class _AmbientPluginsDisabled(Exception):
+    """Ambient plugin discovery was switched off, which is the default.
+
+    A sentinel rather than a plain branch so the disabled path unwinds through
+    the same handler as a discovery failure, and a distinct type so it can be
+    logged as a decision instead of a warning about something going wrong.
+    """
+
 
 ACP_LAST_PROMPT_USER_MESSAGE_ID = "acp_last_prompt_user_message_id"
 ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID = "acp_inflight_prompt_user_message_id"
@@ -1095,11 +1106,44 @@ class LocalConversation(BaseConversation):
         # and home directories, so discovery naturally yields nothing there.
         ambient_plugins_loaded = False
         try:
+            # agentrt: ambient plugin discovery is off unless the operator turns
+            # it on, and it is off by default.
+            #
+            # A plugin carries hooks, and a hook is a shell command that runs
+            # without the agent choosing to run it. Discovery scans the session's
+            # working directory, the enclosing git repository root, and the
+            # user's home directory. So dispatching a session into any
+            # repository that happens to contain .agents/plugins executes that
+            # repository's commands -- no agent cooperation, and no dependence
+            # on which tools the profile granted. Demonstrated in
+            # tools/probe_plugin_hook.py.
+            #
+            # Upstream is a personal CLI, where discovering your own plugins is
+            # the point. agentrt dispatches agents into directories chosen for
+            # them, often code the operator has not read, which makes the same
+            # behaviour an execution path rather than a convenience.
+            #
+            # The switch is an environment variable because only the daemon's
+            # own environment can set it: sessions run under sanitized_env and
+            # cannot reach it.
+            if os.environ.get("AGENTRT_AMBIENT_PLUGINS", "").strip().lower() not in (
+                "1",
+                "true",
+                "yes",
+            ):
+                raise _AmbientPluginsDisabled
+
             ambient_plugins = load_available_plugins(
                 work_dir=self.workspace.working_dir,
                 include_user=True,
                 include_project=True,
             )
+        except _AmbientPluginsDisabled:
+            logger.debug(
+                "Ambient plugin discovery is disabled; set "
+                "AGENTRT_AMBIENT_PLUGINS=1 to enable it"
+            )
+            ambient_plugins = {}
         except Exception:
             logger.warning(
                 "Failed to load ambient (installed/local) plugins; "

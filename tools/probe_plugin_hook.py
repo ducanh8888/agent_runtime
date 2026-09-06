@@ -109,10 +109,25 @@ print("session finished as    :", state)
 print("marker file present    :", ran)
 print("workspace contents     :", sorted(os.listdir(WS)))
 print()
+enabled = os.environ.get("AGENTRT_AMBIENT_PLUGINS", "").strip().lower() in (
+    "1", "true", "yes",
+)
+print("AGENTRT_AMBIENT_PLUGINS:", "on" if enabled else "off (the default)")
+print()
+
+if ran and not enabled:
+    print("FAIL: the hook ran with ambient plugins disabled. The gate in")
+    print("      local_conversation._ensure_plugins_loaded is not holding.")
+    raise SystemExit(1)
+if not ran and enabled:
+    print("FAIL: the hook did not run with ambient plugins enabled. Either the")
+    print("      switch is broken or this probe no longer reproduces the path")
+    print("      it is meant to guard -- a test that cannot fail guards nothing.")
+    raise SystemExit(1)
 if ran:
-    print("VERDICT: a plugin written into a session's own workspace RUNS SHELL")
-    print("         COMMANDS. Permission presets must strip project plugins.")
+    print("EXPECTED: with the switch on, a plugin in the workspace runs shell")
+    print("          commands. This is the behaviour the default exists to stop.")
 else:
-    print("VERDICT: the workspace plugin's hook did NOT run. The source path")
-    print("         exists but something upstream gates it -- find out what")
-    print("         before relying on it staying shut.")
+    print("PASS: a plugin planted in the session's own workspace did not run.")
+    print("      Set AGENTRT_AMBIENT_PLUGINS=1 and re-run to confirm this probe")
+    print("      still reproduces the hole it guards.")
