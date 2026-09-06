@@ -96,6 +96,31 @@ Windows and `~/.agentrt` elsewhere.
 `agentrt daemon logs` tails `daemon.log`, which holds server-side tracebacks
 when a session fails for no visible reason.
 
+## Test workspaces are not repositories
+
+Two defects here had the same shape, and neither was subtle once seen.
+
+`artifacts` listed every file in the workspace by path and returned the first
+two hundred. In an empty scratch directory that is the right answer. In a
+repository with a `.venv` at the root, all two hundred are dependency files and
+nothing the session wrote appears at all.
+
+The permission guard resolved a relative path against the daemon's own working
+directory. In a scratch directory started from the same place, that is the right
+answer too.
+
+Both passed every test, because the tests were written in the same conditions
+that hid the defect. Neither needed a cleverer check to find — only a workspace
+that looked like somewhere real work happens. `tools/probe_artifacts.py` seeds a
+virtualenv and pre-existing sources before dispatching, and
+`tools/probe_paths.py` uses a directory with diacritics and a filename with a
+space, for that reason.
+
+The general form, worth applying to whatever comes next: a scratch directory
+agrees with a repository about almost everything, so it cannot tell you which of
+your assumptions were about agents and which were about your own tidy
+workspace.
+
 ## Limits worth knowing
 
 - **Only `readonly` actually contains a session**, and even that is confinement
