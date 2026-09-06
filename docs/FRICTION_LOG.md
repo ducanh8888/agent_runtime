@@ -114,8 +114,11 @@ For an empty scratch directory that is indistinguishable from the right answer,
 and every workspace used while building this was one. Measured against a
 repository it is not merely noisy. With a `.venv` at the root, all two hundred
 returned files are dependency files and nothing the session wrote appears at
-all, because `.` sorts before every letter. Simulated over this project's own
-tree: the agent's output would have been entry 31,512 of 31,514.
+all, because `.` sorts before every letter. Simulated with this project's own
+virtualenv file list placed at a repository root: the agent's output would have
+been entry 31,512 of 31,514. Over this project's actual tree the ordering is
+kinder and still wrong -- `tools/spend.py` is entry 33,300 of 33,301, behind the
+`packages/` directory.
 
 It now reports what changed since the session started, newest first, and prunes
 dependency trees and tool caches. Two files came back from a four-hundred-file

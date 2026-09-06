@@ -70,7 +70,7 @@ while time.time() < deadline:
 out = client.artifacts(sid)
 names = [f["path"] for f in out["files"]]
 print("\nsince             :", out["since"])
-print("total_in_workspace:", out["total_in_workspace"])
+print("total_scanned     :", out["total_scanned"])
 print("files reported    :", names[:10], "..." if len(names) > 10 else "")
 
 check("no dependency file is reported as the session's work",
@@ -81,8 +81,8 @@ check("the file the session wrote is reported", "FIXED.md" in names,
       "the session may simply not have written it")
 check("the file the session edited is reported", "src/app.py" in names)
 check("the result is small enough to read", len(names) <= 10, "%d files" % len(names))
-check("the .venv was pruned from the walk entirely", out["total_in_workspace"] < 20,
-      "walked %d" % out["total_in_workspace"])
+check("the .venv was pruned from the walk entirely", out["total_scanned"] < 20,
+      "walked %d" % out["total_scanned"])
 
 if "FIXED.md" in names:
     body = client.artifacts(sid, path="FIXED.md")["content"]

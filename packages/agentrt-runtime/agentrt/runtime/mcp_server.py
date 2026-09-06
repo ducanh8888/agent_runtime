@@ -255,8 +255,11 @@ def artifacts(session: str, path: str | None = None) -> dict:
 
     This is how you check a session's work instead of taking its word for it.
 
-    An empty `files` with a non-zero `total_in_workspace` is a real answer, not
-    a failure: the session ran and wrote nothing. That is worth knowing early.
+    An empty `files` with a non-zero `total_scanned` is a real answer, not a
+    failure: the session ran and wrote nothing. That is worth knowing early.
+    `total_scanned` counts files outside the pruned directories, so it is not
+    the size of the workspace -- a repository with a 400-file virtualenv in it
+    reports 4.
 
     Three things it does not show. Deletions -- a file removed leaves nothing to
     list, so a session asked to remove something must be checked another way.

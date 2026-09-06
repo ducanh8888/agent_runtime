@@ -722,11 +722,14 @@ class Client:
             ),
             "files": files[:200],
             "truncated": len(files) > 200,
-            # Distinguishes "walked the workspace and the session wrote nothing"
-            # from "the walk found nothing at all". The first is a real and
-            # common answer -- a session can run for an hour and produce no file
-            # -- and it should not look like a broken call.
-            "total_in_workspace": total,
+            # Files seen outside the pruned directories, which is not the
+            # size of the workspace and should not be read as one: a repository
+            # with a 400-file virtualenv reports 4. Its job is to distinguish
+            # "walked the workspace and the session wrote nothing" from "the
+            # walk found nothing at all". The first is a real and common answer
+            # -- a session can run an hour and produce no file -- and it should
+            # not look like a broken call.
+            "total_scanned": total,
             "pruned": sorted(PRUNED_DIRS),
         }
 
