@@ -18,6 +18,13 @@ does not reveal, and `ORCHESTRATOR_GUIDE.md` for what using it has taught.
 `FRICTION_LOG.md` collects the defects ordinary use found after the phases
 ended, `DOCKER_RECON.md` the sandbox investigation.
 
+The rest are records of how the work got here and are not maintained against
+the code: `RESEARCH_PASS_1.md`, `RESEARCH_PASS_2.md` and
+`RESEARCH_OSS_GAP_REASSESSMENT.md` predate the plan, `PRE_PLAN_DECISIONS.md`
+holds the decisions that shaped it, `P1_BASELINE.md` the vendored test baseline,
+and `P4_RECON.md` what was probed before P4 was written. Read them for why
+something is the way it is, not for what it currently does.
+
 Built after the phases, on request: `max_iterations` on dispatch, session tags,
 and installation as a package (`uv tool install`). One criterion was withdrawn
 rather than met -- see section 8.
