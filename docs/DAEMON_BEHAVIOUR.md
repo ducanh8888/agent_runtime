@@ -135,6 +135,57 @@ for a transcript, which is the opposite of the point. Condensation keeps: user
 and agent messages, each action as its tool name plus its short `thought`, and
 each observation truncated.
 
+## Iteration limits
+
+`max_iterations` on the conversation model **defaults to 500**. There is no
+unlimited session, only one whose ceiling nobody chose. Confirmed by reading it
+back off six sessions: the two dispatched with an explicit limit report it, the
+other four report 500.
+
+Running out lands the session in `execution_status: "error"` -- not `finished`
+-- and the daemon carries **no message for it**. There is no counter and no
+error field in the payload, so a session that exhausted its steps and one that
+genuinely failed are indistinguishable from `status` alone. What separates them
+is the transcript: exhaustion ends mid-task after about that many steps.
+
+The agent is not warned before the cut, and the budget is **per run**. A `send`
+after exhaustion starts a fresh allowance of the same size, so a limit of 5 with
+three follow-ups is up to twenty steps.
+
+## Tags
+
+`tags` is a **`dict[str, str]`**, not a list. A list is a 500 from the daemon,
+and so is a non-string value -- both arrive as an opaque server error rather
+than as "that is not a tag", so a client should coerce.
+
+`PATCH /api/conversations/{id}` **replaces** the whole map rather than merging
+into it, so the obvious "add one tag" call silently drops every tag already
+there. Merging means reading first.
+
+`GET /api/conversations/search` returns `tags` on each item, so a listing can
+show them without a request per row.
+
+## Workspace kinds are a union that has to be imported
+
+`BaseWorkspace` is a discriminated union keyed on `kind`, and a member of it
+exists only once the module defining it has been imported. The server imports
+the local and remote kinds and nothing else, so a request naming
+`kind: "DockerWorkspace"` is rejected during validation with an
+`assertion_error` whose message is **empty**, and the daemon log shows a
+validation error with no other trace. Importing the class anywhere in the server
+process is enough; `agentrt.runtime.server_launch` does it before handing over.
+
+## The create path is narrower than the read path
+
+`StartConversationRequest.workspace` is typed `LocalWorkspace`. The conversation
+*response* model uses `BaseWorkspace`, which is what makes container workspaces
+look supported from outside. Reading the OpenAPI schema is what settles it:
+
+    "workspace": {"$ref": "#/components/schemas/LocalWorkspace-Input"}
+
+So the daemon can describe a container workspace and cannot be asked for one.
+`DOCKER_RECON.md` records what happens when that field is widened.
+
 ## Workspace files
 
 `GET /api/conversations/{id}/workspace/{path}` serves one file, 200 with

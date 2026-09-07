@@ -69,6 +69,10 @@ costs one message. A session heading the wrong way will not correct itself, and
 letting it finish to see what it produces is the expensive option. Watch
 `transcript` early rather than waiting on `result`.
 
+Early means *reading* early, not interrupting early. Judge by what the session
+did before it went quiet, not by how long it has been quiet -- the next section
+is about why those are different.
+
 ## A thinking session and a stuck one look identical
 
 Watched live, a review session read four files in seven seconds and then emitted
@@ -223,6 +227,13 @@ workspace.
   check does nothing at all. Confinement by path cannot see
   aliasing it is not told about, so the workspace you point a session at is part
   of its authority.
+
+  The same leak existed a second time, on *your* side rather than the agent's:
+  `artifacts` with a path asked only whether the file was inside the workspace,
+  so a hard link there would have been served to the orchestrator -- putting the
+  key in a model's context rather than an agent's. It now calls the same guard.
+  Worth knowing as a shape: the check that matters is the one every reader goes
+  through, and a second reader is easy to forget.
 
   `workspace` confines the file editor but still grants a terminal, and
   `python -c` opens any file the user can — it constrains ordinary behaviour,

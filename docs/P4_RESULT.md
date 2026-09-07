@@ -7,6 +7,11 @@ through its `hooks` field; a `broad` session cannot create another session
 through shell, HTTP or MCP. Separately, a deliberately uncooperative tool does
 not delay control of an unrelated session.*
 
+Closed on 2026-09-06. One clause of that criterion -- a `broad` session cannot
+start another -- was withdrawn by decision and moved to the plan's accepted-risk
+table, because it cannot be met without a sandbox and sandboxing is out of scope
+in the same plan. The reasoning is below, under the dispatcher boundary.
+
 Scope changed twice, both times because measuring came before porting. See
 [P4_RECON.md](P4_RECON.md) for what was probed.
 
@@ -330,6 +335,9 @@ mcp_e2e              8 tools: artifacts control dispatch list profiles
                               result status transcript
 ```
 
-Plus the adversarial checklist at 22/22. Nothing here proves the MCP layer as
-Claude Code sees it -- `mcp_e2e` drives the server in-process. That check needs
-an orchestrator restart and is the one thing still outstanding.
+Plus the adversarial checklist at 22/22, still 22 at the time of writing this
+line. Nothing in that block proves the MCP layer as Claude Code sees it --
+`mcp_e2e` drives the server in-process. That was outstanding until an
+orchestrator restart made it checkable; all eight tools were then driven on real
+work from inside Claude Code, which is recorded in `P3_RESULT.md` and in
+`FRICTION_LOG.md`.

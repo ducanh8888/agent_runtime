@@ -81,13 +81,24 @@ tools       : ['artifacts', 'control', 'dispatch', 'list', 'result', 'status', '
 carrying weight rather than sitting unused. All three failure modes arrive as
 data the model can read instead of protocol errors.
 
-## Not verified
+## Verified later, from inside a restarted Claude Code
 
-**Whether Claude Code surfaces this.** The protocol behaves; what a host does
-with `instructions`, and how it presents seven tools whose descriptions are the
-documentation, is only observable from inside a restarted Claude Code. Until
-then the plan's literal criterion — "works from Claude Code" — is unmet, and the
-gap is the host, not the code.
+This section read "not verified" for as long as the phase was open, because what
+a host does with `instructions`, and how it presents tools whose descriptions
+are the documentation, is only observable from inside the host. It has since
+been observed.
+
+All eight tools were driven on real work: `profiles`, then `dispatch` of a
+`readonly` review, `status` and `transcript` while it ran, `list`, `control`
+with `interrupt` and `send` to redirect it, `result`, and `artifacts`. The tool
+descriptions arrive intact, including the long ones. The plan's literal
+criterion -- "works from Claude Code" -- is met.
+
+Two things that only that view showed, both now in `FRICTION_LOG.md`: a session
+composing a long answer freezes `transcript` and `updated_at` together, so
+thinking and hanging look identical; and `artifacts` on a session listed six
+files the orchestrator had written in that workspace while it ran, which is the
+limitation the tool description now names fourth.
 
 ## What this phase cost
 

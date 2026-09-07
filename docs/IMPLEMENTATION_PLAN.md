@@ -7,6 +7,21 @@ Target: the runtime is finished when it is usable day to day, not when the phase
 
 Guiding rule: **reuse first, write only what no donor supplies.** Every task is labelled `REUSE` (runs as-is after vendoring), `PORT` (donor source adapted), or `NEW` (no donor exists). Anything not needed to reach a phase's done criteria is out of scope.
 
+## Status
+
+All four phases are closed. `P1_BASELINE.md`, `P2_RESULT.md`, `P3_RESULT.md` and
+`P4_RESULT.md` record each one and are historical: they describe what was true
+when the phase ended, not necessarily what is true now. For current behaviour
+read the tool descriptions in `mcp_server.py`, which are the product's
+documentation, then `DAEMON_BEHAVIOUR.md` for what the daemon does that its API
+does not reveal, and `ORCHESTRATOR_GUIDE.md` for what using it has taught.
+`FRICTION_LOG.md` collects the defects ordinary use found after the phases
+ended, `DOCKER_RECON.md` the sandbox investigation.
+
+Built after the phases, on request: `max_iterations` on dispatch, session tags,
+and installation as a package (`uv tool install`). One criterion was withdrawn
+rather than met -- see section 8.
+
 ## 1. What is being built
 
 A local agent runtime that Claude Code and Codex drive through MCP. Sessions run in the background, survive the orchestrator exiting, and can later be listed, inspected, steered, stopped, resumed and harvested.
@@ -47,7 +62,34 @@ tests/           our own tests; vendored tests stay inside packages/
 
 Runtime state lives outside the repo and outside every workspace: `~/.agentrt` on Linux/macOS, `%LOCALAPPDATA%\agentrt` on Windows. It holds sessions, events, LLM profiles, provider keys, `daemon.json` (port, token, pid; mode 0600), and `daemon.log`.
 
-## 4. Orchestrator surface — 12 tools
+## 4. Orchestrator surface — 8 tools
+
+**Shipped as 8, not the 12 below.** The five rare lifecycle verbs collapsed into
+one `control` tool taking an `action`, by decision: a flat core of the things an
+orchestrator reaches for constantly, with the rest grouped behind one name. The
+original twelve-row table is kept underneath because the *operations* did not
+change, only how many tool names they occupy.
+
+| Tool | Behaviour |
+|---|---|
+| `dispatch` | Required: `task`, `workspace`. Optional: `permission` (default `workspace`), `title`, `max_iterations`. Returns immediately with the short id. |
+| `list` | Sessions with id, title, status, timestamps and tags. |
+| `status` | One session: state, timestamps, workspace, `max_iterations`, tags. |
+| `transcript` | Events condensed, oldest first, with a cursor for older ones. |
+| `result` | The agent's closing summary — a claim, not evidence. |
+| `artifacts` | What the session created or modified since it started, newest first; or one file's content. |
+| `control` | `send`, `interrupt`, `stop`, `resume`, `delete`, `tag`. |
+| `profiles` | The permission presets and what each grants. |
+
+Two rows of the original design were not built as written. `dispatch` has no
+`llm_profile`, `tools`, `skills` or `mcp_servers`: one profile per preset is
+resolved inside the daemon, which is what keeps the credential out of the
+dispatching process. And `artifacts` does not return "files the agent declared
+in its final result" — a session's own list is a claim like any other, so it
+reports what actually changed on disk since the session started.
+
+<details>
+<summary>The original twelve-tool design</summary>
 
 One tool per operation. Session ids are short (`a3f9c1`); every tool also accepts the underlying UUID. The CLI exposes the same operations as subcommands, plus `daemon start|stop|logs`.
 
@@ -67,6 +109,8 @@ One tool per operation. Session ids are short (`a3f9c1`); every tool also accept
 | `profiles` | Lists permission presets and LLM profiles so the model does not guess names. |
 
 Default tool set inside a session: terminal, file editor, task tracker. Delegate, browser and MCP tools are attached only when `dispatch` asks. Skills come from the runtime's own directory and from the workspace; `~/.claude/skills` is not read.
+
+</details>
 
 ## 5. Permission model
 
