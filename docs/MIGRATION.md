@@ -26,6 +26,38 @@ provider credential.
 
 The bundle built for this move contains the first four and excludes the rest.
 
+## What a clean Ubuntu needs first
+
+A clone alone does not run. Four things happen before the first conversation,
+and the second one is the one people forget, because its absence looks like a
+broken daemon rather than a missing file.
+
+**1. Prerequisites.** `uv` is not on Ubuntu by default and is what installs
+everything else, including its own Python -- no system interpreter is required.
+
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    sudo apt install -y git tmux
+
+`tmux` is recommended rather than required. The terminal tool picks it when it
+is there and falls back to a subprocess backend with a warning when it is not;
+upstream's own words for the fallback are "may be less stable". Windows never
+took either path -- it uses a PowerShell backend -- so tmux is the one part of
+the stack this project has never exercised.
+
+`docker` only matters if the sandbox experiment is being retried.
+
+**2. The state directory.** Without it there is no credential, and every command
+fails at the point of use rather than at setup. See the table above for what to
+carry.
+
+**3. Install.** `uv tool install packages/agentrt-runtime` from the clone.
+
+**4. The MCP entry**, pointing at `agentrt-mcp`.
+
+Only then is starting a conversation enough. `agentrt config` is the one-command
+check that steps 1 to 3 worked: it prints the resolved settings without printing
+the key, and it fails loudly if the state directory is missing.
+
 ## Restoring on Ubuntu
 
 1. Clone the repository.
