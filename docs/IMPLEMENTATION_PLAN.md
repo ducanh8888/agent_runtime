@@ -18,6 +18,9 @@ does not reveal, and `ORCHESTRATOR_GUIDE.md` for what using it has taught.
 `FRICTION_LOG.md` collects the defects ordinary use found after the phases
 ended, `DOCKER_RECON.md` the sandbox investigation.
 
+`MIGRATION.md` covers moving to another machine: what is in git, what exists
+only in the state directory, and what changes on Linux.
+
 The rest are records of how the work got here and are not maintained against
 the code: `RESEARCH_PASS_1.md`, `RESEARCH_PASS_2.md` and
 `RESEARCH_OSS_GAP_REASSESSMENT.md` predate the plan, `PRE_PLAN_DECISIONS.md`
