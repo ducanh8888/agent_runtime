@@ -8,7 +8,7 @@ which is the only code that is ours.
 ## Start here
 
 1. `docs/IMPLEMENTATION_PLAN.md` — the `Status` block at the top maps all
-   sixteen documents and says which are current and which are history.
+   every document and says which are current and which are history.
 2. `packages/agentrt-runtime/agentrt/runtime/mcp_server.py` — the tool
    docstrings **are the product's documentation**. Nothing under `docs/` ever
    reaches a session working in another repository, so operational guidance
