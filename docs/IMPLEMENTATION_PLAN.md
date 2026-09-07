@@ -9,6 +9,9 @@ Guiding rule: **reuse first, write only what no donor supplies.** Every task is 
 
 ## Status
 
+`CLAUDE.md` at the repository root is the entry point: where to start reading,
+how to run the checks, and the working conventions this project was built with.
+
 All four phases are closed. `P1_BASELINE.md`, `P2_RESULT.md`, `P3_RESULT.md` and
 `P4_RESULT.md` record each one and are historical: they describe what was true
 when the phase ended, not necessarily what is true now. For current behaviour
