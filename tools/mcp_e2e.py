@@ -14,8 +14,14 @@ import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-REPO = r"C:\Users\ADMIN\Desktop\ORCHESTRATOR\agent_runtime"
-PY = os.path.join(REPO, "packages", ".venv", "Scripts", "python.exe")
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+# The workspace venv, wherever this repository sits and whatever this platform
+# calls its script directory. Hardcoding an absolute Windows path here is what
+# made this tool the first thing to fail on Linux.
+_BIN = "Scripts" if os.name == "nt" else "bin"
+_PY = "python.exe" if os.name == "nt" else "python"
+PY = os.path.join(REPO, "packages", ".venv", _BIN, _PY)
 
 
 def payload(result):

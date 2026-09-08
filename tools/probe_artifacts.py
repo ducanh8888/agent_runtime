@@ -127,7 +127,15 @@ outside = os.path.join(os.path.abspath(os.sep), "Windows", "win.ini")
 for label, bad in (
     ("parent traversal", os.path.join("..", "..", "secret.txt")),
     ("absolute path", outside),
-    ("UNC path", r"\server\share\x"),
+    # `\server\share\x` is drive-relative on Windows, so it leaves the
+    # workspace and the guard must refuse it. POSIX has no analogue: the same
+    # string is a legal filename that resolves to `<workspace>/\server\share\x`,
+    # inside, and approving it is correct. Verified against `check_path`
+    # directly -- it allows this string and refuses the `\\server\...` form, on
+    # Linux, which is one guard being consistent rather than two disagreeing.
+    # The containment this case tested is covered by the absolute-path and
+    # traversal cases above.
+    *((("UNC path", r"\server\share\x"),) if os.name == "nt" else ()),
     ("traversal through a subdirectory", "src/../../escape.txt"),
     # The guard refuses these two wherever it runs, so unlike the absolute case
     # they exercise containment rather than the platform's idea of a path.
