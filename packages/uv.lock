@@ -75,6 +75,8 @@ source = { editable = "agentrt-runtime" }
 dependencies = [
     { name = "agentrt-sdk" },
     { name = "agentrt-server" },
+    { name = "agentrt-tools" },
+    { name = "agentrt-workspace" },
     { name = "httpx" },
     { name = "mcp" },
 ]
@@ -83,8 +85,10 @@ dependencies = [
 requires-dist = [
     { name = "agentrt-sdk", editable = "agentrt-sdk" },
     { name = "agentrt-server", editable = "agentrt-server" },
+    { name = "agentrt-tools", editable = "agentrt-tools" },
+    { name = "agentrt-workspace", editable = "agentrt-workspace" },
     { name = "httpx", specifier = ">=0.28" },
-    { name = "mcp", specifier = ">=1.28" },
+    { name = "mcp", specifier = ">=1.28,<2" },
 ]
 
 [[package]]
@@ -159,6 +163,7 @@ dependencies = [
     { name = "alembic" },
     { name = "docker" },
     { name = "fastapi" },
+    { name = "libtmux" },
     { name = "openai" },
     { name = "pydantic" },
     { name = "sqlalchemy" },
@@ -179,6 +184,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "docker", specifier = ">=7.1,<8" },
     { name = "fastapi", specifier = ">=0.104" },
+    { name = "libtmux", specifier = ">=0.53.0" },
     { name = "openai", specifier = ">=2.33.0,<3" },
     { name = "posthog", marker = "extra == 'posthog'", specifier = ">=6,<7" },
     { name = "pydantic", specifier = ">=2" },
