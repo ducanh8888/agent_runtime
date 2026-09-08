@@ -304,3 +304,30 @@ the runtime would have objected.
 keeps turning out to be a description of state. `tags` already exists on
 dispatch and through `PATCH`; until evidence sessions carry one, the protection
 is a string in a Markdown file that no tool reads.
+
+## Deleting sessions erases the spend ledger
+
+`tools/spend.py` derives cost from the conversation store, because the daemon
+reports usage and 9Router publishes no prices. That store is also what
+`agentrt delete` removes. So cleaning up sessions silently rewrites the budget
+record.
+
+Measured today, either side of deleting 73 restored Windows conversations:
+
+    before   COMBINED ~$0.8427
+    after    COMBINED ~$0.3908
+
+No money came back. The $2 cap is tracked against a number that fell by $0.45
+because rows were removed from the thing doing the tracking, and it will
+under-report by that much for the rest of the project.
+
+The true figure is reconstructible only because the before-reading happened to
+be taken: $0.8427 at restore, plus $0.0745 of sessions dispatched by the Linux
+baseline runs, is about $0.92 of $2.
+
+**The general lesson:** a ledger stored in the same place as the thing it
+measures is not a ledger. Either spend must accumulate somewhere deletion does
+not reach -- `tools/spend.json` already exists for the delegate calls and could
+carry a running total for sessions -- or `delete` has to fold the session's cost
+into that file before removing it. Until then, read `spend.py` before any
+cleanup, not after.
