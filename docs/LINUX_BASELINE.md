@@ -90,7 +90,13 @@ Not yet recorded. Run from `packages/`, with a scratch persistence directory:
       -p no:cacheprovider -n auto --timeout=180 --timeout-method=thread \
       -q --tb=no -rf --junitxml=<out>.xml
 
-Note for whoever runs it: `-n auto` starts 4 workers on this 8-core machine,
-and the coordinator process accumulates almost no CPU time of its own. A run in
-progress looks indistinguishable from a hung one unless the *worker* processes
-are checked. Windows took 9m35s; this takes considerably longer.
+Attempted 2026-09-09 and stopped at about 65 minutes without finishing, so
+there is no number here yet. Budget well over an hour before starting one.
+
+Two notes for whoever runs it. `-n auto` starts 4 workers on this 8-core
+machine, and the coordinator accumulates almost no CPU time of its own -- after
+30 minutes it had 14 seconds, while its workers had 2:36, 2:00, 1:46 and 5:06.
+A healthy run therefore looks exactly like a hung one unless the *worker*
+processes are checked; that cost a wrong diagnosis here. And with `-q` piped
+into `tail`, nothing is written until the run ends, so there is no progress to
+watch -- use `--junitxml` and watch that file instead, or drop the pipe.
