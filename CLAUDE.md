@@ -100,9 +100,13 @@ experiment to repeat is written there. If it clears, `workspace` becomes a
 preset that genuinely contains a session, and a P4 criterion that was withdrawn
 becomes reachable. Both are currently documented as *not* true.
 
-**The test baseline is Windows-only.** `docs/P1_BASELINE.md` records pass/fail
-per test as measured there, and the plan's rule that results must match it
-exactly does not transfer to Linux. Record a fresh baseline before comparing.
+**The test baseline.** `docs/P1_BASELINE.md` is the Windows measurement and the
+plan's rule that results must match it exactly does not transfer.
+`docs/LINUX_BASELINE.md` is the Linux reference: the five `tools/` checks all
+pass there, and it explains why the old numbers could not simply be re-read --
+four checks asserted Windows path syntax rather than containment, two of them
+passing while testing nothing. The vendored pytest suite is still unrecorded on
+Linux.
 
 **Codex was never wired up.** The MCP surface is standard, so this needs no
 redesign — only the config entry.

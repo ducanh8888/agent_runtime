@@ -22,7 +22,9 @@ does not reveal, and `ORCHESTRATOR_GUIDE.md` for what using it has taught.
 ended, `DOCKER_RECON.md` the sandbox investigation.
 
 `MIGRATION.md` covers moving to another machine: what is in git, what exists
-only in the state directory, and what changes on Linux.
+only in the state directory, and what changes on Linux. `LINUX_BASELINE.md` is
+what the checks actually measured once that move was made, and replaces
+`P1_BASELINE.md` for any comparison run on Linux.
 
 The rest are records of how the work got here and are not maintained against
 the code: `RESEARCH_PASS_1.md`, `RESEARCH_PASS_2.md` and
