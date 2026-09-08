@@ -263,3 +263,44 @@ came from a display script of mine that piped the CLI's UTF-8 output into
 Recorded because the wrong conclusion was one step away and would have sent a
 change into vendored encoding code that was working correctly. On Windows,
 suspect the pipe before the program.
+
+## `list --limit` above 100 is a 500, not a validation error
+
+Restoring onto Ubuntu, `agentrt list --limit 200` returned
+
+    {"error": "ClientError",
+     "message": "{\"detail\":\"Internal Server Error\",\"exception\":\"\", ...}"}
+
+The ceiling is exactly 100: `--limit 100` returns all 77 sessions, `--limit 101`
+is a 500. Measured across 100, 101, 128, 150, 199, 200.
+
+Three things make this worse than a wrong number. The `exception` field is
+empty, so the response says only that something failed server-side. The CLI
+passes `--limit` through without validation and `list --help` documents no
+range, so nothing at the point of use suggests a bound exists. And the failure
+mode for "I want to see everything" is silence rather than a clamp.
+
+**The general lesson:** a bound the caller cannot see is a bound the caller will
+cross. Either clamp it or say what it is; returning a 500 with an empty
+exception does neither.
+
+## The prose that protects sessions failed a second time
+
+The entry above concluded that "do not delete" living only in a document is the
+underlying problem, and recommended tags. Restoring onto Linux produced the
+second instance within a week.
+
+Every one of the 77 restored conversations carries a Windows `working_dir`
+(`C:\Users\ADMIN\...`), so none is resumable and the obvious cleanup is "delete
+everything Windows-origin". That filter selects 76 of 77 -- and three of them,
+`6ff256c9`, `70652c62` and `e8d1dd8f`, are cited in `P3_RESULT.md` and
+`P4_RESULT.md`, two under literal `## Do not delete session ...` headings.
+
+What caught it was grepping the docs for eight-hex-digit ids and intersecting
+that with the delete list, by hand, after the list was already built. Nothing in
+the runtime would have objected.
+
+**The general lesson:** the filter that looks like a description of residue
+keeps turning out to be a description of state. `tags` already exists on
+dispatch and through `PATCH`; until evidence sessions carry one, the protection
+is a string in a Markdown file that no tool reads.
