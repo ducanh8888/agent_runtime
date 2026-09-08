@@ -331,3 +331,43 @@ not reach -- `tools/spend.json` already exists for the delegate calls and could
 carry a running total for sessions -- or `delete` has to fold the session's cost
 into that file before removing it. Until then, read `spend.py` before any
 cleanup, not after.
+
+## Codex reaches the MCP server but `exec` cannot approve the call
+
+Wiring Codex took one command -- `codex mcp add agentrt -- <abs path to
+agentrt-mcp>` -- and the absolute path matters: `~/.local/bin` is not on the
+PATH a spawned stdio server inherits, and `codex` itself is already broken the
+same way on this machine (its shebang runs `env node`, and `node` lives under
+nvm).
+
+`codex doctor --all` then reports `✓ mcp 1 server (1 stdio) · 0 disabled`, which
+is config validation and proves nothing about the connection. The first real
+run failed:
+
+    mcp: agentrt/profiles started
+    mcp: agentrt/profiles (failed)
+    MCP tool call requires approval, but approval policy is never
+
+That is not the sandbox, which was the obvious suspect given `codex doctor`
+reports `restricted fs + restricted network`. `codex exec` sets
+`approval: never`, meaning *never ask*, so every tool call that would need
+approval fails outright. An interactive session prompts instead and works.
+Non-interactive use needs either project trust in `~/.codex/config.toml` or
+`--dangerously-bypass-approvals-and-sandbox`.
+
+With approvals bypassed, the whole path works: Codex dispatched a session with
+`max_iterations` 6 into `/tmp/codex_ws`, polled `status` to `finished`, and
+`artifacts` reported `CODEX.txt`. Checked against the filesystem rather than the
+transcript, per the rule above: the file exists and contains `wired`.
+
+**The general lesson:** "started" then "(failed)" is a connection that worked.
+Read the reason before re-checking the wiring -- the sandbox was innocent and
+half an hour could have gone into it.
+
+## The MCP server reports the wrong version
+
+`initialize` returns `serverInfo.name = "agentrt"` with
+`serverInfo.version = "1.28.1"`, which is the version of the `mcp` library, not
+of agentrt. FastMCP fills it in when the server does not set one. A client
+cannot tell which agentrt it is talking to, which is the one thing that field
+exists for. Cosmetic until two versions are in use somewhere.
