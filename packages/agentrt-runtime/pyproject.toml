@@ -20,7 +20,11 @@ dependencies = [
     # normal install should be able to use it.
     "agentrt-workspace",
     "httpx>=0.28",
-    "mcp>=1.28",
+    # Pinned below 2: mcp 2.x renamed FastMCP to MCPServer, which
+    # agentrt.runtime.mcp_server imports. A bare ">=1.28" resolves to 2.x on a
+    # clean install and the MCP server fails to start. packages/uv.lock already
+    # pins 1.28.1; this makes a standalone `uv tool install` agree with it.
+    "mcp>=1.28,<2",
 ]
 
 [tool.setuptools.packages.find]
