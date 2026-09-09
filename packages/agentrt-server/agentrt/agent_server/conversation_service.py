@@ -1714,11 +1714,28 @@ class ConversationService:
         # are preserved through the round-trip; the dict is only used in-process to
         # construct StoredConversation, not sent over the network.
         # Launch-only fields are already folded into stored conversation state.
+        #
+        # ``workspace`` is excluded from the dump and reattached as the live
+        # object below. `request.workspace` was already constructed once, above,
+        # while this request was validated -- for a `DockerWorkspace` that means
+        # a container is already running. Dumping it to JSON and letting
+        # `StoredConversation(**request_data)` validate that dict as a fresh
+        # `BaseWorkspace` would build a *second* one from the same (by now fixed)
+        # `host_port`, which finds the first container still holding the port and
+        # raises, orphaning it -- measured on 2026-09-09, see DOCKER_RECON.md.
+        # `DiscriminatedUnionMixin._validate_subtype` short-circuits
+        # (`if isinstance(data, cls): return data`) when the value handed to a
+        # workspace-typed field is already an instance of that type, so passing
+        # the live object here, instead of its dump, is what keeps the second
+        # validation from reconstructing it. `LocalWorkspace` round-tripped fine
+        # either way, which is why this went unnoticed until a workspace kind
+        # whose construction has a side effect was actually dispatched.
         request_data = request.model_dump(
             mode="json",
             context={"expose_secrets": True},
-            exclude={"agent_profile_id", "agent_launch_additions"},
+            exclude={"agent_profile_id", "agent_launch_additions", "workspace"},
         )
+        request_data["workspace"] = request.workspace
 
         # The agent is persisted to base_state.json (not meta.json), so it must
         # not be splatted into StoredConversation (which no longer carries the

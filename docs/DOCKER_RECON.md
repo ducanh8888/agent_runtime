@@ -182,14 +182,50 @@ work as the type-widening, not a bigger one. It was not attempted here; the
 boundary this time was documenting the true cause rather than shipping a fix
 mid-recon.
 
-Reverted after the finding, same as the Windows session: the field-widening
-edit was not committed, and the daemon was returned to the installed snapshot.
+**Fixed and shipped, 2026-09-09.** The double-construction is exactly what
+`_validate_subtype` (`DiscriminatedUnionMixin`, `agentrt/sdk/utils/models.py`)
+already exists to prevent: `if isinstance(data, cls): return data` short-
+circuits validation for a value that is already the right type, skipping
+`model_post_init` entirely. It only helps if the already-constructed object is
+what gets validated. `_create_conversation` was defeating it by dumping
+`request.workspace` to a JSON dict first -- a dict is never `isinstance(data,
+cls)`, so the short-circuit never fired and a fresh instance was built every
+time. `workspace` is now excluded from the dump and the live object is
+reattached to `request_data` before it is splatted into `StoredConversation`,
+so the short-circuit does what it was written for. Verified: the repeat
+dispatch produced exactly one container, not four; `docker ps` stayed at one
+entry through the whole attempt. Regression-checked against `cli_loop.py` and
+`adversarial.py` (both still pass in full) since this changes the persist path
+every conversation goes through, not only Docker's.
+
+The field-widening (`LocalWorkspace` to `BaseWorkspace` on
+`ConversationConfig.workspace`) was tried again on top of the fix and reverted
+again -- not because it failed the same way, but because it now fails
+*differently* and further along, which is the useful result. With the
+construction bug fixed, a `DockerWorkspace` dispatch reaches
+`event_service.py`'s `start()`, which asserts `isinstance(workspace,
+LocalWorkspace)` before doing `Path(workspace.working_dir).mkdir(...)` --
+exactly the host-path assumption this document already named as the real
+blocker, now hit for real instead of estimated. That is `_start_event_service`
+alone; `artifacts` has the identical assumption. Landing the widened type
+without anything downstream able to use it just re-opens the "looks supported
+from outside" trap this document already warned about for the response model,
+so it was left out. The type stays `LocalWorkspace` until something is ready
+to receive a wider one.
+
+The persist-path fix is unconditionally worth keeping regardless of whether
+Docker ever lands: any workspace kind whose construction has a side effect --
+not only Docker's -- would have hit the same leak-and-false-failure the moment
+someone reachable an alternate `kind:` through this path, and now none can.
 
 ## What to do instead, for now
 
 Nothing here changes the standing advice. `readonly` genuinely contains a
 session, because it has no terminal. `workspace` constrains ordinary behaviour
 and not a determined session, and the documentation says so in those words. The
-sandbox that would change that is available, reachable, and now has a named,
-scoped defect standing between it and working -- not an unexplained
-environment difference.
+sandbox that would change that is reachable one layer further than before --
+the persist-path bug is fixed and shipped -- and stops at a named assertion in
+`event_service.start()` rather than an unexplained environment difference. The
+work from here is threading the host-path/container-path distinction through
+`event_service.start()` and `artifacts`, which is what the field-widening
+alone cannot do and is why it was left out again.

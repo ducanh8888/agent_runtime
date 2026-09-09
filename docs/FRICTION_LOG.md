@@ -405,3 +405,30 @@ re-validate from a dump for one member is not safe for all of them. The
 members that matter are the ones with a `model_post_init` that does something
 in the world -- and those are exactly the ones a quick look at the harmless
 member would miss.
+
+## Fixed: the double-construction that orphaned Docker containers
+
+`_create_conversation` now excludes `workspace` from the JSON dump it builds
+for `StoredConversation` and reattaches the live `request.workspace` object
+afterward, instead of letting it round-trip through a dict. The mechanism this
+relies on already existed: `DiscriminatedUnionMixin._validate_subtype` (in
+`agentrt/sdk/utils/models.py`) short-circuits with `if isinstance(data, cls):
+return data` when the value handed to a workspace-typed field is already the
+right type, skipping `model_post_init` entirely. Dumping to a dict first
+defeated that short-circuit on every single dispatch -- a dict is never
+`isinstance(data, cls)` -- which is why `LocalWorkspace` (whose
+`model_post_init` only touches a directory) never surfaced this, and
+`DockerWorkspace` (whose `model_post_init` starts a container) leaked one on
+every attempt.
+
+Verified by repeating the exact dispatch that produced four orphaned
+containers before the fix: it now produces one, and `docker ps` stays at one
+entry through the attempt. Regression-checked with `cli_loop.py` and
+`adversarial.py`, both still fully passing, since this is on the path every
+conversation create goes through, not only Docker's.
+
+Widening `ConversationConfig.workspace` to accept the fix's beneficiary
+(`DockerWorkspace`) was tried again on top of this and reverted again -- see
+the entry above and `DOCKER_RECON.md`. The type stays narrow because nothing
+downstream can use a wider one yet; landing it alone would only reintroduce
+"looks supported from outside" for a different field.

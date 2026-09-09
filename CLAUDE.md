@@ -93,18 +93,23 @@ what was rejected, not just what changed.
 
 ## What is open
 
-**Docker.** The Windows write-up in `docs/DOCKER_RECON.md` blamed the WSL port
-proxy for a container that starts but whose port the daemon then calls
-unavailable. Repeating it on native Linux (2026-09-09) reproduced the same
-failure, which rules that theory out, and traced the real cause instead: the
-daemon builds the workspace twice per request -- once live, while validating
-the incoming request, once more from a JSON dump while persisting it -- and for
-`DockerWorkspace` the second construction is not inert, it starts a second
-container and finds the first one still holding the port. Four orphaned,
-running containers were the evidence. `docs/DOCKER_RECON.md` has the full
-trace and the scoped fix this points to: stop re-validating the workspace from
-a dump in `_create_conversation` and carry the live object forward instead.
-Not attempted yet. If it clears, `workspace` becomes a preset that genuinely
+**Docker.** The persist-path bug is fixed and shipped: `_create_conversation`
+was dumping the already-live `request.workspace` to JSON and letting
+`StoredConversation` re-validate it from that dict, which for `DockerWorkspace`
+meant building a second container that collided with the first and orphaned
+it, every single dispatch. Fixed by excluding `workspace` from the dump and
+reattaching the live object, which lets `DiscriminatedUnionMixin`'s existing
+`isinstance` short-circuit do what it was written for. Verified: one container
+per dispatch, not four; `cli_loop.py` and `adversarial.py` still pass in full
+since this touches the persist path every conversation goes through.
+
+The type stays `LocalWorkspace` on `ConversationConfig.workspace` -- widening
+it was tried again on top of the fix and reverted again, because it now fails
+one layer further in, at a real `assert isinstance(workspace, LocalWorkspace)`
+in `event_service.start()` that does `Path(workspace.working_dir).mkdir(...)`
+against a container path that doesn't exist on the host. `docs/DOCKER_RECON.md`
+has the full trace. If that gets threaded through -- `event_service.start()`
+and `artifacts` both need it -- `workspace` becomes a preset that genuinely
 contains a session, and a P4 criterion that was withdrawn becomes reachable.
 
 **The test baseline.** `docs/P1_BASELINE.md` is the Windows measurement and the
