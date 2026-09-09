@@ -107,10 +107,89 @@ Two corrections to what is written above, both found by doing it:
 The two fixes made getting here -- `.cmd` resolution on Windows, and
 registering the workspace kinds -- are independent of all this and stay.
 
+## The Linux repeat, 2026-09-09: the environment theory was wrong
+
+The Windows write-up above concluded "the architecture is not the obstacle,
+the environment is" and named the WSL port proxy as the suspect. This
+machine's docker is native -- no WSL, no proxy -- so it was the predicted
+clean run. It was not. The port-binding failure reproduces here too, and
+tracing it to a cause the Windows session could not have found changes the
+conclusion: **this was never the environment.**
+
+Repeating the experiment exactly: `.cmd` resolution and workspace-kind
+registration are already in the tree (from Windows) and untouched. Widening
+`ConversationConfig.workspace` from `LocalWorkspace` to `BaseWorkspace` is the
+same one-line change, made against a daemon started from the source venv (the
+installed snapshot doesn't see source edits). The daemon's own OpenAPI schema
+confirmed both effects of that line: `workspace` resolves to a `BaseWorkspace`
+discriminated union, and `DockerWorkspace-Input` is a member of it.
+
+Dispatching a `kind: DockerWorkspace` conversation directly against
+`POST /api/conversations` (bypassing the CLI/MCP client, which still only
+knows `LocalWorkspace`) failed every time with the same shape of error as
+Windows:
+
+    {"detail": "Internal Server Error", "exception": "Port 32113 is not available"}
+
+Three more attempts, three more failures, three different random ports. That
+by itself looks like Windows's ending. It is not what was happening.
+
+**Every failed request had already started a healthy container.** `docker ps`
+showed four running `agent-server` containers, one per attempt, each
+`Up`, each with a working port mapping, each backed by a real `docker-proxy`
+process bound to exactly the port the client was told was unavailable. The
+daemon log confirms the order per attempt: `docker run` succeeds, `Started
+container`, the health check passes, `Docker workspace is ready` -- and *then*
+`RuntimeError: Port <same port> is not available`, twice, before the request
+finally fails. The container that made the port genuinely busy by the second
+check is the one the first, successful construction started.
+
+**The cause: the workspace is constructed twice per request, and the second
+construction is not a copy.** `_create_conversation` calls
+`request.model_dump(mode="json", ...)` on the already-live `request.workspace`
+(the `DockerWorkspace` instance FastAPI built while parsing the POST body, with
+a concrete `host_port` and a running container behind it), then splats that
+dict into `StoredConversation(id=..., **request_data)` to build the persisted
+record. `StoredConversation.workspace` is typed `BaseWorkspace` -- it already
+was, independent of anything changed here -- so Pydantic validates that dict
+as a fresh model rather than accepting the live object, and validating a
+`DockerWorkspace` dict is not inert: `model_post_init` runs again,
+`host_port` is already fixed in the dump so `find_available_tcp_port` is
+skipped, and `check_port_available` correctly refuses the port the first
+container is still holding. The exception aborts `stored` before it is ever
+assigned, so nothing references the first container -- it is not stopped, not
+recorded in `agentrt list`, not visible to anything but `docker ps`. Four
+attempts, four orphaned containers, cleaned up here by hand
+(`docker stop`, which removes them since they run `--rm`).
+
+`LocalWorkspace.model_post_init` only touches a directory, so building one
+twice from a dump is a harmless no-op -- which is exactly why this has never
+surfaced before now. It is specific to workspace kinds whose construction has
+a side effect, and `DockerWorkspace` is the first one anyone tried to create
+through this path.
+
+**So the corrected estimate:** the blocker is not the request type (that part
+of the original write-up holds -- widening it does make the 422 disappear and
+the request reach `docker run`), and it is not this machine's environment
+either. It is that `_create_conversation`'s persist step re-validates the
+workspace from a dump instead of carrying the already-constructed object
+forward, which is safe for every workspace kind currently reachable and wrong
+for every one that is not. Fixing it is a real, scoped task -- pass the live
+`request.workspace` object into `StoredConversation` directly (or exclude it
+from the dump and set it separately) rather than round-tripping it through
+JSON -- and it is a vendored change to the persist path, in the same class of
+work as the type-widening, not a bigger one. It was not attempted here; the
+boundary this time was documenting the true cause rather than shipping a fix
+mid-recon.
+
+Reverted after the finding, same as the Windows session: the field-widening
+edit was not committed, and the daemon was returned to the installed snapshot.
+
 ## What to do instead, for now
 
 Nothing here changes the standing advice. `readonly` genuinely contains a
 session, because it has no terminal. `workspace` constrains ordinary behaviour
 and not a determined session, and the documentation says so in those words. The
-sandbox that would change that is available, reachable, and blocked on the
-environment rather than on the design.
+sandbox that would change that is available, reachable, and now has a named,
+scoped defect standing between it and working -- not an unexplained
+environment difference.

@@ -93,12 +93,19 @@ what was rejected, not just what changed.
 
 ## What is open
 
-**Docker.** `docs/DOCKER_RECON.md` ends with a container that starts correctly
-and a daemon that cannot bind its published port — specific to Windows, where
-docker is reached through a WSL proxy. On Linux that layer is gone, and the
-experiment to repeat is written there. If it clears, `workspace` becomes a
-preset that genuinely contains a session, and a P4 criterion that was withdrawn
-becomes reachable. Both are currently documented as *not* true.
+**Docker.** The Windows write-up in `docs/DOCKER_RECON.md` blamed the WSL port
+proxy for a container that starts but whose port the daemon then calls
+unavailable. Repeating it on native Linux (2026-09-09) reproduced the same
+failure, which rules that theory out, and traced the real cause instead: the
+daemon builds the workspace twice per request -- once live, while validating
+the incoming request, once more from a JSON dump while persisting it -- and for
+`DockerWorkspace` the second construction is not inert, it starts a second
+container and finds the first one still holding the port. Four orphaned,
+running containers were the evidence. `docs/DOCKER_RECON.md` has the full
+trace and the scoped fix this points to: stop re-validating the workspace from
+a dump in `_create_conversation` and carry the live object forward instead.
+Not attempted yet. If it clears, `workspace` becomes a preset that genuinely
+contains a session, and a P4 criterion that was withdrawn becomes reachable.
 
 **The test baseline.** `docs/P1_BASELINE.md` is the Windows measurement and the
 plan's rule that results must match it exactly does not transfer.

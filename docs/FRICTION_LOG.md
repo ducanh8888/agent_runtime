@@ -371,3 +371,37 @@ half an hour could have gone into it.
 of agentrt. FastMCP fills it in when the server does not set one. A client
 cannot tell which agentrt it is talking to, which is the one thing that field
 exists for. Cosmetic until two versions are in use somewhere.
+
+## A workspace with side effects gets built twice, and the second time is not a copy
+
+Found repeating the Docker experiment on native Linux. `_create_conversation`
+persists a new conversation by dumping the just-validated `request.workspace`
+to JSON and splatting it into `StoredConversation(id=..., **request_data)`.
+`StoredConversation.workspace` is typed `BaseWorkspace`, so Pydantic validates
+that dict as a new model instead of accepting the live object already sitting
+in memory. For `LocalWorkspace` that is a no-op -- `model_post_init` just
+touches a directory -- so it has never been visible. `DockerWorkspace` starts a
+container in `model_post_init`; validating its dump starts a *second* one,
+with the same `host_port` (already fixed by the first), and the second
+correctly finds that port taken -- by the container the first, successful
+construction is still running.
+
+The client sees only the second failure: `RuntimeError: Port <port> is not
+available`, reported as a 500. Nothing about that message says a container is
+running. `docker ps` was the only way to find the four orphaned, running
+containers this produced across four attempts -- one per request, all healthy,
+none referenced by anything, since the exception happens before `stored` is
+ever assigned. `agentrt list` shows nothing for them.
+
+This is also a correction of the Windows-era `DOCKER_RECON.md`, which saw the
+identical port error there and concluded it was specific to docker being
+reached through a WSL proxy. It reproduced on a machine with no WSL and no
+proxy, so that theory was wrong -- the port conflict was real on Windows too,
+caused there by the same double construction, just never traced past the
+error message to the container it left running.
+
+**The general lesson:** a discriminated-union field that is safe to
+re-validate from a dump for one member is not safe for all of them. The
+members that matter are the ones with a `model_post_init` that does something
+in the world -- and those are exactly the ones a quick look at the harmless
+member would miss.
