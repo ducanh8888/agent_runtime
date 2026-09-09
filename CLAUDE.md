@@ -121,7 +121,7 @@ passing while testing nothing. The vendored pytest suite is still unrecorded on
 Linux.
 
 **Codex is wired up** (codex-cli 0.153.4, 2026-09-09). `codex mcp add agentrt --
-/home/ducanh/.local/bin/agentrt-mcp` writes `[mcp_servers.agentrt]` to
+<absolute path to agentrt-mcp>` writes `[mcp_servers.agentrt]` to
 `~/.codex/config.toml`. The absolute path is deliberate: `~/.local/bin` is not
 on the PATH a spawned server inherits. Verified by dispatching a session from
 Codex and checking the file it produced, not the report — see `FRICTION_LOG.md`
