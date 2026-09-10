@@ -37,7 +37,9 @@ something is the way it is, not for what it currently does.
 [DeepSeek hardening](DEEPSEEK_HARDENING_PLAN.md) specifies H0–H7 for direct
 DeepSeek with thinking enabled/high, reliable reads/results, waiting,
 workspace isolation, batch admission and images/accounting. All H phases are
-pending; this is planned work, not a claim about the installed runtime.
+tracked there: [H0 is complete](H0_RESULT.md), H1 is next, and H2–H7 remain
+pending. Completion describes the source-stage gate, not the installed runtime;
+production cutover remains H7.
 [The self-audit](DEEPSEEK_HARDENING_AUDIT.md) is its dated evidence and decision
 record. The new plan supersedes this document's original exclusions only for
 that follow-on scope (not cron, sandboxing or a second lifecycle owner). Keep

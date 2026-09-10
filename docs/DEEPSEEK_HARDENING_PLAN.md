@@ -4,14 +4,15 @@ Date: 2026-09-11 (Asia/Bangkok).
 Basis: [self-audit and measured evidence](DEEPSEEK_HARDENING_AUDIT.md), the user's
 nine runtime feedback items, and the DeepSeek optimization proposal as narrowed
 by the user to direct DeepSeek with thinking enabled and effort `high`.
-Baseline: `cce40bea488ee7299d312faa07172d0216dfb875`.
+Planning baseline: `cce40bea488ee7299d312faa07172d0216dfb875`.
+Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 
 ## Status
 
-Active follow-on implementation plan; **all H0–H7 work is pending**. The scope
-and thinking/high policy are user requirements. API examples and internal field
-names below are proposed contracts, not shipped capabilities. This document
-records the plan; it does not implement it or change live profiles.
+Active follow-on implementation plan; **H0 is complete and H1 is next**. The
+scope and thinking/high policy are user requirements. H1–H7 API examples and
+internal field names below are proposed contracts, not shipped capabilities;
+the verified H0 behavior is recorded in [H0_RESULT.md](H0_RESULT.md).
 
 The original [implementation plan](IMPLEMENTATION_PLAN.md) remains the document
 index and historical P1–P4 record. H-prefix phase names avoid reusing those closed
@@ -51,8 +52,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 
 | Phase | Deliverable | Basis | Depends on | Status |
 |---|---|---|---|---|
-| H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Pending |
-| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Pending |
+| H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Complete — [result](H0_RESULT.md) |
+| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Next |
 | H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Pending |
 | H3 | Reliable waits, finalization and partial summaries | REUSE + PORT + NEW | H0, H2 | Pending |
 | H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Pending |
@@ -81,7 +82,9 @@ mirroring its state in the MCP process.
    versions, daemon identity and redacted effective profile settings. Record
    which executable actually runs each test. Add correct runtime version and
    capability reporting; MCP must not identify itself with the MCP library's
-   version. Preserve existing fields and never reveal credentials.
+   version. Add the conventional non-mutating `agentrt --version` flag so this
+   identity does not require a daemon round trip. Preserve existing fields and
+   never reveal credentials.
 2. Add neutral `AGENTRT_API_KEY` / `AGENTRT_BASE_URL` configuration names while
    retaining legacy `AGENTRT_9ROUTER_*`. Preserve layer precedence: process env,
    state `.env`, development `.env`. Resolve old/new aliases inside each layer;
@@ -127,34 +130,45 @@ No production session is restarted as part of verification.
 
 **Implementation**
 
-1. Fix the numbering/truncation reproduction first. Never number a head/tail
+1. Add an `inspect` permission preset between `readonly` and `workspace`. It
+   may execute only schema-validated read operations (file paging/search plus
+   hardened Git and version/environment inspections), cannot invoke a general
+   shell, cannot edit files, and must not expose provider credentials. Treat
+   this as a readonly command runner, not an OS sandbox or a string-based shell
+   allowlist. Prompt-only "do not write" instructions are not a security
+   boundary.
+2. Fix the numbering/truncation reproduction first. Never number a head/tail
    splice as a contiguous range. Prefer a page of whole source lines with stable
    continuation rather than a larger arbitrary character cap.
-2. Extend the existing file view contract with version/hash, requested and
+3. Extend the existing file view contract with version/hash, requested and
    returned ranges, continuation cursor, EOF and truncation metadata. Keep old
    parameters usable. A long single line needs an offset continuation and an
    explicit partial-line marker; the cursor must advance even in this case.
-3. Bind cursors to file identity/version and range options. Return a typed
+4. Bind cursors to file identity/version and range options. Return a typed
    `file_changed` result when continuity cannot be honored. Handle binary files,
    encoding errors, out-of-range requests and empty files explicitly.
-4. Add structured search with file, line, bounded context and its own cursor.
+5. Add structured search with file, line, bounded context and its own cursor.
    Enforce existing root/credential guards for every candidate and returned
    file, not just the starting directory. Guard fallbacks, symlinks and known
    credential hard links without rejecting all legitimate hard-linked files.
-5. Provide narrow readonly git status/diff/log/show operations. Use validated
-   argv rather than arbitrary shell text. Disable execution via external diff,
-   textconv, pager, fsmonitor or other helpers and optional index writes as
-   appropriate; do not trust repository configuration. Git patches and search
-   results must obey the same protected-file/output policy as file reads.
-   Reuse existing git facilities only after confirming these properties.
-6. Derive read evidence from successful tool observations and, where tracked,
+6. Provide narrow readonly git status/diff/log/show and executable-version
+   operations. Use validated argv rather than arbitrary shell text. Disable
+   execution via external diff, textconv, pager, fsmonitor or other helpers and
+   optional index writes as appropriate; do not trust repository configuration.
+   Git patches and search results must obey the same protected-file/output
+   policy as file reads. Reuse existing git facilities only after confirming
+   these properties.
+7. Derive read evidence from successful tool observations and, where tracked,
    content included in serialized LLM requests. Record the stage explicitly:
    observed is not necessarily delivered, delivered is not understood. Merge
    ranges only within one file version. Persist through the existing event
    owner; do not add another full transcript store.
-7. Warn on repeated identical version/range reads. A cache hit must preserve
+8. Warn on repeated identical version/range reads. A cache hit must preserve
    correct content and metadata; never replace a requested page with only a
    hash on the assumption that the model remembers it.
+9. Document that an empty artifact listing is the expected positive result for
+   a session that made no workspace writes. Keep it distinct from a missing
+   workspace, unavailable evidence and artifact-enumeration failure.
 
 **Primary seams:** file editor/output utility, runtime guarded tools,
 search/git executors, observation schema and transcript projection.
@@ -192,10 +206,17 @@ unread ranges or an EOF that was not reached.
 6. Accept and persist an explicit title. Do not schedule auto-title when one is
    supplied, and prevent an earlier asynchronous title task from overwriting a
    later explicit title. Auto-generated titles follow H0's high policy.
-7. Keep SDK execution status separate from admission and result status.
-   `idle` may truthfully mean accepted but not running. Preserve public legacy
-   representations where necessary; an empty-string-to-null change requires
-   explicit compatibility treatment, not just a docstring edit.
+7. Keep SDK execution status separate from admission and result status. Expose
+   an explicit admission state (`queued`, `preparing`, `admitted`) so a newly
+   dispatched or cap-blocked session is never ambiguously returned as `idle`.
+   Preserve public legacy representations where necessary; change a pending
+   result from `""` to JSON `null` with explicit compatibility/version handling.
+   A final empty string remains valid and must be distinguishable by result
+   state.
+8. Accept title and tags atomically at dispatch. Preserve caller titles, derive
+   useful default tags from stage/task/base/role when supplied, and make those
+   distinguishing fields visible in compact listings. Auto-title remains a
+   fallback, not the only way to tell a large fan-out apart.
 
 **Primary seams:** SDK request/events/response helpers, server run/create paths,
 runtime client/status/result/transcript, typed clients if their contract changes.
@@ -287,6 +308,8 @@ or cleanup of another session occurs.
 1. Add per-item batch outcomes and bounded batch size. Preserve single dispatch.
    Validate items before side effects and define partial acceptance explicitly;
    a network retry must return the original accepted items, not recreate them.
+   A full execution pool applies backpressure by durably queueing accepted work;
+   it does not reject overflow and require caller-managed wave batching.
 2. Keep queue/preparation/admission metadata in the existing server persistence
    owner, not the MCP client's memory. Define durable transitions and recovery
    around enqueue, workspace preparation and run launch.
@@ -302,6 +325,8 @@ or cleanup of another session occurs.
    and an advisory queue position. Zero disables that specific cap; report
    unbounded availability explicitly, not as a misleading numeric remainder.
    A provider quota and an explicit limit on another dimension still apply.
+   A caller must be able to submit N independent items once and later collect N
+   terminal outcomes without re-dispatching cap rejects.
 6. Add submission idempotency with durable key-to-request mapping. The same key
    with a different payload is a conflict. Define retry lifetime and scope.
    This guarantees deduplicated submission, not exactly-once arbitrary tools.
@@ -338,6 +363,8 @@ claims for uncooperative external programs.
    completion/reasoning, queue wait, first-token and full-call latency, completed
    progress, iterations, tools, repeated ranges and result state. Distinguish
    first reasoning token from first user-visible content when measuring latency.
+   Expose the per-session projection through MCP/CLI as well as REST so batch
+   orchestrators can inspect spend without opening persisted state directly.
 5. Normalize provider usage without double-counting reasoning included in output
    or cache included in prompt. Preserve unknown versus zero and handle usage
    missing from an interrupted stream. Retrying/replayed events cannot be counted
@@ -448,7 +475,7 @@ carry input/run provenance and current result state independently.
 | Input feedback/proposal | Resolution |
 |---|---|
 | 1. Fan-out cap, dispatch-many, queue and slots | H5; authority moves to daemon with compatibility negotiation |
-| 2. Readonly cannot run useful read commands | H1 structured search/git, not arbitrary shell allowlisting |
+| 2. Readonly cannot run useful read commands | H1 `inspect` preset with schema-validated readonly operations, not a general shell |
 | 3. Large-file truncation, unstable reads, repeated ranges | H1 correctness/cursors/versioning |
 | 4. Opaque iteration errors and missing partial progress | H2 errors/progress; H3 explicit summary policy |
 | 5. No wait-any/all | H3 authoritative event-backed waits |
@@ -464,6 +491,14 @@ carry input/run provenance and current result state independently.
 | Per-model/service telemetry | H0 foundations, H6 accounting and retention |
 | Sol, tiers, classifier, auto-escalation | Excluded by user direction |
 | Wrong version and source/installed confusion | H0 identity, H7 explicit verification/cutover |
+| Overflow is rejected instead of queued | H5 durable acceptance/backpressure; one submit, N outcomes |
+| New dispatch reports ambiguous `idle` | H2 separate admission state; H5 authoritative queued/preparing transitions |
+| Running result is `""` instead of documented `null` | H2 typed result state plus compatibility-gated JSON `null` |
+| No per-session token/cost visibility | H0 REST foundation; H6 complete MCP/CLI accounting and unknown-cost semantics |
+| Similar titles and undiscoverable tags | H2 atomic title/tags and compact-list projection |
+| Missing conventional CLI `--version` | H0 local runtime version flag |
+| No command-capable readonly preset | H1 `inspect` preset with no general shell or file mutation |
+| Empty artifacts are ambiguous | H1 typed/documented empty-success semantics |
 
 ## 6. Handoff and update convention
 
