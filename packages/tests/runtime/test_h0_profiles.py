@@ -151,6 +151,30 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
         assert profile_path.stat().st_mode & 0o777 == 0o600
 
 
+def test_provider_linked_target_refuses_preview_and_apply(state) -> None:
+    bootstrap.ensure_profiles()
+    llm_store = get_llm_profile_store()
+    profile_path = Path(state) / "profiles" / "default.json"
+
+    linked = llm_store.load("default").model_copy(
+        update={"provider_connection_id": "9router-shared"}
+    )
+    llm_store.save("default", linked, include_secrets=True)
+    before = _digest(profile_path)
+
+    with pytest.raises(bootstrap.ProviderLinkedProfileError) as preview_exc:
+        bootstrap.preview_llm_profile()
+    assert "9router-shared" in str(preview_exc.value)
+
+    with pytest.raises(bootstrap.ProviderLinkedProfileError):
+        bootstrap.apply_llm_profile()
+
+    # The refusal must not have written anything nor detached the connection.
+    assert _digest(profile_path) == before
+    stored = llm_store.load("default", resolve_provider=False)
+    assert stored.provider_connection_id == "9router-shared"
+
+
 class _StubClient(client_mod.Client):
     """A Client whose HTTP surface records the request instead of sending it."""
 

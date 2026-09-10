@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         output = args.func(args)
-    except client_mod.ClientError as exc:
+    except (client_mod.ClientError, bootstrap.ProviderLinkedProfileError) as exc:
         _report_error(1, exc)
         return 1
     except Exception as exc:  # noqa: BLE001 - daemon diagnostics must stay quiet

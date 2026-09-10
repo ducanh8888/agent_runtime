@@ -45,6 +45,32 @@ DIRECT_LLM_CAPABILITY_OVERRIDES: dict[str, bool | str] = {
 DIRECT_LLM_EXTRA_BODY: dict[str, object] = {"thinking": {"type": "enabled"}}
 
 
+class ProviderLinkedProfileError(RuntimeError):
+    """Refuse to edit an LLM profile whose endpoint and key come from elsewhere.
+
+    A profile with ``provider_connection_id`` stores no endpoint or key of its
+    own; both are resolved from the shared provider connection every time the
+    profile is loaded. Rewriting the model or policy while leaving that link in
+    place would let apply report a direct endpoint while the request still
+    routes through the linked provider. Attaching the direct endpoint and key
+    would instead mean detaching the connection, which must be its own explicit,
+    credential-safe operation, not a side effect of applying a policy. So this
+    runtime refuses both preview and apply for such a target rather than making
+    a claim it cannot honour.
+    """
+
+
+def _linked_provider_error(name: str, connection_id: str) -> ProviderLinkedProfileError:
+    return ProviderLinkedProfileError(
+        f"LLM profile {name!r} is linked to provider connection "
+        f"{connection_id!r}; its endpoint and key are resolved from that "
+        "connection, so the direct DeepSeek endpoint and key in the resolved "
+        "configuration cannot be applied without detaching it. Refusing rather "
+        "than reporting a change that would not take effect. Detach the "
+        "provider connection explicitly first if direct access is intended."
+    )
+
+
 def _use_state_dir() -> Path:
     """Point the vendored stores at our state directory.
 
@@ -293,17 +319,16 @@ def _profile_changes(current, proposed) -> list[dict]:
 def _merge_llm(current, proposed):
     """Update the endpoint, model and full policy, preserving unrelated fields.
 
-    A profile linked to a provider connection owns no inline credential, so
-    its ``base_url`` and ``api_key`` stay with that connection. Everything in
-    ``_POLICY_FIELDS`` is refreshed together: a partial update would leave an
-    old effort or api_mode next to a new model, which is exactly the
-    inconsistency that reads as "the policy is applied" while the request
-    still goes out weaker.
+    Everything in ``_POLICY_FIELDS`` is refreshed together: a partial update
+    would leave an old effort or api_mode next to a new model, which is exactly
+    the inconsistency that reads as "the policy is applied" while the request
+    still goes out weaker. ``base_url`` and ``api_key`` are always written,
+    because callers refuse a provider-linked target up front -- there is no
+    path here that silently keeps another endpoint.
     """
     update: dict = {field: getattr(proposed, field) for field in _POLICY_FIELDS}
-    if not current.provider_connection_id:
-        update["base_url"] = proposed.base_url
-        update["api_key"] = proposed.api_key
+    update["base_url"] = proposed.base_url
+    update["api_key"] = proposed.api_key
     return current.model_copy(update=update)
 
 
@@ -323,6 +348,9 @@ def preview_llm_profile(
         current = store.load(name, resolve_provider=False)
     except FileNotFoundError:
         current = None
+    if current is not None and current.provider_connection_id:
+        # Do not describe endpoint/key changes that apply would not make.
+        raise _linked_provider_error(name, current.provider_connection_id)
     return {
         "profile": name,
         "exists": current is not None,
@@ -359,6 +387,8 @@ def apply_llm_profile(
         current = store.load(name, resolve_provider=False)
     except FileNotFoundError:
         current = None
+    if current is not None and current.provider_connection_id:
+        raise _linked_provider_error(name, current.provider_connection_id)
 
     store.save(
         name,
