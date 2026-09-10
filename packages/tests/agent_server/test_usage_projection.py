@@ -8,6 +8,13 @@ from agentrt.agent_server.usage_projection import (
 )
 from agentrt.sdk.conversation.conversation_stats import ConversationStats
 from agentrt.sdk.llm.utils.metrics import Metrics
+from agentrt.sdk.llm.utils.provenance import (
+    CallProvenance,
+    EndpointProvenance,
+    PolicyProvenance,
+    ProviderConfirmation,
+    RouteProvenance,
+)
 
 
 def _agent_metrics() -> Metrics:
@@ -21,6 +28,31 @@ def _agent_metrics() -> Metrics:
         context_window=65536,
         response_id="resp-1",
         reasoning_tokens=64,
+        provenance=CallProvenance(
+            call_id="resp-1",
+            call_id_source="provider_response_id",
+            configured=RouteProvenance(
+                model="openai/deepseek-flash",
+                provider="openai",
+                endpoint=EndpointProvenance(
+                    origin="https://api.deepseek.com", path="/v1"
+                ),
+                policy=PolicyProvenance(
+                    reasoning_effort="high", thinking_type="enabled"
+                ),
+            ),
+            sent=RouteProvenance(
+                model="deepseek-flash",
+                provider="openai",
+                endpoint=EndpointProvenance(
+                    origin="https://api.deepseek.com", path="/v1"
+                ),
+                policy=PolicyProvenance(
+                    reasoning_effort="high", thinking_type="enabled"
+                ),
+            ),
+            confirmation=ProviderConfirmation(reasoning_policy="unknown"),
+        ),
     )
     metrics.add_token_usage(
         prompt_tokens=500,
@@ -67,6 +99,14 @@ def test_projects_service_and_call_provenance():
     assert all(call.call_id_source == "provider_response_id" for call in agent.calls)
     assert agent.calls[0].usage.prompt_tokens == 1000
     assert agent.calls[0].usage.reasoning_tokens == 64
+    assert agent.calls[0].provenance is not None
+    assert agent.calls[0].provenance.configured.model == "openai/deepseek-flash"
+    assert agent.calls[0].provenance.sent.endpoint is not None
+    assert agent.calls[0].provenance.sent.endpoint.origin == "https://api.deepseek.com"
+    assert agent.calls[0].provenance.sent.policy.reasoning_effort == "high"
+    assert agent.calls[0].provenance.sent.policy.thinking_type == "enabled"
+    assert agent.calls[0].provenance.confirmation.reasoning_policy == "unknown"
+    assert agent.calls[1].provenance is None
 
     condenser = usage.services[1]
     assert [call.call_id for call in condenser.calls] == ["condenser:0"]
@@ -122,6 +162,7 @@ def test_projection_carries_only_numeric_and_identifier_fields():
         "call_id",
         "call_id_source",
         "model",
+        "provenance",
         "usage",
     }
     assert set(call.usage.model_dump()) == {

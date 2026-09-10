@@ -10,13 +10,12 @@ owner does not already record.
 Two things this projection deliberately does *not* do:
 
 * It does not invent provider-confirmed facts. The stats owner records the
-  provider's raw token numbers and response id; it does not record the
-  effective endpoint, the request that was sent, or whether the endpoint
-  confirmed the policy. Those are therefore absent rather than guessed from
-  configuration.
-* It does not emit free text. Token counts, model names and provider response
-  ids only — no prompts, no completions, no reasoning traces, no credentials,
-  and no endpoint.
+  configured and sent routes/policies, but confirmation stays ``unknown``
+  until an explicit provider signal exists. Reasoning-token presence is not
+  treated as confirmation.
+* It does not emit unbounded free text. Endpoint provenance has already been
+  reduced to origin/path by the SDK; no userinfo, query, fragment, API key,
+  headers, prompts, completions or private reasoning can enter this view.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agentrt.sdk.conversation.conversation_stats import ConversationStats
 from agentrt.sdk.llm.utils.metrics import Metrics, TokenUsage
+from agentrt.sdk.llm.utils.provenance import CallProvenance
 
 
 #: Longest identifier copied verbatim onto the wire. ``usage_id`` is supplied
@@ -86,6 +86,13 @@ class UsageCall(BaseModel):
     model: str | None = Field(
         default=None,
         description="Model the stats owner recorded for this call, if any.",
+    )
+    provenance: CallProvenance | None = Field(
+        default=None,
+        description=(
+            "Sanitized configured/sent/provider-confirmation provenance, or "
+            "null for legacy records and calls without captured provenance."
+        ),
     )
     usage: RawTokenUsage
 
@@ -167,6 +174,7 @@ def _project_call(usage_id: str, index: int, usage: TokenUsage) -> UsageCall:
         call_id=_safe_identifier(call_id, f"{usage_id}:{index}"),
         call_id_source=call_id_source,
         model=usage.model or None,
+        provenance=usage.provenance,
         usage=_raw_usage(usage),
     )
 
