@@ -136,17 +136,28 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         # it, and an orchestrator may be holding one from an earlier `profiles`
         # call. Constructing a fresh profile mints a new UUID, so rebuilding
         # because *one* preset was missing silently re-identified the other two.
+        #
+        # A namesake also keeps its own switch_llm setting; only a genuinely
+        # new profile is created with the tool off. Rebuilding must not disable
+        # a setting the operator turned on, and a fresh AgentRT profile must not
+        # let its worker switch itself to an unapproved saved LLM profile.
         kwargs: dict = {}
+        enable_switch_llm = False
         try:
-            kwargs["id"] = agent_store.load(preset).id
+            existing = agent_store.load(preset)
         except Exception:
             pass  # Genuinely new; let the default factory mint one.
+        else:
+            kwargs["id"] = existing.id
+            if isinstance(existing, OpenHandsAgentProfile):
+                enable_switch_llm = existing.enable_switch_llm_tool
 
         profile = OpenHandsAgentProfile(
             name=preset,
             llm_profile_ref=LLM_PROFILE_NAME,
             tools=_tools_for(preset),
             enable_sub_agents=False,
+            enable_switch_llm_tool=enable_switch_llm,
             **kwargs,
         )
         agent_store.save(profile)
@@ -168,6 +179,166 @@ def _tighten(path: Path) -> None:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
+def allowed_llm_profiles() -> list[str]:
+    """Names of the LLM profiles the runtime's agent profiles reference.
+
+    Dispatch may select one of these and refuses anything else rather than
+    silently falling back. Names only: no model, endpoint or key is returned.
+    """
+    from agentrt.agent_server.persistence import get_agent_profile_store
+    from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+
+    _use_state_dir()
+    store = get_agent_profile_store()
+    refs: set[str] = set()
+    for preset in permissions.PRESETS:
+        try:
+            profile = store.load(preset)
+        except Exception:
+            continue
+        if isinstance(profile, OpenHandsAgentProfile):
+            refs.add(profile.llm_profile_ref)
+    return sorted(refs or {LLM_PROFILE_NAME})
+
+
+def agent_profile_llm_ref(permission: str) -> str | None:
+    """The LLM profile reference a permission preset's agent profile uses."""
+    from agentrt.agent_server.persistence import get_agent_profile_store
+    from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+
+    _use_state_dir()
+    try:
+        profile = get_agent_profile_store().load(permission)
+    except Exception:
+        return None
+    if isinstance(profile, OpenHandsAgentProfile):
+        return profile.llm_profile_ref
+    return None
+
+
+def _describe_llm(llm) -> dict:
+    """Secret-free description of one LLM profile."""
+    return {
+        "model": llm.model,
+        "base_url": llm.base_url,
+        "reasoning_effort": llm.reasoning_effort,
+        "usage_id": llm.usage_id,
+        "api_key_present": llm.api_key is not None,
+        "provider_connection_id": llm.provider_connection_id,
+    }
+
+
+def _profile_changes(current, proposed) -> list[dict]:
+    """Endpoint/model/policy differences, with the key reported as presence."""
+    changes: list[dict] = []
+    for field in ("model", "base_url", "reasoning_effort"):
+        before = getattr(current, field, None) if current is not None else None
+        after = getattr(proposed, field)
+        if before != after:
+            changes.append({"field": field, "from": before, "to": after})
+    before_key = current is not None and current.api_key is not None
+    after_key = proposed.api_key is not None
+    if before_key != after_key:
+        changes.append(
+            {
+                "field": "api_key",
+                "from": "present" if before_key else "absent",
+                "to": "present" if after_key else "absent",
+            }
+        )
+    return changes
+
+
+def _merge_llm(current, proposed):
+    """Update endpoint, model and policy, preserving the profile's other fields.
+
+    A profile linked to a provider connection owns no inline credential, so
+    its ``base_url`` and ``api_key`` stay with that connection; model and
+    reasoning effort are still updated because they are not credentials.
+    """
+    update: dict = {
+        "model": proposed.model,
+        "reasoning_effort": proposed.reasoning_effort,
+    }
+    if not current.provider_connection_id:
+        update["base_url"] = proposed.base_url
+        update["api_key"] = proposed.api_key
+    return current.model_copy(update=update)
+
+
+def preview_llm_profile(
+    router: config.RouterConfig | None = None,
+    *,
+    name: str = LLM_PROFILE_NAME,
+) -> dict:
+    """Describe what applying the resolved config would change, writing nothing."""
+    from agentrt.agent_server.persistence import get_llm_profile_store
+
+    router = router or config.load_router_config()
+    _use_state_dir()
+    store = get_llm_profile_store()
+    proposed = _build_llm(router)
+    try:
+        current = store.load(name, resolve_provider=False)
+    except FileNotFoundError:
+        current = None
+    return {
+        "profile": name,
+        "exists": current is not None,
+        "current": _describe_llm(current) if current is not None else None,
+        "proposed": _describe_llm(proposed),
+        "changes": _profile_changes(current, proposed),
+        "applies_to": "new sessions only",
+        "note": (
+            "Preview only; nothing was written. Applying updates the saved LLM "
+            "profile for sessions created afterwards. Editing .env alone does "
+            "not change a saved profile or an already-created session."
+        ),
+    }
+
+
+def apply_llm_profile(
+    router: config.RouterConfig | None = None,
+    *,
+    name: str = LLM_PROFILE_NAME,
+) -> dict:
+    """Update one saved LLM profile from the resolved config.
+
+    Only that profile is rewritten: agent profiles and their stable ids,
+    permission settings and unrelated LLM fields are preserved. Existing
+    sessions are never retargeted.
+    """
+    from agentrt.agent_server.persistence import get_llm_profile_store
+
+    router = router or config.load_router_config()
+    state = _use_state_dir()
+    store = get_llm_profile_store()
+    proposed = _build_llm(router)
+    try:
+        current = store.load(name, resolve_provider=False)
+    except FileNotFoundError:
+        current = None
+
+    store.save(
+        name,
+        proposed if current is None else _merge_llm(current, proposed),
+        include_secrets=True,
+    )
+    _tighten(state / "profiles" / f"{name}.json")
+
+    return {
+        "profile": name,
+        "applied": True,
+        "changes": _profile_changes(current, proposed),
+        "agent_profiles_unchanged": True,
+        "applies_to": "new sessions only",
+        "note": (
+            "Saved profile updated. Already-created sessions keep the policy "
+            "they launched with and are not retargeted on resume."
+        ),
+    }
+
+
 def summary() -> dict:
     """Report what is configured without revealing the credential."""
     from agentrt.agent_server.persistence import (
@@ -176,7 +347,16 @@ def summary() -> dict:
     )
 
     state = _use_state_dir()
-    out: dict = {"state_dir": str(state)}
+    out: dict = {
+        "state_dir": str(state),
+        "runtime_version": config.runtime_version(),
+    }
+    try:
+        out["settings"] = config.describe_settings()
+    except config.ConfigConflictError as exc:
+        out["settings"] = None
+        out["settings_error"] = str(exc)
+    out["allowed_llm_profiles"] = allowed_llm_profiles()
     try:
         llm = get_llm_profile_store().load(LLM_PROFILE_NAME)
         out["llm_profile"] = LLM_PROFILE_NAME

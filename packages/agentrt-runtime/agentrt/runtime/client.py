@@ -356,8 +356,15 @@ class Client:
 
         return matches[0]
 
-    def _profile_id(self, permission: str | None = None) -> str:
-        """Resolve a preset name to the agent profile the daemon should use."""
+    def _profile_id(
+        self, permission: str | None = None, llm_profile: str | None = None
+    ) -> str:
+        """Resolve a preset and an optional allowed LLM reference to a profile id.
+
+        ``llm_profile`` is a name, never a credential. Selecting one that the
+        runtime does not reference, or that the preset is not bound to, is a
+        clear error rather than a silent fallback.
+        """
         if self._profile_ref is None:
             self._ensure_ready()
         preset = permissions.normalise(permission)
@@ -368,6 +375,22 @@ class Client:
                 f"no agent profile for permission {preset!r}; "
                 "run `agentrt config` to see what exists"
             )
+        if llm_profile is not None:
+            allowed = bootstrap.allowed_llm_profiles()
+            if llm_profile not in allowed:
+                raise ClientError(
+                    f"LLM profile {llm_profile!r} is not allowed; allowed: "
+                    f"{', '.join(allowed) or 'none'}. This runtime exposes only "
+                    "the LLM profiles its agent profiles reference."
+                )
+            bound = bootstrap.agent_profile_llm_ref(preset)
+            if bound != llm_profile:
+                raise ClientError(
+                    f"permission {preset!r} is bound to LLM profile {bound!r}; "
+                    f"selecting {llm_profile!r} would retarget it. Apply a "
+                    "selected LLM profile change instead of selecting one per "
+                    "dispatch."
+                )
         return str(profiles[preset])
 
     def profiles(self) -> dict:
@@ -383,6 +406,7 @@ class Client:
                 }
                 for preset in permissions.PRESETS
             ],
+            "allowed_llm_profiles": bootstrap.allowed_llm_profiles(),
         }
 
     # ------------------------------------------------------------------
@@ -396,13 +420,23 @@ class Client:
         *,
         title: str | None = None,
         permission: str | None = None,
+        llm_profile: str | None = None,
         max_iterations: int | None = None,
         tags: dict[str, str] | None = None,
     ) -> dict:
-        """Start a new conversation in a workspace for a text task."""
+        """Start a new conversation in a workspace for a text task.
+
+        ``llm_profile`` names the allowed LLM profile to run under. It is a
+        reference the daemon resolves against its own stores, so no credential
+        crosses this boundary; an unknown or unbound name is refused.
+        """
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
         preset = permissions.normalise(permission)
+        profile_id = self._profile_id(preset, llm_profile)
+        resolved_llm = (
+            bootstrap.agent_profile_llm_ref(preset) or bootstrap.LLM_PROFILE_NAME
+        )
 
         cap = config.max_running_sessions()
         if cap > 0:
@@ -419,7 +453,7 @@ class Client:
 
         body: dict = {
             "workspace": {"working_dir": workspace},
-            "agent_profile_id": self._profile_id(preset),
+            "agent_profile_id": profile_id,
             # The daemon imports these modules "to trigger tool auto
             # registration". Naming the guard module is what installs the
             # permission-aware file editor inside the daemon process, which is
@@ -445,6 +479,7 @@ class Client:
             "status": _status_of(data),
             "workspace": workspace,
             "permission": preset,
+            "llm_profile": resolved_llm,
         }
 
     def _all_sessions(self) -> list[dict]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,23 @@ class RouterConfig:
             f"RouterConfig(api_key=<redacted>, base_url={self.base_url!r}, "
             f"model={self.model!r})"
         )
+
+
+RUNTIME_DISTRIBUTION = "agentrt-runtime"
+
+
+def runtime_version() -> str:
+    """Return the installed AgentRT runtime version.
+
+    The MCP initialize response must identify AgentRT, not the ``mcp`` library
+    that carries the tool surface, and the low-level server otherwise reports
+    the library's own version. A source checkout without installed distribution
+    metadata reports ``"unknown"`` rather than failing to start.
+    """
+    try:
+        return importlib.metadata.version(RUNTIME_DISTRIBUTION)
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
 
 
 def state_dir() -> Path:
@@ -53,11 +71,36 @@ def log_file() -> Path:
     return state_dir() / "daemon.log"
 
 
-REQUIRED_KEYS = (
-    "AGENTRT_9ROUTER_API_KEY",
-    "AGENTRT_9ROUTER_BASE_URL",
-    "AGENTRT_DEFAULT_MODEL",
-)
+class ConfigConflictError(ValueError):
+    """Two aliases for one setting disagree at the same precedence."""
+
+
+#: Canonical setting name to the spellings accepted for it, neutral first.
+#: Per-setting aliases let the neutral names land without breaking an
+#: operator's existing ``AGENTRT_9ROUTER_*`` configuration.
+SETTING_ALIASES: dict[str, tuple[str, ...]] = {
+    "AGENTRT_API_KEY": ("AGENTRT_API_KEY", "AGENTRT_9ROUTER_API_KEY"),
+    "AGENTRT_BASE_URL": ("AGENTRT_BASE_URL", "AGENTRT_9ROUTER_BASE_URL"),
+    "AGENTRT_DEFAULT_MODEL": ("AGENTRT_DEFAULT_MODEL",),
+}
+
+REQUIRED_KEYS: tuple[str, ...] = tuple(SETTING_ALIASES)
+
+SECRET_SETTINGS: frozenset[str] = frozenset({"AGENTRT_API_KEY"})
+
+
+@dataclass(frozen=True)
+class SettingProvenance:
+    """Where one resolved setting's value came from."""
+
+    setting: str
+    value: str | None
+    source: str
+    alias: str | None
+
+    @property
+    def present(self) -> bool:
+        return self.value is not None
 
 
 def config_file() -> Path:
@@ -85,67 +128,154 @@ def repo_env_file() -> Path | None:
     return None
 
 
-def resolve_settings() -> tuple[dict[str, str], str]:
-    """Collect configuration from the first source that supplies it.
+def _alias_names(setting: str) -> str:
+    return " or ".join(SETTING_ALIASES[setting])
 
-    Order is process environment, then the state directory, then a development
-    checkout. The environment comes first because it is the only source an
-    orchestrator can set without touching the filesystem, and the checkout
-    comes last because relying on it is exactly what stops agentrt working
-    outside this repository.
 
-    Returns the values together with a description of where they came from, so
-    a configuration mistake can be reported against a real path instead of a
-    guess.
+def _resolve_layer(entries: dict[str, str]) -> dict[str, tuple[str, str]]:
+    """Resolve aliases within one precedence layer.
+
+    Raises :class:`ConfigConflictError` when two spellings for one setting
+    carry different non-empty values, because there is no safe way to guess
+    which endpoint or credential the operator meant.
     """
-    for key in REQUIRED_KEYS:
-        if not os.environ.get(key, "").strip():
-            break
-    else:
-        return {key: os.environ[key] for key in REQUIRED_KEYS}, "process environment"
+    resolved: dict[str, tuple[str, str]] = {}
+    for setting, aliases in SETTING_ALIASES.items():
+        supplied = [(alias, entries.get(alias, "")) for alias in aliases]
+        non_empty = [(alias, value) for alias, value in supplied if value.strip()]
+        if not non_empty:
+            continue
+        if len({value.strip() for _, value in non_empty}) > 1:
+            raise ConfigConflictError(
+                f"{setting} is set more than once with different values "
+                f"({', '.join(alias for alias, _ in non_empty)}); remove one. "
+                "Values are not shown."
+            )
+        alias, value = next(
+            (pair for pair in non_empty if pair[0] == setting), non_empty[0]
+        )
+        resolved[setting] = (value, alias)
+    return resolved
 
+
+def _layers() -> list[tuple[str, dict[str, str]]]:
+    """Configuration sources in precedence order: env, state, checkout."""
+    layers: list[tuple[str, dict[str, str]]] = [
+        ("process environment", dict(os.environ))
+    ]
+    state = config_file()
+    if state.is_file():
+        layers.append((str(state), read_dotenv(state)))
+    dev = repo_env_file()
+    if dev is not None and dev != state:
+        layers.append((str(dev), read_dotenv(dev)))
+    return layers
+
+
+def resolve_settings_provenance() -> dict[str, SettingProvenance]:
+    """Resolve every setting and record which layer and alias supplied it.
+
+    Aliases are resolved inside each layer first, so the neutral name and its
+    legacy spelling at the same precedence are either equal (accepted) or a
+    :class:`ConfigConflictError`. Higher-precedence layers win per setting,
+    which keeps the environment ahead of the state file while still letting a
+    single value be overridden without restating the rest.
+    """
+    out = {
+        setting: SettingProvenance(setting, None, "no configuration source", None)
+        for setting in REQUIRED_KEYS
+    }
+    for source, entries in _layers():
+        for setting, (value, alias) in _resolve_layer(entries).items():
+            if not out[setting].present:
+                out[setting] = SettingProvenance(setting, value, source, alias)
+    return out
+
+
+def resolve_settings() -> tuple[dict[str, str], str]:
+    """Collect configuration from the highest source that supplies each key.
+
+    Returns canonical setting names to values, plus a description of the
+    sources consulted. Provenance per setting is available from
+    :func:`resolve_settings_provenance`.
+    """
+    provenance = resolve_settings_provenance()
     values: dict[str, str] = {}
     sources: list[str] = []
-    for path in (repo_env_file(), config_file()):
-        if path is not None and path.is_file():
-            values.update(read_dotenv(path))
-            sources.append(str(path))
-
-    # The environment still wins over any file for keys it does define, so a
-    # single variable can override one setting without restating the rest.
-    for key in REQUIRED_KEYS:
-        if os.environ.get(key, "").strip():
-            values[key] = os.environ[key]
-            if "process environment" not in sources:
-                sources.append("process environment")
-
+    for setting in REQUIRED_KEYS:
+        entry = provenance[setting]
+        if entry.present:
+            values[setting] = str(entry.value)
+            if entry.source not in sources:
+                sources.append(entry.source)
     return values, ", ".join(sources) if sources else "no configuration source"
+
+
+def describe_settings() -> list[dict]:
+    """Report provenance per setting with secret values redacted."""
+    provenance = resolve_settings_provenance()
+    report: list[dict] = []
+    for setting in REQUIRED_KEYS:
+        entry = provenance[setting]
+        if setting in SECRET_SETTINGS:
+            value = "<set>" if entry.present else None
+        else:
+            value = entry.value
+        report.append(
+            {
+                "setting": setting,
+                "aliases": list(SETTING_ALIASES[setting]),
+                "source": entry.source if entry.present else None,
+                "alias": entry.alias,
+                "present": entry.present,
+                "value": value,
+            }
+        )
+    return report
 
 
 def load_router_config(env_path: Path | None = None) -> RouterConfig:
     """Build RouterConfig from the resolved configuration.
 
-    Missing or blank required keys are reported together, with the source that
-    was consulted, so one run tells the operator both what is absent and where
-    to put it.
+    Missing or blank required keys are reported together, naming both the
+    neutral and legacy spellings, with the source that was consulted. Aliases
+    that disagree inside one layer raise :class:`ConfigConflictError`.
     """
     if env_path is not None:
-        values, source = read_dotenv(env_path), str(env_path)
+        resolved = _resolve_layer(read_dotenv(env_path))
+        source = str(env_path)
     else:
-        values, source = resolve_settings()
+        provenance = resolve_settings_provenance()
+        resolved = {
+            setting: (str(entry.value), entry.alias)
+            for setting, entry in provenance.items()
+            if entry.present
+        }
+        source = (
+            ", ".join(
+                dict.fromkeys(
+                    entry.source for entry in provenance.values() if entry.present
+                )
+            )
+            or "no configuration source"
+        )
 
-    missing = [key for key in REQUIRED_KEYS if not values.get(key, "").strip()]
+    missing = [setting for setting in REQUIRED_KEYS if setting not in resolved]
     if missing:
         raise ValueError(
-            f"Missing required settings: {', '.join(missing)}. "
-            f"Checked {source}. Set them in the environment or write them to "
+            "Missing required settings: "
+            + ", ".join(_alias_names(setting) for setting in missing)
+            + f". Checked {source}. Set them in the environment or write them to "
             f"{config_file()}."
         )
 
+    api_key = resolved["AGENTRT_API_KEY"][0]
+    base_url = resolved["AGENTRT_BASE_URL"][0]
+    model = resolved["AGENTRT_DEFAULT_MODEL"][0]
     return RouterConfig(
-        api_key=values["AGENTRT_9ROUTER_API_KEY"],
-        base_url=values["AGENTRT_9ROUTER_BASE_URL"].rstrip("/"),
-        model=values["AGENTRT_DEFAULT_MODEL"],
+        api_key=api_key,
+        base_url=base_url.rstrip("/"),
+        model=model,
     )
 
 

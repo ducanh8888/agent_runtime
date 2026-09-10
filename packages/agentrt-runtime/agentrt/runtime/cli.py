@@ -56,6 +56,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         workspace=args.workspace,
         title=args.title,
         permission=args.permission,
+        llm_profile=args.llm_profile,
         max_iterations=args.max_iterations,
     )
 
@@ -172,6 +173,13 @@ def _cmd_config(_args: argparse.Namespace) -> dict:
     return bootstrap.summary()
 
 
+def _cmd_llm_profile(args: argparse.Namespace) -> dict:
+    """Preview or apply the selected LLM profile from resolved configuration."""
+    if args.apply:
+        return bootstrap.apply_llm_profile()
+    return bootstrap.preview_llm_profile()
+
+
 def _add_subparser(
     subparsers: argparse._SubParsersAction,
     name: str,
@@ -205,6 +213,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--permission",
         choices=["readonly", "workspace", "broad"],
         help="permission preset (default: workspace)",
+    )
+    dispatch_parser.add_argument(
+        "--llm-profile",
+        help="allowed LLM profile reference to run under (see `profiles`)",
     )
     dispatch_parser.add_argument(
         "--max-iterations",
@@ -317,6 +329,18 @@ def _build_parser() -> argparse.ArgumentParser:
         subparsers, "config", help="print runtime configuration summary"
     )
     config_parser.set_defaults(func=_cmd_config)
+
+    llm_parser = _add_subparser(
+        subparsers,
+        "llm-profile",
+        help="preview or apply the selected LLM profile (default: preview)",
+    )
+    llm_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="write the change; without it this only reports what would change",
+    )
+    llm_parser.set_defaults(func=_cmd_llm_profile)
 
     return parser
 

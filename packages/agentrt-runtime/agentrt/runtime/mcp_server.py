@@ -11,7 +11,7 @@ it. Whatever a tool's description does not say, the caller has to guess.
 
 from threading import Lock
 
-from agentrt.runtime import client as client_mod
+from agentrt.runtime import client as client_mod, config
 from mcp.server.fastmcp import FastMCP
 
 INSTRUCTIONS = """agentrt runs coding agents in background sessions on this
@@ -25,6 +25,11 @@ detaching from. And whatever a session reports about its own work is a claim,
 not evidence; check the files it produced."""
 
 mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
+# FastMCP takes no version argument, so the low-level server falls back to the
+# installed `mcp` library's own version. Report this runtime's version instead,
+# or every client's initialize response misidentifies the tool surface as the
+# MCP SDK rather than AgentRT.
+mcp._mcp_server.version = config.runtime_version()
 
 _client: client_mod.Client | None = None
 _client_lock = Lock()
@@ -58,6 +63,7 @@ def dispatch(
     workspace: str,
     title: str | None = None,
     permission: str | None = None,
+    llm_profile: str | None = None,
     max_iterations: int | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
@@ -80,6 +86,12 @@ def dispatch(
     `workspace` confines the file editor to the workspace but still grants a
     terminal, and a terminal can open any file you can. Treat it as constraining
     ordinary behaviour, not as containment.
+
+    LLM_PROFILE. Optional name of the allowed LLM profile to run under, from
+    `profiles`. It is a reference, not a credential -- the key never leaves the
+    daemon. Defaults to the permission preset's own profile. An unknown or
+    unbound name is refused rather than silently falling back to a weaker
+    policy.
 
     MAX_ITERATIONS bounds one run of the agent. Left unset, the daemon applies
     its own default of 500 -- there is no such thing as an unlimited session
@@ -156,6 +168,7 @@ def dispatch(
         workspace,
         title=title,
         permission=permission,
+        llm_profile=llm_profile,
         max_iterations=max_iterations,
     )
 
@@ -378,10 +391,12 @@ def artifacts(session: str, path: str | None = None) -> dict:
 
 @mcp.tool()
 def profiles() -> dict:
-    """List the permission presets and what each one grants.
+    """List the permission presets and the LLM references dispatch accepts.
 
     Call this before dispatching work whose authority matters, rather than
     guessing a preset name -- an unknown name is refused, not quietly widened.
+    `allowed_llm_profiles` is the secret-free set of names `dispatch`'s
+    `llm_profile` may select.
     """
     return _guard(_get_client().profiles)
 
