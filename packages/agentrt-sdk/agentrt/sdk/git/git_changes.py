@@ -13,7 +13,7 @@ from agentrt.sdk.git.exceptions import GitCommandError, GitError
 from agentrt.sdk.git.models import GitChange, GitChangeStatus
 from agentrt.sdk.git.utils import (
     get_valid_ref,
-    run_git_command,
+    run_readonly_git_command,
     validate_git_repository,
 )
 
@@ -180,7 +180,7 @@ def get_changes_in_repo(
 
     # Get changed files using secure git command
     try:
-        changed_files_output = run_git_command(
+        changed_files_output = run_readonly_git_command(
             ["git", "--no-pager", "diff", "--name-status", ref], validated_repo
         )
         changed_files = (
@@ -193,7 +193,7 @@ def get_changes_in_repo(
 
     # Get untracked files
     try:
-        untracked_output = run_git_command(
+        untracked_output = run_readonly_git_command(
             ["git", "--no-pager", "ls-files", "--others", "--exclude-standard"],
             validated_repo,
         )

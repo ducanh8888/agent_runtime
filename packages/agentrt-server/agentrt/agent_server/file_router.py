@@ -18,6 +18,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -25,8 +26,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
+from agentrt.agent_server._read_guard import (
+    protected_state_inodes,
+    reject_protected_state_path,
+)
 from agentrt.agent_server._secret_redaction import redacted_file_bytes
-from agentrt.agent_server.config import get_default_config
+from agentrt.agent_server.config import Config, get_default_config
 from agentrt.agent_server.models import Success
 from agentrt.agent_server.server_details_router import update_last_execution_time
 from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
@@ -34,7 +39,7 @@ from agentrt.sdk.git.utils import (
     GIT_EMPTY_TREE_HASH,
     get_git_repository_metadata,
     get_valid_ref,
-    run_git_command,
+    run_readonly_git_command,
     validate_git_repository,
 )
 from agentrt.sdk.logger import get_logger
@@ -101,7 +106,7 @@ async def _upload_file(path: str, file: UploadFile) -> Success:
         )
 
 
-async def _download_file(path: str) -> FileResponse:
+async def _download_file(path: str, config: Config | None = None) -> FileResponse:
     """Internal helper to download a file from the workspace."""
     update_last_execution_time()
     logger.info(f"Downloading file: {path}")
@@ -122,6 +127,8 @@ async def _download_file(path: str) -> FileResponse:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Path is not a file"
             )
+
+        reject_protected_state_path(target_path, config)
 
         return FileResponse(
             path=target_path,
@@ -329,7 +336,7 @@ def _excludes_to_git_pathspecs(excludes: list[str]) -> list[str]:
 def _head_is_detached(root: Path) -> bool:
     """True if the repo at ``root`` has a detached HEAD (no current branch)."""
     try:
-        branch = run_git_command(
+        branch = run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--abbrev-ref", "HEAD"], root
         )
     except GitCommandError:
@@ -342,8 +349,53 @@ def _header_safe(value: str) -> str:
     return quote(value, safe="")
 
 
+# Command-line config overrides that neutralise a hostile repository config for
+# the archive's git calls, mirroring the SDK's readonly runner. ``git add`` on a
+# scratch index still legitimately writes, so these are config flags only.
+_ARCHIVE_GIT_CONFIG_OVERRIDES: tuple[str, ...] = (
+    "-c",
+    "diff.external=",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=" + os.devnull,
+    "-c",
+    "core.pager=cat",
+)
+
+
+def _protected_relative_pathspecs(
+    root: Path, protected_inodes: set[tuple[int, int]] | None
+) -> list[str]:
+    """Literal exclude pathspecs for hard links to protected server state files.
+
+    A hard link has its own path inside the workspace but shares the credential
+    file's inode, so it can only be found by scanning the tree. ``.git`` is
+    skipped; only files actually present in the working tree matter.
+    """
+    if not protected_inodes:
+        return []
+    specs: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for name in filenames:
+            file_path = Path(dirpath) / name
+            try:
+                st = file_path.stat()
+            except OSError:
+                continue
+            if (st.st_dev, st.st_ino) in protected_inodes:
+                rel = file_path.relative_to(root).as_posix()
+                specs.append(f":(exclude,literal){rel}")
+    return specs
+
+
 def _create_git_delta(
-    root: Path, base_ref: str | None, output_path: Path, excludes: list[str]
+    root: Path,
+    base_ref: str | None,
+    output_path: Path,
+    excludes: list[str],
+    protected_pathspecs: list[str] | None = None,
 ) -> str:
     """Write a git patch capturing the working-tree delta against a base.
 
@@ -355,7 +407,8 @@ def _create_git_delta(
     pathspecs — on top of the repo's own ``.gitignore`` — so excluded paths are
     dropped whether tracked or untracked, matching the tar.gz format. Callers
     can disable the default excludes when they intentionally want a fuller
-    capture.
+    capture. ``protected_pathspecs`` additionally drop hard links to server
+    credential files, which are identified by inode rather than name.
 
     Returns the full base commit SHA the patch applies against, or "" when the
     base is the empty tree (fresh repo) or cannot resolve to a commit.
@@ -375,8 +428,17 @@ def _create_git_delta(
         # server fault; surface it so the caller gets a 4xx.
         raise ValueError(f"base_ref {base_ref!r} could not be resolved") from e
     index_path = output_path.with_name(output_path.name + ".index")
-    pathspecs = _excludes_to_git_pathspecs(excludes)
+    pathspecs = [
+        *_excludes_to_git_pathspecs(excludes),
+        *(protected_pathspecs or []),
+    ]
     env = {**os.environ, "GIT_INDEX_FILE": str(index_path)}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env.pop("GIT_EXTERNAL_DIFF", None)
+    env.pop("GIT_CONFIG_PARAMETERS", None)
     try:
         # Seed the scratch index from the base ref, stage the working tree on
         # top of it (skipping the requested excludes), then diff. The ``-- .``
@@ -384,7 +446,7 @@ def _create_git_delta(
         # ``path`` that is a subdirectory of a larger repo yields only that
         # subtree's delta rather than the whole repository's.
         subprocess.run(
-            ["git", "read-tree", ref],
+            ["git", *_ARCHIVE_GIT_CONFIG_OVERRIDES, "read-tree", ref],
             cwd=root,
             env=env,
             capture_output=True,
@@ -392,7 +454,7 @@ def _create_git_delta(
             timeout=60,
         )
         subprocess.run(
-            ["git", "add", "-A", "--", ".", *pathspecs],
+            ["git", *_ARCHIVE_GIT_CONFIG_OVERRIDES, "add", "-A", "--", ".", *pathspecs],
             cwd=root,
             env=env,
             capture_output=True,
@@ -403,7 +465,19 @@ def _create_git_delta(
         # buffered in memory (OOM risk at pause/stop on a fat workspace).
         with open(output_path, "wb") as out:
             subprocess.run(
-                ["git", "diff", "--binary", "--cached", ref, "--", ".", *pathspecs],
+                [
+                    "git",
+                    *_ARCHIVE_GIT_CONFIG_OVERRIDES,
+                    "diff",
+                    "--no-textconv",
+                    "--no-ext-diff",
+                    "--binary",
+                    "--cached",
+                    ref,
+                    "--",
+                    ".",
+                    *pathspecs,
+                ],
                 cwd=root,
                 env=env,
                 stdout=out,
@@ -438,7 +512,7 @@ def _create_git_delta(
         return ""
     # Resolve the base to a full commit SHA so the artifact is self-describing.
     try:
-        return run_git_command(
+        return run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--verify", f"{ref}^{{commit}}"],
             root,
         )
@@ -536,7 +610,12 @@ class _ExactSizeReader:
         return data
 
 
-def _add_file_member(tar: tarfile.TarFile, file_path: Path, arcname: str) -> int | None:
+def _add_file_member(
+    tar: tarfile.TarFile,
+    file_path: Path,
+    arcname: str,
+    protected_inodes: set[tuple[int, int]] | None = None,
+) -> int | None:
     """Add a regular file to ``tar`` without risking tar-stream corruption.
 
     ``tar.add`` stats the file, writes a header for that size, then copies the
@@ -544,7 +623,8 @@ def _add_file_member(tar: tarfile.TarFile, file_path: Path, arcname: str) -> int
     ``_ExactSizeReader``). Instead, size the header from the OPEN fd and copy
     exactly that many bytes via ``_ExactSizeReader``. Returns the byte count, or
     ``None`` if the file could not be read / was not a regular file (skipped,
-    best-effort — the workspace may still be mutating).
+    best-effort — the workspace may still be mutating) or if its inode is a
+    protected server credential file reached through a hard link.
     """
     try:
         f = open(file_path, "rb")
@@ -556,6 +636,9 @@ def _add_file_member(tar: tarfile.TarFile, file_path: Path, arcname: str) -> int
         if not stat.S_ISREG(st.st_mode):
             # Raced into a non-regular path (dir/fifo/socket); skip it.
             return None
+        if protected_inodes and (st.st_dev, st.st_ino) in protected_inodes:
+            logger.warning(f"Skipping protected server state file {file_path}")
+            return None
         info = tar.gettarinfo(arcname=arcname, fileobj=f)
         tar.addfile(info, _ExactSizeReader(f, info.size))
         return info.size
@@ -566,7 +649,12 @@ def _add_file_member(tar: tarfile.TarFile, file_path: Path, arcname: str) -> int
         f.close()
 
 
-def _create_tar_gz_archive(root: Path, output_path: Path, excludes: list[str]) -> None:
+def _create_tar_gz_archive(
+    root: Path,
+    output_path: Path,
+    excludes: list[str],
+    protected_inodes: set[tuple[int, int]] | None = None,
+) -> None:
     """Stream a gzip tarball of ``root`` to ``output_path``.
 
     Walks ``root`` without following symlinks, pruning excluded directories so
@@ -618,7 +706,7 @@ def _create_tar_gz_archive(root: Path, output_path: Path, excludes: list[str]) -
                     # Best-effort and corruption-proof: the workspace may still be
                     # mutating, so a file that vanishes or is truncated mid-add is
                     # skipped without desynchronizing the tar stream.
-                    size = _add_file_member(tar, file_path, arcname)
+                    size = _add_file_member(tar, file_path, arcname, protected_inodes)
                     if size is None:
                         continue
                     if arcname == manifest_arcname:
@@ -657,10 +745,11 @@ async def upload_file_query(
 
 @file_router.get("/download")
 async def download_file_query(
+    request: Request,
     path: Annotated[str, Query(description="Absolute file path")],
 ) -> FileResponse:
     """Download a file from the workspace using query parameter (preferred method)."""
-    return await _download_file(path)
+    return await _download_file(path, getattr(request.app.state, "config", None))
 
 
 @file_router.post("/create_directory")
@@ -893,6 +982,7 @@ async def download_trajectory(
 
 @file_router.get("/archive")
 async def archive_directory(
+    request: Request,
     path: Annotated[
         str, Query(description="Absolute path of the directory to archive")
     ],
@@ -997,19 +1087,30 @@ async def archive_directory(
     # archive at the repo (consistent paths across git-delta, tar.gz, and the
     # initial snapshot) and git-delta does not 400 on the non-repo parent.
     repo_root = await asyncio.to_thread(_resolve_git_repo_root, target)
+    protected_inodes = await asyncio.to_thread(
+        protected_state_inodes, getattr(request.app.state, "config", None)
+    )
     base_commit = ""
     try:
         if archive_format == "git-delta":
+            protected_pathspecs = await asyncio.to_thread(
+                _protected_relative_pathspecs, repo_root, protected_inodes
+            )
             base_commit = await asyncio.to_thread(
                 _create_git_delta,
                 repo_root,
                 base_ref,
                 output_path,
                 effective_excludes,
+                protected_pathspecs,
             )
         else:
             await asyncio.to_thread(
-                _create_tar_gz_archive, repo_root, output_path, effective_excludes
+                _create_tar_gz_archive,
+                repo_root,
+                output_path,
+                effective_excludes,
+                protected_inodes,
             )
     except GitRepositoryError as e:
         output_path.unlink(missing_ok=True)

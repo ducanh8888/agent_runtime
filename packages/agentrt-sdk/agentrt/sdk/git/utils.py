@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import shlex
 import subprocess
@@ -24,11 +25,13 @@ def _run_git_subprocess(
     args: list[str],
     cwd: str | Path | None,
     timeout: int,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a subprocess with the capture/decode settings all git callers need."""
     return subprocess.run(
         args,
         cwd=cwd,
+        env=env,
         capture_output=True,
         text=True,
         errors="replace",
@@ -37,10 +40,231 @@ def _run_git_subprocess(
     )
 
 
+# Subcommands the hardened readonly runner will execute. Anything outside this
+# set (checkout, fetch, config, ...) is refused so a read surface cannot reach a
+# mutating git operation through the readonly entry point.
+_READONLY_SUBCOMMANDS = frozenset(
+    {
+        "cat-file",
+        "diff",
+        "log",
+        "ls-files",
+        "ls-tree",
+        "merge-base",
+        "name-rev",
+        "remote",
+        "rev-list",
+        "rev-parse",
+        "show",
+        "show-ref",
+        "status",
+        "symbolic-ref",
+    }
+)
+
+# ``git remote`` is read-only only for these actions; ``remote add/set-url/prune``
+# mutate the repository. Restricting the action keeps the readonly runner honest.
+_READONLY_REMOTE_ACTIONS = frozenset({"get-url", "show"})
+
+# Options accepted after a readonly subcommand. This is a closed set on purpose:
+# an internal caller's argv is fixed, so any other option-looking token is either
+# a mistake or option injection from a user-supplied ref/path
+# (``--output=...``, ``--exec-path=...``, ``--help``), and both are refused.
+_READONLY_EXACT_FLAGS = frozenset(
+    {
+        "--",
+        "--all",
+        "--abbrev-ref",
+        "--binary",
+        "--branch",
+        "--cached",
+        "--count",
+        "--exclude-standard",
+        "--first-parent",
+        "--full-name",
+        "--git-dir",
+        "--is-bare-repository",
+        "--is-inside-work-tree",
+        "--name-only",
+        "--name-status",
+        "--no-ext-diff",
+        "--no-merges",
+        "--no-optional-locks",
+        "--no-pager",
+        "--no-renames",
+        "--no-show-signature",
+        "--no-textconv",
+        "--numstat",
+        "--others",
+        "--porcelain",
+        "--quiet",
+        "--short",
+        "--shortstat",
+        "--show-toplevel",
+        "--stage",
+        "--staged",
+        "--stat",
+        "--untracked-files=no",
+        "--verify",
+        "-b",
+        "-n",
+        "-s",
+        "-z",
+    }
+)
+_READONLY_PREFIX_FLAGS = (
+    "--diff-filter=",
+    "--format=",
+    "--ignore-submodules=",
+    "--max-count=",
+    "--pretty=",
+    "--untracked-files=",
+)
+
+# Subcommands whose output is a diff/patch and therefore accept the flags that
+# suppress external diff drivers and textconv; passing them elsewhere is a git
+# usage error, so they are only appended for these three.
+_DIFF_LIKE_SUBCOMMANDS = frozenset({"diff", "log", "show"})
+
+# Command-line config overrides beat repository/global config, which is what
+# closes the hostile-repo hole: a repo's own ``.git/config`` setting
+# ``diff.external`` or ``core.fsmonitor`` is overridden per invocation. The
+# hooks path points at the null device (a non-directory), so no hook can run.
+_READONLY_HARDENING_CONFIG: tuple[str, ...] = (
+    "diff.external=",
+    "core.fsmonitor=false",
+    "core.hooksPath=" + os.devnull,
+    "core.pager=cat",
+    "pager.diff=false",
+    "pager.log=false",
+    "pager.show=false",
+)
+
+_READONLY_GLOBAL_FLAGS = frozenset({"--no-pager", "--no-optional-locks"})
+
+
+def _readonly_git_env() -> dict[str, str]:
+    """Environment for readonly git: no prompts, no pager, no ambient config.
+
+    ``GIT_CONFIG_GLOBAL`` is redirected to the null device and system config is
+    disabled so a hostile user/global config cannot re-enable a code-executing
+    driver. Config injected through ``GIT_CONFIG_COUNT``/``GIT_CONFIG_KEY_n``
+    env vars is stripped for the same reason.
+    """
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_PAGER"] = "cat"
+    env["PAGER"] = "cat"
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env.pop("GIT_EXTERNAL_DIFF", None)
+    env.pop("GIT_CONFIG", None)
+    env.pop("GIT_CONFIG_PARAMETERS", None)
+    env.pop("GIT_CONFIG_COUNT", None)
+    for key in [
+        k for k in env if k.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+    ]:
+        env.pop(key, None)
+    return env
+
+
+def _is_allowed_readonly_flag(flag: str) -> bool:
+    return flag in _READONLY_EXACT_FLAGS or flag.startswith(_READONLY_PREFIX_FLAGS)
+
+
+def _build_readonly_argv(args: list[str]) -> list[str]:
+    """Validate a callers' argv and return a hardened readonly equivalent.
+
+    Rejects non-git programs, mutating subcommands, unknown pre-subcommand
+    global options and unknown option-looking arguments. Caller-supplied
+    ``--no-pager``/``--no-optional-locks`` are dropped because the hardened
+    prefix sets them itself.
+
+    Raises:
+        GitCommandError: If the argv is not a permitted readonly invocation.
+    """
+    if not args or args[0] != "git":
+        raise GitCommandError(
+            message="Readonly git runner requires an argv starting with 'git'",
+            command=list(args),
+            exit_code=-1,
+            stderr="readonly guard",
+        )
+
+    rest = list(args[1:])
+    index = 0
+    while index < len(rest) and rest[index].startswith("-"):
+        if rest[index] not in _READONLY_GLOBAL_FLAGS:
+            raise GitCommandError(
+                message=f"Unsupported git global option: {rest[index]}",
+                command=list(args),
+                exit_code=-1,
+                stderr="readonly guard",
+            )
+        index += 1
+
+    if index >= len(rest):
+        raise GitCommandError(
+            message="Readonly git runner requires a subcommand",
+            command=list(args),
+            exit_code=-1,
+            stderr="readonly guard",
+        )
+
+    subcommand = rest[index]
+    tail = rest[index + 1 :]
+    if subcommand not in _READONLY_SUBCOMMANDS:
+        raise GitCommandError(
+            message=f"Refusing non-readonly git subcommand: {subcommand}",
+            command=list(args),
+            exit_code=-1,
+            stderr="readonly guard",
+        )
+
+    if subcommand == "remote":
+        action = next((a for a in tail if not a.startswith("-")), None)
+        if action not in _READONLY_REMOTE_ACTIONS:
+            raise GitCommandError(
+                message=f"Refusing non-readonly 'git remote' action: {action}",
+                command=list(args),
+                exit_code=-1,
+                stderr="readonly guard",
+            )
+
+    for arg in tail:
+        if arg.startswith("-") and not _is_allowed_readonly_flag(arg):
+            raise GitCommandError(
+                message=f"Refusing unexpected option in readonly git command: {arg}",
+                command=list(args),
+                exit_code=-1,
+                stderr="readonly guard",
+            )
+
+    hardened: list[str] = []
+    for key in _READONLY_HARDENING_CONFIG:
+        hardened.extend(["-c", key])
+    hardened.append("--no-pager")
+    hardened.append("--no-optional-locks")
+    hardened.append(subcommand)
+    if subcommand in _DIFF_LIKE_SUBCOMMANDS:
+        if "--no-ext-diff" not in tail:
+            hardened.append("--no-ext-diff")
+        if "--no-textconv" not in tail:
+            hardened.append("--no-textconv")
+    hardened.extend(tail)
+    return ["git", *hardened]
+
+
 def _run_git_probe(args: list[str], cwd: str | Path) -> str:
     try:
-        result = _run_git_subprocess(["git", "--no-pager", *args], cwd, timeout=30)
-    except (OSError, subprocess.SubprocessError):
+        result = _run_git_subprocess(
+            _build_readonly_argv(["git", "--no-pager", *args]),
+            cwd,
+            timeout=30,
+            env=_readonly_git_env(),
+        )
+    except (OSError, subprocess.SubprocessError, GitCommandError):
         return ""
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -65,33 +289,19 @@ def get_git_repository_metadata(repo_dir: str | Path) -> dict[str, str]:
     return metadata
 
 
-def run_git_command(
+def _execute_git_command(
     args: list[str],
-    cwd: str | Path | None = None,
-    timeout: int = 30,
+    cwd: str | Path | None,
+    timeout: int,
     *,
-    expected_failure: bool = False,
+    expected_failure: bool,
+    env: dict[str, str] | None = None,
 ) -> str:
-    """Run a git command safely without shell injection vulnerabilities.
-
-    Args:
-        args: List of command arguments (e.g., ['git', 'status', '--porcelain'])
-        cwd: Working directory to run the command in (optional for commands like clone)
-        timeout: Timeout in seconds (default: 30)
-        expected_failure: Log a non-zero exit at debug level when the caller
-            intentionally probes for a fallback condition.
-
-    Returns:
-        Command output as string
-
-    Raises:
-        GitCommandError: If the git command fails
-    """
     redacted_args = [redact_url_credentials(a) for a in args]
     cmd_str = shlex.join(redacted_args)
 
     try:
-        result = _run_git_subprocess(args, cwd, timeout)
+        result = _run_git_subprocess(args, cwd, timeout, env=env)
 
         if result.returncode != 0:
             error_msg = f"Git command failed: {cmd_str}"
@@ -133,6 +343,73 @@ def run_git_command(
         ) from e
 
 
+def run_git_command(
+    args: list[str],
+    cwd: str | Path | None = None,
+    timeout: int = 30,
+    *,
+    expected_failure: bool = False,
+) -> str:
+    """Run a git command safely without shell injection vulnerabilities.
+
+    This is the mutable/general-purpose runner: it keeps ambient config and the
+    caller's environment. Read surfaces must use
+    :func:`run_readonly_git_command` instead.
+
+    Args:
+        args: List of command arguments (e.g., ['git', 'status', '--porcelain'])
+        cwd: Working directory to run the command in (optional for commands like clone)
+        timeout: Timeout in seconds (default: 30)
+        expected_failure: Log a non-zero exit at debug level when the caller
+            intentionally probes for a fallback condition.
+
+    Returns:
+        Command output as string
+
+    Raises:
+        GitCommandError: If the git command fails
+    """
+    return _execute_git_command(args, cwd, timeout, expected_failure=expected_failure)
+
+
+def run_readonly_git_command(
+    args: list[str],
+    cwd: str | Path | None = None,
+    timeout: int = 30,
+    *,
+    expected_failure: bool = False,
+) -> str:
+    """Run a readonly git command with validated argv and a sanitized env.
+
+    Unlike :func:`run_git_command` this refuses mutating subcommands and unknown
+    options, and runs with external diff drivers, textconv, fsmonitor, pager,
+    hooks, global/system config, prompts and optional index locks disabled. That
+    closes the hole where a workspace's own ``.git/config`` / ``.gitattributes``
+    could make a read command execute an arbitrary program.
+
+    Args:
+        args: argv starting with ``git`` (e.g. ``["git", "diff", "--name-status"]``).
+        cwd: Working directory to run the command in.
+        timeout: Timeout in seconds (default: 30).
+        expected_failure: Log a non-zero exit at debug level when probing.
+
+    Returns:
+        Command output as string.
+
+    Raises:
+        GitCommandError: If the argv is not a permitted readonly invocation, or
+            the git command fails.
+    """
+    hardened = _build_readonly_argv(args)
+    return _execute_git_command(
+        hardened,
+        cwd,
+        timeout,
+        expected_failure=expected_failure,
+        env=_readonly_git_env(),
+    )
+
+
 def _repo_has_commits(repo_dir: str | Path) -> bool:
     """Check if a git repository has any commits.
 
@@ -146,7 +423,7 @@ def _repo_has_commits(repo_dir: str | Path) -> bool:
         True if the repository has at least one commit, False otherwise
     """
     try:
-        count = run_git_command(
+        count = run_readonly_git_command(
             ["git", "--no-pager", "rev-list", "--count", "--all"], repo_dir
         )
         return count.strip() != "0"
@@ -158,7 +435,7 @@ def _repo_has_commits(repo_dir: str | Path) -> bool:
 def _rev_parse(repo_dir: str | Path, ref: str) -> str | None:
     """Resolve ``ref`` to a commit SHA, or None if it doesn't resolve."""
     try:
-        result = run_git_command(
+        result = run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--verify", ref],
             repo_dir,
             expected_failure=True,
@@ -172,7 +449,7 @@ def _merge_base(repo_dir: str | Path, ref_a: str, ref_b: str) -> str | None:
     """Return the merge base of two refs, or None if it can't be computed
     (e.g. unrelated histories, shallow clone)."""
     try:
-        result = run_git_command(
+        result = run_readonly_git_command(
             ["git", "--no-pager", "merge-base", ref_a, ref_b],
             repo_dir,
             expected_failure=True,
@@ -185,7 +462,7 @@ def _merge_base(repo_dir: str | Path, ref_a: str, ref_b: str) -> str | None:
 def _get_current_branch(repo_dir: str | Path) -> str | None:
     """Return the current branch name, or None when detached/unborn."""
     try:
-        branch = run_git_command(
+        branch = run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--abbrev-ref", "HEAD"],
             repo_dir,
             expected_failure=True,
@@ -205,7 +482,7 @@ def _get_remote_default_branch(repo_dir: str | Path) -> str | None:
     for remotes that were added without recording ``origin/HEAD``.
     """
     try:
-        symref = run_git_command(
+        symref = run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--abbrev-ref", "origin/HEAD"],
             repo_dir,
             expected_failure=True,
@@ -217,7 +494,7 @@ def _get_remote_default_branch(repo_dir: str | Path) -> str | None:
         logger.debug("origin/HEAD not set; falling back to `git remote show`")
 
     try:
-        remote_info = run_git_command(
+        remote_info = run_readonly_git_command(
             ["git", "--no-pager", "remote", "show", "origin"], repo_dir
         )
         for line in remote_info.splitlines():
@@ -240,7 +517,7 @@ def _has_tracked_changes(repo_dir: str | Path) -> bool:
     a stray scratch file must not re-hide a fully-pushed branch's diff.
     """
     try:
-        status = run_git_command(
+        status = run_readonly_git_command(
             ["git", "--no-pager", "status", "--porcelain", "--untracked-files=no"],
             repo_dir,
         )
@@ -381,7 +658,7 @@ def get_valid_ref(
             # Resolve explicit override and surface failure to the caller so
             # the difference between "ref not found" and "no changes" stays
             # visible.
-            return run_git_command(
+            return run_readonly_git_command(
                 [
                     "git",
                     "--no-pager",
@@ -425,7 +702,7 @@ def get_valid_ref(
 
     # Try current branch's origin
     try:
-        current_branch = run_git_command(
+        current_branch = run_readonly_git_command(
             ["git", "--no-pager", "rev-parse", "--abbrev-ref", "HEAD"],
             repo_dir,
             expected_failure=True,
@@ -438,7 +715,7 @@ def get_valid_ref(
 
     # Try to get default branch from remote
     try:
-        remote_info = run_git_command(
+        remote_info = run_readonly_git_command(
             ["git", "--no-pager", "remote", "show", "origin"], repo_dir
         )
         for line in remote_info.splitlines():
@@ -452,7 +729,7 @@ def get_valid_ref(
 
                     # Also try merge base with default branch
                     try:
-                        merge_base = run_git_command(
+                        merge_base = run_readonly_git_command(
                             [
                                 "git",
                                 "--no-pager",
@@ -475,7 +752,7 @@ def get_valid_ref(
     # Find the first valid reference
     for ref in refs_to_try:
         try:
-            result = run_git_command(
+            result = run_readonly_git_command(
                 ["git", "--no-pager", "rev-parse", "--verify", ref],
                 repo_dir,
                 expected_failure=True,
@@ -513,7 +790,7 @@ def validate_git_repository(repo_dir: str | Path) -> Path:
         raise GitRepositoryError(f"Path is not a directory: {repo_path}")
 
     try:
-        run_git_command(["git", "rev-parse", "--git-dir"], repo_path)
+        run_readonly_git_command(["git", "rev-parse", "--git-dir"], repo_path)
     except GitCommandError as e:
         raise GitRepositoryError(f"Not a git repository: {repo_path}") from e
 

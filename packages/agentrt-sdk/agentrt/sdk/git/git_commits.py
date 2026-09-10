@@ -22,7 +22,7 @@ from agentrt.sdk.git.models import GitChange, GitCommit, GitCommitsPage, GitDiff
 from agentrt.sdk.git.utils import (
     GIT_EMPTY_TREE_HASH,
     _rev_parse,
-    run_git_command,
+    run_readonly_git_command,
     validate_git_repository,
 )
 
@@ -71,7 +71,7 @@ def get_git_commits(
 
     # --no-show-signature: a repo with log.showSignature=true would
     # otherwise interleave GPG output with the formatted lines.
-    output = run_git_command(
+    output = run_readonly_git_command(
         [
             "git",
             "--no-pager",
@@ -113,7 +113,7 @@ def _resolve_commit(repo: Path, commit: str) -> str:
             repository (kept strict so a bad SHA surfaces as an error
             instead of silently rendering "no changes").
     """
-    return run_git_command(
+    return run_readonly_git_command(
         ["git", "--no-pager", "rev-parse", "--verify", f"{commit}^{{commit}}"],
         repo,
     )
@@ -138,7 +138,7 @@ def get_commit_changes(repo_path: str | Path, commit: str) -> list[GitChange]:
     sha = _resolve_commit(validated_repo, commit)
     parent = _rev_parse(validated_repo, f"{sha}^") or GIT_EMPTY_TREE_HASH
 
-    output = run_git_command(
+    output = run_readonly_git_command(
         ["git", "--no-pager", "diff", "--name-status", parent, sha],
         validated_repo,
     )
@@ -154,7 +154,7 @@ def _show_file_at_rev(repo: Path, rev: str, relative_path: Path) -> str:
     """
     spec = f"{rev}:{relative_path.as_posix()}"
     try:
-        size_output = run_git_command(
+        size_output = run_readonly_git_command(
             ["git", "--no-pager", "cat-file", "-s", spec], repo
         )
     except GitCommandError:
@@ -171,7 +171,7 @@ def _show_file_at_rev(repo: Path, rev: str, relative_path: Path) -> str:
         )
 
     try:
-        return run_git_command(["git", "--no-pager", "show", spec], repo)
+        return run_readonly_git_command(["git", "--no-pager", "show", spec], repo)
     except GitCommandError:
         return ""
 

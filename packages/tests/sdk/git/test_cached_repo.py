@@ -320,7 +320,7 @@ def test_git_get_current_branch_error(tmp_path: Path):
     repo = tmp_path / "not-a-repo"
     repo.mkdir()
 
-    with pytest.raises(GitCommandError, match="git rev-parse"):
+    with pytest.raises(GitCommandError, match="rev-parse"):
         git.get_current_branch(repo)
 
 
@@ -354,7 +354,11 @@ def test_get_default_branch_returns_main(tmp_path: Path):
 
     assert result == "main"
     call_args = mock_run.call_args[0][0]
-    assert call_args == ["git", "symbolic-ref", "refs/remotes/origin/HEAD"]
+    # Readonly primitive validates and hardens the argv; the subcommand and ref
+    # are still the trailing tokens.
+    assert call_args[0] == "git"
+    assert call_args[-2:] == ["symbolic-ref", "refs/remotes/origin/HEAD"]
+    assert "-c" in call_args
 
 
 def test_get_default_branch_returns_master(tmp_path: Path):

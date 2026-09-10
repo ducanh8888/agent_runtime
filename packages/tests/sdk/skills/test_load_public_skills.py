@@ -328,10 +328,16 @@ def test_update_skills_repository_update_existing(tmp_path):
         assert mock_run.call_count == 6
         all_commands = [call[0][0] for call in mock_run.call_args_list]
         assert all_commands[0][:2] == ["git", "checkout"]
-        assert all_commands[1] == ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+        # rev-parse goes through the hardened readonly runner, so the subcommand
+        # is preceded by ``-c`` config overrides and global flags.
+        assert all_commands[1][0] == "git"
+        assert all_commands[1][-3:] == ["rev-parse", "--abbrev-ref", "HEAD"]
+        assert "-c" in all_commands[1]
         assert all_commands[2][:3] == ["git", "fetch", "origin"]
         assert all_commands[3][:2] == ["git", "checkout"]
-        assert all_commands[4] == ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+        assert all_commands[4][0] == "git"
+        assert all_commands[4][-3:] == ["rev-parse", "--abbrev-ref", "HEAD"]
+        assert "-c" in all_commands[4]
         assert all_commands[5][:3] == ["git", "reset", "--hard"]
 
 

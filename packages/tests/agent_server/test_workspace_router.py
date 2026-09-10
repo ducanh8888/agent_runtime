@@ -1,5 +1,6 @@
 """Tests for workspace_router.py – the conversation workspace static server."""
 
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
@@ -227,3 +228,82 @@ def test_non_local_workspace_returns_404(tmp_path):
 
     assert resp.status_code == 404
     assert "not local" in resp.json()["detail"].lower()
+
+
+def _make_persistence_file(tmp_path, name: str, content: str = "server-secret"):
+    persist = tmp_path / "persist"
+    persist.mkdir(exist_ok=True)
+    secret = persist / name
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_text(content)
+    return secret
+
+
+def test_hard_link_to_settings_json_is_not_served(
+    client_factory, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persistence_file(tmp_path, "settings.json")
+    cid = uuid4()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    link = workspace / "stolen.json"
+    os.link(secret, link)
+    client = client_factory(conversation_id=cid, workspace_dir=workspace)
+
+    resp = client.get(f"/api/conversations/{cid}/workspace/stolen.json")
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
+def test_hard_link_to_provider_connections_is_not_served(
+    client_factory, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persistence_file(
+        tmp_path, "provider-connections/provider_connections.json"
+    )
+    cid = uuid4()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    link = workspace / "stolen.json"
+    os.link(secret, link)
+    client = client_factory(conversation_id=cid, workspace_dir=workspace)
+
+    resp = client.get(f"/api/conversations/{cid}/workspace/stolen.json")
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
+def test_hard_linked_index_html_is_not_served(client_factory, tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persistence_file(tmp_path, "secrets.json")
+    cid = uuid4()
+    workspace = tmp_path / "ws"
+    site = workspace / "site"
+    site.mkdir(parents=True)
+    os.link(secret, site / "index.html")
+    client = client_factory(conversation_id=cid, workspace_dir=workspace)
+
+    resp = client.get(f"/api/conversations/{cid}/workspace/site/")
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
+def test_plain_file_still_served_with_persistence_dir_set(
+    client_factory, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    cid = uuid4()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "normal.txt").write_text("public")
+    client = client_factory(conversation_id=cid, workspace_dir=workspace)
+
+    resp = client.get(f"/api/conversations/{cid}/workspace/normal.txt")
+
+    assert resp.status_code == 200
+    assert resp.text == "public"

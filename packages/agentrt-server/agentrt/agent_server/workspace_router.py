@@ -15,9 +15,11 @@ Behaves like a plain static file server:
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 
+from agentrt.agent_server._read_guard import reject_protected_state_path
+from agentrt.agent_server.config import Config
 from agentrt.agent_server.conversation_service import ConversationService
 from agentrt.agent_server.dependencies import get_conversation_service
 from agentrt.sdk.logger import get_logger
@@ -77,7 +79,9 @@ def _resolve_target(workspace_dir: Path, file_path: str) -> Path:
     return candidate
 
 
-def _serve_path(workspace_dir: Path, file_path: str) -> FileResponse:
+def _serve_path(
+    workspace_dir: Path, file_path: str, config: Config | None = None
+) -> FileResponse:
     target = _resolve_target(workspace_dir, file_path)
 
     if target.is_dir():
@@ -87,6 +91,7 @@ def _serve_path(workspace_dir: Path, file_path: str) -> FileResponse:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No index.html in directory",
             )
+        reject_protected_state_path(index_file, config)
         return FileResponse(path=index_file)
 
     if not target.is_file():
@@ -94,6 +99,7 @@ def _serve_path(workspace_dir: Path, file_path: str) -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found",
         )
+    reject_protected_state_path(target, config)
     return FileResponse(path=target)
 
 
@@ -102,12 +108,13 @@ def _serve_path(workspace_dir: Path, file_path: str) -> FileResponse:
     responses={404: {"description": "File or conversation not found"}},
 )
 async def serve_workspace_root(
+    request: Request,
     conversation_id: UUID,
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> FileResponse:
     """Serve ``index.html`` from the conversation's workspace root."""
     workspace_dir = await _resolve_workspace_dir(conversation_id, conversation_service)
-    return _serve_path(workspace_dir, "")
+    return _serve_path(workspace_dir, "", getattr(request.app.state, "config", None))
 
 
 @workspace_router.get(
@@ -115,10 +122,13 @@ async def serve_workspace_root(
     responses={404: {"description": "File or conversation not found"}},
 )
 async def serve_workspace_file(
+    request: Request,
     conversation_id: UUID,
     file_path: str,
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> FileResponse:
     """Serve a file (or directory ``index.html``) from the workspace."""
     workspace_dir = await _resolve_workspace_dir(conversation_id, conversation_service)
-    return _serve_path(workspace_dir, file_path)
+    return _serve_path(
+        workspace_dir, file_path, getattr(request.app.state, "config", None)
+    )

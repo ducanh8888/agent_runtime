@@ -15,7 +15,7 @@ from agentrt.sdk.git.exceptions import (
 from agentrt.sdk.git.models import GitDiff
 from agentrt.sdk.git.utils import (
     get_valid_ref,
-    run_git_command,
+    run_readonly_git_command,
     validate_git_repository,
 )
 
@@ -108,7 +108,7 @@ def get_git_diff(relative_file_path: str | Path, ref: str | None = None) -> GitD
 
     # Get old content (from the ref)
     try:
-        original = run_git_command(
+        original = run_readonly_git_command(
             ["git", "show", f"{current_rev}:{relative_path_from_repo}"], validated_repo
         )
     except GitCommandError:

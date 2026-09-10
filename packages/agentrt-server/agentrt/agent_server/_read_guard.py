@@ -1,0 +1,165 @@
+"""Guard the file/workspace read endpoints against serving server credentials.
+
+A served workspace can contain a symlink or a same-inode hard link pointing at
+one of the agent-server's own credential-bearing state files (``settings.json``,
+``secrets.json``, ``provider-connections/*.json``, ``profiles/*.json``,
+``agent-profiles/*.json`` and conversation ``meta.json`` / ``base_state.json``).
+Containment checks alone do not catch the hard-link case: the link's path is
+inside the workspace and resolves there, yet its inode is the credential file's.
+
+This module identifies those exact server-owned files and answers whether a
+candidate read path is one of them (or aliases one by inode). Only the
+server-owned files are protected; a *copy* of a secret elsewhere has a different
+inode and is deliberately out of scope -- this module makes no claim to detect
+copied secrets.
+"""
+
+from __future__ import annotations
+
+import stat
+import threading
+import time
+from pathlib import Path
+
+from fastapi import HTTPException, status
+
+from agentrt.agent_server.config import Config, get_default_config
+from agentrt.sdk.utils.path import get_user_persistence_dir
+
+
+# Credential-bearing files under the user persistence dir (settings/secrets) and
+# its credential subdirectories. The provider-connections store keeps its keys
+# in one JSON file per directory, hence the glob.
+_PERSISTENCE_CREDENTIAL_FILES = ("settings.json", "secrets.json")
+_PERSISTENCE_CREDENTIAL_DIRS = ("provider-connections", "profiles", "agent-profiles")
+
+# Per-conversation state files that can carry agent/LLM state.
+_CONVERSATION_STATE_FILES = ("meta.json", "base_state.json")
+
+Inode = tuple[int, int]
+
+# A read request must not pay an O(conversations) directory walk every time, so
+# the protected-inode scan is cached briefly. The window only delays protecting a
+# credential file created moments before a read; persistence/conversations paths
+# are part of the key, so separate server instances never share entries.
+_INODE_CACHE_TTL_SECONDS = 5.0
+_inode_cache_lock = threading.Lock()
+_inode_cache: dict[tuple[str, str], tuple[float, frozenset[Inode]]] = {}
+
+
+def _resolve_config(config: Config | None) -> Config:
+    return config if config is not None else get_default_config()
+
+
+def protected_state_paths(config: Config | None = None) -> list[Path]:
+    """Existing server-owned credential files, resolved.
+
+    Best-effort: unreadable or missing paths are skipped so a scan never turns a
+    read request into a 500. Not used on the hot read path (see
+    :func:`protected_state_inodes`), which avoids resolving every candidate.
+    """
+    resolved: list[Path] = []
+    for path in _candidate_state_paths(config):
+        try:
+            if path.is_file():
+                resolved.append(path.resolve())
+        except OSError:
+            continue
+    return resolved
+
+
+def _candidate_state_paths(config: Config | None) -> list[Path]:
+    """Unresolved server-owned credential file paths (no stat, no resolve)."""
+    paths: list[Path] = []
+    persistence = get_user_persistence_dir()
+    paths.extend(persistence / name for name in _PERSISTENCE_CREDENTIAL_FILES)
+    for subdir in _PERSISTENCE_CREDENTIAL_DIRS:
+        try:
+            paths.extend((persistence / subdir).glob("*.json"))
+        except OSError:
+            continue
+
+    conversations_path = _resolve_config(config).conversations_path
+    try:
+        conversation_dirs = list(conversations_path.iterdir())
+    except OSError:
+        conversation_dirs = []
+    for child in conversation_dirs:
+        try:
+            if not child.is_dir():
+                continue
+        except OSError:
+            continue
+        paths.extend(child / name for name in _CONVERSATION_STATE_FILES)
+    return paths
+
+
+def _inode(path: Path) -> Inode | None:
+    try:
+        stat_result = path.stat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(stat_result.st_mode):
+        return None
+    return (stat_result.st_dev, stat_result.st_ino)
+
+
+def protected_state_inodes(config: Config | None = None) -> set[Inode]:
+    """Inodes of the existing server-owned credential files.
+
+    Scans the persistence dir and every conversation dir, so the result is
+    cached briefly: a read request must not pay an O(conversations) directory
+    walk on every file. ``AGENTRT_PERSISTENCE_DIR`` and the conversations path
+    are part of the cache key, so distinct server instances never share state.
+    """
+    key = (
+        str(get_user_persistence_dir()),
+        str(_resolve_config(config).conversations_path),
+    )
+    now = time.monotonic()
+    with _inode_cache_lock:
+        entry = _inode_cache.get(key)
+        if entry is not None and entry[0] > now:
+            return set(entry[1])
+
+    inodes = _scan_protected_state_inodes(config)
+    with _inode_cache_lock:
+        _inode_cache[key] = (now + _INODE_CACHE_TTL_SECONDS, frozenset(inodes))
+        expired = [k for k, (expiry, _) in _inode_cache.items() if expiry <= now]
+        for expired_key in expired:
+            del _inode_cache[expired_key]
+    return inodes
+
+
+def _scan_protected_state_inodes(config: Config | None) -> set[Inode]:
+    inodes: set[Inode] = set()
+    for path in _candidate_state_paths(config):
+        inode = _inode(path)
+        if inode is not None:
+            inodes.add(inode)
+    return inodes
+
+
+def is_protected_state_path(candidate: Path, config: Config | None = None) -> bool:
+    """True when ``candidate`` is, or aliases by inode, a server-owned file.
+
+    Comparing inodes (rather than resolved paths) also catches symlinks and hard
+    links to the protected files without resolving every protected path.
+    """
+    candidate_inode = _inode(candidate)
+    if candidate_inode is None:
+        return False
+    return candidate_inode in protected_state_inodes(config)
+
+
+def reject_protected_state_path(candidate: Path, config: Config | None = None) -> None:
+    """Raise 404 when ``candidate`` aliases a server-owned credential file.
+
+    404 (rather than 403) keeps the response from confirming that a particular
+    server state file exists at that path.
+    """
+    if is_protected_state_path(candidate, config):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found",
+        )

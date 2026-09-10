@@ -1776,3 +1776,151 @@ def test_git_delta_dir_only_exclude_keeps_same_named_file(client, tmp_path):
     assert "diff --git a/build b/build" in patch  # the file is kept
     assert "authored marker" in patch
     assert "sub/build/out.o" not in patch  # the directory is excluded
+
+
+# =============================================================================
+# Read guard - server credential state must not leak through aliases
+# =============================================================================
+
+
+def _make_persisted_secret(tmp_path: Path, name: str, content: str = "server-secret"):
+    persist = tmp_path / "persist"
+    secret = persist / name
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_text(content)
+    return secret
+
+
+def test_download_of_direct_persistence_secret_is_rejected(
+    client, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persisted_secret(tmp_path, "settings.json")
+
+    resp = client.get("/api/file/download", params={"path": str(secret)})
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
+def test_download_of_hard_link_to_secret_is_rejected(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persisted_secret(tmp_path, "secrets.json")
+    link = tmp_path / "stolen.json"
+    os.link(secret, link)
+
+    resp = client.get("/api/file/download", params={"path": str(link)})
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
+def test_download_of_hard_link_to_conversation_meta_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    conversations = tmp_path / "conversations"
+    meta = conversations / "conv-1" / "meta.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text("conversation-secret")
+    config = Config(session_api_keys=[], conversations_path=conversations)
+    secret_client = TestClient(create_app(config), raise_server_exceptions=False)
+    link = tmp_path / "stolen_meta.json"
+    os.link(meta, link)
+
+    resp = secret_client.get("/api/file/download", params={"path": str(link)})
+
+    assert resp.status_code == 404
+    assert "conversation-secret" not in resp.text
+
+
+def test_download_of_plain_file_still_succeeds(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    plain = tmp_path / "plain.txt"
+    plain.write_text("public")
+
+    resp = client.get("/api/file/download", params={"path": str(plain)})
+
+    assert resp.status_code == 200
+    assert resp.content == b"public"
+
+
+def _init_repo_with_secret_hard_link(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init"], repo)
+    (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-m", "base"], repo)
+    secret = _make_persisted_secret(tmp_path, "settings.json")
+    os.link(secret, repo / "stolen.json")
+    return repo
+
+
+def test_tar_gz_archive_omits_hard_linked_secret(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    repo = _init_repo_with_secret_hard_link(tmp_path)
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+
+    resp = client.get(
+        "/api/file/archive", params={"path": str(repo), "format": "tar.gz"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tar:
+        names = tar.getnames()
+    assert not any(name.endswith("stolen.json") for name in names)
+    assert "server-secret" not in resp.content.decode("utf-8", "replace")
+
+
+def test_git_delta_archive_omits_hard_linked_secret(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    repo = _init_repo_with_secret_hard_link(tmp_path)
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+
+    resp = client.get(
+        "/api/file/archive", params={"path": str(repo), "format": "git-delta"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    patch = resp.content.decode("utf-8", "replace")
+    assert "stolen.json" not in patch
+    assert "server-secret" not in patch
+
+
+def test_git_delta_archive_does_not_execute_hostile_diff_command(tmp_path):
+    helper = tmp_path / "evil.sh"
+    marker = tmp_path / "MARKER-archive"
+    helper.write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n")
+    helper.chmod(0o755)
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-b", "main"], repo)
+    (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-m", "base"], repo)
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    _git(["config", "diff.hostile.command", str(helper)], repo)
+    (repo / ".gitattributes").write_text("*.txt diff=hostile\n", encoding="utf-8")
+    (repo / "tracked.txt").write_text("changed\n", encoding="utf-8")
+
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+    resp = client.get(
+        "/api/file/archive",
+        params={"path": str(repo), "format": "git-delta", "base_ref": base},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert not marker.exists(), "hostile diff command executed during archive"
+    assert b"changed" in resp.content

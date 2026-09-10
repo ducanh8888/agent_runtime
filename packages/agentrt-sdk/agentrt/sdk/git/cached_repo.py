@@ -13,7 +13,11 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 
 from agentrt.sdk.git.exceptions import GitCommandError
-from agentrt.sdk.git.utils import redact_url_credentials, run_git_command
+from agentrt.sdk.git.utils import (
+    redact_url_credentials,
+    run_git_command,
+    run_readonly_git_command,
+)
 from agentrt.sdk.logger import get_logger
 
 
@@ -133,7 +137,7 @@ class GitHelper:
         Raises:
             GitCommandError: If command fails.
         """
-        branch = run_git_command(
+        branch = run_readonly_git_command(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=repo_path,
             timeout=timeout,
@@ -160,7 +164,7 @@ class GitHelper:
         """
         try:
             # origin/HEAD is a symbolic ref pointing to the default branch
-            ref = run_git_command(
+            ref = run_readonly_git_command(
                 ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
                 cwd=repo_path,
                 timeout=timeout,
@@ -187,7 +191,7 @@ class GitHelper:
         Raises:
             GitCommandError: If command fails.
         """
-        return run_git_command(
+        return run_readonly_git_command(
             ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
             timeout=timeout,
