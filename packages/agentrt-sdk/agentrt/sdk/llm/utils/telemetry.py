@@ -5,6 +5,7 @@ import traceback
 import uuid
 import warnings
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any, ClassVar
 
 from litellm.cost_calculator import completion_cost as litellm_completion_cost
@@ -46,7 +47,14 @@ class Telemetry(BaseModel):
     # --- Runtime fields (not serialized) ---
     _req_start: float = PrivateAttr(default=0.0)
     _req_ctx: dict[str, Any] = PrivateAttr(default_factory=dict)
-    _pending_provenance: CallProvenance | None = PrivateAttr(default=None)
+    # LLM instances can serve the worker and auto-title concurrently. Keep
+    # request provenance local to the current async/task or thread context so
+    # one response cannot consume another in-flight call's metadata.
+    _pending_provenance: ContextVar[CallProvenance | None] = PrivateAttr(
+        default_factory=lambda: ContextVar(
+            "agentrt_pending_llm_provenance", default=None
+        )
+    )
     _last_latency: float = PrivateAttr(default=0.0)
     _log_completions_callback: Callable[[str, str], None] | None = PrivateAttr(
         default=None
@@ -85,7 +93,7 @@ class Telemetry(BaseModel):
     ) -> None:
         self._req_start = time.time()
         self._req_ctx = telemetry_ctx or {}
-        self._pending_provenance = provenance
+        self._pending_provenance.set(provenance)
 
     def on_response(
         self,
@@ -218,8 +226,8 @@ class Telemetry(BaseModel):
         The pending value is consumed once so a retry cannot double-count or
         attach a previous attempt's provenance to the next completed call.
         """
-        provenance = self._pending_provenance
-        self._pending_provenance = None
+        provenance = self._pending_provenance.get()
+        self._pending_provenance.set(None)
         if provenance is None:
             return None
         call_id, call_id_source = call_identity(response_id)

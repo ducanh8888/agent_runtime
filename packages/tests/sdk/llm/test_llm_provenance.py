@@ -7,6 +7,8 @@ retry-safe per-call identity.
 """
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from litellm.exceptions import APIConnectionError
@@ -345,6 +347,37 @@ class TestTelemetryProvenanceLifecycle:
         provenance = metrics.token_usages[0].provenance
         assert provenance is not None
         assert provenance.confirmation.reasoning_policy == "unknown"
+
+    def test_concurrent_calls_keep_their_own_provenance(self):
+        """Auto-title and worker calls may share one LLM/Telemetry instance."""
+        metrics = Metrics(model_name="deepseek-flash")
+        telemetry = Telemetry(model_name="deepseek-flash", metrics=metrics)
+        barrier = threading.Barrier(2)
+
+        def complete(name: str) -> None:
+            provenance = CallProvenance(
+                configured=RouteProvenance(model=f"configured-{name}"),
+                sent=RouteProvenance(model=f"sent-{name}"),
+            )
+            telemetry.on_request({}, provenance=provenance)
+            barrier.wait()
+            telemetry.on_response(_response(response_id=f"response-{name}"))
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(complete, name) for name in ("worker", "title")]
+            for future in futures:
+                future.result()
+
+        recorded = {
+            usage.response_id: usage.provenance for usage in metrics.token_usages
+        }
+        assert set(recorded) == {"response-worker", "response-title"}
+        for name in ("worker", "title"):
+            provenance = recorded[f"response-{name}"]
+            assert provenance is not None
+            assert provenance.configured.model == f"configured-{name}"
+            assert provenance.sent.model == f"sent-{name}"
+            assert provenance.call_id == f"response-{name}"
 
 
 _LEGACY_USAGE = {
