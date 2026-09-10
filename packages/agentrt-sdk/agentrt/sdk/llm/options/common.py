@@ -57,6 +57,26 @@ def apply_extra_body(user_kwargs: dict[str, Any], llm: LLM) -> dict[str, Any]:
     return out
 
 
+def merge_extra_body_defaults(
+    user_kwargs: dict[str, Any], defaults: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Merge model-derived ``extra_body`` defaults under user-supplied values.
+
+    Some OpenAI-compatible aliases infer a provider that does not advertise
+    ``reasoning_effort``/``thinking``, so LiteLLM strips them before
+    serialization. Routing the explicit controls through ``extra_body`` keeps
+    them on the wire, while an explicit user ``extra_body`` still wins.
+
+    - Pure and deterministic; does not mutate inputs
+    """
+    out = dict(user_kwargs)
+    if not defaults:
+        return out
+    explicit = out.get("extra_body") or {}
+    out["extra_body"] = {**defaults, **explicit}
+    return out
+
+
 def apply_call_context(
     user_kwargs: dict[str, Any],
     llm: LLM,

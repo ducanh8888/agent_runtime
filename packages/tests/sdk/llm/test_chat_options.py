@@ -255,9 +255,26 @@ def test_deepseek_flash_payload_sends_effort_and_thinking(model):
     # them from the selected options.
     assert out["reasoning_effort"] == "high"
     assert out["thinking"] == {"type": "enabled"}
+    # They are also carried via extra_body so a provider that does not
+    # advertise them cannot strip them before serialization.
+    assert out["extra_body"]["reasoning_effort"] == "high"
+    assert out["extra_body"]["thinking"] == {"type": "enabled"}
     # Reasoning models keep temperature/top_p out of the request.
     assert "temperature" not in out
     assert "top_p" not in out
+
+
+def test_deepseek_flash_reasoning_defaults_do_not_override_user_extra_body():
+    llm = DummyLLM(
+        model="openai/deepseek-flash",
+        reasoning_effort="high",
+        litellm_extra_body={"reasoning_effort": "low", "trace": "t1"},
+    )
+    out = select_chat_options(llm, user_kwargs={}, has_tools=True)
+
+    assert out["extra_body"]["reasoning_effort"] == "low"
+    assert out["extra_body"]["trace"] == "t1"
+    assert out["extra_body"]["thinking"] == {"type": "enabled"}
 
 
 def test_deepseek_flash_payload_resolves_canonical_name_alias():
@@ -286,7 +303,15 @@ def test_deepseek_flash_capability_override_disables_reasoning_controls():
 
     assert "reasoning_effort" not in out
     assert "thinking" not in out
+    assert "extra_body" not in out
     assert out["temperature"] == 0.7
+
+
+def test_non_deepseek_model_has_no_reasoning_extra_body():
+    llm = DummyLLM(model="gpt-4o", reasoning_effort="high")
+    out = select_chat_options(llm, user_kwargs={}, has_tools=True)
+
+    assert "extra_body" not in out
 
 
 def test_chat_options_sampling_override_takes_precedence():

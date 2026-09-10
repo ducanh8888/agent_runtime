@@ -7,6 +7,7 @@ from agentrt.sdk.llm.options.common import (
     apply_defaults_if_absent,
     apply_extra_body,
     apply_extra_headers,
+    merge_extra_body_defaults,
 )
 
 
@@ -92,6 +93,19 @@ def select_chat_options(
         out["prompt_cache_retention"] = llm.prompt_cache_retention
 
     out = apply_extra_body(out, llm)
+
+    # OpenAI-compatible aliases (e.g. openai/deepseek-flash) infer a provider
+    # whose parameter list excludes reasoning controls, so LiteLLM drops the
+    # top-level fields. Forward them via extra_body as well to keep the
+    # explicit request on the wire. Scoped to the resolved capability, so a
+    # thinking_mode/supports_reasoning_effort override still disables it.
+    reasoning_defaults: dict[str, Any] | None = None
+    if model_features.thinking_mode == "enabled":
+        reasoning_defaults = {"thinking": {"type": "enabled"}}
+        if model_features.supports_reasoning_effort and llm.reasoning_effort:
+            reasoning_defaults["reasoning_effort"] = llm.reasoning_effort
+    out = merge_extra_body_defaults(out, reasoning_defaults)
+
     out = apply_call_context(out, llm, call_context)
 
     return out
