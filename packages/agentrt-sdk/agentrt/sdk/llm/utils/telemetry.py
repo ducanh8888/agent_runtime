@@ -23,6 +23,27 @@ from agentrt.sdk.logger import get_logger
 logger = get_logger(__name__)
 
 
+class _RequestLocalProvenance:
+    """Context-local provenance holder that can be deep-copied with an LLM."""
+
+    def __init__(self) -> None:
+        self._value: ContextVar[CallProvenance | None] = ContextVar(
+            "agentrt_pending_llm_provenance", default=None
+        )
+
+    def get(self) -> CallProvenance | None:
+        return self._value.get()
+
+    def set(self, value: CallProvenance | None) -> None:
+        self._value.set(value)
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_RequestLocalProvenance":
+        # Runtime request state must not cross into a copied LLM/Telemetry.
+        copied = type(self)()
+        memo[id(self)] = copied
+        return copied
+
+
 class Telemetry(BaseModel):
     """
     Handles latency, token/cost accounting, and optional logging.
@@ -50,10 +71,8 @@ class Telemetry(BaseModel):
     # LLM instances can serve the worker and auto-title concurrently. Keep
     # request provenance local to the current async/task or thread context so
     # one response cannot consume another in-flight call's metadata.
-    _pending_provenance: ContextVar[CallProvenance | None] = PrivateAttr(
-        default_factory=lambda: ContextVar(
-            "agentrt_pending_llm_provenance", default=None
-        )
+    _pending_provenance: _RequestLocalProvenance = PrivateAttr(
+        default_factory=_RequestLocalProvenance
     )
     _last_latency: float = PrivateAttr(default=0.0)
     _log_completions_callback: Callable[[str, str], None] | None = PrivateAttr(
