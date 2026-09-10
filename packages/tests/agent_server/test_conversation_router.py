@@ -26,6 +26,7 @@ from agentrt.sdk.agent.acp_agent import ACPAgent
 from agentrt.sdk.conversation.state import ConversationExecutionStatus
 from agentrt.sdk.llm import llm_profile_store
 from agentrt.sdk.llm.llm_profile_store import LLMProfileStore
+from agentrt.sdk.llm.utils.metrics import Metrics
 from agentrt.sdk.marketplace.registry import (
     PluginNotFoundError,
     PluginResolutionError,
@@ -358,6 +359,58 @@ def test_get_conversation_not_found(
         mock_conversation_service.get_conversation.assert_called_once_with(
             sample_conversation_id
         )
+    finally:
+        client.app.dependency_overrides.clear()
+
+
+def test_get_conversation_usage_projects_stats(
+    client, mock_conversation_service, sample_conversation_info
+):
+    """The usage endpoint projects the conversation's existing stats owner."""
+
+    metrics = Metrics(model_name="deepseek-flash")
+    metrics.add_token_usage(
+        prompt_tokens=100,
+        completion_tokens=10,
+        cache_read_tokens=0,
+        cache_write_tokens=0,
+        context_window=65536,
+        response_id="resp-1",
+        reasoning_tokens=4,
+    )
+    sample_conversation_info.stats.usage_to_metrics["agent"] = metrics
+    mock_conversation_service.get_conversation.return_value = sample_conversation_info
+
+    client.app.dependency_overrides[get_conversation_service] = lambda: (
+        mock_conversation_service
+    )
+
+    try:
+        response = client.get(f"/api/conversations/{sample_conversation_info.id}/usage")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["conversation_id"] == str(sample_conversation_info.id)
+        assert [service["usage_id"] for service in data["services"]] == ["agent"]
+        service = data["services"][0]
+        assert service["calls"][0]["call_id"] == "resp-1"
+        assert service["calls"][0]["call_id_source"] == "provider_response_id"
+        assert service["calls"][0]["usage"]["prompt_tokens"] == 100
+    finally:
+        client.app.dependency_overrides.clear()
+
+
+def test_get_conversation_usage_not_found(client, mock_conversation_service):
+    """The usage endpoint returns 404 for an unknown conversation."""
+
+    mock_conversation_service.get_conversation.return_value = None
+    client.app.dependency_overrides[get_conversation_service] = lambda: (
+        mock_conversation_service
+    )
+
+    try:
+        response = client.get(f"/api/conversations/{uuid4()}/usage")
+        assert response.status_code == 404
     finally:
         client.app.dependency_overrides.clear()
 

@@ -1,0 +1,202 @@
+"""Redacted projection of the conversation's LLM usage records.
+
+The SDK owns the usage records: ``ConversationStats`` holds one ``Metrics``
+per ``usage_id`` (the service slot: worker, condenser, title, ...) and each
+``Metrics`` keeps the per-call ``TokenUsage`` records. This module only
+reshapes that existing owner's data for the REST info surface. It stores
+nothing, sums nothing across conversations, and never reads a field the stats
+owner does not already record.
+
+Two things this projection deliberately does *not* do:
+
+* It does not invent provider-confirmed facts. The stats owner records the
+  provider's raw token numbers and response id; it does not record the
+  effective endpoint, the request that was sent, or whether the endpoint
+  confirmed the policy. Those are therefore absent rather than guessed from
+  configuration.
+* It does not emit free text. Token counts, model names and provider response
+  ids only — no prompts, no completions, no reasoning traces, no credentials,
+  and no endpoint.
+"""
+
+from __future__ import annotations
+
+from typing import Final, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from agentrt.sdk.conversation.conversation_stats import ConversationStats
+from agentrt.sdk.llm.utils.metrics import Metrics, TokenUsage
+
+
+#: Longest identifier copied verbatim onto the wire. ``usage_id`` is supplied
+#: by the caller, so bound it the way the telemetry sanitizer bounds tokens.
+_MAX_IDENTIFIER_LENGTH: Final[int] = 128
+
+ModelSource = Literal["stats", "unavailable"]
+CallIdSource = Literal["provider_response_id", "ordinal"]
+
+
+class RawTokenUsage(BaseModel):
+    """Provider-reported token counts, copied verbatim from the stats owner."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt_tokens: int
+    completion_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
+    reasoning_tokens: int
+    context_window: int
+    per_turn_token: int
+
+
+class NormalizedTokenUsage(BaseModel):
+    """Derived view of :class:`RawTokenUsage`, returned alongside it.
+
+    Only ``input_tokens`` is derived: providers that nest cache reads inside
+    ``prompt_tokens`` (litellm/OpenAI) have them subtracted, while providers
+    that report cache separately (ACP, where ``cache_read_tokens`` exceeds
+    ``prompt_tokens``) already exclude them. ``output_tokens`` and
+    ``reasoning_tokens`` are copies — the projection does not decide whether
+    reasoning is folded into the completion count.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    input_tokens: int
+    cache_read_tokens: int
+    output_tokens: int
+    reasoning_tokens: int
+
+
+class UsageCall(BaseModel):
+    """One provider completion call recorded by the stats owner."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    call_id: str = Field(
+        description=(
+            "Stable per-call identifier: the provider response id when the "
+            "stats owner recorded one, otherwise ``<usage_id>:<ordinal>``."
+        )
+    )
+    call_id_source: CallIdSource
+    model: str | None = Field(
+        default=None,
+        description="Model the stats owner recorded for this call, if any.",
+    )
+    usage: RawTokenUsage
+
+
+class UsageService(BaseModel):
+    """Per-service (``usage_id``) usage plus its per-call records."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    usage_id: str = Field(
+        description="Service slot the SDK registry assigned, e.g. ``agent``."
+    )
+    model: str | None = None
+    model_source: ModelSource
+    accumulated_cost: float = Field(ge=0.0)
+    accumulated_token_usage: RawTokenUsage
+    normalized: NormalizedTokenUsage
+    cache_hit_rate: float | None = Field(
+        default=None,
+        description=(
+            "The SDK's own cache-hit fraction, or null when there is no "
+            "denominator. Normalized by the stats owner, not by this "
+            "projection."
+        ),
+    )
+    calls: list[UsageCall] = Field(default_factory=list)
+
+
+class ConversationUsage(BaseModel):
+    """Redacted usage provenance for one conversation."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    conversation_id: UUID
+    services: list[UsageService] = Field(default_factory=list)
+
+
+def _safe_identifier(value: str, fallback: str) -> str:
+    cleaned = "".join(ch for ch in value if ch.isprintable()).strip()
+    if not cleaned:
+        return fallback
+    return cleaned[:_MAX_IDENTIFIER_LENGTH]
+
+
+def _raw_usage(usage: TokenUsage) -> RawTokenUsage:
+    return RawTokenUsage(
+        prompt_tokens=usage.prompt_tokens,
+        completion_tokens=usage.completion_tokens,
+        cache_read_tokens=usage.cache_read_tokens,
+        cache_write_tokens=usage.cache_write_tokens,
+        reasoning_tokens=usage.reasoning_tokens,
+        context_window=usage.context_window,
+        per_turn_token=usage.per_turn_token,
+    )
+
+
+def _normalize(raw: RawTokenUsage) -> NormalizedTokenUsage:
+    # Mirror MetricsSnapshot.cache_hit_rate's documented denominator rule.
+    cached = raw.cache_read_tokens
+    if cached <= raw.prompt_tokens:
+        input_tokens = raw.prompt_tokens - cached
+    else:
+        input_tokens = raw.prompt_tokens
+    return NormalizedTokenUsage(
+        input_tokens=max(0, input_tokens),
+        cache_read_tokens=cached,
+        output_tokens=raw.completion_tokens,
+        reasoning_tokens=raw.reasoning_tokens,
+    )
+
+
+def _project_call(usage_id: str, index: int, usage: TokenUsage) -> UsageCall:
+    response_id = usage.response_id.strip()
+    if response_id:
+        call_id, call_id_source = response_id, "provider_response_id"
+    else:
+        call_id, call_id_source = f"{usage_id}:{index}", "ordinal"
+    return UsageCall(
+        call_id=_safe_identifier(call_id, f"{usage_id}:{index}"),
+        call_id_source=call_id_source,
+        model=usage.model or None,
+        usage=_raw_usage(usage),
+    )
+
+
+def _project_service(usage_id: str, metrics: Metrics) -> UsageService:
+    snapshot = metrics.get_snapshot()
+    accumulated = snapshot.accumulated_token_usage or TokenUsage()
+    model = accumulated.model or snapshot.model_name or None
+    raw = _raw_usage(accumulated)
+    return UsageService(
+        usage_id=_safe_identifier(usage_id, "unknown"),
+        model=model,
+        model_source="stats" if model else "unavailable",
+        accumulated_cost=snapshot.accumulated_cost,
+        accumulated_token_usage=raw,
+        normalized=_normalize(raw),
+        cache_hit_rate=snapshot.cache_hit_rate,
+        calls=[
+            _project_call(usage_id, index, call)
+            for index, call in enumerate(metrics.token_usages)
+        ],
+    )
+
+
+def project_conversation_usage(
+    conversation_id: UUID, stats: ConversationStats
+) -> ConversationUsage:
+    """Project the stats owner's records into a redacted, additive view."""
+    services = [
+        _project_service(usage_id, metrics)
+        for usage_id, metrics in sorted(stats.usage_to_metrics.items())
+    ]
+    return ConversationUsage(conversation_id=conversation_id, services=services)

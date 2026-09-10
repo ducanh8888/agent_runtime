@@ -44,6 +44,10 @@ from agentrt.agent_server.models import (
     UpdateSecretsRequest,
     trim_conversation_response_skills,
 )
+from agentrt.agent_server.usage_projection import (
+    ConversationUsage,
+    project_conversation_usage,
+)
 from agentrt.sdk import LLM, Agent, TextContent
 from agentrt.sdk.conversation.state import ConversationExecutionStatus
 from agentrt.sdk.marketplace.registry import (
@@ -177,6 +181,28 @@ async def get_conversation_agent_final_response(
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     response = await event_service.get_agent_final_response()
     return AgentResponseResult(response=response)
+
+
+@conversation_router.get(
+    "/{conversation_id}/usage",
+    responses={404: {"description": "Conversation not found"}},
+)
+async def get_conversation_usage(
+    conversation_id: UUID,
+    conversation_service: ConversationService = Depends(get_conversation_service),
+) -> ConversationUsage:
+    """Get the redacted LLM usage provenance for a conversation.
+
+    Projects the existing conversation stats (the SDK's ``ConversationStats``)
+    into per-service and per-call records with stable ids and raw numeric token
+    fields. Provider endpoint/confirmation provenance is not recorded by the
+    stats owner and is reported as unavailable rather than inferred. No
+    credential, prompt, completion or private reasoning content is included.
+    """
+    conversation = await conversation_service.get_conversation(conversation_id)
+    if conversation is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return project_conversation_usage(conversation.id, conversation.stats)
 
 
 @conversation_router.get("")

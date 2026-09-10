@@ -1,12 +1,17 @@
 import asyncio
-import os
 import sys
 import time
-from importlib.metadata import version
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field
 
+from agentrt.agent_server.build_identity import (
+    SERVER_DISTRIBUTION,
+    BuildIdentity,
+    package_version,
+    runtime_version,
+    server_build_identity,
+)
 from agentrt.sdk.tool.registry import list_usable_tools
 from agentrt.tools.terminal.timeout_policy import (
     get_max_foreground_timeout_seconds,
@@ -20,13 +25,6 @@ _last_event_time = time.time()
 _initialization_complete = asyncio.Event()
 
 
-def _package_version(dist_name: str) -> str:
-    try:
-        return version(dist_name)
-    except Exception:
-        return "unknown"
-
-
 class HealthStatus(BaseModel):
     status: str
 
@@ -36,23 +34,17 @@ class ServerInfo(BaseModel):
     idle_time: float
     title: str = "OpenHands Agent Server"
 
-    version: str = Field(
-        default_factory=lambda: _package_version("agentrt-server")
-    )
-    sdk_version: str = Field(default_factory=lambda: _package_version("agentrt-sdk"))
-    tools_version: str = Field(
-        default_factory=lambda: _package_version("agentrt-tools")
-    )
+    version: str = Field(default_factory=lambda: package_version(SERVER_DISTRIBUTION))
+    sdk_version: str = Field(default_factory=lambda: package_version("agentrt-sdk"))
+    tools_version: str = Field(default_factory=lambda: package_version("agentrt-tools"))
     workspace_version: str = Field(
-        default_factory=lambda: _package_version("agentrt-workspace")
+        default_factory=lambda: package_version("agentrt-workspace")
     )
+    runtime_version: str = Field(default_factory=runtime_version)
 
-    build_git_sha: str = Field(
-        default_factory=lambda: os.environ.get("AGENTRT_BUILD_GIT_SHA", "unknown")
-    )
-    build_git_ref: str = Field(
-        default_factory=lambda: os.environ.get("AGENTRT_BUILD_GIT_REF", "unknown")
-    )
+    build_git_sha: str = Field(default_factory=lambda: server_build_identity().git_sha)
+    build_git_ref: str = Field(default_factory=lambda: server_build_identity().git_ref)
+    build: BuildIdentity = Field(default_factory=server_build_identity)
     python_version: str = Field(default_factory=lambda: sys.version)
     usable_tools: list[str] = Field(default_factory=lambda: list_usable_tools())
     runtime_idle_timeout_seconds: float | None = Field(
@@ -63,6 +55,8 @@ class ServerInfo(BaseModel):
             "credential_binding_v1",
             "credential_binding_readiness_probe_v1",
             "credential_binding_activation_guard_v1",
+            "build_identity_v1",
+            "usage_provenance_v1",
         ]
     )
     max_foreground_terminal_timeout_seconds: float | None = Field(

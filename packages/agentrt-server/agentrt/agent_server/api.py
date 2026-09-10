@@ -5,7 +5,6 @@ import traceback
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
-from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -21,6 +20,10 @@ from agentrt.agent_server.agent_profiles_router import agent_profiles_router
 from agentrt.agent_server.auth_router import auth_router
 from agentrt.agent_server.bash_router import bash_router
 from agentrt.agent_server.bash_service import get_default_bash_event_service
+from agentrt.agent_server.build_identity import (
+    SERVER_DISTRIBUTION,
+    package_version,
+)
 from agentrt.agent_server.canvas_extensions_router import canvas_extensions_router
 from agentrt.agent_server.config import (
     Config,
@@ -356,7 +359,7 @@ def _create_fastapi_instance(config: Config) -> FastAPI:
     """
     return FastAPI(
         title="OpenHands Agent Server",
-        version=version("agentrt-server"),
+        version=package_version(SERVER_DISTRIBUTION),
         description=(
             "OpenHands Agent Server - REST/WebSocket interface for OpenHands AI Agent"
         ),
