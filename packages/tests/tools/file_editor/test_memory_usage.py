@@ -140,7 +140,12 @@ def test_file_editor_memory_leak(temp_file):
 
     # Set memory limit to 170MB to make it more likely to catch issues
     memory_limit = 170 * 1024 * 1024  # 170MB in bytes
-    if set_address_space_limit_if_available(memory_limit):
+    if psutil.Process(os.getpid()).memory_info().vms > memory_limit:
+        # RLIMIT_AS cannot be enforced below the interpreter's current address
+        # space; setting it only makes unrelated allocations fail. The psutil
+        # growth assertions below still guard the leak this test targets.
+        print("Address space already exceeds limit; skipping RLIMIT_AS")
+    elif set_address_space_limit_if_available(memory_limit):
         print("Memory limit set successfully")
     else:
         print("Address-space memory limit not available in this environment")

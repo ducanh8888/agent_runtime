@@ -21,6 +21,7 @@ from agentrt.sdk.tool import (
     register_tool,
 )
 from agentrt.tools.file_editor.utils.diff import visualize_diff
+from agentrt.tools.file_editor.view_contract import FileRange, ViewStatus
 
 
 CommandLiteral = Literal["view", "create", "str_replace", "insert", "undo_edit"]
@@ -64,6 +65,22 @@ class FileEditorAction(Action):
         "show lines 11 and 12. Indexing at 1 to start. Setting `[start_line, "
         "-1]` shows all lines from `start_line` to the end of the file.",
     )
+    cursor: str | None = Field(
+        default=None,
+        description="Optional continuation cursor returned by a previous `view` "
+        "of the same file. Pass it back to read the next page. The cursor is "
+        "bound to the file's identity, content version and view options, so it "
+        "is rejected with a typed `file_changed` result if the file changed. "
+        "Cannot be combined with `view_range`.",
+    )
+    max_lines: int | None = Field(
+        default=None,
+        ge=1,
+        description="Optional maximum number of whole source lines returned by a "
+        "single `view` page. Defaults to the tool's page size. A single line "
+        "longer than the page budget is returned partially, with a cursor that "
+        "continues inside the line.",
+    )
 
 
 class FileEditorObservation(Observation):
@@ -86,6 +103,67 @@ class FileEditorObservation(Observation):
     )
     new_content: str | None = Field(
         default=None, description="The content of the file after the edit."
+    )
+
+    view_status: ViewStatus | None = Field(
+        default=None,
+        description="Typed outcome of a `view` command: `ok`, `eof`, `empty`, "
+        "`truncated`, `partial_line`, `binary`, `too_large`, `decode_error`, "
+        "`read_error`, `out_of_range`, `file_changed`, `invalid_cursor`, "
+        "`directory` or `image`.",
+    )
+    requested_range: FileRange | None = Field(
+        default=None,
+        description="The line/character span the caller asked for, 1-based lines "
+        "and 0-based characters.",
+    )
+    returned_range: FileRange | None = Field(
+        default=None,
+        description="The line/character span actually returned. For a partial "
+        "line, `end_char` marks where the next page continues.",
+    )
+    eof: bool | None = Field(
+        default=None, description="Whether the returned page reached end of file."
+    )
+    truncated: bool | None = Field(
+        default=None,
+        description="Whether content remains after the returned page; if so a "
+        "`cursor` is provided.",
+    )
+    partial_line: bool = Field(
+        default=False,
+        description="Whether the page ends inside a single line because the line "
+        "is longer than the page budget.",
+    )
+    cursor: str | None = Field(
+        default=None,
+        description="Opaque continuation cursor for the next page, or None when "
+        "the request is complete.",
+    )
+    file_hash: str | None = Field(
+        default=None, description="SHA-256 of the file bytes the page was read from."
+    )
+    file_size: int | None = Field(
+        default=None, description="Size of the file in bytes."
+    )
+    line_count: int | None = Field(
+        default=None, description="Number of lines in the file."
+    )
+    encoding: str | None = Field(
+        default=None, description="Text encoding used to decode the file."
+    )
+    newline: str | None = Field(
+        default=None,
+        description="Detected newline convention: `\\n`, `\\r\\n`, `\\r`, `mixed` "
+        "or `none`.",
+    )
+    has_final_newline: bool | None = Field(
+        default=None, description="Whether the file ends with a newline."
+    )
+    file_changed: bool = Field(
+        default=False,
+        description="Whether a continuation cursor was rejected because the file "
+        "was modified between pages.",
     )
 
     _diff_cache: Text | None = PrivateAttr(default=None)
@@ -162,6 +240,7 @@ TOOL_DESCRIPTION = """Custom editing tool for viewing, creating and editing file
 * If `path` is a text file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
 * The `create` command cannot be used if the specified `path` already exists as a file
 * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
+* `view` returns whole-line pages and reports `requested_range`, `returned_range`, `eof`, `truncated`, the detected `encoding`/`newline`, and a continuation `cursor` when more content remains. Pass that `cursor` back to read the next page; if the file was modified since the page was read, the result is a typed `file_changed` and you must re-run `view` without the cursor. A line too long for one page is returned partially with a `partial_line` cursor that continues inside the line.
 * The `undo_edit` command will revert the last edit made to the file at `path`
 * This tool can be used for creating and editing files in plain-text format.
 

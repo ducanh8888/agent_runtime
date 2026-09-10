@@ -36,12 +36,26 @@ from agentrt.tools.file_editor.utils.encoding import (
     with_encoding,
 )
 from agentrt.tools.file_editor.utils.history import FileHistoryManager
+from agentrt.tools.file_editor.view_contract import (
+    FileRange,
+    FileScan,
+    InvalidCursorError,
+    Page,
+    ViewStatus,
+    decode_cursor,
+    encode_cursor,
+    read_page,
+    scan_file,
+)
 
 
 logger = get_logger(__name__)
 
 # Supported image extensions for viewing as base64-encoded content
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+# Default number of whole source lines returned by a single view page.
+DEFAULT_MAX_VIEW_LINES = 500
 
 
 def _is_encodable(text: str, encoding: str) -> bool:
@@ -111,6 +125,8 @@ class FileEditor:
         path: str,
         file_text: str | None = None,
         view_range: list[int] | None = None,
+        cursor: str | None = None,
+        max_lines: int | None = None,
         old_str: str | None = None,
         new_str: str | None = None,
         insert_line: int | None = None,
@@ -118,7 +134,7 @@ class FileEditor:
         _path = Path(path)
         self.validate_path(command, _path)
         if command == "view":
-            return self.view(_path, view_range)
+            return self.view(_path, view_range, cursor, max_lines)
         elif command == "create":
             if file_text is None:
                 raise EditorToolParameterMissingError(command, "file_text")
@@ -281,10 +297,17 @@ class FileEditor:
         )
 
     def view(
-        self, path: Path, view_range: list[int] | None = None
+        self,
+        path: Path,
+        view_range: list[int] | None = None,
+        cursor: str | None = None,
+        max_lines: int | None = None,
     ) -> FileEditorObservation:
-        """
-        View the contents of a file or a directory.
+        """View the contents of a file or a directory.
+
+        File views return whole-line pages. The observation reports the
+        requested and returned ranges, EOF/truncation state, detected
+        encoding/newline, and a continuation cursor while more content remains.
         """
         if path.is_dir():
             if view_range:
@@ -305,6 +328,7 @@ class FileEditor:
                     is_error=True,
                     path=str(path),
                     prev_exist=True,
+                    view_status="directory",
                 )
 
             msg = [
@@ -326,6 +350,7 @@ class FileEditor:
                 command="view",
                 path=str(path),
                 prev_exist=True,
+                view_status="directory",
             )
 
         # Check if the file is an image
@@ -352,31 +377,195 @@ class FileEditor:
                     ],
                     path=str(path),
                     prev_exist=True,
+                    view_status="image",
                 )
             except Exception as e:
                 raise ToolError(f"Failed to read image file {path}: {e}") from None
 
-        # Validate file and count lines
-        self.validate_file(path)
         try:
-            num_lines = self._count_lines(path)
-        except UnicodeDecodeError as e:
-            raise ToolError(
-                f"Cannot view {path}: file contains binary content that cannot be "
-                f"decoded as text. Error: {e}"
-            ) from None
-
-        start_line = 1
-        if not view_range:
-            file_content = self.read_file(path)
-            output = self._make_output(file_content, str(path), start_line)
-
-            return FileEditorObservation.from_text(
-                text=output,
-                command="view",
-                path=str(path),
-                prev_exist=True,
+            self.validate_file(path)
+        except FileValidationError as e:
+            reason = e.reason.lower()
+            status: ViewStatus = (
+                "binary"
+                if "binary" in reason
+                else "too_large"
+                if "large" in reason
+                else "validation_error"
             )
+            return self._view_error(path, e.message, status)
+
+        try:
+            scan = scan_file(path)
+            encoding = self._encoding_manager.get_encoding(path)
+        except OSError as e:
+            return self._view_error(path, f"Cannot view {path}: {e}", "read_error")
+
+        if cursor is not None and view_range:
+            return self._view_error(
+                path,
+                "Cannot combine `cursor` with `view_range`: the cursor already "
+                "fixes the requested range.",
+                "invalid_cursor",
+                cursor=cursor,
+                scan=scan,
+                encoding=encoding,
+            )
+
+        try:
+            return self._view_file_page(
+                path, scan, encoding, view_range, cursor, max_lines
+            )
+        except InvalidCursorError as e:
+            return self._view_error(
+                path,
+                f"Invalid view cursor: {e.reason}.",
+                "invalid_cursor",
+                cursor=cursor,
+                scan=scan,
+                encoding=encoding,
+            )
+        except EditorToolParameterInvalidError as e:
+            return self._view_error(
+                path,
+                e.message,
+                "out_of_range",
+                cursor=cursor,
+                scan=scan,
+                encoding=encoding,
+            )
+        except UnicodeDecodeError as e:
+            return self._view_error(
+                path,
+                f"Cannot view {path}: file contains binary content that cannot be "
+                f"decoded as text. Error: {e}",
+                "decode_error",
+                scan=scan,
+                encoding=encoding,
+            )
+        except OSError as e:
+            return self._view_error(
+                path,
+                f"Cannot view {path}: {e}",
+                "read_error",
+                scan=scan,
+                encoding=encoding,
+            )
+
+    def _view_file_page(
+        self,
+        path: Path,
+        scan: FileScan,
+        encoding: str,
+        view_range: list[int] | None,
+        cursor: str | None,
+        max_lines: int | None,
+    ) -> FileEditorObservation:
+        warning: str | None = None
+        if cursor is not None:
+            payload = decode_cursor(cursor)
+            if payload["path"] != str(path.resolve()):
+                raise InvalidCursorError("cursor was issued for a different file")
+            if payload["file_id"] != scan.file_id or payload["digest"] != scan.sha256:
+                return self._changed_cursor_observation(path, scan, encoding)
+            if max_lines is not None and max_lines != payload["max_lines"]:
+                raise InvalidCursorError("cursor was issued for a different page size")
+            page_max_lines = payload["max_lines"]
+            start_line = payload["line"]
+            start_char = payload["char"]
+            req_start = payload["req_start"]
+            req_end: int | None = payload["end_line"]
+        else:
+            page_max_lines = DEFAULT_MAX_VIEW_LINES if max_lines is None else max_lines
+            if page_max_lines < 1:
+                raise EditorToolParameterInvalidError(
+                    "max_lines", str(max_lines), "It should be a positive integer."
+                )
+            req_start, req_end, warning = self._requested_span(
+                view_range, scan.line_count
+            )
+            start_line, start_char = req_start, 0
+
+        if scan.line_count == 0:
+            return self._empty_view_observation(path, scan, encoding, warning)
+
+        if start_line > scan.line_count:
+            return self._view_error(
+                path,
+                f"No content at line {start_line}: {path} has only "
+                f"{scan.line_count} lines.",
+                "out_of_range",
+                cursor=cursor,
+                scan=scan,
+                encoding=encoding,
+            )
+
+        page = read_page(
+            path,
+            encoding,
+            start_line=start_line,
+            start_char=start_char,
+            req_end=req_end,
+            max_lines=page_max_lines,
+            char_budget=MAX_RESPONSE_LEN_CHAR,
+        )
+
+        if not page.lines:
+            return self._view_error(
+                path,
+                f"No content at line {start_line} in {path}.",
+                "out_of_range",
+                cursor=cursor,
+                scan=scan,
+                encoding=encoding,
+            )
+
+        eof = self._page_reached_eof(page, scan.line_count)
+        page = page.model_copy(update={"eof": eof})
+        more = page.next_line is not None and (
+            page.partial or req_end is None or page.next_line <= req_end
+        )
+
+        next_cursor: str | None = None
+        if more and page.next_line is not None:
+            next_cursor = encode_cursor(
+                path=str(path.resolve()),
+                file_id=scan.file_id,
+                digest=scan.sha256,
+                line=page.next_line,
+                char=page.next_char,
+                req_start=req_start,
+                end_line=req_end,
+                max_lines=page_max_lines,
+            )
+
+        text = self._render_page_text(path, page, warning, more)
+        requested_end = req_end if req_end is not None else scan.line_count
+        return FileEditorObservation.from_text(
+            text=text,
+            command="view",
+            path=str(path),
+            prev_exist=True,
+            view_status=self._page_status(page, more),
+            requested_range=FileRange(start_line=req_start, end_line=requested_end),
+            returned_range=page.returned_range,
+            eof=eof,
+            truncated=more,
+            partial_line=page.partial,
+            cursor=next_cursor,
+            file_hash=scan.sha256,
+            file_size=scan.size,
+            line_count=scan.line_count,
+            encoding=encoding,
+            newline=scan.newline,
+            has_final_newline=scan.has_final_newline,
+        )
+
+    def _requested_span(
+        self, view_range: list[int] | None, num_lines: int
+    ) -> tuple[int, int, str | None]:
+        if not view_range:
+            return 1, num_lines, None
 
         if len(view_range) != 2 or not all(isinstance(i, int) for i in view_range):
             raise EditorToolParameterInvalidError(
@@ -394,12 +583,11 @@ class FileEditor:
                 f"lines of the file: {[1, num_lines]}.",
             )
 
-        # Normalize end_line and provide a warning if it exceeds file length
-        warning_message: str | None = None
+        warning: str | None = None
         if end_line == -1:
             end_line = num_lines
         elif end_line > num_lines:
-            warning_message = (
+            warning = (
                 f"We only show up to {num_lines} since there're only {num_lines} "
                 "lines in this file."
             )
@@ -413,22 +601,125 @@ class FileEditor:
                 f"to the first element `{start_line}`.",
             )
 
-        file_content = self.read_file(path, start_line=start_line, end_line=end_line)
+        return start_line, end_line, warning
 
-        # Get the detected encoding
-        output = self._make_output(
-            "\n".join(file_content.splitlines()), str(path), start_line
-        )  # Remove extra newlines
+    @staticmethod
+    def _page_reached_eof(page: Page, line_count: int) -> bool:
+        if page.partial or not page.lines:
+            return False
+        return page.lines[-1][0] == line_count
 
-        # Prepend warning if we truncated the end_line
-        if warning_message:
-            output = f"NOTE: {warning_message}\n{output}"
+    @staticmethod
+    def _page_status(page: Page, more: bool) -> ViewStatus:
+        if page.partial:
+            return "partial_line"
+        if more:
+            return "truncated"
+        if page.eof:
+            return "eof"
+        return "ok"
 
+    def _render_page_text(
+        self,
+        path: Path,
+        page: Page,
+        warning: str | None,
+        more: bool,
+    ) -> str:
+        numbered = "\n".join(f"{lineno:6}\t{content}" for lineno, content in page.lines)
+        output = f"Here's the result of running `cat -n` on {path}:\n{numbered}\n"
+        if page.partial:
+            output += (
+                f"\n[partial line: line {page.next_line} continues at character "
+                f"{page.next_char}]\n"
+            )
+        if more:
+            output += TEXT_FILE_CONTENT_TRUNCATED_NOTICE + "\n"
+        if warning:
+            output = f"NOTE: {warning}\n{output}"
+        return output
+
+    def _empty_view_observation(
+        self,
+        path: Path,
+        scan: FileScan,
+        encoding: str,
+        warning: str | None,
+    ) -> FileEditorObservation:
+        output = self._make_output("", str(path), 1)
+        output += "\nNOTE: The file is empty (0 bytes; 0 lines).\n"
+        if warning:
+            output = f"NOTE: {warning}\n{output}"
         return FileEditorObservation.from_text(
             text=output,
             command="view",
             path=str(path),
             prev_exist=True,
+            view_status="empty",
+            requested_range=None,
+            returned_range=None,
+            eof=True,
+            truncated=False,
+            partial_line=False,
+            cursor=None,
+            file_hash=scan.sha256,
+            file_size=scan.size,
+            line_count=0,
+            encoding=encoding,
+            newline=scan.newline,
+            has_final_newline=scan.has_final_newline,
+        )
+
+    def _changed_cursor_observation(
+        self, path: Path, scan: FileScan, encoding: str
+    ) -> FileEditorObservation:
+        return FileEditorObservation.from_text(
+            text=(
+                f"The file {path} changed since this cursor was issued (content "
+                "version mismatch). Re-run `view` without a cursor to read the "
+                "current content."
+            ),
+            command="view",
+            is_error=True,
+            path=str(path),
+            prev_exist=True,
+            view_status="file_changed",
+            file_changed=True,
+            cursor=None,
+            file_hash=scan.sha256,
+            file_size=scan.size,
+            line_count=scan.line_count,
+            encoding=encoding,
+            newline=scan.newline,
+            has_final_newline=scan.has_final_newline,
+        )
+
+    def _view_error(
+        self,
+        path: Path,
+        text: str,
+        status: ViewStatus,
+        *,
+        cursor: str | None = None,
+        scan: FileScan | None = None,
+        encoding: str | None = None,
+        file_changed: bool = False,
+    ) -> FileEditorObservation:
+        return FileEditorObservation.from_text(
+            text=text,
+            command="view",
+            is_error=True,
+            path=str(path),
+            prev_exist=True,
+            view_status=status,
+            cursor=cursor,
+            file_changed=file_changed,
+            file_hash=scan.sha256 if scan else None,
+            file_size=scan.size if scan else None,
+            line_count=scan.line_count if scan else None,
+            newline=scan.newline if scan else None,
+            has_final_newline=scan.has_final_newline if scan else None,
+            encoding=encoding,
         )
 
     def _format_directory_entry(self, root: Path, entry: Path) -> str:
@@ -796,20 +1087,19 @@ class FileEditor:
                 "Markdown format:\n" + snippet_content + "\n"
             )
 
-        snippet_content = maybe_truncate(
-            snippet_content,
+        # Number the lines before truncating: clipping first would renumber the
+        # surviving tail as if it continued from the head.
+        numbered = "\n".join(
+            f"{i + start_line:6}\t{line}"
+            for i, line in enumerate(snippet_content.split("\n"))
+        )
+        numbered = maybe_truncate(
+            numbered,
             truncate_after=MAX_RESPONSE_LEN_CHAR,
             truncate_notice=TEXT_FILE_CONTENT_TRUNCATED_NOTICE,
         )
-
-        snippet_content = "\n".join(
-            [
-                f"{i + start_line:6}\t{line}"
-                for i, line in enumerate(snippet_content.split("\n"))
-            ]
-        )
         return (
             f"Here's the result of running `cat -n` on {snippet_description}:\n"
-            + snippet_content
+            + numbered
             + "\n"
         )
