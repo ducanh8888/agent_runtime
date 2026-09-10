@@ -136,12 +136,36 @@ def _tools_for(preset: str):
     return specs
 
 
+def _constrain_switch_llm(store, profile):
+    """Force the worker's own LLM-profile switch off for an AgentRT preset.
+
+    A preset that can switch its own LLM profile can point a worker at any
+    saved profile, which is exactly the bypass the fixed direct/high policy is
+    meant to prevent. Only instances that carry the setting are touched, and
+    only when it is currently on, so a restart does not rewrite unchanged
+    profiles. ``model_copy`` carries over the id, tools, permissions and every
+    unrelated field; already-created sessions hold their own resolved policy
+    and are never retargeted here.
+    """
+    from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+
+    if not isinstance(profile, OpenHandsAgentProfile):
+        return profile
+    if profile.enable_switch_llm_tool is False:
+        return profile
+    constrained = profile.model_copy(update={"enable_switch_llm_tool": False})
+    store.save(constrained)
+    return constrained
+
+
 def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
     """Create the LLM and agent profiles if absent; return id per preset.
 
     One agent profile per permission preset, named for it. Existing profiles are
     left alone unless ``force`` is set, so restarting the daemon never silently
-    discards configuration.
+    discards configuration. Both paths also migrate the three AgentRT presets to
+    ``enable_switch_llm_tool=False``: a profile created before that constraint
+    existed must not let new workers switch to an unapproved saved profile.
     """
     from agentrt.agent_server.persistence import (
         get_agent_profile_store,
@@ -158,11 +182,16 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         # added since the last run is missing, and dispatching to it would fail
         # at the point of use rather than here.
         try:
-            return {
-                preset: agent_store.load(preset).id for preset in permissions.PRESETS
+            loaded = {
+                preset: agent_store.load(preset) for preset in permissions.PRESETS
             }
         except Exception:
             pass
+        else:
+            return {
+                preset: _constrain_switch_llm(agent_store, profile).id
+                for preset, profile in loaded.items()
+            }
 
     router = config.load_router_config()
 
@@ -188,27 +217,23 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         # call. Constructing a fresh profile mints a new UUID, so rebuilding
         # because *one* preset was missing silently re-identified the other two.
         #
-        # A namesake also keeps its own switch_llm setting; only a genuinely
-        # new profile is created with the tool off. Rebuilding must not disable
-        # a setting the operator turned on, and a fresh AgentRT profile must not
-        # let its worker switch itself to an unapproved saved LLM profile.
+        # Reuse the existing id, but never its switch_llm setting: a rebuild is
+        # the migration path for a profile that predates the constraint, so it
+        # must end with the tool off rather than carrying the bypass forward.
         kwargs: dict = {}
-        enable_switch_llm = False
         try:
             existing = agent_store.load(preset)
         except Exception:
             pass  # Genuinely new; let the default factory mint one.
         else:
             kwargs["id"] = existing.id
-            if isinstance(existing, OpenHandsAgentProfile):
-                enable_switch_llm = existing.enable_switch_llm_tool
 
         profile = OpenHandsAgentProfile(
             name=preset,
             llm_profile_ref=LLM_PROFILE_NAME,
             tools=_tools_for(preset),
             enable_sub_agents=False,
-            enable_switch_llm_tool=enable_switch_llm,
+            enable_switch_llm_tool=False,
             **kwargs,
         )
         agent_store.save(profile)

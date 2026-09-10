@@ -77,19 +77,57 @@ def test_saved_llm_profile_carries_exact_direct_high_contract(state) -> None:
     assert "test-key" not in repr(dumped)
 
 
-def test_rebuild_preserves_switch_llm_turned_on_by_operator(state) -> None:
-    bootstrap.ensure_profiles()
+def test_fast_path_migrates_base_created_switch_llm_off(state) -> None:
+    ids = bootstrap.ensure_profiles()
+    store = get_agent_profile_store()
+    original_tools: dict[str, list[str]] = {}
+    for preset in ("readonly", "workspace", "broad"):
+        profile = store.load(preset)
+        assert isinstance(profile, OpenHandsAgentProfile)
+        original_tools[preset] = [tool.name for tool in (profile.tools or [])]
+        # Simulate a profile created before the constraint existed.
+        store.save(
+            profile.model_copy(
+                update={
+                    "enable_switch_llm_tool": True,
+                    "system_message_suffix": "operator-set",
+                }
+            )
+        )
+
+    workspace_path = Path(state) / "agent-profiles" / "workspace.json"
+    before = _digest(workspace_path)
+
+    assert bootstrap.ensure_profiles() == ids
+
+    for preset in ("readonly", "workspace", "broad"):
+        reloaded = store.load(preset)
+        assert isinstance(reloaded, OpenHandsAgentProfile)
+        assert reloaded.enable_switch_llm_tool is False
+        assert reloaded.id == ids[preset]
+        assert [tool.name for tool in (reloaded.tools or [])] == original_tools[preset]
+        assert reloaded.system_message_suffix == "operator-set"
+
+    # The upgrade rewrote the profile, and running again leaves it alone.
+    assert _digest(workspace_path) != before
+    settled = _digest(workspace_path)
+    assert bootstrap.ensure_profiles() == ids
+    assert _digest(workspace_path) == settled
+
+
+def test_force_rebuild_turns_switch_llm_off(state) -> None:
+    ids = bootstrap.ensure_profiles()
     store = get_agent_profile_store()
     profile = store.load("workspace")
     assert isinstance(profile, OpenHandsAgentProfile)
     store.save(profile.model_copy(update={"enable_switch_llm_tool": True}))
 
-    bootstrap.ensure_profiles()
+    assert bootstrap.ensure_profiles(force=True) == ids
 
-    reloaded = get_agent_profile_store().load("workspace")
+    reloaded = store.load("workspace")
     assert isinstance(reloaded, OpenHandsAgentProfile)
-    assert reloaded.enable_switch_llm_tool is True
-    assert reloaded.id == profile.id
+    assert reloaded.enable_switch_llm_tool is False
+    assert reloaded.id == ids["workspace"]
 
 
 def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
