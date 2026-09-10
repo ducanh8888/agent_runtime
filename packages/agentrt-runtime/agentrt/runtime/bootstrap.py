@@ -113,10 +113,11 @@ GUARD_MODULE = "agentrt.runtime.guarded_tools"
 def _tools_for(preset: permissions.Permission):
     """Build the tool specs a preset grants.
 
-    Round 7 fixed the set at terminal, file editor and task tracker: browser
-    drags in Playwright and has the weakest cancellation story of any executor,
-    and sub-agents are attached per dispatch, never by default. A preset narrows
-    that set; it never widens it.
+    Round 7 fixed the base set at terminal, file editor and task tracker:
+    browser drags in Playwright and has the weakest cancellation story of any
+    executor, and sub-agents are attached per dispatch, never by default. The
+    `inspect` preset adds one more read-only tool, `inspect`, and drops
+    `terminal`; no preset ever widens the base set.
 
     The permission travels as a tool parameter rather than as daemon-wide state
     so two sessions with different presets can run at once.
@@ -130,7 +131,11 @@ def _tools_for(preset: permissions.Permission):
 
     specs = []
     for name in permissions.tools_for(preset):
-        if name == "file_editor":
+        if name in ("file_editor", "inspect"):
+            # Both guards are preset-aware: the file editor needs to know it may
+            # only view, and `inspect` refuses to be created under any other
+            # preset. The permission travels as a tool parameter, not daemon
+            # state, so two sessions with different presets can run at once.
             specs.append(Tool(name=name, params={"permission": preset}))
         else:
             specs.append(Tool(name=name))

@@ -10,8 +10,13 @@ and `c:\\foo` are the same directory).
 What the presets are honest about:
 
 - `readonly` — no terminal at all, and the file editor may only view, only
-  inside the workspace. This is the one preset that keeps a session away from
-  the credential in the state directory.
+  inside the workspace. Together with `inspect`, one of the two presets that
+  keeps a session away from the credential in the state directory.
+- `inspect` — the file editor may only view, plus one schema-validated
+  `inspect` tool offering structured search, narrow Git status/diff/log/show
+  and executable/environment metadata. No terminal, no editor mutation. See
+  `inspect_tools.py`: the tool is a guarded read runner, not an OS sandbox, and
+  it does not widen the workspace guard.
 - `workspace` — the file editor is confined to the workspace, and a terminal is
   present. **A terminal defeats path confinement**: `python -c` opens any file
   the user can. The confinement constrains the model's ordinary behaviour, not a
@@ -29,16 +34,31 @@ from pathlib import Path
 from typing import Literal
 
 
-Permission = Literal["readonly", "workspace", "broad"]
+Permission = Literal["readonly", "inspect", "workspace", "broad"]
 
-PRESETS: tuple[Permission, ...] = ("readonly", "workspace", "broad")
+#: Ordered weakest-first. `inspect` sits between `readonly` (view only) and
+#: `workspace` (a terminal, which defeats path confinement). Anything iterating
+#: presets for display or profile creation will pick it up from here.
+PRESETS: tuple[Permission, ...] = ("readonly", "inspect", "workspace", "broad")
 DEFAULT_PERMISSION: Permission = "workspace"
+
+#: Presets that may not change files. Enforced in `check_path`, so the file
+#: editor's own `writing` flag is what decides, not a shell allowlist.
+READ_ONLY_PERMISSIONS: frozenset[str] = frozenset({"readonly", "inspect"})
 
 DESCRIPTIONS: dict[str, str] = {
     "readonly": (
         "Read-only. No terminal. The file editor can view files inside the "
-        "workspace and nothing else. The only preset that keeps a session away "
-        "from the provider credential."
+        "workspace and nothing else. With `inspect`, one of the two presets "
+        "that keeps a session away from the provider credential."
+    ),
+    "inspect": (
+        "Read-only, with structured inspection commands. No terminal and no "
+        "file mutation. The file editor may view files inside the workspace, "
+        "and the `inspect` tool offers schema-validated structured search, "
+        "narrow Git status/diff/log/show and executable/environment metadata. "
+        "It refuses to read the runtime's own credential, and every path is "
+        "resolved and confined to the workspace."
     ),
     "workspace": (
         "Read and write inside the workspace, with a terminal. The file editor "
@@ -139,9 +159,9 @@ def check_path(
     ):
         raise PermissionDenied(f"refusing an extended-length or UNC path: {text!r}")
 
-    if writing and permission == "readonly":
+    if writing and permission in READ_ONLY_PERMISSIONS:
         raise PermissionDenied(
-            "this session is readonly; it may view files but not change them"
+            f"this session is {permission}; it may view files but not change them"
         )
 
     # Windows strips trailing dots and spaces from a path component when it
@@ -243,10 +263,17 @@ def _is_runtime_secret(resolved: Path) -> bool:
 def tools_for(permission: Permission) -> list[str]:
     """Which tool names a preset grants.
 
-    `readonly` drops the terminal entirely rather than trying to filter shell
-    commands. A rule over command text is defeated by `python -c`, so the only
-    honest read-only shell is no shell.
+    `readonly` and `inspect` drop the terminal entirely rather than trying to
+    filter shell commands. A rule over command text is defeated by `python -c`,
+    so the only honest read-only shell is no shell.
+
+    `inspect` adds one tool, `inspect`, that runs a fixed, schema-validated set
+    of read operations (structured search, narrow Git reads, executable and
+    environment metadata). It is not a shell and cannot mutate. The file editor
+    stays for viewing, and its guard refuses every write under this preset.
     """
     if permission == "readonly":
         return ["file_editor", "task_tracker"]
+    if permission == "inspect":
+        return ["file_editor", "inspect", "task_tracker"]
     return ["terminal", "file_editor", "task_tracker"]

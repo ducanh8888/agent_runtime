@@ -26,9 +26,13 @@ denied path into a crash.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
-from agentrt.runtime import permissions
+from agentrt.runtime import (
+    inspect_tools,  # noqa: F401 -- importing this module registers `inspect`
+    permissions,
+)
 from agentrt.sdk.tool import ToolExecutor
 from agentrt.sdk.tool.registry import register_tool
 from agentrt.tools.file_editor import FileEditorTool
@@ -36,6 +40,7 @@ from agentrt.tools.file_editor.definition import (
     FileEditorAction,
     FileEditorObservation,
 )
+
 
 if TYPE_CHECKING:
     from agentrt.sdk.conversation.state import ConversationState
@@ -102,9 +107,9 @@ class GuardedFileEditorTool(FileEditorTool):
     @classmethod
     def create(
         cls,
-        conv_state: "ConversationState",
+        conv_state: ConversationState,
         permission: str | None = None,
-    ) -> Sequence["GuardedFileEditorTool"]:
+    ) -> Sequence[GuardedFileEditorTool]:
         preset = permissions.normalise(permission)
         root = conv_state.workspace.working_dir
 
