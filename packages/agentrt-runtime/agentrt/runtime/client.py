@@ -183,6 +183,468 @@ def _capped(text: str, limit: int) -> str:
     return text[:limit] + " ... [truncated]"
 
 
+#: Tool names whose observations can carry file-read evidence. Matches the
+#: ``tool_name`` persisted on an ``ObservationEvent``. The second spelling is
+#: the upstream name; the projection accepts both so a differently-named build
+#: does not silently project nothing.
+FILE_EDITOR_TOOL_NAMES = frozenset({"file_editor", "str_replace_editor"})
+
+#: A read passes through three stages and they are not interchangeable.
+#: ``observed`` is what a persisted successful tool result proves. ``delivered``
+#: is content serialized into an LLM request, and ``understood`` is content the
+#: model acted on. The latter two are not implied by an observation, so they are
+#: ``unknown`` unless a source event records them.
+READ_STAGES = ("observed", "delivered", "understood")
+
+#: Optional metadata a paging writer may add to a view observation. The
+#: projection must work against events persisted before those fields existed, so
+#: every lookup is best-effort: a missing key becomes "unknown", never a guessed
+#: range, EOF, or hash.
+_READ_PATH_KEYS = ("path", "file", "file_path", "filename")
+_READ_VERSION_KEYS = (
+    "file_version",
+    "version",
+    "content_hash",
+    "hash",
+    "sha256",
+    "digest",
+    "revision",
+)
+_READ_REQUESTED_LINE_KEYS = (
+    "requested_lines",
+    "requested_line_range",
+    "view_range",
+    "requested_range",
+)
+_READ_RETURNED_LINE_KEYS = (
+    "returned_lines",
+    "returned_line_range",
+    "line_range",
+    "lines",
+)
+_READ_START_LINE_KEYS = ("start_line", "first_line", "returned_start_line")
+_READ_END_LINE_KEYS = ("end_line", "last_line", "returned_end_line")
+_READ_REQUESTED_CHAR_KEYS = (
+    "requested_chars",
+    "requested_char_range",
+    "requested_character_range",
+)
+_READ_RETURNED_CHAR_KEYS = (
+    "returned_chars",
+    "returned_char_range",
+    "returned_character_range",
+)
+_READ_OFFSET_KEYS = ("offset", "char_offset", "start_offset", "byte_offset")
+_READ_LENGTH_KEYS = ("length", "char_count", "byte_count", "size")
+_READ_EOF_KEYS = ("eof", "reached_eof", "is_eof", "at_eof", "end_of_file")
+_READ_TRUNCATED_KEYS = (
+    "truncated",
+    "is_truncated",
+    "truncation",
+    "partial",
+    "is_partial",
+)
+_READ_DELIVERED_KEYS = ("delivered", "is_delivered", "llm_delivered", "in_llm_request")
+_READ_UNDERSTOOD_KEYS = ("understood", "is_understood", "model_understood")
+
+_READ_METADATA_KEYS = (
+    _READ_PATH_KEYS
+    + _READ_VERSION_KEYS
+    + _READ_REQUESTED_LINE_KEYS
+    + _READ_RETURNED_LINE_KEYS
+    + _READ_START_LINE_KEYS
+    + _READ_END_LINE_KEYS
+    + _READ_REQUESTED_CHAR_KEYS
+    + _READ_RETURNED_CHAR_KEYS
+    + _READ_OFFSET_KEYS
+    + _READ_LENGTH_KEYS
+    + _READ_EOF_KEYS
+    + _READ_TRUNCATED_KEYS
+    + _READ_DELIVERED_KEYS
+    + _READ_UNDERSTOOD_KEYS
+)
+
+#: Nested dicts under an observation or event that may carry read metadata.
+_READ_NESTED_KEYS = ("metadata", "read_evidence", "read", "view")
+
+#: Outcome of one artifacts listing. ``empty`` is a positive answer and is
+#: deliberately distinct from every way a listing can be unavailable or
+#: incomplete.
+ARTIFACTS_LISTED = "listed"
+ARTIFACTS_EMPTY = "empty"
+ARTIFACTS_TRUNCATED = "truncated"
+ARTIFACTS_UNFILTERED = "unfiltered"
+ARTIFACTS_PARTIAL = "partial"
+ARTIFACTS_UNAVAILABLE = "unavailable"
+ARTIFACTS_FAILED = "failed"
+
+_ARTIFACTS_LIMIT = 200
+
+
+def _read_containers(event: dict, observation: dict) -> list[dict]:
+    """Dicts to search for optional read metadata, most specific first."""
+    containers: list[dict] = []
+    for source in (observation, event):
+        containers.append(source)
+        for key in _READ_NESTED_KEYS:
+            nested = source.get(key)
+            if isinstance(nested, dict):
+                containers.append(nested)
+    return containers
+
+
+def _read_value(containers: list[dict], keys: tuple[str, ...]) -> object:
+    """First non-None value for any candidate key, or None."""
+    for container in containers:
+        for key in keys:
+            if key in container and container[key] is not None:
+                return container[key]
+    return None
+
+
+def _present_keys(containers: list[dict], keys: tuple[str, ...]) -> list[str]:
+    """Names from ``keys`` that appear with a non-None value anywhere."""
+    found: list[str] = []
+    for key in keys:
+        for container in containers:
+            if key in container and container[key] is not None:
+                found.append(key)
+                break
+    return found
+
+
+def _as_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _first_int(container: dict, keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        if key in container:
+            number = _as_int(container[key])
+            if number is not None:
+                return number
+    return None
+
+
+def _as_bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("true", "yes", "1"):
+            return True
+        if lowered in ("false", "no", "0"):
+            return False
+    return None
+
+
+def _as_range(value: object) -> dict | None:
+    """Normalise a range to ``{"start", "end"}`` without inventing an end.
+
+    Accepts the shapes a persisted payload plausibly uses: a two-element list, a
+    ``"start-end"`` / ``"start:end"`` string, or a dict. An ``end`` of ``-1`` is
+    the file editor's "to end of file" sentinel and is kept as an open end,
+    never turned into a literal position.
+    """
+    start: int | None = None
+    end: int | None = None
+    length: int | None = None
+    if isinstance(value, dict):
+        start = _first_int(value, ("start", "from", "first", "begin", "min", "gte"))
+        end = _first_int(value, ("end", "to", "last", "max", "lt", "finish"))
+        length = _first_int(value, ("length", "count", "size"))
+    elif isinstance(value, (list, tuple)) and len(value) >= 2:
+        start = _as_int(value[0])
+        end = _as_int(value[1])
+    elif isinstance(value, str):
+        parts = value
+        for separator in ("..", ":", ",", "-"):
+            parts = parts.replace(separator, " ")
+        numbers = [
+            number for number in map(_as_int, parts.split()) if number is not None
+        ]
+        if len(numbers) >= 2:
+            start, end = numbers[0], numbers[1]
+        elif len(numbers) == 1:
+            start = end = numbers[0]
+    if start is None:
+        return None
+    if end is None and length is not None:
+        end = start + length
+    result: dict[str, int | bool | None] = {"start": start, "end": end}
+    if end == -1:
+        result["end"] = None
+        result["open_end"] = True
+    return result
+
+
+def _merge_ranges(ranges: list[dict], *, adjacent: bool) -> list[list[int]]:
+    """Merge closed ranges that overlap (lines may also touch end to start)."""
+    closed = sorted(
+        (
+            {"start": item["start"], "end": item["end"]}
+            for item in ranges
+            if item.get("start") is not None and item.get("end") is not None
+        ),
+        key=lambda item: (item["start"], item["end"]),
+    )
+    merged: list[list[int]] = []
+    for item in closed:
+        gap = 1 if adjacent else 0
+        if merged and item["start"] <= merged[-1][1] + gap:
+            if item["end"] > merged[-1][1]:
+                merged[-1][1] = item["end"]
+        else:
+            merged.append([item["start"], item["end"]])
+    return merged
+
+
+def _stage_of(value: bool | None) -> str:
+    if value is True:
+        return "confirmed"
+    if value is False:
+        return "denied"
+    return "unknown"
+
+
+def _aggregate_stage(values: list[str]) -> str:
+    known = [value for value in values if value != "unknown"]
+    if not known:
+        return "unknown"
+    if all(value == "confirmed" for value in known):
+        return "confirmed"
+    if all(value == "denied" for value in known):
+        return "denied"
+    return "mixed"
+
+
+def _range_key(value: dict | None) -> tuple | None:
+    if not isinstance(value, dict):
+        return None
+    return (value.get("start"), value.get("end"), value.get("open_end", False))
+
+
+def _relative_to_workspace(path: str, workspace: str | None) -> str | None:
+    """Workspace-relative form of an observed path, or None if it escapes it."""
+    if not workspace:
+        return None
+    try:
+        relative = os.path.relpath(path, workspace)
+    except (TypeError, ValueError):
+        return None
+    if relative == os.pardir or relative.startswith(os.pardir + os.sep):
+        return None
+    return relative.replace(os.sep, "/")
+
+
+def _project_read(event: dict, workspace: str | None) -> dict | None:
+    """Project one successful view observation into a read record, or None.
+
+    Only ``view`` observations that carry a path qualify. Optional fields are
+    read from generic keys when present; nothing is inferred from the file's
+    text, so an unrecorded range or EOF stays ``None``.
+    """
+    observation = event.get("observation")
+    if not isinstance(observation, dict):
+        return None
+    if _as_bool(observation.get("is_error")) is True:
+        return None
+    command = observation.get("command")
+    if command is None:
+        command = event.get("command")
+    containers = _read_containers(event, observation)
+    path = _read_value(containers, _READ_PATH_KEYS)
+    if not isinstance(path, str) or not path:
+        return None
+
+    version = _read_value(containers, _READ_VERSION_KEYS)
+    version_text = str(version) if isinstance(version, (str, int)) else None
+
+    requested_lines = _as_range(_read_value(containers, _READ_REQUESTED_LINE_KEYS))
+    returned_lines = _as_range(_read_value(containers, _READ_RETURNED_LINE_KEYS))
+    if returned_lines is None:
+        start_line = _as_int(_read_value(containers, _READ_START_LINE_KEYS))
+        if start_line is not None:
+            returned_lines = {
+                "start": start_line,
+                "end": _as_int(_read_value(containers, _READ_END_LINE_KEYS)),
+            }
+    requested_chars = _as_range(_read_value(containers, _READ_REQUESTED_CHAR_KEYS))
+    returned_chars = _as_range(_read_value(containers, _READ_RETURNED_CHAR_KEYS))
+    if returned_chars is None:
+        offset = _as_int(_read_value(containers, _READ_OFFSET_KEYS))
+        length = _as_int(_read_value(containers, _READ_LENGTH_KEYS))
+        if offset is not None or length is not None:
+            returned_chars = {
+                "start": offset,
+                "end": offset + length
+                if offset is not None and length is not None
+                else None,
+            }
+
+    metadata_present = any(
+        value is not None
+        for value in (
+            version_text,
+            requested_lines,
+            returned_lines,
+            requested_chars,
+            returned_chars,
+        )
+    )
+    if command != "view" and not (command is None and metadata_present):
+        return None
+
+    return {
+        "event_id": event.get("id"),
+        "timestamp": event.get("timestamp"),
+        "tool_call_id": event.get("tool_call_id"),
+        "tool": event.get("tool_name"),
+        "command": command,
+        "path": path,
+        "path_relative": _relative_to_workspace(path, workspace),
+        "version": version_text,
+        "version_known": version_text is not None,
+        "requested": {"lines": requested_lines, "chars": requested_chars},
+        "returned": {"lines": returned_lines, "chars": returned_chars},
+        "eof": _as_bool(_read_value(containers, _READ_EOF_KEYS)),
+        "truncated": _as_bool(_read_value(containers, _READ_TRUNCATED_KEYS)),
+        "stages": {
+            "observed": "confirmed",
+            "delivered": _stage_of(
+                _as_bool(_read_value(containers, _READ_DELIVERED_KEYS))
+            ),
+            "understood": _stage_of(
+                _as_bool(_read_value(containers, _READ_UNDERSTOOD_KEYS))
+            ),
+        },
+        "metadata_keys": _present_keys(containers, _READ_METADATA_KEYS),
+    }
+
+
+def _group_reads(reads: list[dict]) -> list[dict]:
+    """Group reads by path and explicit version; unknown versions never merge."""
+    groups: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for read in reads:
+        version = read.get("version")
+        key = (
+            ("version", read["path"], version)
+            if version is not None
+            else ("event", read["event_id"])
+        )
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "path": read["path"],
+                "path_relative": read["path_relative"],
+                "version": version,
+                "version_known": version is not None,
+                "reads": [],
+            }
+            groups[key] = group
+            order.append(key)
+        group["reads"].append(read)
+
+    result: list[dict] = []
+    for key in order:
+        group = groups[key]
+        included: list[dict] = group["reads"]
+        lines = [
+            read["returned"]["lines"]
+            for read in included
+            if read["returned"]["lines"] is not None
+        ]
+        chars = [
+            read["returned"]["chars"]
+            for read in included
+            if read["returned"]["chars"] is not None
+        ]
+        result.append(
+            {
+                "path": group["path"],
+                "path_relative": group["path_relative"],
+                "version": group["version"],
+                "version_known": group["version_known"],
+                "read_count": len(included),
+                "event_ids": [read["event_id"] for read in included],
+                "merged_lines": _merge_ranges(lines, adjacent=True),
+                "merged_chars": _merge_ranges(chars, adjacent=False),
+                "open_ended_lines": [item for item in lines if item.get("open_end")],
+                "eof_confirmed": any(read["eof"] is True for read in included),
+                "truncation_observed": any(
+                    read["truncated"] is True for read in included
+                ),
+                "stages": {
+                    "observed": "confirmed",
+                    "delivered": _aggregate_stage(
+                        [read["stages"]["delivered"] for read in included]
+                    ),
+                    "understood": _aggregate_stage(
+                        [read["stages"]["understood"] for read in included]
+                    ),
+                },
+            }
+        )
+    return result
+
+
+def _repeated_reads(reads: list[dict]) -> list[dict]:
+    """Repeated requests for the same path and range, per observed version."""
+    seen: dict[tuple, list[str]] = {}
+    sample: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for read in reads:
+        lines = _range_key(read["requested"]["lines"])
+        chars = _range_key(read["requested"]["chars"])
+        if lines is None and chars is None:
+            continue
+        key = (read["path"], read.get("version"), lines, chars)
+        if key not in seen:
+            seen[key] = []
+            sample[key] = read
+            order.append(key)
+        seen[key].append(read["event_id"])
+
+    repeated: list[dict] = []
+    for key in order:
+        if len(seen[key]) < 2:
+            continue
+        read = sample[key]
+        version_known = read.get("version") is not None
+        repeated.append(
+            {
+                "path": read["path"],
+                "path_relative": read["path_relative"],
+                "version": read.get("version"),
+                "version_known": version_known,
+                "requested": read["requested"],
+                "count": len(seen[key]),
+                "event_ids": seen[key],
+                "note": (
+                    "same requested range observed more than once"
+                    if version_known
+                    else "same requested range observed more than once; "
+                    "file version unverified"
+                ),
+            }
+        )
+    return repeated
+
+
 class Client:
     """Talking to the daemon over its HTTP API.
 
@@ -691,6 +1153,144 @@ class Client:
             "next_cursor": data.get("next_page_id") if isinstance(data, dict) else None,
         }
 
+    def read_evidence(
+        self,
+        session: str,
+        *,
+        limit: int = 100,
+        max_pages: int = 50,
+        cursor: str | None = None,
+    ) -> dict:
+        """Project what a session read, from its persisted observations.
+
+        Nothing is stored for this: the projection reads the same
+        ``ObservationEvent`` records the transcript does, so it stays correct
+        for sessions that ran before this method existed.
+
+        COST AND PAGINATION. It pages ``events/search`` at ``limit`` raw events
+        per request until the daemon returns no ``next_page_id`` or ``max_pages``
+        requests have been made -- a long session is several HTTP calls and this
+        call blocks for all of them. ``complete`` says whether the end was
+        reached; when it is false, ``next_cursor`` continues from where the bound
+        stopped.
+
+        WHAT IT PROVES. Only successful ``file_editor`` view observations.
+        ``observed`` means the tool result was persisted. ``delivered`` (content
+        actually serialized into an LLM request) and ``understood`` (content the
+        model acted on) are separate stages and are reported as ``unknown``
+        unless a source event records them; they cannot be inferred here.
+
+        RANGES AND EOF. Optional version/hash, requested/returned line and
+        character ranges, EOF and truncation metadata are read from generic keys
+        when a paging writer has added them. Where the source event did not
+        record a range or an EOF, the value is ``null`` -- never guessed. Ranges
+        are merged only for reads carrying the same explicit file version; a
+        read with no version is never merged across events. ``repeated_reads``
+        reports the same requested range observed more than once.
+        """
+        if limit <= 0:
+            raise ClientError("limit must be positive")
+        if max_pages <= 0:
+            raise ClientError("max_pages must be positive")
+
+        resolved = self._resolve_session(session)
+        page_size = min(limit, 100)
+
+        raw_events: list[dict] = []
+        pages = 0
+        complete = True
+        next_cursor = cursor
+        while pages < max_pages:
+            params: dict[str, object] = {
+                "sort_order": "TIMESTAMP_DESC",
+                "limit": page_size,
+            }
+            if next_cursor:
+                params["page_id"] = next_cursor
+            data = self._send(
+                "GET",
+                f"/api/conversations/{quote(resolved, safe='')}/events/search",
+                params=params,
+            ).json()
+            items = data.get("items") if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                complete = False
+                next_cursor = None
+                break
+            pages += 1
+            raw_events.extend(item for item in items if isinstance(item, dict))
+            page = data.get("next_page_id") if isinstance(data, dict) else None
+            next_cursor = page if isinstance(page, str) and page else None
+            if not next_cursor:
+                complete = True
+                break
+        else:
+            complete = False
+        if pages == 0:
+            complete = True
+
+        status = self.status(resolved)
+        workspace = status.get("workspace")
+
+        reads: list[dict] = []
+        for event in raw_events:
+            if event.get("kind") != "ObservationEvent":
+                continue
+            if event.get("tool_name") not in FILE_EDITOR_TOOL_NAMES:
+                continue
+            workspace_dir = workspace if isinstance(workspace, str) else None
+            read = _project_read(event, workspace_dir)
+            if read is not None:
+                reads.append(read)
+        reads.sort(key=lambda read: str(read.get("timestamp") or ""))
+
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": status.get("status"),
+            "events_scanned": len(raw_events),
+            "pages": pages,
+            "complete": complete,
+            "next_cursor": None if complete else next_cursor,
+            "reads": reads,
+            "file_versions": _group_reads(reads),
+            "repeated_reads": _repeated_reads(reads),
+            "assumptions": [
+                "read evidence is projected from already-persisted successful "
+                "ObservationEvents; no second transcript store is written",
+                "line ranges are treated as 1-based and inclusive; character "
+                "ranges are reported exactly as recorded, without an assumed "
+                "convention",
+                "optional version, range, EOF and truncation metadata is read "
+                "from generic keys and only when a source event records it",
+                "ranges are merged only within one explicit file version; a "
+                "read without a version is never merged across events",
+                "observed, delivered and understood are separate stages: only "
+                "observed is proven by a tool observation",
+            ],
+            "notes": [
+                "a read with version_known false means the source event carried "
+                "no version/hash, so its ranges cannot be merged with any other",
+                "eof and range fields are null when the source event did not "
+                "record them; this projection never infers them from file text",
+                "metadata_keys on each read lists the optional keys actually "
+                "found, so a caller can tell which assumptions applied",
+            ],
+            "root_integration": [
+                "the event owner must persist version/hash, requested and "
+                "returned line/character ranges, EOF and truncation on the "
+                "file_editor view result; this projection only reads those keys "
+                "and reports null where they are absent",
+                "delivered requires the SDK/server to record which observation "
+                "content was serialized into an LLM request; understood is not "
+                "derivable from events and must be recorded explicitly to be "
+                "claimed",
+                "generic key spellings are accepted on the observation, under "
+                "its metadata/read_evidence/read/view nested dicts, and on the "
+                "event itself; metadata_keys reports what was recognized",
+            ],
+        }
+
     def send(self, session: str, message: str) -> dict:
         """Post a user message and start a run (``run=True`` is required)."""
         resolved = self._resolve_session(session)
@@ -792,14 +1392,26 @@ class Client:
         repository it is not merely noisy but useless. With a `.venv` at the
         root, all two hundred slots are dependency files and nothing the session
         wrote appears at all, because `.` sorts before every letter.
+
+        ``outcome`` types the listing so an empty answer is not read as a
+        failure. ``empty`` is the positive result of a successful filtered scan:
+        the session ran and wrote nothing. It is distinct from ``unavailable``
+        (no workspace, or a workspace path that is not a directory here),
+        ``unfiltered`` (no start time, so nothing was filtered), ``partial`` (the
+        walk or a ``stat`` failed), ``truncated`` (more than two hundred files
+        matched) and ``failed`` (the walk itself raised). ``complete`` is true
+        only for a fully filtered, untruncated scan; ``scan_errors`` counts
+        entries that could not be read.
         """
         resolved = self._resolve_session(session)
         status = self.status(resolved)
         workspace = status.get("workspace")
-        if not workspace:
-            raise ClientError(f"no workspace known for session {short_id(resolved)}")
 
         if path is not None:
+            if not workspace:
+                raise ClientError(
+                    f"no workspace known for session {short_id(resolved)}"
+                )
             if os.path.isabs(path):
                 raise ClientError(f"absolute paths are not allowed: {path!r}")
             # `check_path` rather than a containment test of our own. An
@@ -836,38 +1448,7 @@ class Client:
             }
 
         since = _started_at(status)
-        found: list[tuple[float, dict]] = []
-        total = 0
-        for dirpath, dirnames, filenames in os.walk(workspace):
-            dirnames[:] = sorted(d for d in dirnames if d not in PRUNED_DIRS)
-            for name in filenames:
-                full = os.path.join(dirpath, name)
-                try:
-                    entry_stat = os.stat(full)
-                except OSError:
-                    continue
-                total += 1
-                if since is not None and entry_stat.st_mtime < since:
-                    continue
-                found.append(
-                    (
-                        entry_stat.st_mtime,
-                        {
-                            "path": os.path.relpath(full, workspace).replace(
-                                os.sep, "/"
-                            ),
-                            "size": entry_stat.st_size,
-                            "modified": datetime.fromtimestamp(
-                                entry_stat.st_mtime, tz=UTC
-                            ).isoformat(),
-                        },
-                    )
-                )
-        # Newest first, so the file the session finished with is the one read
-        # first. Path order buries it behind whatever the repository is called.
-        found.sort(key=lambda entry: entry[0], reverse=True)
-        files = [entry[1] for entry in found]
-        return {
+        base = {
             "id": resolved,
             "short_id": short_id(resolved),
             "workspace": workspace,
@@ -882,8 +1463,9 @@ class Client:
             # function was rewritten to stop -- silently, and looking like a
             # correct answer. A caller reading `files` alone cannot tell.
             "filtered": since is not None,
-            "files": files[:200],
-            "truncated": len(files) > 200,
+            "files": [],
+            "truncated": False,
+            "total_scanned": 0,
             # Files seen outside the pruned directories, which is not the
             # size of the workspace and should not be read as one: a repository
             # with a 400-file virtualenv reports 4. Its job is to distinguish
@@ -891,6 +1473,98 @@ class Client:
             # walk found nothing at all". The first is a real and common answer
             # -- a session can run an hour and produce no file -- and it should
             # not look like a broken call.
-            "total_scanned": total,
             "pruned": sorted(PRUNED_DIRS),
+        }
+
+        # A workspace the daemon named but that is absent (or not a directory)
+        # here is not an empty result: "wrote nothing" is a positive answer and
+        # must not be confused with "nothing could be listed".
+        if not workspace or not os.path.isdir(workspace):
+            return {
+                **base,
+                "outcome": ARTIFACTS_UNAVAILABLE,
+                "empty": False,
+                "complete": False,
+                "scan_errors": 0,
+            }
+
+        found: list[tuple[float, dict]] = []
+        total = 0
+        scan_errors = 0
+
+        def _on_walk_error(_error: OSError) -> None:
+            nonlocal scan_errors
+            scan_errors += 1
+
+        try:
+            for dirpath, dirnames, filenames in os.walk(
+                workspace, onerror=_on_walk_error
+            ):
+                dirnames[:] = sorted(d for d in dirnames if d not in PRUNED_DIRS)
+                for name in filenames:
+                    full = os.path.join(dirpath, name)
+                    try:
+                        entry_stat = os.stat(full)
+                    except OSError:
+                        scan_errors += 1
+                        continue
+                    total += 1
+                    if since is not None and entry_stat.st_mtime < since:
+                        continue
+                    found.append(
+                        (
+                            entry_stat.st_mtime,
+                            {
+                                "path": os.path.relpath(full, workspace).replace(
+                                    os.sep, "/"
+                                ),
+                                "size": entry_stat.st_size,
+                                "modified": datetime.fromtimestamp(
+                                    entry_stat.st_mtime, tz=UTC
+                                ).isoformat(),
+                            },
+                        )
+                    )
+        except OSError:
+            # The walk itself failed, so the listing is unknown rather than
+            # empty. The underlying message can carry a host path, so only the
+            # outcome is reported.
+            return {
+                **base,
+                "total_scanned": total,
+                "outcome": ARTIFACTS_FAILED,
+                "empty": False,
+                "complete": False,
+                "scan_errors": scan_errors,
+            }
+
+        # Newest first, so the file the session finished with is the one read
+        # first. Path order buries it behind whatever the repository is called.
+        found.sort(key=lambda entry: entry[0], reverse=True)
+        files = [entry[1] for entry in found]
+        listing_truncated = len(files) > _ARTIFACTS_LIMIT
+        if scan_errors:
+            outcome = ARTIFACTS_PARTIAL
+        elif since is None:
+            outcome = ARTIFACTS_UNFILTERED
+        elif listing_truncated:
+            outcome = ARTIFACTS_TRUNCATED
+        elif files:
+            outcome = ARTIFACTS_LISTED
+        else:
+            outcome = ARTIFACTS_EMPTY
+        return {
+            **base,
+            "files": files[:_ARTIFACTS_LIMIT],
+            "truncated": listing_truncated,
+            "total_scanned": total,
+            # Typed outcome: `empty` after a successful filtered scan is a
+            # positive result and is distinct from an unavailable workspace, an
+            # unfiltered or partial scan, truncation and failure.
+            "outcome": outcome,
+            "empty": outcome == ARTIFACTS_EMPTY,
+            "complete": (
+                since is not None and not scan_errors and not listing_truncated
+            ),
+            "scan_errors": scan_errors,
         }

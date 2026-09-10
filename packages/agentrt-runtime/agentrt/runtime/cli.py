@@ -135,6 +135,17 @@ def _cmd_artifacts(args: argparse.Namespace) -> dict:
     return client.artifacts(args.session, path=args.path)
 
 
+def _cmd_read_evidence(args: argparse.Namespace) -> dict:
+    """Project what a session read from its persisted observations."""
+    client = client_mod.Client()
+    return client.read_evidence(
+        args.session,
+        limit=args.limit,
+        max_pages=args.max_pages,
+        cursor=args.cursor,
+    )
+
+
 def _cmd_daemon_start(_args: argparse.Namespace) -> dict:
     """Start the daemon if it is not already running, then report its state."""
     daemon.ensure_running()
@@ -299,6 +310,30 @@ def _build_parser() -> argparse.ArgumentParser:
         "--path", help="file to read, relative to the workspace root"
     )
     artifacts_parser.set_defaults(func=_cmd_artifacts)
+
+    evidence_parser = _add_subparser(
+        subparsers,
+        "read-evidence",
+        help="project what a session read from its persisted observations",
+    )
+    evidence_parser.add_argument("session")
+    evidence_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="raw events per request, capped at 100 (default: 100)",
+    )
+    evidence_parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=50,
+        help="stop after this many event pages (default: 50)",
+    )
+    evidence_parser.add_argument(
+        "--cursor",
+        help="next_cursor from a previous call, to continue an incomplete scan",
+    )
+    evidence_parser.set_defaults(func=_cmd_read_evidence)
 
     daemon_parser = _add_subparser(subparsers, "daemon", help="manage the daemon")
     daemon_subparsers = daemon_parser.add_subparsers(

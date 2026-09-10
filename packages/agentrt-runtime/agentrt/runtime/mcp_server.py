@@ -271,6 +271,59 @@ def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict
 
 
 @mcp.tool()
+def read_evidence(
+    session: str,
+    limit: int = 100,
+    max_pages: int = 50,
+    cursor: str | None = None,
+) -> dict:
+    """Project what files a session read, from its persisted observations.
+
+    This is derived, not stored: it reads the same successful `file_editor`
+    view observations the transcript does, so it works for sessions that ran
+    before this tool existed. It answers "did it actually read that file",
+    which a session's own account does not.
+
+    COST AND PAGING. It fetches raw events, `limit` per request, until the
+    daemon runs out of events or it has made `max_pages` requests. A long
+    session is several requests and this call waits for all of them, so raise
+    max_pages deliberately. `complete` says whether the end of the event log was
+    reached; when it is false, pass `next_cursor` back as `cursor` to continue.
+
+    WHAT IT CAN AND CANNOT CLAIM. Each read reports three stages separately,
+    because they are not the same thing:
+
+    - `observed` -- the tool returned the content and the result was persisted.
+      This is the only stage the evidence itself proves.
+    - `delivered` -- the content was actually serialized into an LLM request.
+    - `understood` -- the model acted on what it received.
+
+    `delivered` and `understood` are `unknown` unless a paging writer recorded
+    them on the event. A view that was observed but never delivered is a real
+    failure mode, and this projection does not paper over it.
+
+    RANGES AND EOF. `version`/hash, requested and returned line and character
+    ranges, EOF and truncation come from optional metadata on the observation.
+    Where a source event did not record one, the value is null -- never guessed.
+    Ranges are merged only between reads with the same explicit `version`; a
+    read with `version_known` false is never merged with another. `repeated_reads`
+    flags the same requested range observed more than once, which usually means
+    the agent re-read what it already had.
+
+    Example use: after checking `artifacts`, call this to see whether the session
+    read the file it claims to have reviewed, and whether it reached EOF or
+    stopped partway.
+    """
+    return _guard(
+        _get_client().read_evidence,
+        session,
+        limit=limit,
+        max_pages=max_pages,
+        cursor=cursor,
+    )
+
+
+@mcp.tool()
 def control(session: str, action: str, message: str | None = None) -> dict:
     """Change a running session's state.
 
@@ -370,8 +423,14 @@ def artifacts(session: str, path: str | None = None) -> dict:
     the workspace rather than the session's -- which looks like a plausible
     answer and is not one.
 
-    An empty `files` with a non-zero `total_scanned` is a real answer, not a
-    failure: the session ran and wrote nothing. That is worth knowing early.
+    `outcome` types the listing, so an empty answer is never mistaken for a
+    failure. `empty` is a positive result: the filter ran and the session wrote
+    nothing. It is distinct from `unavailable` (no workspace, or its path is not
+    a directory here), `unfiltered` (`filtered` is false), `partial` (the walk
+    or a `stat` failed; `scan_errors` counts how many), `truncated` (more than
+    two hundred files matched) and `failed` (the walk itself raised). `complete`
+    is true only for a fully filtered, untruncated scan. An empty `files` with a
+    non-zero `total_scanned` is therefore an `empty` outcome, not a broken call.
     `total_scanned` counts files outside the pruned directories, so it is not
     the size of the workspace -- a repository with a 400-file virtualenv in it
     reports 4.
