@@ -232,6 +232,63 @@ def test_chat_options_resolve_capabilities_from_canonical_alias():
     assert "thinking" not in out
 
 
+@pytest.mark.parametrize(
+    "model",
+    [
+        "deepseek-flash",
+        "deepseek/deepseek-flash",
+        "openai/deepseek-flash",
+        "openai/ds/deepseek-flash",
+        "litellm_proxy/deepseek-flash",
+    ],
+)
+def test_deepseek_flash_payload_sends_effort_and_thinking(model):
+    llm = DummyLLM(
+        model=model,
+        temperature=0.7,
+        top_p=0.9,
+        reasoning_effort="high",
+    )
+    out = select_chat_options(llm, user_kwargs={}, has_tools=True)
+
+    # These are the audit's "silently omitted" fields: the alias must not drop
+    # them from the selected options.
+    assert out["reasoning_effort"] == "high"
+    assert out["thinking"] == {"type": "enabled"}
+    # Reasoning models keep temperature/top_p out of the request.
+    assert "temperature" not in out
+    assert "top_p" not in out
+
+
+def test_deepseek_flash_payload_resolves_canonical_name_alias():
+    llm = DummyLLM(
+        model="litellm_proxy/customer-flash",
+        model_canonical_name="deepseek-flash",
+        reasoning_effort="high",
+    )
+    out = select_chat_options(llm, user_kwargs={}, has_tools=True)
+
+    assert out["reasoning_effort"] == "high"
+    assert out["thinking"] == {"type": "enabled"}
+
+
+def test_deepseek_flash_capability_override_disables_reasoning_controls():
+    llm = DummyLLM(
+        model="openai/deepseek-flash",
+        temperature=0.7,
+        reasoning_effort="high",
+        capability_overrides={
+            "supports_reasoning_effort": False,
+            "thinking_mode": "none",
+        },
+    )
+    out = select_chat_options(llm, user_kwargs={}, has_tools=True)
+
+    assert "reasoning_effort" not in out
+    assert "thinking" not in out
+    assert out["temperature"] == 0.7
+
+
 def test_chat_options_sampling_override_takes_precedence():
     llm = DummyLLM(
         model="litellm_proxy/future-reasoning-model",

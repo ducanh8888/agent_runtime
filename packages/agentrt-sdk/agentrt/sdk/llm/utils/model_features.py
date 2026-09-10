@@ -49,7 +49,7 @@ def apply_ordered_model_rules(model: str | None, rules: list[str]) -> bool:
 @dataclass(frozen=True)
 class ModelFeatures:
     supports_reasoning_effort: bool
-    thinking_mode: Literal["adaptive", "manual", "none", "unknown"]
+    thinking_mode: Literal["adaptive", "manual", "enabled", "none", "unknown"]
     supports_sampling_params: bool | None
     supports_extended_thinking: bool
     supports_prompt_cache: bool
@@ -223,6 +223,14 @@ SEND_REASONING_CONTENT_MODELS: list[str] = [
     "deepseek/deepseek-v4-flash",  # Dual-mode (Thinking/Non-Thinking)
 ]
 
+# DeepSeek's OpenAI-compatible "flash" model. The provider-routing prefix
+# (deepseek/, openai/, ds/, litellm_proxy/, ...) is internal to the transport,
+# so capability detection keys on the API model name. Without this, an alias
+# that hides the provider silently drops reasoning_effort and thinking.
+DEEPSEEK_FLASH_MODELS: list[str] = [
+    "deepseek-flash",
+]
+
 # Match token -> canonical LiteLLM ID for vision metadata overrides.
 VISION_MODEL_OVERRIDES: dict[str, str] = {}
 
@@ -286,10 +294,10 @@ def _thinking_mode(
     model: str | None,
     model_info: Mapping[str, Any] | None,
     overrides: Mapping[str, Any] | None,
-) -> Literal["adaptive", "manual", "none", "unknown"]:
+) -> Literal["adaptive", "manual", "enabled", "none", "unknown"]:
     if overrides is not None:
         override = overrides.get("thinking_mode")
-        if override in {"adaptive", "manual", "none", "unknown"}:
+        if override in {"adaptive", "manual", "enabled", "none", "unknown"}:
             return override
 
     adaptive = _optional_bool(model_info, "supports_adaptive_thinking")
@@ -301,6 +309,8 @@ def _thinking_mode(
         return "none"
     if model_matches(model, EXTENDED_THINKING_MODELS):
         return "manual"
+    if model_matches(model, DEEPSEEK_FLASH_MODELS):
+        return "enabled"
     if supports_reasoning is True:
         return "unknown"
     return "none"
@@ -365,6 +375,7 @@ def get_features(
         metadata_key="supports_reasoning",
         fallback=(
             model_matches(model, REASONING_EFFORT_MODEL_OVERRIDES)
+            or model_matches(model, DEEPSEEK_FLASH_MODELS)
             or "reasoning_effort" in supported_params
         ),
     )
@@ -390,7 +401,10 @@ def get_features(
         ),
         supports_responses_api=_supports_responses_api(model, model_info, overrides),
         force_string_serializer=model_matches(model, FORCE_STRING_SERIALIZER_MODELS),
-        send_reasoning_content=model_matches(model, SEND_REASONING_CONTENT_MODELS),
+        send_reasoning_content=(
+            model_matches(model, SEND_REASONING_CONTENT_MODELS)
+            or model_matches(model, DEEPSEEK_FLASH_MODELS)
+        ),
         # Extended prompt_cache_retention support follows ordered include/exclude rules.
         supports_prompt_cache_retention=_resolved_bool(
             "supports_prompt_cache_retention",

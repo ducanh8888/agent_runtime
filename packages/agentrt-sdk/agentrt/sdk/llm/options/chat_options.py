@@ -78,6 +78,10 @@ def select_chat_options(
         out.pop("top_p", None)
         out.pop("top_k", None)
 
+    elif model_features.thinking_mode == "enabled":
+        # DeepSeek-style thinking: an explicit enabled flag with no token budget.
+        out["thinking"] = {"type": "enabled"}
+
     # Tools: if not using native, strip tool_choice so we don't confuse providers
     if not has_tools:
         out.pop("tools", None)

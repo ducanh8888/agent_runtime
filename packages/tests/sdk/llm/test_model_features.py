@@ -566,3 +566,49 @@ def test_send_reasoning_content_support(model, expected_send_reasoning):
     """Test that models like kimi-k2-thinking require send_reasoning_content."""
     features = get_features(model)
     assert features.send_reasoning_content is expected_send_reasoning
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "deepseek-flash",
+        "deepseek/deepseek-flash",
+        "openai/deepseek-flash",
+        "openai/ds/deepseek-flash",
+        "ds/deepseek-flash",
+        "litellm_proxy/deepseek-flash",
+    ],
+)
+def test_deepseek_flash_capabilities_across_aliases(model):
+    """Capability detection keys on the API model name, not the routing prefix."""
+    features = get_features(model)
+
+    assert features.supports_reasoning_effort is True
+    assert features.thinking_mode == "enabled"
+    assert features.send_reasoning_content is True
+
+
+def test_deepseek_flash_capability_overrides_take_precedence():
+    features = get_features(
+        "openai/ds/deepseek-flash",
+        overrides={
+            "supports_reasoning_effort": False,
+            "thinking_mode": "none",
+        },
+    )
+
+    assert features.supports_reasoning_effort is False
+    assert features.thinking_mode == "none"
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-chat",
+        "gpt-4o",
+    ],
+)
+def test_deepseek_flash_capabilities_do_not_leak_to_other_models(model):
+    """The flash handling stays scoped to the deepseek-flash API model."""
+    assert get_features(model).thinking_mode != "enabled"

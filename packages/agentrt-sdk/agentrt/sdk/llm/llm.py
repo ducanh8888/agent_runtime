@@ -429,8 +429,9 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         default_factory=dict,
         description=(
             "Explicit model capability overrides. Supported keys include "
-            "supports_reasoning_effort, thinking_mode (adaptive, manual, none, "
-            "or unknown), supports_sampling_params, supports_prompt_cache, "
+            "supports_reasoning_effort, thinking_mode (adaptive, manual, "
+            "enabled, none, or unknown), supports_sampling_params, "
+            "supports_prompt_cache, "
             "supports_stop_words, supports_responses_api, supports_vision, and "
             "supports_prompt_cache_retention. Overrides take precedence over "
             "LiteLLM metadata and SDK fallbacks."
