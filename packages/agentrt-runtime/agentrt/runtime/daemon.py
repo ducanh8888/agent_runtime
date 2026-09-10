@@ -23,6 +23,22 @@ import httpx
 from agentrt.runtime import config
 
 
+#: Explicit deployment-only LLM policy for any server this runtime starts.
+#: Mirrors the direct/high contract bootstrap writes into the saved profile, so
+#: every new conversation is direct DeepSeek Chat Completions, thinking enabled
+#: and effort high, and a weaker explicit agent/agent_settings payload or a
+#: switch_llm bypass is refused by the server. Kept literal rather than derived
+#: from the operator's router config: a deployment that points elsewhere should
+#: fail visibly here instead of silently running a weaker model.
+DEPLOYMENT_LLM_POLICY: dict[str, str] = {
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "api_mode": "chat",
+    "thinking_mode": "enabled",
+    "reasoning_effort": "high",
+}
+
+
 @dataclass(frozen=True)
 class DaemonInfo:
     """Identity of one running agent server instance."""
@@ -129,12 +145,39 @@ def _terminate(pid: int) -> None:
 
 def _log_tail() -> str:
     try:
-        lines = config.log_file().read_text(
-            encoding="utf-8", errors="replace"
-        ).splitlines()
+        lines = (
+            config.log_file().read_text(encoding="utf-8", errors="replace").splitlines()
+        )
     except OSError:
         return ""
     return "\n".join(lines[-30:])
+
+
+def _daemon_env(token: str) -> dict[str, str]:
+    """Environment for the spawned agent server, including the H0 policy.
+
+    Factored out so the deployment contract can be asserted without launching a
+    process.
+    """
+    env = os.environ.copy()
+    env["AGENTRT_SESSION_API_KEYS_0"] = token
+    # The vendored SDK defaults its state directory to ~/.agentrt on every
+    # platform, while config.state_dir() follows the Windows convention.
+    # Without this the daemon would look for its settings, and therefore
+    # its LLM credential, somewhere the bootstrap never wrote.
+    env["AGENTRT_PERSISTENCE_DIR"] = str(config.state_dir())
+    env["AGENTRT_SUPPRESS_BANNER"] = "1"
+    # Conversations default to a path relative to the process working
+    # directory, so without this the daemon's session catalog would move
+    # whenever it was started from somewhere else -- sessions would appear
+    # to vanish rather than fail loudly.
+    state = config.state_dir()
+    env["AGENTRT_CONVERSATIONS_PATH"] = str(state / "conversations")
+    env["AGENTRT_WORKSPACE_PATH"] = str(state / "workspace")
+    # Explicit deployment-only LLM policy. The server enforces it on new
+    # conversations; an agent-server started any other way stays generic.
+    env["AGENTRT_DEPLOYMENT_LLM_POLICY"] = json.dumps(DEPLOYMENT_LLM_POLICY)
+    return env
 
 
 def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
@@ -178,21 +221,7 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
             port = sock.getsockname()[1]
 
         token = secrets.token_urlsafe(32)
-        env = os.environ.copy()
-        env["AGENTRT_SESSION_API_KEYS_0"] = token
-        # The vendored SDK defaults its state directory to ~/.agentrt on every
-        # platform, while config.state_dir() follows the Windows convention.
-        # Without this the daemon would look for its settings, and therefore
-        # its LLM credential, somewhere the bootstrap never wrote.
-        env["AGENTRT_PERSISTENCE_DIR"] = str(config.state_dir())
-        env["AGENTRT_SUPPRESS_BANNER"] = "1"
-        # Conversations default to a path relative to the process working
-        # directory, so without this the daemon's session catalog would move
-        # whenever it was started from somewhere else -- sessions would appear
-        # to vanish rather than fail loudly.
-        state = config.state_dir()
-        env["AGENTRT_CONVERSATIONS_PATH"] = str(state / "conversations")
-        env["AGENTRT_WORKSPACE_PATH"] = str(state / "workspace")
+        env = _daemon_env(token)
         command = [
             sys.executable,
             "-m",

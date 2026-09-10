@@ -2,7 +2,7 @@ import asyncio
 import sys
 import time
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
 from agentrt.agent_server.build_identity import (
@@ -12,6 +12,7 @@ from agentrt.agent_server.build_identity import (
     runtime_version,
     server_build_identity,
 )
+from agentrt.agent_server.deployment_policy import DeploymentLLMPolicy
 from agentrt.sdk.tool.registry import list_usable_tools
 from agentrt.tools.terminal.timeout_policy import (
     get_max_foreground_timeout_seconds,
@@ -57,7 +58,15 @@ class ServerInfo(BaseModel):
             "credential_binding_activation_guard_v1",
             "build_identity_v1",
             "usage_provenance_v1",
+            "deployment_llm_policy_v1",
         ]
+    )
+    deployment_llm_policy: DeploymentLLMPolicy | None = Field(
+        default=None,
+        description=(
+            "Active deployment-only LLM contract, or null when this server runs "
+            "with generic behavior. Secret-free: model/transport/policy only."
+        ),
     )
     max_foreground_terminal_timeout_seconds: float | None = Field(
         default_factory=lambda: get_max_foreground_timeout_seconds()
@@ -109,9 +118,11 @@ async def ready(response: Response) -> dict[str, str]:
 
 
 @server_details_router.get("/server_info")
-async def get_server_info() -> ServerInfo:
+async def get_server_info(request: Request) -> ServerInfo:
     now = time.time()
+    policy = getattr(request.app.state.config, "deployment_llm_policy", None)
     return ServerInfo(
         uptime=int(now - _start_time),
         idle_time=int(now - _last_event_time),
+        deployment_llm_policy=policy,
     )

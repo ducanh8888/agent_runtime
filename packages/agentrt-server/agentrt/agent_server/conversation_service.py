@@ -20,6 +20,11 @@ from agentrt.agent_server.conversation_lease import (
     DEFAULT_LEASE_TTL_SECONDS,
     ConversationLeaseHeldError,
 )
+from agentrt.agent_server.deployment_policy import (
+    DeploymentLLMPolicy,
+    enforce_agent_policy,
+    llm_policy_violations,
+)
 from agentrt.agent_server.event_service import (
     LEASE_RENEW_INTERVAL_SECONDS,
     EventService,
@@ -693,6 +698,7 @@ class ConversationService:
         default=Path("/tmp/conversation-worktrees")
     )
     acp_skill_sourcing: ACPSkillSourcing = "native"
+    deployment_llm_policy: DeploymentLLMPolicy | None = None
     _event_services: dict[UUID, EventService] | None = field(default=None, init=False)
     _conversation_records: dict[UUID, _ConversationRecord] = field(
         default_factory=dict, init=False
@@ -1632,6 +1638,12 @@ class ConversationService:
                 update={"agent": _append_system_message_suffix(request.agent, suffix)}
             )
 
+        if self.deployment_llm_policy is not None:
+            # After every creation form has resolved to a concrete agent, so an
+            # explicit agent/agent_settings payload is held to the same contract
+            # as a named profile. Persisted sessions never reach this path.
+            enforce_agent_policy(request.agent, self.deployment_llm_policy)
+
         request = _prepare_request_workspace(
             request, conversation_id, self.conversation_worktree_root
         )
@@ -2341,6 +2353,7 @@ class ConversationService:
             conversation_idle_ttl_seconds=config.conversation_idle_ttl_seconds,
             conversation_worktree_root=config.conversation_worktree_root,
             acp_skill_sourcing=config.acp_skill_sourcing,
+            deployment_llm_policy=config.deployment_llm_policy,
         )
 
     async def _start_event_service(
@@ -2385,7 +2398,10 @@ class ConversationService:
             )
             if stored.autotitle and stored.title is None:
                 await event_service.subscribe_to_events(
-                    AutoTitleSubscriber(service=event_service)
+                    AutoTitleSubscriber(
+                        service=event_service,
+                        deployment_llm_policy=self.deployment_llm_policy,
+                    )
                 )
             await self._maybe_subscribe_telemetry(
                 event_service, stored, is_new_conversation=is_new_conversation
@@ -2569,6 +2585,7 @@ def _generate_title_traced(
 @dataclass
 class AutoTitleSubscriber(Subscriber):
     service: EventService
+    deployment_llm_policy: DeploymentLLMPolicy | None = None
 
     async def __call__(self, event: Event) -> None:
         # Only act on incoming user messages
@@ -2587,11 +2604,12 @@ class AutoTitleSubscriber(Subscriber):
 
         # Precedence: title_llm_profile (if configured and loads) → agent.llm →
         # truncation. This keeps auto-titling non-breaking for consumers who
-        # don't configure title_llm_profile.
+        # don't configure title_llm_profile. Under an enforced deployment policy
+        # the selected LLM is validated against the same contract so an
+        # arbitrary weaker title profile cannot be used.
         conversation = self.service._conversation
-        title_llm = self._load_title_llm()
-        if title_llm is None:
-            title_llm = conversation.agent.llm if conversation else None
+        agent_llm = conversation.agent.llm if conversation else None
+        title_llm = self._select_title_llm(agent_llm)
 
         # Surface an LLM failure during auto-titling to the UI (issue #16686);
         # generation itself stays non-fatal and falls back to truncation.
@@ -2622,6 +2640,46 @@ class AutoTitleSubscriber(Subscriber):
                 )
 
         asyncio.create_task(_generate_and_save())
+
+    def _select_title_llm(self, agent_llm: LLM | None) -> LLM | None:
+        """Pick the title LLM, honoring the deployment policy when set.
+
+        Without a policy this is the documented precedence: a configured
+        ``title_llm_profile`` wins, else the conversation agent LLM. With a
+        policy, a violating title profile falls back to the agent LLM, and a
+        violating agent LLM refuses LLM titling so no weaker request is sent
+        (the SDK falls back to message truncation).
+        """
+        title_llm = self._load_title_llm()
+        if title_llm is None:
+            title_llm = agent_llm
+        if self.deployment_llm_policy is None or title_llm is None:
+            return title_llm
+
+        if title_llm is agent_llm:
+            if llm_policy_violations(title_llm, self.deployment_llm_policy):
+                logger.warning(
+                    "Conversation LLM violates the deployment policy for title "
+                    "generation; using message truncation."
+                )
+                return None
+            return title_llm
+
+        if llm_policy_violations(title_llm, self.deployment_llm_policy):
+            logger.warning(
+                "Title LLM profile violates the deployment policy; "
+                "inheriting the conversation LLM instead."
+            )
+            title_llm = agent_llm
+        if title_llm is None or llm_policy_violations(
+            title_llm, self.deployment_llm_policy
+        ):
+            logger.warning(
+                "Conversation LLM violates the deployment policy for title "
+                "generation; using message truncation."
+            )
+            return None
+        return title_llm
 
     def _load_title_llm(self) -> LLM | None:
         """Load the LLM for title generation from profile store.

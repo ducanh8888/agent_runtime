@@ -24,6 +24,10 @@ from agentrt.agent_server.conversation_service import (
     InvalidParentConversation,
 )
 from agentrt.agent_server.dependencies import get_conversation_service
+from agentrt.agent_server.deployment_policy import (
+    DeploymentLLMPolicy,
+    llm_policy_violations,
+)
 from agentrt.agent_server.models import (
     INCLUDE_SKILLS_PARAM_TITLE,
     AgentResponseResult,
@@ -66,6 +70,29 @@ from agentrt.tools.preset.default import get_default_tools
 
 
 conversation_router = APIRouter(prefix="/conversations", tags=["Conversations"])
+
+
+def _reject_llm_off_policy(
+    service: ConversationService, llm: LLM, *, action: str
+) -> None:
+    """Refuse ``action`` when ``llm`` breaks an active deployment policy.
+
+    The message names only model/transport/policy fields, never a key or
+    endpoint credential. No-op when the server has no policy configured.
+    """
+    policy = getattr(service, "deployment_llm_policy", None)
+    if not isinstance(policy, DeploymentLLMPolicy):
+        return
+    violations = llm_policy_violations(llm, policy)
+    if violations:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{action} rejected by the deployment LLM policy: "
+                + "; ".join(violations)
+            ),
+        )
+
 
 # Examples
 
@@ -491,6 +518,7 @@ async def set_conversation_security_analyzer(
 )
 async def switch_conversation_profile(
     conversation_id: UUID,
+    request: Request,
     profile_name: str = Body(..., embed=True),
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> Success:
@@ -499,6 +527,33 @@ async def switch_conversation_profile(
     if event_service is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     conversation = event_service.get_conversation()
+    if isinstance(
+        getattr(conversation_service, "deployment_llm_policy", None),
+        DeploymentLLMPolicy,
+    ):
+        # Validate the target before switching so a policy-violating profile
+        # cannot retarget a live conversation. Same secret-free message shape.
+        from agentrt.agent_server.persistence import get_llm_profile_store
+
+        try:
+            profile_llm = get_llm_profile_store().load(
+                profile_name, cipher=get_cipher(request)
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Profile '{profile_name}' not found",
+            )
+        except ValueError:
+            # Store/validation errors can echo decrypted inputs; report the
+            # outcome without the arbitrary underlying value.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Profile could not be loaded",
+            )
+        _reject_llm_off_policy(
+            conversation_service, profile_llm, action="switch_profile"
+        )
     try:
         conversation.switch_profile(profile_name)
     except FileNotFoundError:
@@ -536,6 +591,7 @@ async def switch_conversation_llm(
     cipher = get_cipher(request)
     if cipher is not None:
         llm = decrypt_incoming_llm_secrets(llm, cipher)
+    _reject_llm_off_policy(conversation_service, llm, action="switch_llm")
     conversation.switch_llm(llm)
     return Success()
 

@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from agentrt.agent_server.conversation_lease import DEFAULT_LEASE_TTL_SECONDS
+from agentrt.agent_server.deployment_policy import DeploymentLLMPolicy
 from agentrt.agent_server.env_parser import (
     MISSING,
     _get_default_parsers,
@@ -47,9 +48,9 @@ def _default_session_api_keys():
 
 def _default_secret_key() -> SecretStr | None:
     """
-    If the AGENTRT_SECRET_KEY environment variable is present, it is read by the EnvParser
-    and this function is never called. Otherwise, we fall back to using the first
-    available session_api_key - which we read from the environment.
+    If the AGENTRT_SECRET_KEY environment variable is present, it is read by the
+    EnvParser and this function is never called. Otherwise, we fall back to using the
+    first available session_api_key - which we read from the environment.
     We check both the V0 and V1 variables for this.
     """
     session_api_key = os.getenv(V0_SESSION_API_KEY_ENV)
@@ -376,6 +377,18 @@ class Config(BaseModel):
             "the runtime configuration. This is intended for warm-pool deployments "
             "where pods are pre-warmed before a user is matched and per-user "
             "configuration is delivered later."
+        ),
+    )
+    deployment_llm_policy: DeploymentLLMPolicy | None = Field(
+        default=None,
+        description=(
+            "Optional deployment-only LLM contract. When set, every new "
+            "conversation's agent LLM (and any auxiliary LLM it holds) must be "
+            "direct DeepSeek Chat Completions, model deepseek-flash, thinking "
+            "enabled and reasoning_effort high; the switch_llm tool is refused. "
+            "None (the default) keeps generic agent-server behavior. Existing "
+            "persisted sessions are never rejected or retargeted on load. Set by "
+            "the AgentRT runtime when it starts the server."
         ),
     )
     lease_ttl_seconds: float = Field(
