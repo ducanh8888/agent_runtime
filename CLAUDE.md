@@ -17,6 +17,12 @@ which is the only code that is ours.
    reveal. Hand this to a session you dispatch to work on agentrt itself.
 4. `docs/FRICTION_LOG.md` — defects ordinary use found after the phases closed.
    Read it before assuming a test passing means something works.
+5. [DeepSeek hardening plan](docs/DEEPSEEK_HARDENING_PLAN.md) — active follow-on
+   H0–H7 work, with [self-audit/evidence](docs/DEEPSEEK_HARDENING_AUDIT.md).
+   All H phases are pending. The new deployment targets direct DeepSeek,
+   thinking enabled and effort `high`; no Sol or cost-driven effort reduction.
+   This plan does not change existing profiles or authorize interrupting live
+   sessions. Read its compatibility and cutover gates before implementation.
 
 ## Running it
 

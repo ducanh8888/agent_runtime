@@ -33,6 +33,16 @@ holds the decisions that shaped it, `P1_BASELINE.md` the vendored test baseline,
 and `P4_RECON.md` what was probed before P4 was written. Read them for why
 something is the way it is, not for what it currently does.
 
+**Active follow-on plan (2026-09-11):**
+[DeepSeek hardening](DEEPSEEK_HARDENING_PLAN.md) specifies H0–H7 for direct
+DeepSeek with thinking enabled/high, reliable reads/results, waiting,
+workspace isolation, batch admission and images/accounting. All H phases are
+pending; this is planned work, not a claim about the installed runtime.
+[The self-audit](DEEPSEEK_HARDENING_AUDIT.md) is its dated evidence and decision
+record. The new plan supersedes this document's original exclusions only for
+that follow-on scope (not cron, sandboxing or a second lifecycle owner). Keep
+the P1–P4 sections and result reports below as history.
+
 Built after the phases, on request: `max_iterations` on dispatch, session tags,
 and installation as a package (`uv tool install`). One criterion was withdrawn
 rather than met -- see section 8.
