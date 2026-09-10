@@ -57,6 +57,26 @@ def test_new_profiles_are_constrained_and_ids_reused(state) -> None:
         assert profile.enable_switch_llm_tool is False
 
 
+def test_saved_llm_profile_carries_exact_direct_high_contract(state) -> None:
+    bootstrap.ensure_profiles()
+    llm = get_llm_profile_store().load("default")
+
+    # Assert the serialized profile, so this holds even before the SDK's
+    # name-based detection understands the deepseek-flash alias.
+    dumped = llm.model_dump()
+    assert dumped["model"] == "openai/deepseek-flash"
+    assert dumped["usage_id"] == "agent"
+    assert dumped["api_mode"] == "chat"
+    assert dumped["reasoning_effort"] == "high"
+    assert dumped["capability_overrides"]["supports_reasoning_effort"] is True
+    assert dumped["capability_overrides"]["thinking_mode"] == "enabled"
+    assert dumped["capability_overrides"]["supports_responses_api"] is False
+    assert dumped["litellm_extra_body"] == {"thinking": {"type": "enabled"}}
+    assert dumped["base_url"] == "https://api.deepseek.com"
+    assert llm.api_key is not None
+    assert "test-key" not in repr(dumped)
+
+
 def test_rebuild_preserves_switch_llm_turned_on_by_operator(state) -> None:
     bootstrap.ensure_profiles()
     store = get_agent_profile_store()
@@ -85,21 +105,45 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
 
     llm_store = get_llm_profile_store()
     llm = llm_store.load("default")
-    assert llm.reasoning_effort == "high"
+    # A stale, inconsistent policy plus an unrelated field the operator set.
     llm_store.save(
         "default",
-        llm.model_copy(update={"reasoning_effort": "medium", "temperature": 0.25}),
+        llm.model_copy(
+            update={
+                "reasoning_effort": "medium",
+                "api_mode": "auto",
+                "capability_overrides": {},
+                "litellm_extra_body": {},
+                "usage_id": "custom",
+                "temperature": 0.25,
+            }
+        ),
         include_secrets=True,
     )
+
+    preview = bootstrap.preview_llm_profile()
+    assert preview["exists"] is True
+    assert "test-key" not in repr(preview)
+    changed = {change["field"] for change in preview["changes"]}
+    assert {
+        "reasoning_effort",
+        "api_mode",
+        "capability_overrides",
+        "litellm_extra_body",
+        "usage_id",
+    } <= changed
 
     applied = bootstrap.apply_llm_profile()
     assert applied["applied"] is True
     assert applied["agent_profiles_unchanged"] is True
-    assert any(change["field"] == "reasoning_effort" for change in applied["changes"])
 
     reloaded = llm_store.load("default")
-    assert reloaded.reasoning_effort == "high"
-    assert reloaded.temperature == 0.25
+    assert reloaded.model_dump()["reasoning_effort"] == "high"
+    assert reloaded.api_mode == "chat"
+    assert reloaded.capability_overrides["thinking_mode"] == "enabled"
+    assert reloaded.litellm_extra_body == {"thinking": {"type": "enabled"}}
+    assert reloaded.usage_id == "agent"
+    assert reloaded.temperature == 0.25  # unrelated field preserved
     assert reloaded.api_key is not None
     assert bootstrap.preview_llm_profile()["changes"] == []
     assert bootstrap.ensure_profiles() == ids

@@ -27,6 +27,23 @@ from agentrt.runtime import config, permissions
 LLM_PROFILE_NAME = "default"
 AGENT_PROFILE_NAME = "default"
 
+#: Fixed direct-DeepSeek policy for every AgentRT LLM service. The deployment
+#: is DeepSeek-only with thinking enabled and effort "high"; there is no
+#: operator effort selector and no silent downgrade to a weaker request. These
+#: are written into the saved profile so the contract is inspectable, not just
+#: implied by the SDK's detection of the model name. See H0 in
+#: docs/DEEPSEEK_HARDENING_PLAN.md.
+DIRECT_LLM_USAGE_ID = "agent"
+DIRECT_LLM_API_MODE = "chat"
+DIRECT_LLM_REASONING_EFFORT = "high"
+DIRECT_LLM_CAPABILITY_OVERRIDES: dict[str, bool | str] = {
+    "supports_reasoning_effort": True,
+    "thinking_mode": "enabled",
+    # Chat Completions only. Responses mode has no contract tests in this pass.
+    "supports_responses_api": False,
+}
+DIRECT_LLM_EXTRA_BODY: dict[str, object] = {"thinking": {"type": "enabled"}}
+
 
 def _use_state_dir() -> Path:
     """Point the vendored stores at our state directory.
@@ -41,9 +58,13 @@ def _use_state_dir() -> Path:
 
 
 def _build_llm(router: config.RouterConfig):
-    """The model id is prefixed with ``openai/`` so LiteLLM routes it to the
-    OpenAI-compatible path instead of trying to infer a provider from a name it
-    has never seen. 9Router speaks that protocol for every model it serves.
+    """Build the saved LLM profile with the fixed direct-DeepSeek policy.
+
+    The model id is prefixed with ``openai/`` so LiteLLM routes it to the
+    OpenAI-compatible Chat Completions path instead of trying to infer a
+    provider from a name it has never seen. ``api_mode`` and the capability
+    overrides pin that path and the thinking/effort policy explicitly, so the
+    profile does not depend on an alias being recognized by name detection.
     """
     from agentrt.sdk.llm import LLM
 
@@ -51,7 +72,11 @@ def _build_llm(router: config.RouterConfig):
         model=f"openai/{router.model}",
         base_url=router.base_url,
         api_key=SecretStr(router.api_key),
-        service_id="agent",
+        usage_id=DIRECT_LLM_USAGE_ID,
+        api_mode=DIRECT_LLM_API_MODE,
+        reasoning_effort=DIRECT_LLM_REASONING_EFFORT,
+        capability_overrides=dict(DIRECT_LLM_CAPABILITY_OVERRIDES),
+        litellm_extra_body=dict(DIRECT_LLM_EXTRA_BODY),
     )
 
 
@@ -223,15 +248,31 @@ def _describe_llm(llm) -> dict:
         "base_url": llm.base_url,
         "reasoning_effort": llm.reasoning_effort,
         "usage_id": llm.usage_id,
+        "api_mode": llm.api_mode,
+        "capability_overrides": llm.capability_overrides,
+        "litellm_extra_body": llm.litellm_extra_body,
         "api_key_present": llm.api_key is not None,
         "provider_connection_id": llm.provider_connection_id,
     }
 
 
+#: Fields the direct/high contract owns; changed together so apply cannot leave
+#: a stale endpoint beside a new policy.
+_POLICY_FIELDS = (
+    "model",
+    "reasoning_effort",
+    "usage_id",
+    "api_mode",
+    "capability_overrides",
+    "litellm_extra_body",
+)
+
+
 def _profile_changes(current, proposed) -> list[dict]:
     """Endpoint/model/policy differences, with the key reported as presence."""
     changes: list[dict] = []
-    for field in ("model", "base_url", "reasoning_effort"):
+    fields = ("base_url", *_POLICY_FIELDS)
+    for field in fields:
         before = getattr(current, field, None) if current is not None else None
         after = getattr(proposed, field)
         if before != after:
@@ -250,16 +291,16 @@ def _profile_changes(current, proposed) -> list[dict]:
 
 
 def _merge_llm(current, proposed):
-    """Update endpoint, model and policy, preserving the profile's other fields.
+    """Update the endpoint, model and full policy, preserving unrelated fields.
 
     A profile linked to a provider connection owns no inline credential, so
-    its ``base_url`` and ``api_key`` stay with that connection; model and
-    reasoning effort are still updated because they are not credentials.
+    its ``base_url`` and ``api_key`` stay with that connection. Everything in
+    ``_POLICY_FIELDS`` is refreshed together: a partial update would leave an
+    old effort or api_mode next to a new model, which is exactly the
+    inconsistency that reads as "the policy is applied" while the request
+    still goes out weaker.
     """
-    update: dict = {
-        "model": proposed.model,
-        "reasoning_effort": proposed.reasoning_effort,
-    }
+    update: dict = {field: getattr(proposed, field) for field in _POLICY_FIELDS}
     if not current.provider_connection_id:
         update["base_url"] = proposed.base_url
         update["api_key"] = proposed.api_key
