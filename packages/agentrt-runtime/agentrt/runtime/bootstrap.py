@@ -24,6 +24,7 @@ from pydantic import SecretStr
 
 from agentrt.runtime import config, permissions
 
+
 LLM_PROFILE_NAME = "default"
 AGENT_PROFILE_NAME = "default"
 
@@ -109,7 +110,7 @@ def _build_llm(router: config.RouterConfig):
 GUARD_MODULE = "agentrt.runtime.guarded_tools"
 
 
-def _tools_for(preset: str):
+def _tools_for(preset: permissions.Permission):
     """Build the tool specs a preset grants.
 
     Round 7 fixed the set at terminal, file editor and task tracker: browser
@@ -277,7 +278,7 @@ def allowed_llm_profiles() -> list[str]:
     return sorted(refs or {LLM_PROFILE_NAME})
 
 
-def agent_profile_llm_ref(permission: str) -> str | None:
+def agent_profile_llm_ref(permission: permissions.Permission) -> str | None:
     """The LLM profile reference a permission preset's agent profile uses."""
     from agentrt.agent_server.persistence import get_agent_profile_store
     from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
@@ -471,7 +472,7 @@ def summary() -> dict:
             continue
         out["permissions"][preset] = {
             "id": str(profile.id),
-            "tools": [t.name for t in (profile.tools or [])],
+            "tools": [t.name for t in (getattr(profile, "tools", None) or [])],
             "description": permissions.DESCRIPTIONS[preset],
         }
     out["default_permission"] = permissions.DEFAULT_PERMISSION

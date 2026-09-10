@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 import httpx
@@ -87,7 +87,7 @@ def _started_at(status: dict) -> float | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed.timestamp()
 
 
@@ -107,6 +107,7 @@ def short_id(full: str) -> str:
     """Return the short, human-friendly form of a session id."""
     return str(full)[:8]
 
+
 def _status_of(data: object) -> str | None:
     """Read a session's lifecycle state.
 
@@ -117,6 +118,7 @@ def _status_of(data: object) -> str | None:
     if not isinstance(data, dict):
         return None
     return data.get("execution_status") or data.get("status")
+
 
 def _join_text(blocks: object) -> str:
     """Join the ``"text"`` fields of content blocks, tolerating non-lists."""
@@ -293,7 +295,7 @@ class Client:
 
         try:
             response = attempt()
-        except httpx.TransportError as exc:
+        except httpx.TransportError:
             # The cached port and token come from daemon.json as it read at
             # first use. A daemon that restarts picks a new ephemeral port, so
             # a long-lived client -- the MCP server lives as long as the
@@ -350,9 +352,7 @@ class Client:
 
         if len(matches) > 1:
             listed = ", ".join(short_id(full) for full in matches)
-            raise AmbiguousSession(
-                f"session prefix {session!r} is ambiguous: {listed}"
-            )
+            raise AmbiguousSession(f"session prefix {session!r} is ambiguous: {listed}")
 
         return matches[0]
 
@@ -440,8 +440,11 @@ class Client:
 
         cap = config.max_running_sessions()
         if cap > 0:
-            running = [s for s in self.list_sessions(limit=100)
-                       if (s.get("status") or "").lower() == "running"]
+            running = [
+                s
+                for s in self.list_sessions(limit=100)
+                if (s.get("status") or "").lower() == "running"
+            ]
             if len(running) >= cap:
                 raise ClientError(
                     f"{len(running)} sessions are already running and the limit "
@@ -500,9 +503,7 @@ class Client:
             params: dict[str, object] = {"limit": 100}
             if page:
                 params["page_id"] = page
-            data = self._send(
-                "GET", "/api/conversations/search", params=params
-            ).json()
+            data = self._send("GET", "/api/conversations/search", params=params).json()
             items = data.get("items") if isinstance(data, dict) else None
             if not isinstance(items, list) or not items:
                 break
@@ -541,11 +542,19 @@ class Client:
                 {
                     "id": full_id,
                     "short_id": short_id(full_id) if full_id else None,
-                    "title": session.get("title") if isinstance(session, dict) else None,
+                    "title": session.get("title")
+                    if isinstance(session, dict)
+                    else None,
                     "status": _status_of(session),
-                    "created_at": session.get("created_at") if isinstance(session, dict) else None,
-                    "updated_at": session.get("updated_at") if isinstance(session, dict) else None,
-                    "tags": (session.get("tags") or {}) if isinstance(session, dict) else {},
+                    "created_at": session.get("created_at")
+                    if isinstance(session, dict)
+                    else None,
+                    "updated_at": session.get("updated_at")
+                    if isinstance(session, dict)
+                    else None,
+                    "tags": (session.get("tags") or {})
+                    if isinstance(session, dict)
+                    else {},
                 }
             )
         return result
@@ -669,9 +678,7 @@ class Client:
                     {
                         "type": "observation",
                         "tool": item.get("tool_name"),
-                        "output": _capped(
-                            _join_text(observation.get("content")), 600
-                        ),
+                        "output": _capped(_join_text(observation.get("content")), 600),
                     }
                 )
 
@@ -705,9 +712,7 @@ class Client:
     def interrupt(self, session: str) -> dict:
         """Cancel work in flight; the session becomes "paused", still resumable."""
         resolved = self._resolve_session(session)
-        self._send(
-            "POST", f"/api/conversations/{quote(resolved, safe='')}/interrupt"
-        )
+        self._send("POST", f"/api/conversations/{quote(resolved, safe='')}/interrupt")
         return {
             "id": resolved,
             "short_id": short_id(resolved),
@@ -818,10 +823,11 @@ class Client:
                 )
             except permissions.PermissionDenied as denied:
                 raise ClientError(f"refusing {path!r}: {denied}") from denied
-            response = self._send(
-                "GET",
-                f"/api/conversations/{quote(resolved, safe='')}/workspace/{quote(path, safe='/')}",
+            workspace_path = (
+                f"/api/conversations/{quote(resolved, safe='')}/workspace/"
+                f"{quote(path, safe='/')}"
             )
+            response = self._send("GET", workspace_path)
             return {
                 "id": resolved,
                 "short_id": short_id(resolved),
@@ -852,7 +858,7 @@ class Client:
                             ),
                             "size": entry_stat.st_size,
                             "modified": datetime.fromtimestamp(
-                                entry_stat.st_mtime, tz=timezone.utc
+                                entry_stat.st_mtime, tz=UTC
                             ).isoformat(),
                         },
                     )
@@ -866,7 +872,7 @@ class Client:
             "short_id": short_id(resolved),
             "workspace": workspace,
             "since": (
-                datetime.fromtimestamp(since, tz=timezone.utc).isoformat()
+                datetime.fromtimestamp(since, tz=UTC).isoformat()
                 if since is not None
                 else None
             ),
@@ -888,4 +894,3 @@ class Client:
             "total_scanned": total,
             "pruned": sorted(PRUNED_DIRS),
         }
-

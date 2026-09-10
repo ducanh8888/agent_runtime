@@ -376,7 +376,9 @@ def test_router_rejection_never_echoes_hostile_extra_body() -> None:
     )
     service = SimpleNamespace(deployment_llm_policy=DeploymentLLMPolicy())
     with pytest.raises(HTTPException) as excinfo:
-        _reject_llm_off_policy(service, llm, action="switch_llm")
+        _reject_llm_off_policy(
+            cast(ConversationService, service), llm, action="switch_llm"
+        )
     detail = str(excinfo.value.detail)
     assert "litellm_extra_body" in detail
     assert secret not in detail

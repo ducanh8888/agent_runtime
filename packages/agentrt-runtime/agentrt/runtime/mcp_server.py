@@ -11,8 +11,10 @@ it. Whatever a tool's description does not say, the caller has to guess.
 
 from threading import Lock
 
-from agentrt.runtime import client as client_mod, config
 from mcp.server.fastmcp import FastMCP
+
+from agentrt.runtime import client as client_mod, config
+
 
 INSTRUCTIONS = """agentrt runs coding agents in background sessions on this
 machine. A session survives this conversation ending: dispatch work, close the
@@ -321,7 +323,7 @@ def control(session: str, action: str, message: str | None = None) -> dict:
             return {
                 "error": "MissingArgument",
                 "message": "action 'tag' requires `message`, as key=value pairs "
-                           "separated by commas",
+                "separated by commas",
             }
         parsed: dict[str, str] = {}
         for pair in message.split(","):
@@ -336,7 +338,7 @@ def control(session: str, action: str, message: str | None = None) -> dict:
                 return {
                     "error": "MalformedTag",
                     "message": f"{pair!r} is not key=value; write "
-                               f"'{pair}=yes' to set it, or '{pair}=' to remove it",
+                    f"'{pair}=yes' to set it, or '{pair}=' to remove it",
                 }
             parsed[key.strip()] = value.strip()
         return _guard(client.tag, session, parsed)

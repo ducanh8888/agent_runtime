@@ -28,9 +28,10 @@ import os
 from pathlib import Path
 from typing import Literal
 
+
 Permission = Literal["readonly", "workspace", "broad"]
 
-PRESETS: tuple[str, ...] = ("readonly", "workspace", "broad")
+PRESETS: tuple[Permission, ...] = ("readonly", "workspace", "broad")
 DEFAULT_PERMISSION: Permission = "workspace"
 
 DESCRIPTIONS: dict[str, str] = {
@@ -68,13 +69,14 @@ def normalise(permission: str | None) -> Permission:
     value = str(permission).strip().lower()
     if value not in PRESETS:
         raise PermissionDenied(
-            f"unknown permission {permission!r}; expected one of: "
-            + ", ".join(PRESETS)
+            f"unknown permission {permission!r}; expected one of: " + ", ".join(PRESETS)
         )
     return value  # type: ignore[return-value]
 
 
-def _real(path: str | os.PathLike[str], *, base: str | os.PathLike[str] | None = None) -> Path:
+def _real(
+    path: str | os.PathLike[str], *, base: str | os.PathLike[str] | None = None
+) -> Path:
     """Resolve a path the way the filesystem will.
 
     ``resolve()`` rather than ``normpath`` because it follows symlinks and
@@ -130,10 +132,12 @@ def check_path(
     text = str(raw_path)
     # Extended-length and UNC prefixes bypass the normalisation everything else
     # here relies on, and nothing legitimate in a workspace needs them.
-    if text.startswith("\\\\?\\") or text.startswith("\\\\.\\") or text.startswith("\\\\"):
-        raise PermissionDenied(
-            f"refusing an extended-length or UNC path: {text!r}"
-        )
+    if (
+        text.startswith("\\\\?\\")
+        or text.startswith("\\\\.\\")
+        or text.startswith("\\\\")
+    ):
+        raise PermissionDenied(f"refusing an extended-length or UNC path: {text!r}")
 
     if writing and permission == "readonly":
         raise PermissionDenied(
@@ -189,7 +193,11 @@ def _secret_identities() -> set[tuple[int, int]]:
     from agentrt.runtime import config
 
     state = config.state_dir()
-    candidates = [state / ".env", state / "daemon.json", *(state / "profiles").glob("*.json")]
+    candidates = [
+        state / ".env",
+        state / "daemon.json",
+        *(state / "profiles").glob("*.json"),
+    ]
     out: set[tuple[int, int]] = set()
     for path in candidates:
         try:
