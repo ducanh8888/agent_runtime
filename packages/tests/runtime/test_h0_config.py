@@ -153,3 +153,17 @@ def test_mcp_initialize_reports_runtime_version_not_library_version() -> None:
 
     assert options.server_version == config.runtime_version()
     assert options.server_version != importlib.metadata.version("mcp")
+
+
+def test_cli_supports_conventional_version_flag(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from agentrt.runtime.cli import main
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
+
+    assert excinfo.value.code == 0
+    assert capsys.readouterr().out.strip() == (
+        f"agentrt-runtime {config.runtime_version()}"
+    )

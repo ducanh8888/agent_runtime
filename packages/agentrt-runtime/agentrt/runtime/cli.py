@@ -41,7 +41,7 @@ def _emit(args: argparse.Namespace, value: object | None) -> None:
         _print_json(value)
 
 
-def _report_error(code: int, exc: Exception) -> None:
+def _report_error(_code: int, exc: Exception) -> None:
     """Put an error on stderr only, so stdout can remain clean for callers."""
     payload = {"error": type(exc).__name__, "message": str(exc)}
     json.dump(payload, sys.stderr, indent=2, default=str, ensure_ascii=False)
@@ -160,7 +160,7 @@ def _cmd_daemon_logs(args: argparse.Namespace) -> None:
     """
     path = config.log_file()
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as log:
+        with open(path, encoding="utf-8", errors="replace") as log:
             tail = deque(log, maxlen=args.lines)
     except FileNotFoundError:
         return None
@@ -200,6 +200,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="use a short human-readable line instead of JSON",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {config.runtime_version()}",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -229,15 +234,11 @@ def _build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--limit", type=int, default=20)
     list_parser.set_defaults(func=_cmd_list)
 
-    status_parser = _add_subparser(
-        subparsers, "status", help="show session status"
-    )
+    status_parser = _add_subparser(subparsers, "status", help="show session status")
     status_parser.add_argument("session")
     status_parser.set_defaults(func=_cmd_status)
 
-    result_parser = _add_subparser(
-        subparsers, "result", help="show session result"
-    )
+    result_parser = _add_subparser(subparsers, "result", help="show session result")
     result_parser.add_argument("session")
     result_parser.set_defaults(func=_cmd_result)
 
