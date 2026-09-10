@@ -124,6 +124,14 @@ from agentrt.sdk.llm.utils.openhands_provider import (
     canonicalize_openhands_llm_payload,
     litellm_call_kwargs,
 )
+from agentrt.sdk.llm.utils.provenance import (
+    CallProvenance,
+    EndpointProvenance,
+    PolicyProvenance,
+    RouteProvenance,
+    normalize_thinking_mode,
+    policy_from_call_kwargs,
+)
 from agentrt.sdk.llm.utils.retry_mixin import RetryMixin
 from agentrt.sdk.llm.utils.telemetry import Telemetry
 from agentrt.sdk.llm.utils.vertex_preflight import assert_vertex_sdk_available
@@ -1053,6 +1061,42 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             retry_listener=self._retry_listener_fn,
         )
 
+    def _build_call_provenance(self, sent_kwargs: dict[str, Any]) -> CallProvenance:
+        """Describe the configured route/policy and the controls actually sent.
+
+        Built once per completion call so every retry attempt shares the same
+        description. Telemetry adds the per-call id and confirmation from the
+        completed response only.
+        """
+        provider_info = self._provider_info
+        provider_name = provider_info.name if provider_info is not None else None
+        configured = RouteProvenance(
+            model=self.model,
+            provider=provider_name,
+            endpoint=EndpointProvenance.from_url(self.base_url),
+            policy=PolicyProvenance(
+                reasoning_effort=(
+                    self.reasoning_effort
+                    if isinstance(self.reasoning_effort, str)
+                    else None
+                ),
+                thinking_type=normalize_thinking_mode(
+                    self._model_features().thinking_mode
+                ),
+            ),
+        )
+        sent = RouteProvenance(
+            model=provider_info.model if provider_info is not None else None,
+            provider=provider_name,
+            endpoint=(
+                EndpointProvenance.from_url(provider_info.api_base)
+                if provider_info is not None
+                else None
+            ),
+            policy=policy_from_call_kwargs(sent_kwargs),
+        )
+        return CallProvenance(configured=configured, sent=sent)
+
     def _build_completion_result(self, resp: ModelResponse) -> LLMResponse:
         """Convert a raw :class:`ModelResponse` into an :class:`LLMResponse`."""
         first_choice = resp["choices"][0]
@@ -1577,11 +1621,14 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             kwargs,
             call_context=call_context,
         )
+        provenance = self._build_call_provenance(call_kwargs)
 
         @self._make_retry_decorator()
         def _one_attempt(**retry_kwargs: Any) -> ModelResponse:
             assert self._telemetry is not None
-            self._telemetry.on_request(telemetry_ctx=telemetry_ctx)
+            self._telemetry.on_request(
+                telemetry_ctx=telemetry_ctx, provenance=provenance
+            )
             final_kwargs = {**call_kwargs, **retry_kwargs}
             resp = self._transport_call(
                 messages=formatted_messages,
@@ -1681,11 +1728,14 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             kwargs,
             call_context=call_context,
         )
+        provenance = self._build_call_provenance(call_kwargs)
 
         @self._make_retry_decorator()
         async def _one_attempt(**retry_kwargs: Any) -> ModelResponse:
             assert self._telemetry is not None
-            self._telemetry.on_request(telemetry_ctx=telemetry_ctx)
+            self._telemetry.on_request(
+                telemetry_ctx=telemetry_ctx, provenance=provenance
+            )
             final_kwargs = {**call_kwargs, **retry_kwargs}
             resp = await self._atransport_call(
                 messages=formatted_messages,
@@ -1805,11 +1855,14 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             kwargs,
             call_context=call_context,
         )
+        provenance = self._build_call_provenance(call_kwargs)
 
         @self._make_retry_decorator()
         def _one_attempt(**retry_kwargs: Any) -> ResponsesAPIResponse:
             assert self._telemetry is not None
-            self._telemetry.on_request(telemetry_ctx=telemetry_ctx)
+            self._telemetry.on_request(
+                telemetry_ctx=telemetry_ctx, provenance=provenance
+            )
             final_kwargs = {**call_kwargs, **retry_kwargs}
             litellm_kwargs = self._build_responses_call_kwargs(
                 input_items, instructions, resp_tools, final_kwargs
@@ -1956,13 +2009,16 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             kwargs,
             call_context=call_context,
         )
+        provenance = self._build_call_provenance(call_kwargs)
 
         @self._make_retry_decorator()
         async def _one_attempt(
             **retry_kwargs: Any,
         ) -> ResponsesAPIResponse:
             assert self._telemetry is not None
-            self._telemetry.on_request(telemetry_ctx=telemetry_ctx)
+            self._telemetry.on_request(
+                telemetry_ctx=telemetry_ctx, provenance=provenance
+            )
             final_kwargs = {**call_kwargs, **retry_kwargs}
             auth_values = await self._aget_litellm_auth_values()
             litellm_kwargs = self._build_responses_call_kwargs(

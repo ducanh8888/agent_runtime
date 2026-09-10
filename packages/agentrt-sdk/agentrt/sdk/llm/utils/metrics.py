@@ -2,7 +2,15 @@ import copy
 import time
 from typing import final
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
+
+from agentrt.sdk.llm.utils.provenance import CallProvenance
 
 
 class Cost(BaseModel):
@@ -57,6 +65,22 @@ class TokenUsage(BaseModel):
         default=0, ge=0, description="Per turn tokens must be non-negative"
     )
     response_id: str = Field(default="")
+    provenance: CallProvenance | None = Field(
+        default=None,
+        description=(
+            "Optional per-call model/endpoint/policy provenance. None for "
+            "legacy records, aggregate sums, and calls recorded before this "
+            "field existed."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _omit_unknown_provenance(self, handler, info):  # noqa: ARG002
+        """Keep legacy JSON unchanged when no provenance was recorded."""
+        data = handler(self)
+        if self.provenance is None and isinstance(data, dict):
+            data.pop("provenance", None)
+        return data
 
     def __add__(self, other: "TokenUsage") -> "TokenUsage":
         """Add two TokenUsage instances together."""
@@ -184,6 +208,7 @@ class Metrics(MetricsSnapshot):
         context_window: int,
         response_id: str,
         reasoning_tokens: int = 0,
+        provenance: CallProvenance | None = None,
     ) -> None:
         """Add a single usage record."""
         # Token each turn for calculating context usage.
@@ -199,6 +224,7 @@ class Metrics(MetricsSnapshot):
             context_window=context_window,
             per_turn_token=per_turn_token,
             response_id=response_id,
+            provenance=provenance,
         )
         self.token_usages.append(usage)
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from agentrt.sdk.llm.utils.litellm_provider import LLMProvider
 from agentrt.sdk.llm.utils.metrics import Metrics
 from agentrt.sdk.llm.utils.openhands_provider import litellm_call_kwargs
+from agentrt.sdk.llm.utils.provenance import CallProvenance, call_identity
 from agentrt.sdk.logger import get_logger
 
 
@@ -45,6 +46,7 @@ class Telemetry(BaseModel):
     # --- Runtime fields (not serialized) ---
     _req_start: float = PrivateAttr(default=0.0)
     _req_ctx: dict[str, Any] = PrivateAttr(default_factory=dict)
+    _pending_provenance: CallProvenance | None = PrivateAttr(default=None)
     _last_latency: float = PrivateAttr(default=0.0)
     _log_completions_callback: Callable[[str, str], None] | None = PrivateAttr(
         default=None
@@ -76,9 +78,14 @@ class Telemetry(BaseModel):
         """
         self._stats_update_callback = callback
 
-    def on_request(self, telemetry_ctx: dict | None) -> None:
+    def on_request(
+        self,
+        telemetry_ctx: dict | None,
+        provenance: CallProvenance | None = None,
+    ) -> None:
         self._req_start = time.time()
         self._req_ctx = telemetry_ctx or {}
+        self._pending_provenance = provenance
 
     def on_response(
         self,
@@ -93,8 +100,9 @@ class Telemetry(BaseModel):
         """
         # 1) latency
         self._last_latency = time.time() - (self._req_start or time.time())
-        response_id = resp.id
+        response_id = resp.id or ""
         self.metrics.add_response_latency(self._last_latency, response_id)
+        provenance = self._take_provenance(response_id)
 
         # 2) cost
         cost = self._compute_cost(resp, provider_info=provider_info)
@@ -108,7 +116,22 @@ class Telemetry(BaseModel):
 
         if usage and self._has_meaningful_usage(usage):
             self._record_usage(
-                usage, response_id, self._req_ctx.get("context_window", 0)
+                usage,
+                response_id,
+                self._req_ctx.get("context_window", 0),
+                provenance=provenance,
+            )
+        elif provenance is not None:
+            # A completed provider call whose response carries no usage still
+            # has provenance, but writing a zero-token TokenUsage would assert
+            # "0 tokens" rather than "unknown". The stats owner has no
+            # zero/unknown distinction here, so the call is left out of the
+            # per-call list and its provenance is consumed (not misattributed
+            # to a later call). It is therefore reported as usage-unavailable.
+            logger.debug(
+                "Completed call %s has no provider usage; provenance not "
+                "recorded as a per-call usage entry.",
+                response_id or "<unavailable>",
             )
 
         # 4) optional logging
@@ -189,8 +212,27 @@ class Telemetry(BaseModel):
         except Exception:
             return False
 
+    def _take_provenance(self, response_id: str) -> CallProvenance | None:
+        """Bind the pending request provenance to this completed response's id.
+
+        The pending value is consumed once so a retry cannot double-count or
+        attach a previous attempt's provenance to the next completed call.
+        """
+        provenance = self._pending_provenance
+        self._pending_provenance = None
+        if provenance is None:
+            return None
+        call_id, call_id_source = call_identity(response_id)
+        return provenance.model_copy(
+            update={"call_id": call_id, "call_id_source": call_id_source}
+        )
+
     def _record_usage(
-        self, usage: Usage | ResponseAPIUsage, response_id: str, context_window: int
+        self,
+        usage: Usage | ResponseAPIUsage,
+        response_id: str,
+        context_window: int,
+        provenance: CallProvenance | None = None,
     ) -> None:
         """
         Record token usage, supporting both Chat Completions Usage and
@@ -246,6 +288,7 @@ class Telemetry(BaseModel):
             reasoning_tokens=reasoning_tokens,
             context_window=context_window,
             response_id=response_id,
+            provenance=provenance,
         )
 
     def _compute_cost(
