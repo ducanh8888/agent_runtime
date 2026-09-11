@@ -67,6 +67,7 @@ def dispatch(
     permission: str | None = None,
     llm_profile: str | None = None,
     max_iterations: int | None = None,
+    tags: dict[str, str] | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -167,6 +168,17 @@ def dispatch(
 
     `workspace` and `broad` include a terminal and therefore run with the same
     user authority you do. Do not dispatch work you would not run yourself.
+
+    TITLE AND TAGS are persisted at creation, before the first run. An explicit
+    `title` is terminal: auto-titling is not scheduled for that session, so a
+    later generated title cannot replace it. `tags` is a string-to-string map
+    (keys lowercase: letters, digits, `_`, `-`). Use both on a fan-out -- the
+    auto-title of fifty similar tasks is fifty similar titles, while tags are
+    what tell them apart in `list`.
+
+    `result_state` on the returned session is `pending` until a run consumes
+    the input; `admission_status` is `queued` until then, so a freshly
+    dispatched session is never reported as merely `idle`.
     """
     return _guard(
         _get_client().dispatch,
@@ -176,6 +188,7 @@ def dispatch(
         permission=permission,
         llm_profile=llm_profile,
         max_iterations=max_iterations,
+        tags=tags,
     )
 
 
@@ -207,37 +220,49 @@ def status(session: str) -> dict:
 
     session is the short id or the full UUID.
 
-    The states you will see: running means the agent is working; paused means
-    it was interrupted or stopped and can be resumed; finished means it stopped
-    on its own; error means it stopped without finishing.
+    The execution states you will see: running means the agent is working;
+    paused means it was interrupted or stopped and can be resumed; finished
+    means it stopped on its own; error means it stopped without finishing.
 
-    `error` arrives with no explanation. The daemon carries no message for it,
-    so there is usually no error key and nothing here says what went wrong. Two
-    things distinguish the cases:
+    REQUEST SCOPE, separate from whether the session is running:
 
-    - `max_iterations` is always here -- 500 unless you chose otherwise at
-      dispatch -- so its presence tells you nothing on its own. What it gives
-      you is the number to compare against: a session that ran out stops in
-      `error` with a transcript that ends mid-task after about that many steps.
-      No counter is exposed, so that comparison is the only signal.
-    - Read `transcript` either way. A session that failed stops mid-work and its
-      last events show where, and one that ran out looks like a task abandoned
-      in the middle rather than one that went wrong. Server-side tracebacks go
-      to the daemon log (`agentrt daemon logs`), not into this response.
+    - `admission_status`: `queued` (input accepted, no run has stepped on it),
+      `preparing` (a run started but has not completed a step), `admitted`.
+      A freshly dispatched session reports `queued`, not ambiguous `idle`.
+    - `result_state`: `pending` (the newest input has no answer yet), `final`,
+      `partial` (a run stopped early), `unavailable` (no request boundary --
+      the session never ran under this contract).
+    - `iterations_used` / `iterations_remaining` count steps against
+      `max_iterations` for the current run, so an `error` session that ran out
+      of steps is distinguishable here without reading the transcript.
 
-    Check this before result, which is null both while a session is still
-    working and when a finished session had nothing to say.
+    `execution_status` still carries no message for `error`; read `result` for
+    the sanitized code/detail and `transcript` for where it stopped.
+    Server-side tracebacks go to the daemon log (`agentrt daemon logs`), not
+    into this response.
     """
     return _guard(_get_client().status, session)
 
 
 @mcp.tool()
 def result(session: str) -> dict:
-    """Return a session's closing summary.
+    """Return the answer for a session's current request.
 
-    session is the short id or the full UUID. result is null while the agent is
-    still working, so read status first to tell "still running" from "finished
-    with nothing to say".
+    session is the short id or the full UUID.
+
+    `state` scopes the answer. `final` means the run answering the newest
+    consumed input finished; `result` is its text, and an empty string is a
+    valid final answer. `pending` means the newest input has no answer yet --
+    `result` is null, and the previous request's answer is deliberately not
+    returned in its place. `partial` means the run stopped early (error,
+    iteration limit, stuck or pause); any text is partial. `unavailable` means
+    the session never ran under request-scope tracking, so provenance is not
+    claimed for it.
+
+    Reported with it: `error` (sanitized code/detail for this request),
+    `iterations_used` / `iterations_remaining`, `last_completed_tool`, and
+    `last_progress_at` -- the timestamp of the last persisted event, which is
+    durable progress and does not move during a long model turn.
 
     THIS IS THE AGENT'S OWN ACCOUNT OF WHAT IT DID, NOT EVIDENCE THAT IT DID
     IT. An agent that says it verified its output has sometimes only said so.
@@ -252,9 +277,12 @@ def result(session: str) -> dict:
 def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict:
     """Read what a session actually did, condensed.
 
-    Returns events oldest first: messages, each action as its tool name and
-    short intent, and each observation truncated. next_cursor pages backwards
-    into older events; pass it back as cursor.
+    Returns events oldest first: messages, each action with its tool, short
+    intent, event id and -- for file actions -- the path and line range, each
+    observation truncated with its event id, and each error with its sanitized
+    code and detail. Errors used to be dropped here, which made a session that
+    failed look like a clean stop. next_cursor pages backwards into older
+    events; pass it back as cursor.
 
     Expect fewer events than you asked for. limit counts raw events and about
     half of those are internal bookkeeping that gets dropped, so a long session

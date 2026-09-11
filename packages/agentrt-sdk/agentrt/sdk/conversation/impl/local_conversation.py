@@ -1993,6 +1993,10 @@ class LocalConversation(BaseConversation):
                 ConversationExecutionStatus.STUCK,
             ]:
                 self._state.execution_status = ConversationExecutionStatus.RUNNING
+            # H2: the iteration counter describes the run being started, and a
+            # single run() call restarts it -- including a continuation after a
+            # confirmation pause, which the guard above does not cover.
+            self._state.iterations_used = 0
 
         iteration = 0
         _run_start_event_count = len(self._state.events)
@@ -2056,6 +2060,9 @@ class LocalConversation(BaseConversation):
                     # tools (e.g. switch_llm) running on worker threads skip
                     # re-acquiring it instead of deadlocking (#3485).
                     self._step_holds_state_lock = True
+                    step_user_message_id = self._state.last_user_message_id
+                    if step_user_message_id is not None:
+                        self._state.consumed_user_message_id = step_user_message_id
                     try:
                         self.agent.step(
                             self, on_event=self._on_event, on_token=self._on_token
@@ -2063,6 +2070,7 @@ class LocalConversation(BaseConversation):
                     finally:
                         self._step_holds_state_lock = False
                     iteration += 1
+                    self._state.iterations_used = iteration
 
                     # Check for non-finished terminal conditions
                     # Note: We intentionally do NOT check for FINISHED status here.
@@ -2195,6 +2203,9 @@ class LocalConversation(BaseConversation):
             last_acp_prompt_user_message_id = self._state.agent_state.get(
                 ACP_LAST_PROMPT_USER_MESSAGE_ID
             )
+            # H2: the iteration counter describes the run being started, so it
+            # is reset here rather than accumulated across runs.
+            self._state.iterations_used = 0
 
         iteration = 0
         _run_start_event_count = len(self._state.events)
@@ -2313,6 +2324,12 @@ class LocalConversation(BaseConversation):
                         # deadlocking while this await holds it (#3485).
                         self._step_holds_state_lock = True
                         last_user_message_id = self._state.last_user_message_id
+                        # H2 input-consumption boundary: this step answers the
+                        # newest user input present right now. A later message
+                        # gets its own boundary on the next iteration, so an
+                        # answer can never be attributed across it.
+                        if last_user_message_id is not None:
+                            self._state.consumed_user_message_id = last_user_message_id
                         try:
                             await self.agent.astep(
                                 self,
@@ -2322,6 +2339,7 @@ class LocalConversation(BaseConversation):
                         finally:
                             self._step_holds_state_lock = False
                         iteration += 1
+                        self._state.iterations_used = iteration
 
                         # astep releases the state lock for the LLM call, so a
                         # message can land mid-step with status still RUNNING and
@@ -2458,6 +2476,14 @@ class LocalConversation(BaseConversation):
                     ):
                         break
                     acp_step_start_event_count = len(self._state.events)
+                    # H2 boundary: record the newest real user input this step
+                    # answers. The ACP prompt id is not used because it can also
+                    # name an environment stop-hook feedback message, which
+                    # never updates last_user_message_id and would leave the
+                    # boundary pointing at a non-user event.
+                    acp_user_message_id = self._state.last_user_message_id
+                    if acp_user_message_id is not None:
+                        self._state.consumed_user_message_id = acp_user_message_id
                     if acp_step_user_message_id is not None:
                         self._state.agent_state = {
                             **self._state.agent_state,
@@ -2474,6 +2500,7 @@ class LocalConversation(BaseConversation):
                 )
                 with self._state:
                     iteration += 1
+                    self._state.iterations_used = iteration
                     pause_requested_during_acp_step = any(
                         isinstance(event, PauseEvent)
                         for event in self._state.events[acp_step_start_event_count:]

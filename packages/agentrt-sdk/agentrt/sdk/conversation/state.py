@@ -172,6 +172,32 @@ class ConversationState(OpenHandsModel):
         ),
     )
 
+    # H2 input-consumption boundary. The newest user MessageEvent the last run
+    # actually stepped on, written before each ``agent.step``/``astep``. A run
+    # may consume several inputs, and one input may take several runs, so the
+    # answer produced by a run belongs only to inputs at or before this id. None
+    # means no run has consumed an input under this contract (legacy sessions);
+    # provenance is never backfilled for them.
+    consumed_user_message_id: EventID | None = Field(
+        default=None,
+        description=(
+            "Newest user MessageEvent consumed by the last run. A result may "
+            "only be attributed to inputs up to this boundary. None on legacy "
+            "sessions that ran before boundary tracking existed."
+        ),
+    )
+
+    # Steps completed in the run that consumed ``consumed_user_message_id``.
+    # Reset at run start, so it describes the current request, not the session.
+    iterations_used: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Steps completed in the current run. Reset when a run starts, so "
+            "it tracks the request the run is answering."
+        ),
+    )
+
     # Movable HEAD of the conversation tree.
     leaf_event_id: EventID | None = Field(
         default=None,

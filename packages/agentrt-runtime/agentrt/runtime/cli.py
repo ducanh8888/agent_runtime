@@ -48,6 +48,23 @@ def _report_error(_code: int, exc: Exception) -> None:
     sys.stderr.write("\n")
 
 
+def _parse_tags(pairs: list[str] | None) -> dict[str, str] | None:
+    """Turn repeated ``KEY=VALUE`` arguments into a tag map.
+
+    A malformed pair is refused here rather than sent to the daemon, because an
+    invalid tag arrives as an opaque server error.
+    """
+    if not pairs:
+        return None
+    tags: dict[str, str] = {}
+    for pair in pairs:
+        key, separator, value = pair.partition("=")
+        if not separator or not key:
+            raise ValueError(f"tag {pair!r} is not KEY=VALUE")
+        tags[key] = value
+    return tags
+
+
 def _cmd_dispatch(args: argparse.Namespace) -> dict:
     """Dispatch a task through the same client core used by the MCP server."""
     client = client_mod.Client()
@@ -58,6 +75,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         permission=args.permission,
         llm_profile=args.llm_profile,
         max_iterations=args.max_iterations,
+        tags=_parse_tags(args.tag),
     )
 
 
@@ -238,6 +256,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-iterations",
         type=int,
         help="stop the run after this many agent steps (daemon default: 500)",
+    )
+    dispatch_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="tag the session at dispatch; repeatable",
     )
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 

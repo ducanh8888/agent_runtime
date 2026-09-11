@@ -10,7 +10,10 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from agentrt.agent_server.conversation_router import conversation_router
-from agentrt.agent_server.conversation_service import ConversationService
+from agentrt.agent_server.conversation_service import (
+    AutoTitleSubscriber,
+    ConversationService,
+)
 from agentrt.agent_server.dependencies import get_conversation_service
 from agentrt.agent_server.event_service import EventService
 from agentrt.agent_server.models import (
@@ -21,6 +24,8 @@ from agentrt.agent_server.models import (
 from agentrt.agent_server.utils import utc_now
 from agentrt.sdk import LLM, Agent, Tool
 from agentrt.sdk.conversation.state import ConversationExecutionStatus
+from agentrt.sdk.event import MessageEvent
+from agentrt.sdk.llm import Message, TextContent
 from agentrt.sdk.security.confirmation_policy import NeverConfirm
 from agentrt.sdk.workspace import LocalWorkspace
 
@@ -97,6 +102,68 @@ def test_start_conversation_with_tags(
         assert request_arg.tags == {"env": "prod", "team": "infra"}
     finally:
         client.app.dependency_overrides.clear()
+
+
+def test_start_conversation_with_title_and_tags(
+    client, mock_conversation_service, sample_conversation_info
+):
+    """An explicit title and tags reach the service at creation, together.
+
+    Before H2 the create schema had no `title` field, so `StartConversationRequest`
+    accepted the body and dropped it -- the runtime's `dispatch(title=...)` was a
+    silent no-op.
+    """
+    mock_conversation_service.start_conversation.return_value = (
+        sample_conversation_info,
+        True,
+    )
+    client.app.dependency_overrides[get_conversation_service] = (
+        lambda: mock_conversation_service
+    )
+
+    try:
+        request_data = {
+            "agent": {
+                "llm": {
+                    "model": "gpt-4o",
+                    "api_key": "test-key",
+                    "usage_id": "test-llm",
+                },
+                "tools": [{"name": "TerminalTool"}],
+            },
+            "workspace": {"working_dir": "/tmp/test"},
+            "title": "Named task",
+            "tags": {"stage": "h2"},
+        }
+        response = client.post("/api/conversations", json=request_data)
+
+        assert response.status_code == 201
+        request_arg = mock_conversation_service.start_conversation.call_args[0][0]
+        assert request_arg.title == "Named task"
+        assert request_arg.tags == {"stage": "h2"}
+    finally:
+        client.app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_auto_title_subscriber_skips_when_a_title_exists():
+    """An explicit title is terminal: no auto-title task is scheduled."""
+    service = MagicMock()
+    service.stored.title = "Explicit"
+
+    subscriber = AutoTitleSubscriber(service=service)
+    event = MessageEvent(
+        source="user",
+        llm_message=Message(role="user", content=[TextContent(text="hello")]),
+    )
+
+    with patch(
+        "agentrt.agent_server.conversation_service.asyncio.create_task"
+    ) as create_task:
+        await subscriber(event)
+
+    create_task.assert_not_called()
+    assert service.stored.title == "Explicit"
 
 
 def test_start_conversation_without_tags(

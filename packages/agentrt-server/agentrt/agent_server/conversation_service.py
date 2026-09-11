@@ -41,6 +41,11 @@ from agentrt.agent_server.models import (
 )
 from agentrt.agent_server.persistence import FileSecretsStore
 from agentrt.agent_server.pub_sub import Subscriber
+from agentrt.agent_server.run_scope import (
+    derive_admission_status,
+    derive_result_state,
+    iterations_remaining,
+)
 from agentrt.agent_server.server_details_router import update_last_execution_time
 from agentrt.agent_server.skills_service import discover_profile_skills
 from agentrt.agent_server.telemetry import (
@@ -534,6 +539,12 @@ def _compose_conversation_info(
         supports_runtime_model_switch=supports_runtime_model_switch,
         client_tools=stored.client_tools,
         launched_agent_profile=stored.launched_agent_profile,
+        # H2 request scope, derived from persisted state alone so a listing
+        # reports it without reading the event log. `iterations_used` arrives
+        # in the state dump above; a second keyword for it is a TypeError.
+        result_state=derive_result_state(state),
+        admission_status=derive_admission_status(state),
+        iterations_remaining=iterations_remaining(state),
     )
 
 

@@ -184,6 +184,24 @@ def _capped(text: str, limit: int) -> str:
     return text[:limit] + " ... [truncated]"
 
 
+def _add_action_location(entry: dict, action: object) -> None:
+    """Copy a bounded path/range off a file action onto a transcript entry.
+
+    Only the location travels -- not the content being written or edited, which
+    is what keeps a transcript from carrying repository payloads.
+    """
+    if not isinstance(action, dict):
+        return
+    path = action.get("path")
+    if isinstance(path, str) and path:
+        entry["path"] = _capped(path, 300)
+    view_range = action.get("view_range")
+    if isinstance(view_range, (list, tuple)):
+        bounds = [value for value in view_range if isinstance(value, int)][:2]
+        if bounds:
+            entry["range"] = bounds
+
+
 #: Tool names whose observations can carry file-read evidence. Matches the
 #: ``tool_name`` persisted on an ``ObservationEvent``. The second spelling is
 #: the upstream name; the projection accepts both so a differently-named build
@@ -1174,10 +1192,26 @@ class Client:
         if data.get("max_iterations") is not None:
             result["max_iterations"] = data.get("max_iterations")
         result["tags"] = data.get("tags") or {}
+        # H2 request scope. `result_state` says whether the newest input has an
+        # answer yet; `admission_status` distinguishes accepted-but-not-started
+        # work from a session that has nothing to do -- a freshly dispatched
+        # session is `queued`, not ambiguous `idle`.
+        result["result_state"] = data.get("result_state")
+        result["admission_status"] = data.get("admission_status")
+        result["iterations_used"] = data.get("iterations_used")
+        result["iterations_remaining"] = data.get("iterations_remaining")
         return result
 
     def result(self, session: str) -> dict:
-        """Return the agent's final response, or ``None`` if there is none yet."""
+        """Return the answer for the session's current request.
+
+        ``result`` is the text, or ``None`` when ``state`` is ``pending`` --
+        the newest input has no answer yet, and a previous request's answer is
+        never returned in its place. An empty string is a valid ``final``
+        answer. ``state``, ``error``, ``iterations_*``,
+        ``last_completed_tool`` and ``last_progress_at`` describe provenance
+        and progress.
+        """
         resolved = self._resolve_session(session)
         response = self._send(
             "GET",
@@ -1191,6 +1225,7 @@ class Client:
                 "id": info.get("id"),
                 "short_id": info.get("short_id"),
                 "status": _status_of(info),
+                "state": "unavailable",
                 "result": None,
             }
 
@@ -1202,12 +1237,25 @@ class Client:
         if status is None:
             status = self.status(session).get("status")
 
-        return {
+        payload = {
             "id": full_id,
             "short_id": short_id(full_id) if full_id else None,
             "status": status,
+            "state": data.get("state"),
             "result": _text_from_response(data),
         }
+        for key in (
+            "request_message_id",
+            "iterations_used",
+            "iterations_remaining",
+            "last_completed_tool",
+            "last_progress_at",
+            "error",
+        ):
+            value = data.get(key)
+            if value is not None:
+                payload[key] = value
+        return payload
 
     def transcript(
         self, session: str, *, limit: int = 30, cursor: str | None = None
@@ -1245,20 +1293,33 @@ class Client:
                     }
                 )
             elif kind == "ActionEvent":
-                events.append(
-                    {
-                        "type": "action",
-                        "tool": item.get("tool_name"),
-                        "thought": _capped(_join_text(item.get("thought")), 400),
-                    }
-                )
+                entry = {
+                    "type": "action",
+                    "id": item.get("id"),
+                    "tool": item.get("tool_name"),
+                    "thought": _capped(_join_text(item.get("thought")), 400),
+                }
+                _add_action_location(entry, item.get("action"))
+                events.append(entry)
             elif kind == "ObservationEvent":
                 observation = item.get("observation") or {}
                 events.append(
                     {
                         "type": "observation",
+                        "id": item.get("id"),
                         "tool": item.get("tool_name"),
                         "output": _capped(_join_text(observation.get("content")), 600),
+                    }
+                )
+            elif kind == "ConversationErrorEvent":
+                # H2: errors were silently dropped here, so a session that
+                # failed for no visible reason looked like a clean stop.
+                events.append(
+                    {
+                        "type": "error",
+                        "id": item.get("id"),
+                        "code": item.get("code"),
+                        "detail": _capped(str(item.get("detail") or ""), 400),
                     }
                 )
 

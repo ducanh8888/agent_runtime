@@ -17,12 +17,19 @@ from agentrt.agent_server.conversation_lease import (
     ConversationOwnershipLostError,
 )
 from agentrt.agent_server.models import (
+    AgentResponseResult,
     ConfirmationResponseRequest,
+    ConversationErrorInfo,
     EventPage,
     EventSortOrder,
     StoredConversation,
 )
 from agentrt.agent_server.pub_sub import PubSub, Subscriber
+from agentrt.agent_server.run_scope import (
+    AgentResponseState,
+    derive_result_state,
+    iterations_remaining,
+)
 from agentrt.agent_server.server_details_router import update_last_execution_time
 from agentrt.sdk import LLM, AgentBase, Event, Message, TextContent, get_logger
 from agentrt.sdk.agent import ACPAgent
@@ -50,7 +57,10 @@ from agentrt.sdk.conversation.impl.local_conversation import (
     LocalConversation,
 )
 from agentrt.sdk.conversation.persistence_const import BASE_STATE
-from agentrt.sdk.conversation.response_utils import get_agent_final_response
+from agentrt.sdk.conversation.response_utils import (
+    get_agent_final_response,
+    index_of_event,
+)
 from agentrt.sdk.conversation.secret_registry import SecretValue
 from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
@@ -186,8 +196,9 @@ class EventService:
                     context={
                         "cipher": self.cipher,
                     }
-                )
-            , encoding="utf-8")
+                ),
+                encoding="utf-8",
+            )
 
     def _without_stored_secret(self, secret_name: str) -> StoredConversation:
         # meta.json (StoredConversation) no longer carries the agent, so there is
@@ -1870,6 +1881,106 @@ class EventService:
             raise ValueError("inactive_service")
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_agent_final_response_sync)
+
+    @staticmethod
+    def _scan_request_tail(
+        events, boundary_index: int | None
+    ) -> tuple[str | None, str | None, ConversationErrorInfo | None]:
+        """Newest completed tool, newest event time and newest error after the
+        consumption boundary. Stops at the boundary so a previous request's
+        observation or error is not attributed to this one."""
+        last_tool: str | None = None
+        last_progress_at: str | None = None
+        error: ConversationErrorInfo | None = None
+        total = len(events)
+        for position, event in enumerate(reversed(events)):
+            index = total - 1 - position
+            if boundary_index is not None and index <= boundary_index:
+                break
+            if last_progress_at is None:
+                timestamp = getattr(event, "timestamp", None)
+                if timestamp is not None:
+                    last_progress_at = str(timestamp)
+            # Any observation completes a tool attempt, including an error or
+            # rejection: the last completed tool must not look like an older
+            # successful one.
+            if last_tool is None and isinstance(event, ObservationBaseEvent):
+                last_tool = event.tool_name
+            if error is None and isinstance(event, ConversationErrorEvent):
+                error = ConversationErrorInfo(
+                    code=str(event.code), detail=str(event.detail)[:500]
+                )
+            if (
+                last_tool is not None
+                and error is not None
+                and last_progress_at is not None
+            ):
+                break
+        return last_tool, last_progress_at, error
+
+    def _get_agent_response_result_sync(self) -> AgentResponseResult:
+        """Build the request-scoped answer with its provenance and progress."""
+        if not self._conversation:
+            raise ValueError("inactive_service")
+        state = self._conversation._state
+        events = state.events
+        result_state = derive_result_state(state)
+        boundary = state.consumed_user_message_id
+        # A recorded boundary that is not in the event log cannot scope
+        # anything: the autosaved state and the event files disagree. Report
+        # unavailable rather than a final "" that looks like a real answer.
+        boundary_index = (
+            index_of_event(events, boundary) if boundary is not None else None
+        )
+        if boundary is not None and boundary_index is None:
+            result_state = AgentResponseState.UNAVAILABLE
+        scoped = result_state in (
+            AgentResponseState.FINAL,
+            AgentResponseState.PARTIAL,
+        )
+        response: str | None = None
+        if scoped or (
+            result_state is AgentResponseState.UNAVAILABLE and boundary is None
+        ):
+            # Answered (scoped to the boundary), or a legacy session with no
+            # boundary at all -- whose last answer is all there is. A pending
+            # request gets null: extracting here would return the previous
+            # request's answer across the boundary, the defect this removes.
+            response = get_agent_final_response(events, after_id=boundary)
+        if scoped:
+            last_tool, last_progress_at, error = self._scan_request_tail(
+                events, boundary_index
+            )
+        else:
+            # No answer means no provenance to report. A previous request's
+            # error or tool must not be presented as this request's.
+            last_tool = last_progress_at = None
+            error = None
+        return AgentResponseResult(
+            response=response,
+            state=result_state,
+            # The boundary describes an answer that exists. A pending request
+            # has no answer, so naming the previous boundary here would claim
+            # the wrong input.
+            request_message_id=(
+                boundary
+                if result_state
+                in (AgentResponseState.FINAL, AgentResponseState.PARTIAL)
+                else None
+            ),
+            iterations_used=state.iterations_used,
+            iterations_remaining=iterations_remaining(state),
+            last_completed_tool=last_tool,
+            last_progress_at=last_progress_at,
+            error=error,
+        )
+
+    async def get_agent_response_result(self) -> AgentResponseResult:
+        """Return the current request's answer, state, error and progress."""
+        if not self._conversation:
+            raise ValueError("inactive_service")
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._get_agent_response_result_sync)
 
     async def get_state(self) -> ConversationState:
         if not self._conversation:

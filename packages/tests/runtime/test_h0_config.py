@@ -27,6 +27,12 @@ def clean_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Point the state-file layer at an empty directory so an operator's real
     # ~/.agentrt/.env cannot supply settings the test meant to be absent.
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    # The checkout layer is located by walking up from the runtime module, so a
+    # development `.env` anywhere above the repository -- common on a working
+    # machine -- would silently supply the settings these tests require to be
+    # absent. Neutralise that layer explicitly; the state layer above is
+    # already isolated.
+    monkeypatch.setattr(config, "repo_env_file", lambda: None)
 
 
 def test_neutral_aliases_supply_router_config(clean_env, monkeypatch) -> None:

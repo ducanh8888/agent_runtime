@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from agentrt.agent_server.run_scope import AdmissionStatus, AgentResponseState
 from agentrt.sdk.agent.acp_models import ACPModelInfo
 from agentrt.sdk.agent.base import AgentBase
 from agentrt.sdk.conversation.conversation_stats import ConversationStats
@@ -149,6 +150,35 @@ class _ConversationInfoBase(BaseModel):
     )
     execution_status: ConversationExecutionStatus = Field(
         default=ConversationExecutionStatus.IDLE
+    )
+    result_state: AgentResponseState = Field(
+        default=AgentResponseState.UNAVAILABLE,
+        description=(
+            "How to read the current request's answer: pending (no answer for "
+            "the newest input yet), final, partial (run stopped early) or "
+            "unavailable (no request boundary known). Pending means the agent "
+            "route returns a null response -- never the previous answer."
+        ),
+    )
+    admission_status: AdmissionStatus = Field(
+        default=AdmissionStatus.ADMITTED,
+        description=(
+            "Whether accepted input has been admitted to a run. Separate from "
+            "execution_status: a freshly dispatched session with unconsumed "
+            "input is `queued`, not ambiguous `idle`."
+        ),
+    )
+    iterations_used: int = Field(
+        default=0,
+        ge=0,
+        description="Steps completed in the run answering the current request.",
+    )
+    iterations_remaining: int | None = Field(
+        default=None,
+        description=(
+            "Steps left in the current run's allowance, or None when the "
+            "remaining budget is not known."
+        ),
     )
     confirmation_policy: ConfirmationPolicyBase = Field(default=NeverConfirm())
     security_analyzer: SecurityAnalyzerBase | None = Field(
@@ -557,19 +587,72 @@ class StartGoalRequest(BaseModel):
     )
 
 
-class AgentResponseResult(BaseModel):
-    """The agent's final response for a conversation.
+class ConversationErrorInfo(BaseModel):
+    """Sanitized terminal error observed for the current request."""
 
-    Contains the text of the last agent finish message or text response.
-    Empty string if the agent has not produced a final response yet.
+    code: str = Field(description="SDK error code, e.g. MaxIterationsReached.")
+    detail: str = Field(
+        description=(
+            "Bounded error detail. Never private reasoning, model output or "
+            "credentials."
+        )
+    )
+
+
+class AgentResponseResult(BaseModel):
+    """The agent's answer for the conversation's current request.
+
+    The answer is scoped to the newest input a run actually consumed. When a
+    newer input exists that no run has stepped on, ``response`` is null and
+    ``state`` is ``pending`` -- the previous request's answer is not returned
+    as this one's. An empty string is a valid ``final`` answer and is
+    distinguishable from ``pending`` by ``state``.
     """
 
-    response: str = Field(
+    response: str | None = Field(
+        default=None,
         description=(
-            "The agent's final response text. Extracted from either a "
-            "FinishAction message or the last agent MessageEvent. "
-            "Empty string if no final response is available."
-        )
+            "Answer text for the current request, bounded to events after the "
+            "consumed input. null when state is `pending`. Empty string is a "
+            "valid final answer."
+        ),
+    )
+    state: AgentResponseState = Field(
+        default=AgentResponseState.UNAVAILABLE,
+        description="One of pending, final, partial, unavailable.",
+    )
+    request_message_id: str | None = Field(
+        default=None,
+        description=(
+            "Id of the user message this answer belongs to (the consumed "
+            "boundary). Null when the state is pending or unavailable, because "
+            "no answer -- and so no boundary -- exists for it."
+        ),
+    )
+    iterations_used: int | None = Field(
+        default=None, description="Steps completed in the answering run."
+    )
+    iterations_remaining: int | None = Field(
+        default=None, description="Steps left in that run's allowance."
+    )
+    last_completed_tool: str | None = Field(
+        default=None,
+        description=(
+            "Tool of the last persisted observation before this answer. "
+            "Derived from the event log, never from an agent self-report."
+        ),
+    )
+    last_progress_at: str | None = Field(
+        default=None,
+        description=(
+            "Timestamp of the last persisted event. Durable progress only: "
+            "stream deltas are not persisted, so this does not move during a "
+            "long completion, unlike raw stream activity."
+        ),
+    )
+    error: ConversationErrorInfo | None = Field(
+        default=None,
+        description="Last error event for the current request, if any.",
     )
 
 

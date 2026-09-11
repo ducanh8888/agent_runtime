@@ -315,6 +315,16 @@ class StartConversationRequest(ConversationConfig):
         ),
     )
     agent: AgentBase = Field(default=cast(AgentBase, None))
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description=(
+            "Optional explicit title, persisted at creation. When set, "
+            "auto-titling is not scheduled for this conversation, so an "
+            "asynchronous title task cannot overwrite the caller's choice."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod

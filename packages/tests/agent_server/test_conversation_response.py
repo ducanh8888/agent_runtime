@@ -12,6 +12,8 @@ from agentrt.agent_server.conversation_router import conversation_router
 from agentrt.agent_server.conversation_service import ConversationService
 from agentrt.agent_server.dependencies import get_conversation_service
 from agentrt.agent_server.event_service import EventService
+from agentrt.agent_server.models import AgentResponseResult
+from agentrt.agent_server.run_scope import AgentResponseState
 from agentrt.sdk import Message
 from agentrt.sdk.event import ActionEvent, MessageEvent
 from agentrt.sdk.llm import MessageToolCall, TextContent
@@ -43,10 +45,10 @@ def mock_event_service():
 def test_get_response_with_finish_action(
     client, mock_conversation_service, mock_event_service, sample_conversation_id
 ):
-    """Endpoint returns FinishAction message text."""
+    """Endpoint returns the request-scoped answer with its state."""
     mock_conversation_service.get_event_service.return_value = mock_event_service
-    mock_event_service.get_agent_final_response.return_value = (
-        "Task completed successfully!"
+    mock_event_service.get_agent_response_result.return_value = AgentResponseResult(
+        response="Task completed successfully!", state=AgentResponseState.FINAL
     )
 
     client.app.dependency_overrides[get_conversation_service] = (
@@ -61,10 +63,11 @@ def test_get_response_with_finish_action(
         assert response.status_code == 200
         data = response.json()
         assert data["response"] == "Task completed successfully!"
+        assert data["state"] == "final"
         mock_conversation_service.get_event_service.assert_called_once_with(
             sample_conversation_id
         )
-        mock_event_service.get_agent_final_response.assert_called_once()
+        mock_event_service.get_agent_response_result.assert_called_once()
     finally:
         client.app.dependency_overrides.clear()
 
@@ -72,9 +75,11 @@ def test_get_response_with_finish_action(
 def test_get_response_empty_when_no_agent_events(
     client, mock_conversation_service, mock_event_service, sample_conversation_id
 ):
-    """Endpoint returns empty string when no agent response exists."""
+    """An empty final answer is valid and distinguishable by state."""
     mock_conversation_service.get_event_service.return_value = mock_event_service
-    mock_event_service.get_agent_final_response.return_value = ""
+    mock_event_service.get_agent_response_result.return_value = AgentResponseResult(
+        response="", state=AgentResponseState.FINAL
+    )
 
     client.app.dependency_overrides[get_conversation_service] = (
         lambda: mock_conversation_service
@@ -88,6 +93,36 @@ def test_get_response_empty_when_no_agent_events(
         assert response.status_code == 200
         data = response.json()
         assert data["response"] == ""
+        assert data["state"] == "final"
+    finally:
+        client.app.dependency_overrides.clear()
+
+
+def test_get_response_pending_is_null(
+    client, mock_conversation_service, mock_event_service, sample_conversation_id
+):
+    """A pending request returns JSON null, never the previous answer."""
+    mock_conversation_service.get_event_service.return_value = mock_event_service
+    mock_event_service.get_agent_response_result.return_value = AgentResponseResult(
+        response=None,
+        state=AgentResponseState.PENDING,
+        request_message_id="msg-2",
+    )
+
+    client.app.dependency_overrides[get_conversation_service] = (
+        lambda: mock_conversation_service
+    )
+
+    try:
+        response = client.get(
+            f"/api/conversations/{sample_conversation_id}/agent_final_response"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["response"] is None
+        assert data["state"] == "pending"
+        assert data["request_message_id"] == "msg-2"
     finally:
         client.app.dependency_overrides.clear()
 

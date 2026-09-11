@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -326,6 +327,19 @@ async def test_deltas_only_reach_subscribers_that_opted_in(event_service, tmp_pa
 _IDLE_THRESHOLD = 20 * 60.0
 
 
+def _server_info_request(policy=None) -> SimpleNamespace:
+    """Minimal Request stand-in for ``get_server_info``.
+
+    H0 added a ``request`` parameter so the endpoint can report the deployment
+    LLM policy; it reads only ``request.app.state.config.deployment_llm_policy``.
+    """
+    return SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(config=SimpleNamespace(deployment_llm_policy=policy))
+        )
+    )
+
+
 @pytest.mark.asyncio
 async def test_deltas_keep_idle_time_below_the_threshold(
     event_service, tmp_path, monkeypatch
@@ -347,7 +361,8 @@ async def test_deltas_keep_idle_time_below_the_threshold(
 
     callback(_make_chunk(content="tok"))
 
-    assert (await server_details_router.get_server_info()).idle_time < _IDLE_THRESHOLD
+    info = await server_details_router.get_server_info(_server_info_request())
+    assert info.idle_time < _IDLE_THRESHOLD
 
 
 @pytest.mark.asyncio

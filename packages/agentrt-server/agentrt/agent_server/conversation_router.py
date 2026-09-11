@@ -197,17 +197,18 @@ async def get_conversation_agent_final_response(
     conversation_id: UUID,
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> AgentResponseResult:
-    """Get the agent's final response for a conversation.
+    """Get the agent's answer for the conversation's current request.
 
-    Returns the text of the last agent finish message (FinishAction) or
-    the last agent text response (MessageEvent). Returns an empty string
-    if the agent has not produced a final response yet.
+    The answer is scoped to the newest input a run consumed. When a newer input
+    exists that no run has stepped on, ``response`` is null and ``state`` is
+    ``pending``; a previous request's answer is never returned. An empty string
+    is a valid ``final`` answer. Progress (iterations, last completed tool,
+    progress time) and the current request's error are reported alongside.
     """
     event_service = await conversation_service.get_event_service(conversation_id)
     if event_service is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    response = await event_service.get_agent_final_response()
-    return AgentResponseResult(response=response)
+    return await event_service.get_agent_response_result()
 
 
 @conversation_router.get(
