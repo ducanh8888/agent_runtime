@@ -1,7 +1,7 @@
 # Agent Runtime — Implementation Plan
 
 Date: 2026-09-06.
-Basis: [Pass 1](RESEARCH_PASS_1.md), [Pass 2](RESEARCH_PASS_2.md), [OSS Gap Reassessment](RESEARCH_OSS_GAP_REASSESSMENT.md), [Pre-Plan Decisions](PRE_PLAN_DECISIONS.md).
+Basis: [Pass 1](../research/pass-01.md), [Pass 2](../research/pass-02.md), [OSS Gap Reassessment](../research/oss-gap-reassessment.md), [Pre-Plan Decisions](../research/pre-plan-decisions.md).
 
 Target: the runtime is finished when it is usable day to day, not when the phase list is ticked off. Phases order the work; they do not define done.
 
@@ -9,39 +9,39 @@ Guiding rule: **reuse first, write only what no donor supplies.** Every task is 
 
 ## Status
 
-`CLAUDE.md` at the repository root is the entry point: where to start reading,
-how to run the checks, and the working conventions this project was built with.
+The current document registry is [the documentation index](../README.md).
+[`CLAUDE.md`](../../CLAUDE.md) remains the runtime/development entrypoint.
 
-All four phases are closed. `P1_BASELINE.md`, `P2_RESULT.md`, `P3_RESULT.md` and
-`P4_RESULT.md` record each one and are historical: they describe what was true
+All four phases are closed. `../results/p1-baseline-windows.md`, `../results/p2.md`, `../results/p3.md` and
+`../results/p4.md` record each one and are historical: they describe what was true
 when the phase ended, not necessarily what is true now. For current behaviour
 read the tool descriptions in `mcp_server.py`, which are the product's
-documentation, then `DAEMON_BEHAVIOUR.md` for what the daemon does that its API
-does not reveal, and `ORCHESTRATOR_GUIDE.md` for what using it has taught.
-`FRICTION_LOG.md` collects the defects ordinary use found after the phases
-ended, `DOCKER_RECON.md` the sandbox investigation.
+documentation, then `../reference/daemon-behavior.md` for what the daemon does that its API
+does not reveal, and `../guides/orchestration.md` for what using it has taught.
+`../research/friction-log.md` collects the defects ordinary use found after the phases
+ended, `../research/docker-recon.md` the sandbox investigation.
 
-`MIGRATION.md` covers moving to another machine: what is in git, what exists
-only in the state directory, and what changes on Linux. `LINUX_BASELINE.md` is
+`../guides/migration.md` covers moving to another machine: what is in git, what exists
+only in the state directory, and what changes on Linux. `../results/baseline-linux.md` is
 what the checks actually measured once that move was made, and replaces
-`P1_BASELINE.md` for any comparison run on Linux.
+`../results/p1-baseline-windows.md` for any comparison run on Linux.
 
 The rest are records of how the work got here and are not maintained against
-the code: `RESEARCH_PASS_1.md`, `RESEARCH_PASS_2.md` and
-`RESEARCH_OSS_GAP_REASSESSMENT.md` predate the plan, `PRE_PLAN_DECISIONS.md`
-holds the decisions that shaped it, `P1_BASELINE.md` the vendored test baseline,
-and `P4_RECON.md` what was probed before P4 was written. Read them for why
+the code: `../research/pass-01.md`, `../research/pass-02.md` and
+`../research/oss-gap-reassessment.md` predate the plan, `../research/pre-plan-decisions.md`
+holds the decisions that shaped it, `../results/p1-baseline-windows.md` the vendored test baseline,
+and `../research/p4-recon.md` what was probed before P4 was written. Read them for why
 something is the way it is, not for what it currently does.
 
 **Active follow-on plan (2026-09-11):**
-[DeepSeek hardening](DEEPSEEK_HARDENING_PLAN.md) specifies H0–H7 for direct
+[DeepSeek hardening](deepseek-hardening.md) specifies H0–H7 for direct
 DeepSeek with thinking enabled/high, reliable reads/results, waiting,
 workspace isolation, batch admission and images/accounting. All H phases are
-tracked there: [H0](H0_RESULT.md) and [H1](H1_RESULT.md) are complete, H2 is
+tracked there: [H0](../results/h0.md) and [H1](../results/h1.md) are complete, H2 is
 next, and H3–H7 remain pending. Completion describes the source-stage gate, not
 the installed runtime;
 production cutover remains H7.
-[The self-audit](DEEPSEEK_HARDENING_AUDIT.md) is its dated evidence and decision
+[The self-audit](../research/deepseek-hardening-audit.md) is its dated evidence and decision
 record. The new plan supersedes this document's original exclusions only for
 that follow-on scope (not cron, sandboxing or a second lifecycle owner). Keep
 the P1–P4 sections and result reports below as history.
@@ -76,12 +76,12 @@ Everything is local except the provider call. `agentrtd` exists solely because a
 
 One owner per concern. No second agent loop, no second provider abstraction, no second event store.
 
-## 3. Layout
+## 3. Layout at plan time
 
 `agent_runtime/` is the git repo (`main`).
 
 ```
-docs/            the three research reports, PRE_PLAN_DECISIONS, this plan
+docs/            flat research and planning records (since reorganized)
 packages/        vendored OpenHands, renamed to agentrt.*
   agentrt-sdk/  agentrt-server/  agentrt-tools/  agentrt-workspace/
 src/agentrt/     client.py  daemon.py  cli.py  mcp/  policy/
@@ -222,4 +222,4 @@ Scheduling — the OS scheduler calls the CLI, so no cron belongs in the daemon.
 | Sessions are kept forever | The catalog grows until `delete` is used |
 | A few identifiers keep the upstream spelling | `agent_kind`, `OpenHandsCloudWorkspace` and some enum values are legacy identifiers, not a half-finished rename |
 | Shared workspaces are not coordinated | Two sessions on one repo can overwrite each other; sequencing is the orchestrator's job |
-| A session can start another session | Withdrawn from P4's done criteria by decision. The daemon's token sits in `daemon.json`, so any session with a shell can read it and call the API directly; no in-process check closes that, only a sandbox would. See `P4_RESULT.md`. |
+| A session can start another session | Withdrawn from P4's done criteria by decision. The daemon's token sits in `daemon.json`, so any session with a shell can read it and call the API directly; no in-process check closes that, only a sandbox would. See `../results/p4.md`. |

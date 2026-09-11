@@ -4,8 +4,8 @@ Date: 2026-09-11 (Asia/Bangkok).
 Source baseline: `cce40bea488ee7299d312faa07172d0216dfb875`.
 Basis: the user's nine AgentRT feedback items, the subsequent DeepSeek
 optimization proposal, and the local/API probes recorded in this conversation.
-Related: [implementation plan](DEEPSEEK_HARDENING_PLAN.md),
-[friction log](FRICTION_LOG.md), [Linux baseline](LINUX_BASELINE.md).
+Related: [implementation plan](../plans/deepseek-hardening.md),
+[friction log](friction-log.md), [Linux baseline](../results/baseline-linux.md).
 
 ## Status and authority
 
@@ -52,23 +52,23 @@ tests; it must not depend on these sessions still existing.
 
 ### Source findings
 
-- [File output formatting](../packages/agentrt-tools/agentrt/tools/file_editor/editor.py)
+- [File output formatting](../../packages/agentrt-tools/agentrt/tools/file_editor/editor.py)
   calls `maybe_truncate` before line enumeration in `_make_output`. The prior
   synthetic reproduction displayed source line 500 with a much lower line
   number after head/tail clipping. This is a correctness bug, not just a missing
   paging convenience.
-- [Final response extraction](../packages/agentrt-sdk/agentrt/sdk/conversation/response_utils.py)
+- [Final response extraction](../../packages/agentrt-sdk/agentrt/sdk/conversation/response_utils.py)
   scans historical agent messages/finish actions without a current-input
   boundary. A later user message can therefore coexist with an older answer
   returned as the final response.
-- [Runtime client](../packages/agentrt-runtime/agentrt/runtime/client.py)
+- [Runtime client](../../packages/agentrt-runtime/agentrt/runtime/client.py)
   does not surface SDK error events in its condensed transcript and uses a
   client-side running-session cap. Explicit dispatch titles are sent, but the
   create schema inspected in the audit lacks the corresponding title field.
-- [Profile resolver](../packages/agentrt-sdk/agentrt/sdk/profiles/resolver.py)
+- [Profile resolver](../../packages/agentrt-sdk/agentrt/sdk/profiles/resolver.py)
   already composes an agent profile with a referenced LLM profile. A second
   model registry and permission/model/effort Cartesian product are unnecessary.
-- [Chat options](../packages/agentrt-sdk/agentrt/sdk/llm/options/chat_options.py)
+- [Chat options](../../packages/agentrt-sdk/agentrt/sdk/llm/options/chat_options.py)
   gate effort serialization on capability detection. The previous local probe
   of `openai/ds/deepseek-flash` omitted requested `low`, `high` and `max` from
   the selected options. Vision and SDK prompt-cache activation were also false.

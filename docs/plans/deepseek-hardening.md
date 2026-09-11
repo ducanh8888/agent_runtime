@@ -1,7 +1,7 @@
 # Agent Runtime — DeepSeek hardening plan
 
 Date: 2026-09-11 (Asia/Bangkok).
-Basis: [self-audit and measured evidence](DEEPSEEK_HARDENING_AUDIT.md), the user's
+Basis: [self-audit and measured evidence](../research/deepseek-hardening-audit.md), the user's
 nine runtime feedback items, and the DeepSeek optimization proposal as narrowed
 by the user to direct DeepSeek with thinking enabled and effort `high`.
 Planning baseline: `cce40bea488ee7299d312faa07172d0216dfb875`.
@@ -13,11 +13,12 @@ Active follow-on implementation plan; **H0 and H1 are complete, and H2 is
 next**. The scope and thinking/high policy are user requirements. H2–H7 API
 examples and internal field names below are proposed contracts, not shipped
 capabilities; verified behavior is recorded in
-[H0_RESULT.md](H0_RESULT.md) and [H1_RESULT.md](H1_RESULT.md).
+[H0 result](../results/h0.md) and [H1 result](../results/h1.md).
 
-The original [implementation plan](IMPLEMENTATION_PLAN.md) remains the document
-index and historical P1–P4 record. H-prefix phase names avoid reusing those closed
-phases. [DAEMON_BEHAVIOUR.md](DAEMON_BEHAVIOUR.md) and MCP tool descriptions
+The original [implementation plan](initial-runtime.md) remains the historical
+P1–P4 record. The [documentation index](../README.md) owns document discovery.
+H-prefix phase names avoid reusing those closed phases.
+[Daemon behavior](../reference/daemon-behavior.md) and MCP tool descriptions
 describe measured/shipped behavior, not this plan's intended behavior. Update
 them only when a corresponding change is implemented and verified.
 
@@ -53,8 +54,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 
 | Phase | Deliverable | Basis | Depends on | Status |
 |---|---|---|---|---|
-| H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Complete — [result](H0_RESULT.md) |
-| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](H1_RESULT.md) |
+| H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Complete — [result](../results/h0.md) |
+| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](../results/h1.md) |
 | H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Next |
 | H3 | Reliable waits, finalization and partial summaries | REUSE + PORT + NEW | H0, H2 | Pending |
 | H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Pending |
@@ -511,10 +512,10 @@ restart.
 For every phase, append evidence to a dated result record only after execution:
 revision/build identity, test command and outcome, disposable fixture locations,
 retained evidence session IDs, rejected claims, limitations and rollback impact.
-Register a new result document in `IMPLEMENTATION_PLAN.md` when it exists; do not
+Register a new result document in `../manifest.json` when it exists; do not
 create empty result files or link future files as if they were present. Update
 this phase table only with measured status, not worker self-reports.
 
-The [self-audit](DEEPSEEK_HARDENING_AUDIT.md) remains a dated record. New facts go
+The [self-audit](../research/deepseek-hardening-audit.md) remains a dated record. New facts go
 in subsequent evidence/results and, when shipped, current behavior docs. Preserve
 the original P1–P4 history and the user's unrelated working-tree changes.

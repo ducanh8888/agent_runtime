@@ -2,7 +2,7 @@
 
 Ngày: 2026-09-05.  
 Phạm vi: nghiên cứu source, không implement, không vendor hoặc sửa reference repositories, không chạy test/benchmark.  
-Tài liệu nền: [Pass 1](RESEARCH_PASS_1.md), [Pass 2](RESEARCH_PASS_2.md).
+Tài liệu nền: [Pass 1](pass-01.md), [Pass 2](pass-02.md).
 
 ## 1. Kết luận đã điều chỉnh
 
@@ -69,10 +69,10 @@ Hook này nhìn thấy model tool action, kể cả invocation của built-in n�
 
 Nguồn:
 
-- [conversation_hooks.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/conversation_hooks.py), `on_event`, `_handle_pre_tool_use`.
-- [manager.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/manager.py), `run_pre_tool_use`.
-- [executor.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/executor.py), `HookResult.should_continue` và exit-code semantics.
-- [agent.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/agent.py), các đường `pop_blocked_action`.
+- [conversation_hooks.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/conversation_hooks.py), `on_event`, `_handle_pre_tool_use`.
+- [manager.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/manager.py), `run_pre_tool_use`.
+- [executor.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/hooks/executor.py), `HookResult.should_continue` và exit-code semantics.
+- [agent.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/agent.py), các đường `pop_blocked_action`.
 
 Phân loại: `REUSE_WITH_CONFIGURATION` cho interception đã có; binding vào policy và behavior khi lỗi vẫn phải được đánh giá như phần tích hợp.
 
@@ -82,7 +82,7 @@ OpenHands `ToolExecutor.__call__` là giao diện sync trả `Observation`; `int
 
 `AsyncExecutor` cung cấp `run_async`, portal access và shutdown có thời hạn. Không cần invent một event-loop bridge mới. Portal task future là một điểm nối có sẵn, nhưng `run_async` hiện không tự biến mọi conversation interrupt thành cancel của operation donor.
 
-Nguồn: [ToolExecutor](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/tool.py), [AsyncExecutor](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/async_executor.py).
+Nguồn: [ToolExecutor](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/tool.py), [AsyncExecutor](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/async_executor.py).
 
 Phân loại: `REUSE_DIRECT` cho primitive cầu nối; `ADAPT_THINLY` cho chuyển input/output và cancellation contract của từng executor cụ thể. Không có adapter nào được implement trong nghiên cứu này.
 
@@ -90,7 +90,7 @@ Phân loại: `REUSE_DIRECT` cho primitive cầu nối; `ADAPT_THINLY` cho chuy�
 
 ### 4.1. Pydantic Harness: filesystem containment
 
-Module: [filesystem/_toolset.py](../repos/pydantic-ai-harness/pydantic_ai_harness/filesystem/_toolset.py).
+Module: [filesystem/_toolset.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/filesystem/_toolset.py).
 
 Phần implementation đáng lấy gồm:
 
@@ -112,7 +112,7 @@ Phân loại: `ADAPT_THINLY` cho nhóm kiểm tra filesystem tại ranh giới t
 
 ### 4.2. Deep Agents: rule evaluator và bulk-operation checks
 
-Module: [middleware/filesystem.py](../repos/deepagents/libs/deepagents/deepagents/middleware/filesystem.py), `FilesystemPermission`, `_check_fs_permission`, `_wildcard_delete_overlap` và các helper liên quan.
+Module: [middleware/filesystem.py](../../repos/deepagents/libs/deepagents/deepagents/middleware/filesystem.py), `FilesystemPermission`, `_check_fs_permission`, `_wildcard_delete_overlap` và các helper liên quan.
 
 Có implementation rule theo operation/path và kết quả allow/deny/interrupt. Các thao tác recursive hoặc tìm kiếm cần xét overlap và lọc kết quả; đó là phần hữu ích hơn một allowlist tên tool đơn giản.
 
@@ -128,7 +128,7 @@ Phân loại: `ADAPT_THINLY` cho evaluator/helper chọn lọc; `PATTERN_ONLY` c
 
 ### 4.3. Pydantic ToolGuardrail: hữu ích nhưng không phải donor đầu tiên cho OpenHands
 
-Module: [guardrails/_tool_guardrail.py](../repos/pydantic-ai-harness/pydantic_ai_harness/guardrails/_tool_guardrail.py).
+Module: [guardrails/_tool_guardrail.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/guardrails/_tool_guardrail.py).
 
 Nó kiểm tra hai phía của tool call: validated arguments trước execution và result trước khi trả model. Có block, retry, approval và các verdict khác.
 
@@ -140,7 +140,7 @@ Phân loại: `PATTERN_ONLY` cho toàn capability trong hướng OpenHands nền
 
 ### 4.4. Microsoft DockerShellTool: donor quan trọng bị đánh giá chưa đủ ở Pass 2
 
-Module: [shell/_docker.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py).
+Module: [shell/_docker.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py).
 
 Đây là implementation shell trong container thực sự, không chỉ shell regex policy. Source dựng Docker command với:
 
@@ -197,7 +197,7 @@ Quyền execution rộng vẫn có thể giữ; ngoại lệ quyền dispatcher 
 
 Không nên đưa vào một framework RBAC/multi-user hoặc identity platform chỉ vì thiếu role trên API key. Nếu worker không cần control API thì nó không cần worker-role key. Existing server authentication + execution boundary là hướng reuse cần đánh giá.
 
-Nguồn chính: [dependencies.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/dependencies.py), [command.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/command.py), [DockerShellTool](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py).
+Nguồn chính: [dependencies.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/dependencies.py), [command.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/command.py), [DockerShellTool](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py).
 
 Phân loại: `REUSE_WITH_CONFIGURATION` cho authentication; `ADAPT_THINLY` cho các boundary cụ thể đã có; toàn bộ root-only guarantee vẫn **chưa được xác nhận ở mức composition**. Không suy ra `GAP_REMAINS` của toàn hệ sinh thái OSS chỉ từ điều này.
 
@@ -205,7 +205,7 @@ Phân loại: `REUSE_WITH_CONFIGURATION` cho authentication; `ADAPT_THINLY` cho 
 
 ### 6.1. Microsoft: nội dung skill và script runner tách biệt
 
-Module: [core/agent_framework/_skills.py](../repos/agent-framework/python/packages/core/agent_framework/_skills.py).
+Module: [core/agent_framework/_skills.py](../../repos/agent-framework/python/packages/core/agent_framework/_skills.py).
 
 Những phần đáng lấy:
 
@@ -223,7 +223,7 @@ Phân loại: `ADAPT_THINLY` cho phần content/file-script interface được c
 
 ### 6.2. Pydantic Harness: passive loader nhỏ hơn
 
-Module: [skills/_loader.py](../repos/pydantic-ai-harness/pydantic_ai_harness/skills/_loader.py).
+Module: [skills/_loader.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/skills/_loader.py).
 
 Loader dùng stdlib, Pydantic và YAML parsing; không có subprocess thực thi body. Nó trả tên, mô tả, body và danh sách behavioral frontmatter bị bỏ qua.
 
@@ -239,13 +239,13 @@ Không tìm thấy donor drop-in giữ nguyên toàn bộ cú pháp dynamic comm
 
 Hướng reuse phải giữ scripts, references/resources và dynamic behavior khi được cấp quyền; không mặc định vô hiệu hóa các tính năng đó chỉ để né enforcement.
 
-Nguồn phía OpenHands: [skill.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/skill.py), `render_content`; [invoke_skill.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py); [execute.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py).
+Nguồn phía OpenHands: [skill.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/skill.py), `render_content`; [invoke_skill.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py); [execute.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py).
 
 ## 7. Donor cho cancellation và independent control
 
 ### 7.1. Deep Agents đã xử lý đúng loại lỗi thread-pool shutdown
 
-Trong [FilesystemMiddleware](../repos/deepagents/libs/deepagents/deepagents/middleware/filesystem.py), glob sync có:
+Trong [FilesystemMiddleware](../../repos/deepagents/libs/deepagents/deepagents/middleware/filesystem.py), glob sync có:
 
 - executor được giữ ở instance thay vì tạo context manager theo từng call;
 - `BoundedSemaphore` giới hạn công việc còn thực sự chạy;
@@ -256,7 +256,7 @@ Trong [FilesystemMiddleware](../repos/deepagents/libs/deepagents/deepagents/midd
 
 Source giải thích trực tiếp rằng per-call context manager sẽ gọi shutdown có chờ và vô hiệu hóa timeout. Đây là cùng loại vấn đề được phát hiện trong async batch executor của OpenHands.
 
-Test upstream [test_permissions.py](../repos/deepagents/libs/deepagents/tests/unit_tests/test_permissions.py), `test_sync_glob_rejects_when_timed_out_workers_are_saturated`, kiểm tra các worker timeout vẫn chiếm slot và lời gọi tiếp theo bị từ chối thay vì xếp hàng vô hạn.
+Test upstream [test_permissions.py](../../repos/deepagents/libs/deepagents/tests/unit_tests/test_permissions.py), `test_sync_glob_rejects_when_timed_out_workers_are_saturated`, kiểm tra các worker timeout vẫn chiếm slot và lời gọi tiếp theo bị từ chối thay vì xếp hàng vô hạn.
 
 **Điểm ghép:** phần quản lý lifetime/admission/wait của executor OpenHands. OpenHands vẫn phải giữ event ordering, resource locks, cancellation token và synthetic observations của mình.
 
@@ -266,7 +266,7 @@ Phân loại: `ADAPT_THINLY` cho logic executor chọn lọc; `PATTERN_ONLY` cho
 
 ### 7.2. Pydantic AI và AnyIO cung cấp primitive bổ sung
 
-Module: [Pydantic AI _utils.py](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/_utils.py), `using_thread_executor`, `abandon_threads_on_cancel`, `run_in_executor`.
+Module: [Pydantic AI _utils.py](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/_utils.py), `using_thread_executor`, `abandon_threads_on_cancel`, `run_in_executor`.
 
 Source có custom executor, giữ context variables và lựa chọn bỏ chờ thread khi cancellation xảy ra trong phạm vi phù hợp. `abandon_threads_on_cancel` được sử dụng quanh lời gọi có deadline; không phải default mọi tool tự bị hard-kill.
 
@@ -278,7 +278,7 @@ Phân loại: `REUSE_WITH_CONFIGURATION` cho AnyIO primitive; `PATTERN_ONLY` ho�
 
 ### 7.3. Microsoft có process-tree termination thực sự
 
-Module: [shell/_killtree.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_killtree.py).
+Module: [shell/_killtree.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_killtree.py).
 
 `kill_process_tree` dùng `psutil` để lấy descendants, terminate rồi kill những process còn sống sau grace period. Có fallback theo platform; helper là async và tự mô tả best-effort.
 
@@ -286,13 +286,13 @@ Module: [shell/_killtree.py](../repos/agent-framework/python/packages/tools/agen
 
 Quan trọng hơn, code shell của Microsoft hiện bắt `TimeoutError` ở các đường đã kiểm tra, nhưng không có cleanup tương đương cho mọi external `CancelledError`. Protocol nói cancellation-safe không đủ; source chưa cho phép coi cả executor là lời giải drop-in cho interrupt.
 
-Nguồn: [_executor.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_executor.py), [_session.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_session.py), [_docker.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py), [test_shell_killtree.py](../repos/agent-framework/python/packages/tools/tests/test_shell_killtree.py).
+Nguồn: [_executor.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_executor.py), [_session.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_session.py), [_docker.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_docker.py), [test_shell_killtree.py](../../repos/agent-framework/python/packages/tools/tests/test_shell_killtree.py).
 
 Phân loại: `ADAPT_THINLY` cho helper process-tree/timeout cleanup phù hợp; không thay nguyên terminal để rồi mất tmux/persistent terminal semantics mà chưa có lý do.
 
 ### 7.4. Pydantic Harness có donor cleanup browser sát nhu cầu
 
-Module: [browser_use/_toolset.py](../repos/pydantic-ai-harness/pydantic_ai_harness/browser_use/_toolset.py).
+Module: [browser_use/_toolset.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/browser_use/_toolset.py).
 
 Các phần cụ thể:
 
@@ -302,7 +302,7 @@ Các phần cụ thể:
 - `_run_in_fresh_session`: cleanup trong `finally`.
 - `_run_in_shared_session`: khi lỗi hoặc cancel thì bỏ session không còn chắc trạng thái và cleanup; lần sau tạo lại.
 
-Test upstream bao phủ cancel, teardown lỗi, teardown timeout và retry cleanup: [test_browser_use.py](../repos/pydantic-ai-harness/tests/browser_use/test_browser_use.py), gồm `test_session_killed_when_the_call_is_cancelled`, `test_a_teardown_timeout_is_reported`, `test_a_failed_teardown_is_retried_before_the_next_call`.
+Test upstream bao phủ cancel, teardown lỗi, teardown timeout và retry cleanup: [test_browser_use.py](../../repos/pydantic-ai-harness/tests/browser_use/test_browser_use.py), gồm `test_session_killed_when_the_call_is_cancelled`, `test_a_teardown_timeout_is_reported`, `test_a_failed_teardown_is_retried_before_the_next_call`.
 
 Đây là donor đặc biệt phù hợp vì OpenHands cũng dùng browser-use và đã có cleanup gọi `_close_all_sessions`/`session.kill` ở một số đường. Phần còn thiếu không phải browser lifecycle từ con số không; là liên kết active-operation cancellation và cleanup có giới hạn vào interrupt contract.
 
@@ -314,7 +314,7 @@ Phân loại: `ADAPT_THINLY` cho cleanup protocol/helper chọn lọc; `PATTERN_
 
 ### 7.5. Pydantic shell là donor timeout, không phải bảo đảm interrupt toàn diện
 
-Module: [shell/_toolset.py](../repos/pydantic-ai-harness/pydantic_ai_harness/shell/_toolset.py).
+Module: [shell/_toolset.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/shell/_toolset.py).
 
 Có process group, TERM/KILL escalation, bounded output drain và cleanup trong finally. Nhưng đường kill-group tường minh gắn với timeout; không được suy luận rằng external cancel luôn dừng mọi descendant. Một số primitive dùng POSIX process groups.
 
@@ -340,7 +340,7 @@ Phân loại: `PATTERN_ONLY` cho thay terminal; `ADAPT_THINLY` cho helper cleanu
 
 Các repo local OpenHands, Pydantic AI, Pydantic Harness, Deep Agents và Microsoft Agent Framework đều có LICENSE MIT ở phạm vi root; package tools/core của Microsoft và package Deep Agents cũng có LICENSE riêng đã tìm thấy. Việc phân phối lại phần source phải giữ notice/license tương ứng. Đây là ghi nhận từ file license, không phải kết luận rằng mọi dependency hoặc tài sản bên trong đều cùng một license.
 
-Nguồn: [OpenHands LICENSE](../repos/software-agent-sdk/LICENSE), [Pydantic Harness LICENSE](../repos/pydantic-ai-harness/LICENSE), [Pydantic AI LICENSE](../repos/pydantic-ai/LICENSE), [Deep Agents LICENSE](../repos/deepagents/LICENSE), [Microsoft tools LICENSE](../repos/agent-framework/python/packages/tools/LICENSE), [Microsoft core LICENSE](../repos/agent-framework/python/packages/core/LICENSE).
+Nguồn: [OpenHands LICENSE](../../repos/software-agent-sdk/LICENSE), [Pydantic Harness LICENSE](../../repos/pydantic-ai-harness/LICENSE), [Pydantic AI LICENSE](../../repos/pydantic-ai/LICENSE), [Deep Agents LICENSE](../../repos/deepagents/LICENSE), [Microsoft tools LICENSE](../../repos/agent-framework/python/packages/tools/LICENSE), [Microsoft core LICENSE](../../repos/agent-framework/python/packages/core/LICENSE).
 
 Không có integration dependency solve trong lần này. Metadata cho biết Pydantic Harness là alpha, Microsoft tools là beta và Deep Agents là beta tại snapshot; các mức này không phủ nhận capability nhưng làm tăng chi phí theo dõi API khi port internal modules.
 

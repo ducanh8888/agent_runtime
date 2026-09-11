@@ -1734,7 +1734,8 @@ class ConversationService:
         # `StoredConversation(**request_data)` validate that dict as a fresh
         # `BaseWorkspace` would build a *second* one from the same (by now fixed)
         # `host_port`, which finds the first container still holding the port and
-        # raises, orphaning it -- measured on 2026-09-09, see DOCKER_RECON.md.
+        # raises, orphaning it -- measured on 2026-09-09, see
+        # docs/research/docker-recon.md.
         # `DiscriminatedUnionMixin._validate_subtype` short-circuits
         # (`if isinstance(data, cls): return data`) when the value handed to a
         # workspace-typed field is already an instance of that type, so passing

@@ -1,10 +1,10 @@
 # Agent Runtime — Research Pass 2
 
-> **Scope correction after cross-repository reassessment:** The blocker verdict below describes the reviewed OpenHands integration, not the absence of reusable OSS implementations. Subsequent source inspection identified existing OpenHands action-blocking hooks and concrete donor implementations for filesystem policy, sandboxed shell execution, bounded executor handling, process termination, skill execution separation, and browser cancellation cleanup. Read [OSS Gap Reassessment](RESEARCH_OSS_GAP_REASSESSMENT.md) for the revised base-repository-plus-donors findings. The original findings are retained below for traceability; their product-wide interpretation is superseded by that reassessment.
+> **Scope correction after cross-repository reassessment:** The blocker verdict below describes the reviewed OpenHands integration, not the absence of reusable OSS implementations. Subsequent source inspection identified existing OpenHands action-blocking hooks and concrete donor implementations for filesystem policy, sandboxed shell execution, bounded executor handling, process termination, skill execution separation, and browser cancellation cleanup. Read [OSS Gap Reassessment](oss-gap-reassessment.md) for the revised base-repository-plus-donors findings. The original findings are retained below for traceability; their product-wide interpretation is superseded by that reassessment.
 
 **Status:** Final pre-implementation research report; architecture is not frozen.  
 **Date:** 2026-09-05.  
-**Prior evidence:** [Research Pass 1](RESEARCH_PASS_1.md).  
+**Prior evidence:** [Research Pass 1](pass-01.md).
 **Scope:** OSS reuse, runtime behavior, authority boundaries, lifecycle semantics, and architecture readiness.  
 **Final verdict:** `BLOCKED_BY_CONFIRMED_GAPS`.
 
@@ -101,7 +101,7 @@ The authorization subject is an external dispatcher, represented by a protected 
 
 The workspace cookie is accepted only by workspace routes, but its underlying value must not be mistaken for a separate least-privilege credential. A raw client possessing the corresponding accepted API-key value could send it in the control header.
 
-Evidence: [dependencies.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/dependencies.py), especially line 24 onward.
+Evidence: [dependencies.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/dependencies.py), especially line 24 onward.
 
 ### Existing terminal protection
 
@@ -109,7 +109,7 @@ The command environment sanitizer removes `SESSION_API_KEY`, `OH_SECRET_KEY`, an
 
 This is useful existing behavior that should not be rebuilt. It protects a particular environment-exposure route; it is not process or filesystem isolation and does not automatically remove every unrelated provider credential.
 
-Evidence: [command.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/command.py), line 25 onward; [terminal environment](../repos/software-agent-sdk/openhands-tools/openhands/tools/terminal/env.py).
+Evidence: [command.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/utils/command.py), line 25 onward; [terminal environment](../../repos/software-agent-sdk/openhands-tools/openhands/tools/terminal/env.py).
 
 ### Confirmed uncovered execution path
 
@@ -119,7 +119,7 @@ The renderer's own module documentation states that commands execute with full p
 
 The skill invocation tool is also auto-attached after ordinary regex filtering when invocable AgentSkills-format skills exist. An empty ordinary tool selection is therefore not proof that no execution-capable path remains.
 
-Evidence: [agent/base.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/base.py), lines 565–611; [invoke_skill.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py); [skills/execute.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py), lines 52–73.
+Evidence: [agent/base.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/base.py), lines 565–611; [invoke_skill.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py); [skills/execute.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py), lines 52–73.
 
 ### What can and cannot coexist
 
@@ -159,7 +159,7 @@ OpenHands provides policies such as always-confirm, never-confirm and risk-based
 
 It does not follow that never-confirm plus a prompt describing restrictions enforces a restrictive profile. Optional risk analyzers likewise do not become generic filesystem, network, credential or process sandboxes.
 
-Evidence: [confirmation_policy.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/security/confirmation_policy.py).
+Evidence: [confirmation_policy.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/security/confirmation_policy.py).
 
 ### Automatically attached capabilities
 
@@ -205,7 +205,7 @@ This does not justify implementing a new universal policy engine. It prevents de
 | Error inspection | Error state and persisted failure observations/events | Runtime failure may require recovery reconciliation |
 | Delete | Removes session state and closes resources | Workspace is preserved; deletion is not pause |
 
-Evidence: [conversation_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_router.py), line 89 onward; [event_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_router.py); [event_service.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward.
+Evidence: [conversation_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_router.py), line 89 onward; [event_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_router.py); [event_service.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward.
 
 ### Client and process independence
 
@@ -215,7 +215,7 @@ Execution belongs to an EventService task on the server. It is not scoped to the
 
 The guarantee does not apply to every possible wrapper. A CLI that owns and tears down the server or execution workspace can still terminate the session. The reusable server/client behavior supports independent lifetime, but integration must preserve it.
 
-Evidence: [remote_conversation.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py), lines 704 and 1683 onward.
+Evidence: [remote_conversation.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py), lines 704 and 1683 onward.
 
 ### Non-interrupting update details
 
@@ -225,7 +225,7 @@ The state lock is released for model I/O, but not universally for every tool ope
 
 Normal user input also stops OpenHands' separate goal loop. That optional upstream feature should not silently become an orchestration owner. ACP prompt execution has superseding/cancellation behavior different from the normal native-agent path.
 
-Evidence: [event_service.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward; [local_conversation.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py), lines 1813, 1884 and 2250 onward.
+Evidence: [event_service.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward; [local_conversation.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py), lines 1813, 1884 and 2250 onward.
 
 ### Interruption, stopping and continuation
 
@@ -245,7 +245,7 @@ Synchronous execution has weaker interruption behavior: task cancellation cannot
 | External API operation | Stops local continuation where applicable | A submitted external action is undone |
 | Conversation history | Records interruption/failure and retains prior context | In-flight external effect and recorded cancellation become atomic |
 
-Evidence: [ToolExecutor interrupt contract](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/tool.py), line 317 onward; [parallel_executor.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py), line 237 onward; [terminal executor](../repos/software-agent-sdk/openhands-tools/openhands/tools/terminal/impl.py), line 581 onward; [browser executor](../repos/software-agent-sdk/openhands-tools/openhands/tools/browser_use/impl.py).
+Evidence: [ToolExecutor interrupt contract](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/tool.py), line 317 onward; [parallel_executor.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py), line 237 onward; [terminal executor](../../repos/software-agent-sdk/openhands-tools/openhands/tools/terminal/impl.py), line 581 onward; [browser executor](../../repos/software-agent-sdk/openhands-tools/openhands/tools/browser_use/impl.py).
 
 There is no need to redefine stop as deletion. Pause/cancel with retained history and later continuation already supplies useful stop/resume behavior. A separate durable, irreversible stop tombstone is not established, but it is not a frozen requirement.
 
@@ -267,7 +267,7 @@ On restart, formerly running sessions undergo error/recovery reconciliation, inc
 
 Client exit preserves server execution. Server or machine restart preserves persisted files, not arbitrary in-flight execution. A machine restart also requires the service to start again. The product does not require stronger arbitrary-action recovery, so no separate durable workflow platform is justified.
 
-Evidence: [EventService stream publication and recovery](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), lines 1056 and 1140 onward; [conversation catalog/recovery](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), lines 674 and 2095 onward; [conversation leases](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_lease.py).
+Evidence: [EventService stream publication and recovery](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), lines 1056 and 1140 onward; [conversation catalog/recovery](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), lines 674 and 2095 onward; [conversation leases](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_lease.py).
 
 ### CLI and Claude/Codex integration
 
@@ -289,7 +289,7 @@ The conversation service loads a lightweight catalog and hydrates session execut
 
 Relevant upstream tests include lazy restart/list behavior and single hydration under concurrent access. These support the interpretation of the implementation without establishing real workload capacity.
 
-Evidence: [conversation_service.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), lines 674, 714, 1265 and 2095 onward; [test_conversation_service.py](../repos/software-agent-sdk/tests/agent_server/test_conversation_service.py), line 860 onward.
+Evidence: [conversation_service.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), lines 674, 714, 1265 and 2095 onward; [test_conversation_service.py](../../repos/software-agent-sdk/tests/agent_server/test_conversation_service.py), line 860 onward.
 
 ### Remaining bottlenecks
 
@@ -309,7 +309,7 @@ The multi-action async executor uses a synchronous `with ThreadPoolExecutor(...)
 
 **Inference from explicit source and Python semantics:** a tool that does not finish after interruption can make this shutdown wait occur on the shared event loop, delaying unrelated session control. This is a particular failure path, not evidence that normal execution is globally serialized.
 
-Evidence: [parallel_executor.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py), lines 161–253; Python [executor shutdown documentation](https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor.shutdown).
+Evidence: [parallel_executor.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py), lines 161–253; Python [executor shutdown documentation](https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor.shutdown).
 
 ### Assessment against the requirement
 
@@ -377,15 +377,15 @@ Custom model IDs need the appropriate provider route and capability metadata, in
 
 ### Provider evidence
 
-- [OpenHands llm.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/llm/llm.py): provider invocation, configuration, streaming and parameter handling.
-- [OpenHands message.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/llm/message.py): message and reasoning representations.
-- [Responses serialization tests](../repos/software-agent-sdk/tests/sdk/llm/test_responses_serialization.py).
-- [Reasoning-content tests](../repos/software-agent-sdk/tests/sdk/llm/test_reasoning_content.py).
-- [Canonical-model resolution tests](../repos/software-agent-sdk/tests/sdk/llm/test_model_canonical_name_resolution.py).
-- [API connection retry tests](../repos/software-agent-sdk/tests/sdk/llm/test_api_connection_error_retry.py).
-- [Pydantic OpenAI adapter](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/models/openai.py) and [provider](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/openai.py).
-- [Pydantic Anthropic adapter](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/models/anthropic.py) and [provider](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/anthropic.py).
-- [Pydantic OpenAI tests](../repos/pydantic-ai/tests/models/test_openai.py) and [Anthropic tests](../repos/pydantic-ai/tests/models/test_anthropic.py).
+- [OpenHands llm.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/llm/llm.py): provider invocation, configuration, streaming and parameter handling.
+- [OpenHands message.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/llm/message.py): message and reasoning representations.
+- [Responses serialization tests](../../repos/software-agent-sdk/tests/sdk/llm/test_responses_serialization.py).
+- [Reasoning-content tests](../../repos/software-agent-sdk/tests/sdk/llm/test_reasoning_content.py).
+- [Canonical-model resolution tests](../../repos/software-agent-sdk/tests/sdk/llm/test_model_canonical_name_resolution.py).
+- [API connection retry tests](../../repos/software-agent-sdk/tests/sdk/llm/test_api_connection_error_retry.py).
+- [Pydantic OpenAI adapter](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/models/openai.py) and [provider](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/openai.py).
+- [Pydantic Anthropic adapter](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/models/anthropic.py) and [provider](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/anthropic.py).
+- [Pydantic OpenAI tests](../../repos/pydantic-ai/tests/models/test_openai.py) and [Anthropic tests](../../repos/pydantic-ai/tests/models/test_anthropic.py).
 
 The inspected locked diagnostic dependencies included LiteLLM `1.93.0`, OpenAI Python `2.33.0`, and Anthropic Python `0.75.0`. LiteLLM's `llms/anthropic/chat/transformation.py` was inspected in that installed dependency. Dependency-source findings should be rechecked when versions change; they are not assertions about every future release.
 
@@ -420,7 +420,7 @@ The conclusion is not that every skill needs conversion. A directory containing 
 
 The externally assigned profile must remain authoritative even for trusted skills. The current OpenHands dynamic renderer does not establish that property. Removing useful skills or inventing a new DSL is not justified; the required distinction is between portable content and executable behavior that must obey the same authority boundary.
 
-Evidence: [OpenHands skill loader](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/skill.py), [skill command renderer](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py), [skill invocation tool](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py), [Pydantic Harness loader](../repos/pydantic-ai-harness/pydantic_ai_harness/skills/_loader.py), [Deep Agents skills](../repos/deepagents/libs/deepagents/deepagents/middleware/skills.py).
+Evidence: [OpenHands skill loader](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/skill.py), [skill command renderer](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/skills/execute.py), [skill invocation tool](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/tool/builtins/invoke_skill.py), [Pydantic Harness loader](../../repos/pydantic-ai-harness/pydantic_ai_harness/skills/_loader.py), [Deep Agents skills](../../repos/deepagents/libs/deepagents/deepagents/middleware/skills.py).
 
 **Classification:** `ADAPT_THINLY` for sharing the verified content subset; `GAP_REMAINS` for claiming complete externally bounded executable-skill semantics in the current OpenHands integration.
 
@@ -441,7 +441,7 @@ The workspace router resolves paths against the stored conversation workspace an
 
 The more general file routes have their own authorization and path behavior. Their existence should not be interpreted as a per-session permission policy merely because a session-scoped workspace route also exists.
 
-Evidence: [workspace_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/workspace_router.py), [file_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/file_router.py).
+Evidence: [workspace_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/workspace_router.py), [file_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/file_router.py).
 
 ### Association in shared workspaces
 
@@ -461,7 +461,7 @@ The Automation dispatcher prepares execution inputs, selects backend execution, 
 
 Those responsibilities overlap the Agent Runtime's required ownership of workspace selection, execution and lifecycle. Extracting trigger behavior may be possible, but the inspected implementation does not establish it as a thin drop-in integration.
 
-Evidence: [scheduler.py](../repos/automation/openhands/automation/scheduler.py), [dispatcher.py](../repos/automation/openhands/automation/dispatcher.py), [local backend](../repos/automation/openhands/automation/backends/local.py), [watchdog.py](../repos/automation/openhands/automation/watchdog.py).
+Evidence: [scheduler.py](../../repos/automation/openhands/automation/scheduler.py), [dispatcher.py](../../repos/automation/openhands/automation/dispatcher.py), [local backend](../../repos/automation/openhands/automation/backends/local.py), [watchdog.py](../../repos/automation/openhands/automation/watchdog.py).
 
 **Classification:** `REJECT` for adopting OpenHands Automation unchanged as a trigger-only owner; `PATTERN_ONLY` where its scheduling/claiming behavior is informative. This is not a rejection of the project for its own intended use.
 

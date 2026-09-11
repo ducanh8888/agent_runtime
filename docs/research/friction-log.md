@@ -229,7 +229,7 @@ session around, against the ten minutes it had already spent going the wrong way
 A probe left a paused session behind on every run, so the tidy-up was obvious:
 list the sessions, delete the paused ones. That loop deleted one and then
 crashed on an emoji in a title before reaching the second, which was
-`6ff256c9` -- the session `P3_RESULT.md` names in a heading as the one not to
+`6ff256c9` -- the session `../results/p3.md` names in a heading as the one not to
 delete. It is paused because it was interrupted, which is exactly why it is
 evidence.
 
@@ -293,8 +293,8 @@ second instance within a week.
 Every one of the 77 restored conversations carries a Windows `working_dir`
 (`C:\Users\ADMIN\...`), so none is resumable and the obvious cleanup is "delete
 everything Windows-origin". That filter selects 76 of 77 -- and three of them,
-`6ff256c9`, `70652c62` and `e8d1dd8f`, are cited in `P3_RESULT.md` and
-`P4_RESULT.md`, two under literal `## Do not delete session ...` headings.
+`6ff256c9`, `70652c62` and `e8d1dd8f`, are cited in `../results/p3.md` and
+`../results/p4.md`, two under literal `## Do not delete session ...` headings.
 
 What caught it was grepping the docs for eight-hex-digit ids and intersecting
 that with the delete list, by hand, after the list was already built. Nothing in
@@ -393,7 +393,7 @@ containers this produced across four attempts -- one per request, all healthy,
 none referenced by anything, since the exception happens before `stored` is
 ever assigned. `agentrt list` shows nothing for them.
 
-This is also a correction of the Windows-era `DOCKER_RECON.md`, which saw the
+This is also a correction of the Windows-era `docker-recon.md`, which saw the
 identical port error there and concluded it was specific to docker being
 reached through a WSL proxy. It reproduced on a machine with no WSL and no
 proxy, so that theory was wrong -- the port conflict was real on Windows too,
@@ -429,6 +429,6 @@ conversation create goes through, not only Docker's.
 
 Widening `ConversationConfig.workspace` to accept the fix's beneficiary
 (`DockerWorkspace`) was tried again on top of this and reverted again -- see
-the entry above and `DOCKER_RECON.md`. The type stays narrow because nothing
+the entry above and `docker-recon.md`. The type stays narrow because nothing
 downstream can use a wider one yet; landing it alone would only reintroduce
 "looks supported from outside" for a different field.

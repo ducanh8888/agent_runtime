@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "entrypoint": "docs/README.md",
+  "active_plan": "docs/plans/deepseek-hardening.md",
+  "optional_link_roots": ["repos/"],
+  "documents": [
+    {"id": "guide.migration", "path": "docs/guides/migration.md", "type": "guide", "lifecycle": "current", "authority": "normative"},
+    {"id": "guide.orchestration", "path": "docs/guides/orchestration.md", "type": "guide", "lifecycle": "current", "authority": "normative"},
+    {"id": "plan.deepseek-hardening", "path": "docs/plans/deepseek-hardening.md", "type": "plan", "lifecycle": "active", "authority": "normative"},
+    {"id": "plan.initial-runtime", "path": "docs/plans/initial-runtime.md", "type": "plan", "lifecycle": "historical", "authority": "informative"},
+    {"id": "reference.daemon-behavior", "path": "docs/reference/daemon-behavior.md", "type": "reference", "lifecycle": "current", "authority": "reference"},
+    {"id": "research.deepseek-hardening-audit", "path": "docs/research/deepseek-hardening-audit.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.docker-recon", "path": "docs/research/docker-recon.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.friction-log", "path": "docs/research/friction-log.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.oss-gap-reassessment", "path": "docs/research/oss-gap-reassessment.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.p4-recon", "path": "docs/research/p4-recon.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.pass-01", "path": "docs/research/pass-01.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.pass-02", "path": "docs/research/pass-02.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "research.pre-plan-decisions", "path": "docs/research/pre-plan-decisions.md", "type": "research", "lifecycle": "historical", "authority": "informative"},
+    {"id": "result.baseline-linux", "path": "docs/results/baseline-linux.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.h0", "path": "docs/results/h0.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.h1", "path": "docs/results/h1.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.p1-baseline-windows", "path": "docs/results/p1-baseline-windows.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.p2", "path": "docs/results/p2.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.p3", "path": "docs/results/p3.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.p4", "path": "docs/results/p4.md", "type": "result", "lifecycle": "complete", "authority": "evidence"}
+  ]
+}

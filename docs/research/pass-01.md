@@ -304,18 +304,18 @@ Repository: [OpenHands/software-agent-sdk](https://github.com/OpenHands/software
 
 Inspected ref: `f47083cc370a85160f0348f32e531ee3514399e5`.
 
-- Lifecycle REST routes: [conversation_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_router.py), line 89 onward.
-- Event search and message submission: [event_router.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_router.py), line 65 onward.
-- Background execution, steering, interruption and restart recovery: [event_service.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward.
-- Conversation locks, execution pool and worktree handling: [conversation_service.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), line 689 onward.
-- Cross-process lease protection: [conversation_lease.py](../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_lease.py).
-- Reconnect and event reconciliation: [remote_conversation.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py).
-- Parallel tools and resource locks: [parallel_executor.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py).
-- Confirmation policies: [confirmation_policy.py](../repos/software-agent-sdk/openhands-sdk/openhands/sdk/security/confirmation_policy.py).
-- Parallel-executor tests: [test_parallel_executor.py](../repos/software-agent-sdk/tests/sdk/agent/test_parallel_executor.py).
-- Server lifecycle tests: [test_conversation_service.py](../repos/software-agent-sdk/tests/agent_server/test_conversation_service.py).
-- Lease tests: [test_conversation_lease.py](../repos/software-agent-sdk/tests/agent_server/test_conversation_lease.py).
-- Skill-loading tests: [test_load_project_skills.py](../repos/software-agent-sdk/tests/sdk/skills/test_load_project_skills.py).
+- Lifecycle REST routes: [conversation_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_router.py), line 89 onward.
+- Event search and message submission: [event_router.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_router.py), line 65 onward.
+- Background execution, steering, interruption and restart recovery: [event_service.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/event_service.py), line 729 onward.
+- Conversation locks, execution pool and worktree handling: [conversation_service.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_service.py), line 689 onward.
+- Cross-process lease protection: [conversation_lease.py](../../repos/software-agent-sdk/openhands-agent-server/openhands/agent_server/conversation_lease.py).
+- Reconnect and event reconciliation: [remote_conversation.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py).
+- Parallel tools and resource locks: [parallel_executor.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/agent/parallel_executor.py).
+- Confirmation policies: [confirmation_policy.py](../../repos/software-agent-sdk/openhands-sdk/openhands/sdk/security/confirmation_policy.py).
+- Parallel-executor tests: [test_parallel_executor.py](../../repos/software-agent-sdk/tests/sdk/agent/test_parallel_executor.py).
+- Server lifecycle tests: [test_conversation_service.py](../../repos/software-agent-sdk/tests/agent_server/test_conversation_service.py).
+- Lease tests: [test_conversation_lease.py](../../repos/software-agent-sdk/tests/agent_server/test_conversation_lease.py).
+- Skill-loading tests: [test_load_project_skills.py](../../repos/software-agent-sdk/tests/sdk/skills/test_load_project_skills.py).
 
 ### Pydantic AI
 
@@ -323,9 +323,9 @@ Repository: [pydantic/pydantic-ai](https://github.com/pydantic/pydantic-ai)
 
 Inspected ref: `b57cec28acdb836ec98fa29257225eb1b4e3e104`.
 
-- Native OpenAI provider configuration: [openai.py](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/openai.py).
-- Native Anthropic provider configuration: [anthropic.py](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/anthropic.py).
-- Active-run enqueue and cancellation: [run.py](../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/run.py), line 556 onward.
+- Native OpenAI provider configuration: [openai.py](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/openai.py).
+- Native Anthropic provider configuration: [anthropic.py](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/providers/anthropic.py).
+- Active-run enqueue and cancellation: [run.py](../../repos/pydantic-ai/pydantic_ai_slim/pydantic_ai/run.py), line 556 onward.
 
 ### Pydantic AI Harness
 
@@ -333,10 +333,12 @@ Repository: local clone `repos/pydantic-ai-harness`.
 
 Inspected ref: `41d51a828880c1e33155f2fc77e8e623e21483ef`.
 
-- Step persistence scope and limitations: [README.md](../repos/pydantic-ai-harness/pydantic_ai_harness/step_persistence/README.md).
-- Persistence stores and types: [_store.py](../repos/pydantic-ai-harness/pydantic_ai_harness/step_persistence/_store.py).
-- Durability tests: [test_durable_step_persistence.py](../repos/pydantic-ai-harness/tests/step_persistence/test_durable_step_persistence.py).
-- Skill compatibility tests: [test_skills.py](../repos/pydantic-ai-harness/tests/skills/test_skills.py).
+- Step persistence scope and limitations were read from
+  `repos/pydantic-ai-harness/pydantic_ai_harness/step_persistence/README.md`
+  in the research checkout used for this audit.
+- Persistence stores and types: [_store.py](../../repos/pydantic-ai-harness/pydantic_ai_harness/step_persistence/_store.py).
+- Durability tests: [test_durable_step_persistence.py](../../repos/pydantic-ai-harness/tests/step_persistence/test_durable_step_persistence.py).
+- Skill compatibility tests: [test_skills.py](../../repos/pydantic-ai-harness/tests/skills/test_skills.py).
 
 ### Deep Agents
 
@@ -344,11 +346,11 @@ Repository: [langchain-ai/deepagents](https://github.com/langchain-ai/deepagents
 
 Inspected ref: `4e5f9350e4d77b8bf19e472e8414662d3fa59dc0`.
 
-- Async subagent lifecycle client: [async_subagents.py](../repos/deepagents/libs/deepagents/deepagents/middleware/async_subagents.py).
-- Async lifecycle tests: [test_async_subagents.py](../repos/deepagents/libs/deepagents/tests/unit_tests/test_async_subagents.py).
-- Skill parsing and disclosure: [skills.py](../repos/deepagents/libs/deepagents/deepagents/middleware/skills.py).
-- Experimental Talon background agents: [async_subagents.py](../repos/deepagents/libs/talon/deepagents_talon/async_subagents.py).
-- Sequential cron scheduler: [scheduler.py](../repos/deepagents/libs/talon/deepagents_talon/cron/scheduler.py).
+- Async subagent lifecycle client: [async_subagents.py](../../repos/deepagents/libs/deepagents/deepagents/middleware/async_subagents.py).
+- Async lifecycle tests: [test_async_subagents.py](../../repos/deepagents/libs/deepagents/tests/unit_tests/test_async_subagents.py).
+- Skill parsing and disclosure: [skills.py](../../repos/deepagents/libs/deepagents/deepagents/middleware/skills.py).
+- Experimental Talon background agents: [async_subagents.py](../../repos/deepagents/libs/talon/deepagents_talon/async_subagents.py).
+- Sequential cron scheduler: [scheduler.py](../../repos/deepagents/libs/talon/deepagents_talon/cron/scheduler.py).
 - Current standalone LangGraph server requirements: [official documentation](https://docs.langchain.com/langsmith/deploy-standalone-server).
 
 ### Microsoft Agent Framework
@@ -357,10 +359,10 @@ Repository: [microsoft/agent-framework](https://github.com/microsoft/agent-frame
 
 Inspected ref: `cc8c1fa0a4c718a4a4cdbcee3340f0bf01746006`.
 
-- In-memory background agent lifecycle and lost-task recovery: [_background_agents.py](../repos/agent-framework/python/packages/core/agent_framework/_harness/_background_agents.py).
-- Background-agent tests: [test_harness_background_agents.py](../repos/agent-framework/python/packages/core/tests/core/test_harness_background_agents.py).
-- Skills and resources: [_skills.py](../repos/agent-framework/python/packages/core/agent_framework/_skills.py).
-- Shell policy limitations: [_policy.py](../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_policy.py).
+- In-memory background agent lifecycle and lost-task recovery: [_background_agents.py](../../repos/agent-framework/python/packages/core/agent_framework/_harness/_background_agents.py).
+- Background-agent tests: [test_harness_background_agents.py](../../repos/agent-framework/python/packages/core/tests/core/test_harness_background_agents.py).
+- Skills and resources: [_skills.py](../../repos/agent-framework/python/packages/core/agent_framework/_skills.py).
+- Shell policy limitations: [_policy.py](../../repos/agent-framework/python/packages/tools/agent_framework_tools/shell/_policy.py).
 
 ### OpenHands Automation
 
@@ -368,8 +370,8 @@ Repository: [OpenHands/automation](https://github.com/OpenHands/automation)
 
 Inspected ref: `90423e1729671e4400be68a4df36e9a27fb3516f`.
 
-- Scheduler and database claim logic: [scheduler.py](../repos/automation/openhands/automation/scheduler.py).
-- Scheduler tests: [test_scheduler.py](../repos/automation/tests/test_scheduler.py).
+- Scheduler and database claim logic: [scheduler.py](../../repos/automation/openhands/automation/scheduler.py).
+- Scheduler tests: [test_scheduler.py](../../repos/automation/tests/test_scheduler.py).
 
 ### Claude Code
 

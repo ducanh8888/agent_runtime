@@ -1,7 +1,7 @@
 # Agent Runtime — Quyết định trước khi dựng plan
 
 Ngày: 2026-09-05. Nguồn: hỏi–đáp trực tiếp với người dùng.
-Tài liệu nền: [Pass 1](RESEARCH_PASS_1.md), [Pass 2](RESEARCH_PASS_2.md), [OSS Gap Reassessment](RESEARCH_OSS_GAP_REASSESSMENT.md).
+Tài liệu nền: [Pass 1](pass-01.md), [Pass 2](pass-02.md), [OSS Gap Reassessment](oss-gap-reassessment.md).
 
 File này chỉ ghi quyết định đã chốt. Không phải plan, không phải architecture.
 
@@ -143,7 +143,7 @@ Người dùng hỏi lại vì sơ đồ đúng là toàn bộ local trừ lời
 | Thông tin 9Router cho smoke test | Người dùng sẽ cung cấp base URL + model id + key khi tới bước P2. Plan để chỗ trống |
 | Phạm vi test làm mốc đổi namespace | Toàn bộ test suite, gồm cả phần cần mạng/Docker |
 | Bố cục git | Commit 1 = tài liệu (chuyển vào `docs/`), commit 2 = bản copy OpenHands nguyên gốc, chưa sửa gì |
-| Bước tiếp | Viết `IMPLEMENTATION_PLAN.md` |
+| Bước tiếp | Viết `../plans/initial-runtime.md` |
 
 ## Vòng 14 — soát lại và đổi quyết định
 
@@ -247,7 +247,7 @@ Nguyên nhân thật khiến `client.py` tiêu 130K ký tự suy luận là nó 
 | Bỏ khỏi `delegate.py` | Chỉ thị ép mô hình không suy luận dài |
 | Thêm vào `delegate.py` | Quy tắc: interface trong phần tham chiếu là có thẩm quyền, không cần suy ra |
 | Thêm công cụ | `tools/api_context.py` trích OpenAPI của daemon đang chạy thành tài liệu tham chiếu gọn, dùng làm `--context` |
-| Thêm tài liệu | `docs/ORCHESTRATOR_GUIDE.md` — hướng dẫn ngắn cho orchestrator dùng agentrt |
+| Thêm tài liệu | `../guides/orchestration.md` — hướng dẫn ngắn cho orchestrator dùng agentrt |
 
 Nguyên tắc rút ra: **tối ưu chất lượng đầu vào, không tối ưu hành vi mô hình.** Context là đòn bẩy rẻ nhất; mọi chỉ thị về việc nên nghĩ bao nhiêu đều đắt hơn và kém tin cậy hơn.
 

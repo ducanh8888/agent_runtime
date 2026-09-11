@@ -17,7 +17,7 @@ guess sooner. The cheap lever is context: an agent that can see the interface it
 must call does not have to reason its way to one, and reasoning is billed at the
 same rate as code.
 
-`tools/api_context.py` and `docs/DAEMON_BEHAVIOUR.md` exist for that reason. The
+`tools/api_context.py` and `../reference/daemon-behavior.md` exist for that reason. The
 first extracts the daemon's live REST surface; the second records behaviour that
 the surface does not reveal.
 
@@ -54,7 +54,7 @@ most of an hour verifying it against source anyway. "Authoritative" describes
 the document's standing; it does not tell the agent that reading further is
 unnecessary. Both have to be said:
 
-> `docs/DAEMON_BEHAVIOUR.md` is complete and authoritative for this task —
+> `../reference/daemon-behavior.md` is complete and authoritative for this task —
 > routes, limits, enum values, field shapes. Do not verify it against the
 > server source.
 

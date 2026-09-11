@@ -186,7 +186,7 @@ look supported from outside. Reading the OpenAPI schema is what settles it:
     "workspace": {"$ref": "#/components/schemas/LocalWorkspace-Input"}
 
 So the daemon can describe a container workspace and cannot be asked for one.
-`DOCKER_RECON.md` records what happens when that field is widened.
+`../research/docker-recon.md` records what happens when that field is widened.
 
 ## Workspace files
 

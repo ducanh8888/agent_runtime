@@ -33,7 +33,7 @@ AGENT_PROFILE_NAME = "default"
 #: operator effort selector and no silent downgrade to a weaker request. These
 #: are written into the saved profile so the contract is inspectable, not just
 #: implied by the SDK's detection of the model name. See H0 in
-#: docs/DEEPSEEK_HARDENING_PLAN.md.
+#: docs/plans/deepseek-hardening.md.
 DIRECT_LLM_USAGE_ID = "agent"
 DIRECT_LLM_API_MODE = "chat"
 DIRECT_LLM_REASONING_EFFORT = "high"

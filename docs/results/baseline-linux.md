@@ -4,7 +4,7 @@ Taken 2026-09-09 on Ubuntu (Linux 7.0.0-31-generic), Python 3.13.15, 8 cores,
 at commit `31dd229`, after restoring from the migration bundle built on Windows
 2026-09-08.
 
-`P1_BASELINE.md` is the Windows measurement and the plan's rule that results
+`p1-baseline-windows.md` is the Windows measurement and the plan's rule that results
 must match it exactly does not transfer. This is the replacement reference for
 comparisons made on Linux. It records the `tools/` checks; the vendored pytest
 suite is a separate section below.
@@ -77,8 +77,8 @@ terminal to `rm` its own stray file, which the preset permits by design.
 
 The 77 conversations that came from Windows all carry a Windows `working_dir`
 and none is resumable. 73 were deleted; `6ff256c9`, `70652c62` and `e8d1dd8f`
-were kept because `P3_RESULT.md` and `P4_RESULT.md` cite them, two under
-`## Do not delete session` headings. See `FRICTION_LOG.md` -- the filter that
+were kept because `p3.md` and `p4.md` cite them, two under
+`## Do not delete session` headings. See `../research/friction-log.md` -- the filter that
 looks like a description of residue keeps turning out to be a description of
 state.
 

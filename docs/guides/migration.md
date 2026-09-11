@@ -19,7 +19,7 @@ provider credential.
 | `.env` | 867 B | **Yes — holds the API key** |
 | `profiles/default.json` | 4 KB | **Yes — holds the API key** |
 | `agent-profiles/*.json` | 20 KB | Yes. They are regenerated on first run, but with *new* UUIDs, and conversations record the id they ran under. Carrying them keeps that link. |
-| `conversations/` | 48 MB | Yes if the session history matters. Four sessions are tagged `keep` and are cited by name in `P3_RESULT.md`, `P4_RESULT.md` and `FRICTION_LOG.md`. |
+| `conversations/` | 48 MB | Yes if the session history matters. Four sessions are tagged `keep` and are cited by name in `../results/p3.md`, `../results/p4.md` and `../research/friction-log.md`. |
 | `daemon.log` | 7.2 MB | No. Append-only diagnostics. |
 | `cache/` | 7.4 MB | No. Rebuilt. |
 | `daemon.json` | 85 B | No. Port and token of a daemon that will not exist. |
@@ -86,13 +86,13 @@ way to find out what Linux does differently.
 
 ## What is expected to change, and what to do about it
 
-**The test baseline is Windows-only.** `P1_BASELINE.md` records pass/fail per
+**The test baseline is Windows-only.** `../results/p1-baseline-windows.md` records pass/fail per
 test as measured here, and the plan's rule is that results must match it
 exactly. That rule does not transfer: upstream is evidently validated on Linux,
 and the Windows failures it absorbs will not reproduce. Record a fresh baseline
 on Ubuntu before comparing anything against it.
 
-**Docker is the one worth retrying immediately.** `DOCKER_RECON.md` ends with a
+**Docker is the one worth retrying immediately.** `../research/docker-recon.md` ends with a
 container that starts correctly and a daemon that cannot bind its published
 port -- a failure specific to this machine, where docker is reached through a
 WSL proxy. On Linux that layer is gone. The experiment to repeat is written

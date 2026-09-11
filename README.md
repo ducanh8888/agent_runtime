@@ -21,8 +21,7 @@ the exact path) and fill it in.
 
 ## Where to go next
 
-**[CLAUDE.md](CLAUDE.md)** is the real entry point — written for an agent
-session picking up this project, but the right first read for a human too: how
-the pieces fit together, how to run the checks, and the working conventions
-this was built with. `docs/` holds the design record and defect log behind
-that summary.
+Start with **[CLAUDE.md](CLAUDE.md)** for runtime context and working
+conventions, or **[docs/README.md](docs/README.md)** for the categorized
+documentation index. Machine consumers should use
+[`docs/manifest.json`](docs/manifest.json).

@@ -7,19 +7,21 @@ which is the only code that is ours.
 
 ## Start here
 
-1. `docs/IMPLEMENTATION_PLAN.md` — the `Status` block at the top maps every
-   document and says which are current and which are history.
+1. [`docs/README.md`](docs/README.md) — the documentation entrypoint.
+   [`docs/manifest.json`](docs/manifest.json) is the machine-readable registry
+   of document type, lifecycle and authority.
 2. `packages/agentrt-runtime/agentrt/runtime/mcp_server.py` — the tool
    docstrings **are the product's documentation**. Nothing under `docs/` ever
    reaches a session working in another repository, so operational guidance
    lives there and is deliberately not duplicated.
-3. `docs/DAEMON_BEHAVIOUR.md` — what the daemon does that its API does not
-   reveal. Hand this to a session you dispatch to work on agentrt itself.
-4. `docs/FRICTION_LOG.md` — defects ordinary use found after the phases closed.
-   Read it before assuming a test passing means something works.
-5. [DeepSeek hardening plan](docs/DEEPSEEK_HARDENING_PLAN.md) — active follow-on
-   H0–H7 work, with [self-audit/evidence](docs/DEEPSEEK_HARDENING_AUDIT.md).
-   All H phases are pending. The new deployment targets direct DeepSeek,
+3. `docs/reference/daemon-behavior.md` — what the daemon does that its API does
+   not reveal. Hand this to a session you dispatch to work on agentrt itself.
+4. `docs/research/friction-log.md` — defects ordinary use found after the phases
+   closed. Read it before assuming a test passing means something works.
+5. [DeepSeek hardening plan](docs/plans/deepseek-hardening.md) — active follow-on
+   H0–H7 work, with
+   [self-audit/evidence](docs/research/deepseek-hardening-audit.md).
+   H0 and H1 are complete; H2 is next. The deployment targets direct DeepSeek,
    thinking enabled and effort `high`; no Sol or cost-driven effort reduction.
    This plan does not change existing profiles or authorize interrupting live
    sessions. Read its compatibility and cutover gates before implementation.
@@ -49,7 +51,7 @@ prints the daemon's live REST surface.
 ## How this work is done
 
 These are not style preferences. Each one cost something to learn and the
-reasons are in `FRICTION_LOG.md` and the phase results.
+reasons are in `docs/research/friction-log.md` and the phase results.
 
 **Probe before you write a spec.** Endpoint and field names mislead here.
 `goal/*` is a different subsystem; `send` needs `run: true`; the workspace root
@@ -88,6 +90,11 @@ with a recommendation. Do not infer consent from a previous answer.
 **Commit and push continuously**, with messages that say what was measured and
 what was rejected, not just what changed.
 
+**Keep documentation machine-readable.** Follow
+[`docs/README.md`](docs/README.md), update `docs/manifest.json` with every
+document move/addition, use lowercase kebab-case paths, and run
+`python3 tools/check_docs.py` before committing documentation changes.
+
 ## Constraints that were standing
 
 - A spend cap was agreed at **$2 total including testing**; `tools/spend.py`
@@ -113,14 +120,15 @@ The type stays `LocalWorkspace` on `ConversationConfig.workspace` -- widening
 it was tried again on top of the fix and reverted again, because it now fails
 one layer further in, at a real `assert isinstance(workspace, LocalWorkspace)`
 in `event_service.start()` that does `Path(workspace.working_dir).mkdir(...)`
-against a container path that doesn't exist on the host. `docs/DOCKER_RECON.md`
+against a container path that doesn't exist on the host. `docs/research/docker-recon.md`
 has the full trace. If that gets threaded through -- `event_service.start()`
 and `artifacts` both need it -- `workspace` becomes a preset that genuinely
 contains a session, and a P4 criterion that was withdrawn becomes reachable.
 
-**The test baseline.** `docs/P1_BASELINE.md` is the Windows measurement and the
-plan's rule that results must match it exactly does not transfer.
-`docs/LINUX_BASELINE.md` is the Linux reference: the five `tools/` checks all
+**The test baseline.** `docs/results/p1-baseline-windows.md` is the Windows
+measurement and the plan's rule that results must match it exactly does not
+transfer.
+`docs/results/baseline-linux.md` is the Linux reference: the five `tools/` checks all
 pass there, and it explains why the old numbers could not simply be re-read --
 four checks asserted Windows path syntax rather than containment, two of them
 passing while testing nothing. The vendored pytest suite is still unrecorded on
@@ -130,9 +138,9 @@ Linux.
 <absolute path to agentrt-mcp>` writes `[mcp_servers.agentrt]` to
 `~/.codex/config.toml`. The absolute path is deliberate: `~/.local/bin` is not
 on the PATH a spawned server inherits. Verified by dispatching a session from
-Codex and checking the file it produced, not the report — see `FRICTION_LOG.md`
+Codex and checking the file it produced, not the report — see `docs/research/friction-log.md`
 for the approval gate that makes `codex exec` behave differently from an
 interactive session.
 
-`docs/MIGRATION.md` covers moving to another machine: what is in git, what
+`docs/guides/migration.md` covers moving to another machine: what is in git, what
 exists only in the state directory, and what changes on Linux.
