@@ -114,6 +114,16 @@ class ConversationConfig(BaseModel):
             "`/tmp/conversation-worktrees/<conversation_id>/<project_name>`."
         ),
     )
+    workspace_dirty_overlay: bool = Field(
+        default=False,
+        description=(
+            "Opt-in. For the pinned modes, also copy the uncommitted and "
+            "untracked files the caller has right now onto the prepared tree. "
+            "The copy is verified per file but is not an atomic point-in-time "
+            "capture: a file edited while it is copied fails the capture rather "
+            "than being recorded inconsistently."
+        ),
+    )
     workspace_mode: Literal["shared", "snapshot", "isolated_worktree"] = Field(
         default="shared",
         description=(

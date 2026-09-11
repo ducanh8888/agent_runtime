@@ -1,13 +1,15 @@
 import asyncio
+import hashlib
 import importlib
 import json
 import logging
 import os
+import shutil
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
@@ -78,6 +80,7 @@ from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
 from agentrt.sdk.git.utils import (
     resolve_local_commit,
     run_git_command,
+    run_readonly_git_command,
     validate_git_repository,
 )
 from agentrt.sdk.mcp.utils import MCPToolProvider
@@ -169,6 +172,7 @@ class WorkspacePreparation:
     resolved_sha: str | None
     prepared_at: str
     capture: str | None
+    capture_detail: str | None = None
 
 
 class WorkspacePreparationError(ValueError):
@@ -278,6 +282,98 @@ def _create_conversation_worktree(
     )
 
 
+#: Never copied by a dirty overlay: dependency trees and caches are not
+#: authored work, and a worktree root nested in the source would recurse.
+_DIRTY_OVERLAY_EXCLUDES = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+    }
+)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _dirty_entries(repo_root: Path) -> list[tuple[str, str]]:
+    """``(status, path)`` for every changed, deleted or untracked file."""
+    output = run_readonly_git_command(
+        ["git", "--no-pager", "status", "--porcelain", "-z", "--untracked-files=all"],
+        repo_root,
+    )
+    fields = output.split("\0")
+    entries: list[tuple[str, str]] = []
+    index = 0
+    while index < len(fields):
+        entry = fields[index]
+        index += 1
+        if not entry:
+            continue
+        status, path = entry[:2], entry[3:]
+        if status[:1] in ("R", "C"):
+            # Rename/copy entries carry the original path as the next field.
+            index += 1
+        entries.append((status, path))
+    return entries
+
+
+def _capture_dirty_overlay(repo_root: Path, workspace_dir: Path) -> str:
+    """Copy the caller's uncommitted work onto a pinned tree.
+
+    Returns a detail string for the record. The copy is verified, not atomic: a
+    file whose content changes between the pre-copy and post-copy hash is
+    retried once and then refused, because recording a half-copied file as the
+    captured state would be worse than failing.
+    """
+    started_at = utc_now().isoformat()
+    digests: list[tuple[str, str]] = []
+    copied = removed = 0
+    for status, path in _dirty_entries(repo_root):
+        if any(part in _DIRTY_OVERLAY_EXCLUDES for part in PurePosixPath(path).parts):
+            continue
+        source = repo_root / path
+        target = workspace_dir / path
+        if status.strip() == "D" or not source.exists():
+            if target.is_file():
+                target.unlink()
+                removed += 1
+            continue
+        if not source.is_file():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        for attempt in (1, 2):
+            before = _sha256_file(source)
+            shutil.copy2(source, target)
+            after = _sha256_file(source)
+            if before == after:
+                digests.append((path, after))
+                copied += 1
+                break
+            if attempt == 2:
+                raise WorkspacePreparationError(
+                    f"{path} changed while it was being captured; a dirty "
+                    "overlay cannot freeze a tree another process is writing"
+                )
+    digest = hashlib.sha256(
+        "".join(f"{path}\0{value}\n" for path, value in sorted(digests)).encode()
+    ).hexdigest()
+    finished_at = utc_now().isoformat()
+    return (
+        f"files={copied} removed={removed} digest={digest[:16]} "
+        f"window={started_at}..{finished_at} consistency=verified-copy-not-atomic"
+    )
+
+
 def _prepare_request_workspace(
     request: StartConversationRequest,
     conversation_id: UUID,
@@ -344,12 +440,21 @@ def _prepare_request_workspace(
         workspace_dir=Path(new_workspace.working_dir),
         branch=branch or f"detached at {resolved_sha[:12]}",
     )
+    capture = "clean-commit"
+    capture_detail = None
+    if request.workspace_dirty_overlay:
+        capture_detail = _capture_dirty_overlay(
+            repo_root, Path(new_workspace.working_dir)
+        )
+        capture = "dirty-overlay"
+
     prepared = WorkspacePreparation(
         mode=mode,
         requested_ref=requested_ref,
         resolved_sha=resolved_sha,
         prepared_at=prepared_at,
-        capture="clean-commit",
+        capture=capture,
+        capture_detail=capture_detail,
     )
     return (
         request.model_copy(update={"workspace": new_workspace, "agent": agent}),
@@ -590,6 +695,7 @@ def _compose_conversation_info(
         workspace_resolved_sha=stored.workspace_resolved_sha,
         workspace_prepared_at=stored.workspace_prepared_at,
         workspace_capture=stored.workspace_capture,
+        workspace_capture_detail=stored.workspace_capture_detail,
         metrics=stored.metrics,
         created_at=stored.created_at,
         updated_at=stored.updated_at,
@@ -1841,6 +1947,7 @@ class ConversationService:
             workspace_resolved_sha=workspace_preparation.resolved_sha,
             workspace_prepared_at=workspace_preparation.prepared_at,
             workspace_capture=workspace_preparation.capture,
+            workspace_capture_detail=workspace_preparation.capture_detail,
         )
 
         # The agent is persisted to base_state.json (not meta.json), so it must

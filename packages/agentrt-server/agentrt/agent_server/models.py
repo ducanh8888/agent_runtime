@@ -126,6 +126,13 @@ class StoredConversation(ConversationConfig):
         default=None,
         description="Ref the workspace was pinned to, or None for shared mode.",
     )
+    workspace_capture_detail: str | None = Field(
+        default=None,
+        description=(
+            "What a dirty overlay captured and how consistent it is: file "
+            "count, digest and capture window. None for a clean pin."
+        ),
+    )
     workspace_resolved_sha: str | None = Field(
         default=None,
         description=(
@@ -304,6 +311,13 @@ class _ConversationInfoBase(BaseModel):
         description=(
             "What the prepared tree contains: `clean-commit` for a pinned "
             "tree, `dirty-overlay` when uncommitted changes were captured too."
+        ),
+    )
+    workspace_capture_detail: str | None = Field(
+        default=None,
+        description=(
+            "Dirty-overlay file count, digest and capture window, when one ran. "
+            "A verified copy is not an atomic point-in-time snapshot."
         ),
     )
     metrics: MetricsSnapshot | None = None

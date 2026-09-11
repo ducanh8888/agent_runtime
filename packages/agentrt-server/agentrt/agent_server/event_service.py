@@ -83,7 +83,11 @@ from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 from agentrt.sdk.event.error_classification import ErrorClassification, FailureKind
 from agentrt.sdk.event.llm_completion_log import LLMCompletionLogEvent
 from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
-from agentrt.sdk.git.utils import run_git_command, validate_git_repository
+from agentrt.sdk.git.utils import (
+    resolve_local_commit,
+    run_git_command,
+    validate_git_repository,
+)
 from agentrt.sdk.llm.streaming import LLMStreamChunk
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
@@ -228,6 +232,38 @@ class EventService:
                     }
                 ),
                 encoding="utf-8",
+            )
+
+    def _verify_pinned_workspace(self, working_dir: Path, pinned_sha: str) -> None:
+        """Refuse to resume a pinned workspace that is gone or has moved.
+
+        The failure this prevents is silent: `start` otherwise creates the
+        missing directory and `git init`s it, so a session whose snapshot was
+        cleaned up would run against a fresh empty repository and report work
+        against a revision nobody reviewed.
+        """
+        if not working_dir.is_dir():
+            raise ValueError(
+                f"pinned workspace {working_dir} is missing; "
+                f"{self.stored.workspace_mode} mode does not re-create it from "
+                f"{pinned_sha[:12]}"
+            )
+        try:
+            validate_git_repository(str(working_dir))
+        except (GitCommandError, GitRepositoryError) as exc:
+            raise ValueError(
+                f"pinned workspace {working_dir} is not a git repository: {exc}"
+            ) from exc
+        if self.stored.workspace_mode != "snapshot":
+            # A writer's own worktree moves its branch on purpose; only the
+            # immutable review tree has a revision that must not change.
+            return
+        head = resolve_local_commit(working_dir)
+        if head is not None and head != pinned_sha:
+            raise ValueError(
+                f"snapshot workspace {working_dir} is at {head[:12]}, not the "
+                f"pinned {pinned_sha[:12]}; refusing to run against a "
+                "different revision"
             )
 
     def _without_stored_secret(self, secret_name: str) -> StoredConversation:
@@ -1048,8 +1084,12 @@ class EventService:
         workspace = self.stored.workspace
         assert isinstance(workspace, LocalWorkspace)
         working_dir = Path(workspace.working_dir)
-        working_dir.mkdir(parents=True, exist_ok=True)
-        self._ensure_workspace_is_git_repo(working_dir)
+        pinned_sha = self.stored.workspace_resolved_sha
+        if self.stored.workspace_mode != "shared" and pinned_sha:
+            self._verify_pinned_workspace(working_dir, pinned_sha)
+        else:
+            working_dir.mkdir(parents=True, exist_ok=True)
+            self._ensure_workspace_is_git_repo(working_dir)
         # base_state.json is the single source of truth for the agent. On resume
         # (base_state exists) pass ``agent=None`` so LocalConversation keeps the
         # persisted agent. On a new conversation the creating caller supplied the

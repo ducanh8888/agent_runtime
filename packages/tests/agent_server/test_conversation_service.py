@@ -6,6 +6,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
@@ -4199,3 +4200,194 @@ async def test_search_live_conversation_does_not_wait_for_state_lock(tmp_path):
             holder.join(timeout=2)
 
     assert [item.id for item in page.items] == [conversation_info.id]
+
+    def test_dirty_overlay_captures_uncommitted_work(self, tmp_path):
+        """Opt-in overlay: the caller's edits travel with the pinned commit."""
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        tracked = repo_dir / "tracked.txt"
+        tracked.write_text("committed\n")
+        run_git_command(["git", "add", "tracked.txt"], repo_dir)
+        run_git_command(
+            [
+                "git",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-m",
+                "add tracked",
+            ],
+            repo_dir,
+        )
+        tracked.write_text("edited after the commit\n")
+        (repo_dir / "notes.txt").write_text("untracked scratch\n")
+        (repo_dir / ".venv").mkdir()
+        (repo_dir / ".venv" / "junk.txt").write_text("dependency, not work\n")
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+            workspace_dirty_overlay=True,
+        )
+
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
+        )
+
+        target = prepared.workspace.working_dir
+        assert preparation.capture == "dirty-overlay"
+        assert "consistency=verified-copy-not-atomic" in preparation.capture_detail
+        assert (target / "tracked.txt").read_text() == "edited after the commit\n"
+        assert (target / "notes.txt").read_text() == "untracked scratch\n"
+        # Dependency trees are not authored work and are never copied.
+        assert not (target / ".venv").exists()
+
+    def test_dirty_overlay_removes_a_deleted_file(self, tmp_path):
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        doomed = repo_dir / "doomed.txt"
+        doomed.write_text("here\n")
+        run_git_command(["git", "add", "doomed.txt"], repo_dir)
+        run_git_command(
+            [
+                "git",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-m",
+                "add doomed",
+            ],
+            repo_dir,
+        )
+        run_git_command(["git", "rm", "-q", "doomed.txt"], repo_dir)
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+            workspace_dirty_overlay=True,
+        )
+
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
+        )
+
+        assert preparation.capture == "dirty-overlay"
+        assert not (prepared.workspace.working_dir / "doomed.txt").exists()
+
+
+class TestPinnedWorkspaceResume:
+    """A pinned workspace that is gone or moved is refused, never re-created."""
+
+    def test_refuses_a_missing_pinned_workspace(self, tmp_path):
+        stored = SimpleNamespace(
+            workspace_mode="snapshot", workspace_resolved_sha="a" * 40
+        )
+        service = EventService(stored=stored, conversations_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="is missing"):
+            service._verify_pinned_workspace(tmp_path / "gone", "a" * 40)
+
+    def test_refuses_a_snapshot_at_a_different_revision(self, tmp_path):
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        head = run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
+        stored = SimpleNamespace(
+            workspace_mode="snapshot", workspace_resolved_sha="b" * 40
+        )
+        service = EventService(stored=stored, conversations_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="not the pinned"):
+            service._verify_pinned_workspace(repo_dir, "b" * 40)
+
+        # The matching pin is accepted.
+        service._verify_pinned_workspace(repo_dir, head)
+
+    def test_a_writer_worktree_may_move(self, tmp_path):
+        """An isolated writer commits on purpose; only the review tree is fixed."""
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        stored = SimpleNamespace(
+            workspace_mode="isolated_worktree", workspace_resolved_sha="c" * 40
+        )
+        service = EventService(stored=stored, conversations_dir=tmp_path)
+
+        service._verify_pinned_workspace(repo_dir, "c" * 40)
+
+
+class TestIsolatedWriters:
+    """Two writers get separate trees, and nothing merges them."""
+
+    @staticmethod
+    def _prepare(repo_dir, worktrees, mode="isolated_worktree"):
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode=mode,
+        )
+        prepared, _ = _prepare_request_workspace(
+            request, request.conversation_id, worktrees
+        )
+        return Path(prepared.workspace.working_dir)
+
+    def test_two_writers_do_not_share_or_merge(self, tmp_path):
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        source_head = run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
+        worktrees = tmp_path / "worktrees"
+
+        first = self._prepare(repo_dir, worktrees)
+        second = self._prepare(repo_dir, worktrees)
+        assert first != second
+
+        (first / "owned-by-first.txt").write_text("x\n")
+        run_git_command(["git", "add", "-A"], first)
+        run_git_command(
+            [
+                "git",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-m",
+                "first work",
+            ],
+            first,
+        )
+
+        # Nothing merges: not the other writer, not the source checkout.
+        assert not (second / "owned-by-first.txt").exists()
+        assert not (repo_dir / "owned-by-first.txt").exists()
+        assert (
+            run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
+            == source_head
+        )
+        assert (
+            run_git_command(["git", "rev-parse", "HEAD"], second).strip() == source_head
+        )
+
+    def test_re_preparation_replaces_only_its_own_tree(self, tmp_path):
+        """Cleanup is scoped to the session that owns the tree."""
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        worktrees = tmp_path / "worktrees"
+
+        keep = self._prepare(repo_dir, worktrees)
+        (keep / "uncollected.txt").write_text("work nobody has collected\n")
+
+        # Re-preparing a *different* conversation must not touch `keep`.
+        self._prepare(repo_dir, worktrees)
+
+        assert (keep / "uncollected.txt").read_text() == "work nobody has collected\n"
