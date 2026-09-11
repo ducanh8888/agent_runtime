@@ -215,9 +215,11 @@ workspace.
 
 ## Limits worth knowing
 
-- **Only `readonly` actually contains a session**, and even that is confinement
-  by path. It has no terminal and its file editor may view inside the workspace
-  and nothing else. But a path names a file, and a file can have more than one
+- **`readonly` and `inspect` are the contained presets**, and both are still
+  confinement by path rather than OS sandboxes. Neither has a terminal;
+  `inspect` adds schema-validated search, narrow Git/version/environment reads.
+  Their file editor may view inside the workspace and nothing else. But a path
+  names a file, and a file can have more than one
   name: a hard link inside the workspace to something outside it was readable
   through the guard — a `readonly` session read the provider credential that
   way, without being able to create the link itself. The guard now compares

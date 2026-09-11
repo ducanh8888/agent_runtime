@@ -288,11 +288,12 @@ def read_evidence(
     before this tool existed. It answers "did it actually read that file",
     which a session's own account does not.
 
-    COST AND PAGING. It fetches raw events, `limit` per request, until the
-    daemon runs out of events or it has made `max_pages` requests. A long
-    session is several requests and this call waits for all of them, so raise
-    max_pages deliberately. `complete` says whether the end of the event log was
-    reached; when it is false, pass `next_cursor` back as `cursor` to continue.
+    COST AND PAGING. It fetches up to `limit` raw events per request (capped at
+    100 by the daemon) until the daemon runs out of events or it has made
+    `max_pages` requests. A long session is several requests and this call waits
+    for all of them, so raise max_pages deliberately. `complete` says whether
+    the end of the event log was reached; when it is false, pass `next_cursor`
+    back as `cursor` to continue.
 
     WHAT IT CAN AND CANNOT CLAIM. Each read reports three stages separately,
     because they are not the same thing:

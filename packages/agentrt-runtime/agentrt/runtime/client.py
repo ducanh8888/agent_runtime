@@ -1285,12 +1285,12 @@ class Client:
         ``ObservationEvent`` records the transcript does, so it stays correct
         for sessions that ran before this method existed.
 
-        COST AND PAGINATION. It pages ``events/search`` at ``limit`` raw events
-        per request until the daemon returns no ``next_page_id`` or ``max_pages``
-        requests have been made -- a long session is several HTTP calls and this
-        call blocks for all of them. ``complete`` says whether the end was
-        reached; when it is false, ``next_cursor`` continues from where the bound
-        stopped.
+        COST AND PAGINATION. It pages ``events/search`` at up to ``limit`` raw
+        events per request (capped at 100 by the server) until the daemon returns
+        no ``next_page_id`` or ``max_pages`` requests have been made -- a long
+        session is several HTTP calls and this call blocks for all of them.
+        ``complete`` says whether the end was reached; when it is false,
+        ``next_cursor`` continues from where the bound stopped.
 
         WHAT IT PROVES. Only successful ``file_editor`` view observations.
         ``observed`` means the tool result was persisted. ``delivered`` (content

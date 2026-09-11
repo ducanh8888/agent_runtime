@@ -9,10 +9,11 @@ Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 
 ## Status
 
-Active follow-on implementation plan; **H0 is complete and H1 is next**. The
-scope and thinking/high policy are user requirements. H1–H7 API examples and
-internal field names below are proposed contracts, not shipped capabilities;
-the verified H0 behavior is recorded in [H0_RESULT.md](H0_RESULT.md).
+Active follow-on implementation plan; **H0 and H1 are complete, and H2 is
+next**. The scope and thinking/high policy are user requirements. H2–H7 API
+examples and internal field names below are proposed contracts, not shipped
+capabilities; verified behavior is recorded in
+[H0_RESULT.md](H0_RESULT.md) and [H1_RESULT.md](H1_RESULT.md).
 
 The original [implementation plan](IMPLEMENTATION_PLAN.md) remains the document
 index and historical P1–P4 record. H-prefix phase names avoid reusing those closed
@@ -53,8 +54,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | Phase | Deliverable | Basis | Depends on | Status |
 |---|---|---|---|---|
 | H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Complete — [result](H0_RESULT.md) |
-| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Next |
-| H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Pending |
+| H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](H1_RESULT.md) |
+| H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Next |
 | H3 | Reliable waits, finalization and partial summaries | REUSE + PORT + NEW | H0, H2 | Pending |
 | H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Pending |
 | H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Pending |
@@ -502,9 +503,10 @@ carry input/run provenance and current result state independently.
 
 ## 6. Handoff and update convention
 
-The first code task is H0 baseline/contract tests and selected-profile migration,
-not a global bootstrap or production restart. H1/H2 can begin with pure regression
-fixtures against the checkout while live sessions continue unchanged.
+The next code task is H2's SDK input/run boundary, followed by server
+persistence/title/error work and then runtime/MCP/typed-client projections.
+It begins with pure regression fixtures against the checkout, not a production
+restart.
 
 For every phase, append evidence to a dated result record only after execution:
 revision/build identity, test command and outcome, disposable fixture locations,

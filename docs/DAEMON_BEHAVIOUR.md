@@ -85,8 +85,10 @@ session that is a silent no-op: HTTP 200, message stored, nothing happens. Any
 `stats.usage_to_metrics.<service_id>.accumulated_token_usage`, with
 `prompt_tokens`, `completion_tokens`, `cache_read_tokens`, `reasoning_tokens`.
 
-`accumulated_cost` is **0.0** and stays there: 9Router returns no price, so cost
-has to be computed from tokens by the caller. `tools/spend.py` does this.
+The direct DeepSeek candidate reports prompt, completion, cache-read and
+reasoning tokens. Its current LiteLLM price table does not map
+`deepseek-flash`, so `accumulated_cost: 0.0` means that no positive cost was
+recorded, not that the call was free. H6 owns explicit unknown-cost semantics.
 
 ## Two things that bite on Windows
 
@@ -203,10 +205,10 @@ the workspace is a real local directory. It reports only what changed since the
 session started -- see below for why, and for what that misses. Content is still fetched through the
 file route, so the daemon stays the one thing that reads session state.
 
-Path traversal has to be guarded in the client. The obvious probe is
-inconclusive — an HTTP client normalises `../` out of the URL before the server
-sees it — so a caller must reject absolute paths and anything that escapes the
-workspace root after normalisation, rather than assume the server does.
+The server resolves workspace paths and refuses traversal, symlink escapes and
+aliases to its protected state files. Clients should still reject absolute and
+escaping paths before constructing a URL so a normalising HTTP client cannot
+change what the caller intended to address.
 
 ### The daemon runs `git init` in the workspace
 
@@ -216,9 +218,9 @@ it is not one already, and does nothing if it is. Observed, then confirmed in
 compute against. No commit is made.
 
 Two consequences. A directory pointed at for the first time acquires a `.git`,
-which is why `artifacts` prunes that name. And the changes endpoint that would
-justify it is **not exposed by this build** — the live route table has no
-`/api/git/*` at all — so nothing here consumes the repository the daemon makes.
+which is why `artifacts` prunes that name. The current server exposes guarded
+`/api/git/changes`, `/api/git/diff` and archive routes; older installed builds
+may lack them, so `server_info`/version must be checked before relying on them.
 
 It also settles how `artifacts` should answer "what did this session write". Git
 would answer a different question: what differs from the last commit, which in a

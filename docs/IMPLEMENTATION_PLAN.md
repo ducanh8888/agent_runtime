@@ -37,8 +37,9 @@ something is the way it is, not for what it currently does.
 [DeepSeek hardening](DEEPSEEK_HARDENING_PLAN.md) specifies H0–H7 for direct
 DeepSeek with thinking enabled/high, reliable reads/results, waiting,
 workspace isolation, batch admission and images/accounting. All H phases are
-tracked there: [H0 is complete](H0_RESULT.md), H1 is next, and H2–H7 remain
-pending. Completion describes the source-stage gate, not the installed runtime;
+tracked there: [H0](H0_RESULT.md) and [H1](H1_RESULT.md) are complete, H2 is
+next, and H3–H7 remain pending. Completion describes the source-stage gate, not
+the installed runtime;
 production cutover remains H7.
 [The self-audit](DEEPSEEK_HARDENING_AUDIT.md) is its dated evidence and decision
 record. The new plan supersedes this document's original exclusions only for
@@ -55,7 +56,7 @@ A local agent runtime that Claude Code and Codex drive through MCP. Sessions run
 
 ```
 Claude Code / Codex ──stdio──> agentrt-mcp ──┐
-                                              ├─127.0.0.1+token──> agentrtd ──> 9Router
+                                              ├─127.0.0.1+token──> agentrtd ──> DeepSeek
 OS scheduler / operator ─────> agentrt CLI ──┘                    (daemon, owns      (only
                                                                    running sessions)  remote hop)
 ```
@@ -89,13 +90,11 @@ tests/           our own tests; vendored tests stay inside packages/
 
 Runtime state lives outside the repo and outside every workspace: `~/.agentrt` on Linux/macOS, `%LOCALAPPDATA%\agentrt` on Windows. It holds sessions, events, LLM profiles, provider keys, `daemon.json` (port, token, pid; mode 0600), and `daemon.log`.
 
-## 4. Orchestrator surface — 8 tools
+## 4. Orchestrator surface — 9 tools
 
-**Shipped as 8, not the 12 below.** The five rare lifecycle verbs collapsed into
-one `control` tool taking an `action`, by decision: a flat core of the things an
-orchestrator reaches for constantly, with the rest grouped behind one name. The
-original twelve-row table is kept underneath because the *operations* did not
-change, only how many tool names they occupy.
+**Shipped as 9, not the original 12 below.** The five rare lifecycle verbs
+collapsed into one `control` tool taking an `action`; H1 later added derived
+`read_evidence`. The original table is kept underneath as design history.
 
 | Tool | Behaviour |
 |---|---|
@@ -105,15 +104,15 @@ change, only how many tool names they occupy.
 | `transcript` | Events condensed, oldest first, with a cursor for older ones. |
 | `result` | The agent's closing summary — a claim, not evidence. |
 | `artifacts` | What the session created or modified since it started, newest first; or one file's content. |
+| `read_evidence` | Versioned ranges actually returned by successful file views, with honest coverage stage and bounded event paging. |
 | `control` | `send`, `interrupt`, `stop`, `resume`, `delete`, `tag`. |
 | `profiles` | The permission presets and what each grants. |
 
-Two rows of the original design were not built as written. `dispatch` has no
-`llm_profile`, `tools`, `skills` or `mcp_servers`: one profile per preset is
-resolved inside the daemon, which is what keeps the credential out of the
-dispatching process. And `artifacts` does not return "files the agent declared
+Two rows of the original design were not built as written. `dispatch` exposes a
+named `llm_profile` reference but not raw model credentials, arbitrary tools,
+skills or MCP servers. And `artifacts` does not return "files the agent declared
 in its final result" — a session's own list is a claim like any other, so it
-reports what actually changed on disk since the session started.
+reports typed outcomes from what actually changed on disk since session start.
 
 <details>
 <summary>The original twelve-tool design</summary>
@@ -141,9 +140,12 @@ Default tool set inside a session: terminal, file editor, task tracker. Delegate
 
 ## 5. Permission model
 
-Three presets, `workspace` by default, each overridable per dimension:
+Four presets, `workspace` by default:
 
 - `readonly` — read inside the workspace, no writes, no shell.
+- `inspect` — the same write prohibition plus schema-validated search, narrow
+  read-only Git operations, executable versions and sanitized environment
+  metadata; still no general shell.
 - `workspace` — read/write inside the workspace, shell, git.
 - `broad` — everything the process can do, minus dispatcher authority.
 
