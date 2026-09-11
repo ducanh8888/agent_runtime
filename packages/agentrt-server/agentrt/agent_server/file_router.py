@@ -95,7 +95,10 @@ async def _upload_file(
         fd = os.open(target_path, os.O_WRONLY | os.O_CREAT, 0o666)
         try:
             opened = os.fstat(fd)
-            if (opened.st_dev, opened.st_ino) in protected_state_inodes(config):
+            if opened.st_nlink >= 2 and (
+                opened.st_dev,
+                opened.st_ino,
+            ) in protected_state_inodes(config):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="File not found",

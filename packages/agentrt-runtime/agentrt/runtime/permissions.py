@@ -271,6 +271,11 @@ def is_runtime_secret(resolved: Path) -> bool:
         return False
     if not info.st_ino:
         return False
+    # A same-inode alias cannot exist when the file has only one link. This
+    # cheap check keeps ordinary repository searches O(files) instead of
+    # rescanning every persisted conversation for every file.
+    if info.st_nlink < 2:
+        return False
     return (info.st_dev, info.st_ino) in runtime_secret_identities()
 
 

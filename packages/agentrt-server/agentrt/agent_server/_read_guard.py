@@ -158,9 +158,15 @@ def is_protected_state_path(candidate: Path, config: Config | None = None) -> bo
     """
     if _is_protected_state_location(candidate, config):
         return True
-    candidate_inode = _inode(candidate)
-    if candidate_inode is None:
+    try:
+        candidate_stat = candidate.stat()
+    except OSError:
         return False
+    if not stat.S_ISREG(candidate_stat.st_mode):
+        return False
+    if candidate_stat.st_nlink < 2:
+        return False
+    candidate_inode = (candidate_stat.st_dev, candidate_stat.st_ino)
     return candidate_inode in protected_state_inodes(config)
 
 
