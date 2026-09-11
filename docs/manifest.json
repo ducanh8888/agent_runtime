@@ -154,6 +154,13 @@
       "authority": "evidence"
     },
     {
+      "id": "result.h6",
+      "path": "docs/results/h6.md",
+      "type": "result",
+      "lifecycle": "complete",
+      "authority": "evidence"
+    },
+    {
       "id": "result.p1-baseline-windows",
       "path": "docs/results/p1-baseline-windows.md",
       "type": "result",
