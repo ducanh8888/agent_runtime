@@ -9,8 +9,8 @@ Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 
 ## Status
 
-Active follow-on implementation plan; **H0 and H1 are complete, and H2 is
-next**. The scope and thinking/high policy are user requirements. H2–H7 API
+Active follow-on implementation plan; **H0–H2 are complete, and H3 is next**.
+The scope and thinking/high policy are user requirements. H2–H7 API
 examples and internal field names below are proposed contracts, not shipped
 capabilities; verified behavior is recorded in
 [H0 result](../results/h0.md) and [H1 result](../results/h1.md).
@@ -56,7 +56,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 |---|---|---|---|---|
 | H0 | Direct/high policy, profile migration, usage foundation | REUSE + PORT | Baseline capture | Complete — [result](../results/h0.md) |
 | H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](../results/h1.md) |
-| H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Next |
+| H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](../results/h2.md) |
 | H3 | Reliable waits, finalization and partial summaries | REUSE + PORT + NEW | H0, H2 | Pending |
 | H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Pending |
 | H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Pending |
@@ -264,6 +264,29 @@ and cancellation, client batch/wait methods and MCP/CLI control.
 approval pauses and stop-hook rejection are tested. Finalize during a slow tool,
 an exhausted run and a provider failure remains bounded and honest. No new tool
 starts after the finalization barrier; unknown side effects stay visible.
+
+**Decisions (2026-09-11).** The surface mimics the native sub-agent lifecycle
+of the orchestrator that drives it, and no human is assumed to intervene: the
+orchestrator resolves every outcome. Consequences for the items above:
+
+- Wait outcomes are reported as `completed`, `partial`, `failed`, `stopped`,
+  `still_running` and `missing`. There is no "attention required" bucket and no
+  approval-pause branch to design around; a pause is a `stopped` outcome the
+  orchestrator resumes or finalizes. Waiting blocks like a foreground launch;
+  a timeout returns the unfinished ids as `still_running` with an explicit
+  `timed_out` flag -- never as failures and never with partial output. Because
+  a provisional `finished` exists mid-run, "settled" is only reported after the
+  condition holds across two consecutive samples.
+- `finalize` is a barrier over the existing control surface. Its default
+  behavior is to stop new tool starts and return the answer the run already
+  has; it does not spend a model call. An explicit config/flag enables the
+  thinking/high, tools-disabled summary described above, counted within the
+  run's existing allowance; with no allowance left the deterministic partial
+  record is returned instead.
+- Reserved summary is opt-in and off by default, so the legacy `max_iterations`
+  hard limit keeps its meaning for every session that does not ask for it.
+- Status reads are batched within the server's per-request id cap rather than
+  issuing an over-cap request.
 
 ### H4 — Revision-pinned workspaces
 
@@ -504,10 +527,9 @@ carry input/run provenance and current result state independently.
 
 ## 6. Handoff and update convention
 
-The next code task is H2's SDK input/run boundary, followed by server
-persistence/title/error work and then runtime/MCP/typed-client projections.
-It begins with pure regression fixtures against the checkout, not a production
-restart.
+The next code task is H3: event-backed waits on the control surface, followed
+by finalization and the optional reserved-summary policy. It begins with pure
+regression fixtures against the checkout, not a production restart.
 
 For every phase, append evidence to a dated result record only after execution:
 revision/build identity, test command and outcome, disposable fixture locations,

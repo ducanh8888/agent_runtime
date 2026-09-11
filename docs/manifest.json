@@ -20,6 +20,7 @@
     {"id": "result.baseline-linux", "path": "docs/results/baseline-linux.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
     {"id": "result.h0", "path": "docs/results/h0.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
     {"id": "result.h1", "path": "docs/results/h1.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
+    {"id": "result.h2", "path": "docs/results/h2.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
     {"id": "result.p1-baseline-windows", "path": "docs/results/p1-baseline-windows.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
     {"id": "result.p2", "path": "docs/results/p2.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
     {"id": "result.p3", "path": "docs/results/p3.md", "type": "result", "lifecycle": "complete", "authority": "evidence"},
