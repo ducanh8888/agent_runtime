@@ -68,6 +68,7 @@ def dispatch(
     llm_profile: str | None = None,
     max_iterations: int | None = None,
     tags: dict[str, str] | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -179,6 +180,12 @@ def dispatch(
     `result_state` on the returned session is `pending` until a run consumes
     the input; `admission_status` is `queued` until then, so a freshly
     dispatched session is never reported as merely `idle`.
+
+    CAPACITY. A full run pool does not refuse a dispatch: the input is
+    persisted and the conversation is queued, then admitted when a slot frees.
+    Read `capacity` for the backlog. `idempotency_key` makes a repeated
+    submission return the conversation the first one created; the same key with
+    a different submission is refused rather than silently replayed.
     """
     return _guard(
         _get_client().dispatch,
@@ -189,6 +196,7 @@ def dispatch(
         llm_profile=llm_profile,
         max_iterations=max_iterations,
         tags=tags,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -271,6 +279,39 @@ def result(session: str) -> dict:
     difference between believing and knowing.
     """
     return _guard(_get_client().result, session)
+
+
+@mcp.tool()
+def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
+    """Submit several tasks once and get a per-item outcome.
+
+    Each item is a dict of the arguments `dispatch` takes: `task` and
+    `workspace` are required; `title`, `permission`, `llm_profile`,
+    `max_iterations`, `tags` and `idempotency_key` are optional.
+
+    Every item is validated before the first is created, so a malformed item
+    cannot leave half a batch behind; the result separates `accepted` from
+    `failed` with the reason for each failure. A full run pool is not a
+    failure: accepted work is persisted and queued, and `capacity` reports the
+    backlog. Submit once, then collect with `wait_all` -- do not re-dispatch
+    what the daemon has already accepted.
+    """
+    return _guard(_get_client().dispatch_many, tasks, max_batch=max_batch)
+
+
+@mcp.tool()
+def capacity() -> dict:
+    """Report how much work the daemon will admit right now.
+
+    `running`, `limit` and `available` describe run slots; `queued` is accepted
+    work waiting for one, in submission order. `limiting_dimension` names the
+    binding cap, or is null when the run cap is disabled -- and then `available`
+    is null too, because "unbounded" is not a number to subtract from.
+
+    A full pool does not refuse a dispatch: the input is persisted and queued.
+    This call is how you see that backlog instead of inferring it from refusals.
+    """
+    return _guard(_get_client().capacity)
 
 
 @mcp.tool()

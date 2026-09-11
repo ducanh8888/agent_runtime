@@ -175,6 +175,10 @@ class WorkspacePreparation:
     capture_detail: str | None = None
 
 
+class IdempotencyConflict(ValueError):
+    """The same idempotency key was reused with a different submission."""
+
+
 class WorkspacePreparationError(ValueError):
     """The requested workspace mode cannot be prepared for this repository."""
 
@@ -695,6 +699,8 @@ def _compose_conversation_info(
         workspace_resolved_sha=stored.workspace_resolved_sha,
         workspace_prepared_at=stored.workspace_prepared_at,
         workspace_capture=stored.workspace_capture,
+        admission_state=stored.admission_state,
+        admission_enqueued_at=stored.admission_enqueued_at,
         workspace_capture_detail=stored.workspace_capture_detail,
         metrics=stored.metrics,
         created_at=stored.created_at,
@@ -909,6 +915,179 @@ class ConversationService:
     _credential_bindings: dict[UUID, dict[str, VersionedCredentialBinding]] = field(
         default_factory=dict, init=False
     )
+    # H5 admission. The queue mirrors the persisted `admission_state ==
+    # "queued"` records in submission order and is rebuilt from the catalog on
+    # start, so accepted work survives a restart and is admitted later instead
+    # of being lost or silently run past the cap.
+    admission_poll_seconds: float = 2.0
+    _admission_queue: list[UUID] = field(default_factory=list, init=False)
+    _admission_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _admission_task: asyncio.Task | None = field(default=None, init=False)
+
+    def _count_running_runs(self) -> int:
+        """Conversations whose run task is live right now.
+
+        Measured, not inferred from a counter: a slot is held exactly while a
+        run task exists, so a crashed or finished run cannot leak one.
+        """
+        services = self._event_services or {}
+        count = 0
+        for service in services.values():
+            task = getattr(service, "_run_task", None)
+            if task is not None and not task.done():
+                count += 1
+        return count
+
+    def _has_free_slot(self) -> bool:
+        """Whether another run may start. Zero or negative disables the cap."""
+        if self.max_concurrent_runs <= 0:
+            return True
+        return self._count_running_runs() < self.max_concurrent_runs
+
+    def _mark_admission(self, stored: StoredConversation, state: str) -> None:
+        stored.admission_state = state
+        stored.admission_enqueued_at = (
+            utc_now().isoformat() if state == "queued" else None
+        )
+        stored.updated_at = utc_now()
+
+    @staticmethod
+    def _submission_fingerprint(request: StartConversationRequest) -> str:
+        """A stable digest of what the caller asked for.
+
+        It distinguishes "the same submission again" from "the same key, a
+        different submission", because replaying the wrong one would hand back
+        somebody else's conversation. The agent and secrets are deliberately
+        left out: they are not what the key identifies, and one of them does not
+        serialize without a cipher.
+        """
+        payload = {
+            "workspace": str(request.workspace.working_dir),
+            "title": request.title,
+            "tags": sorted((request.tags or {}).items()),
+            "max_iterations": request.max_iterations,
+            "workspace_mode": request.workspace_mode,
+            "workspace_dirty_overlay": request.workspace_dirty_overlay,
+            "agent_profile_id": (
+                str(request.agent_profile_id) if request.agent_profile_id else None
+            ),
+            "initial_message": (
+                request.initial_message.model_dump(mode="json")
+                if request.initial_message
+                else None
+            ),
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+
+    def _find_by_idempotency_key(
+        self, request: StartConversationRequest
+    ) -> _ConversationRecord | None:
+        """The record a repeated submission should replay, if there is one."""
+        if not request.idempotency_key:
+            return None
+        fingerprint = self._submission_fingerprint(request)
+        for record in self._conversation_records.values():
+            if record.stored.idempotency_key != request.idempotency_key:
+                continue
+            if record.stored.idempotency_fingerprint != fingerprint:
+                raise IdempotencyConflict(
+                    f"idempotency key {request.idempotency_key!r} was already "
+                    "used with a different submission"
+                )
+            return record
+        return None
+
+    async def _admit_or_queue(
+        self, event_service: EventService, message: Message
+    ) -> bool:
+        """Run now if a slot is free, otherwise persist the input and queue it.
+
+        Capacity is backpressure, not a refusal: the input is written to the
+        conversation either way, and the scheduler admits a queued one when a
+        slot frees. The decision and the start happen under one lock, so two
+        dispatches cannot both find the same last slot.
+        """
+        async with self._admission_lock:
+            if self._has_free_slot():
+                await self._admit_or_queue(event_service, message)
+                return True
+            # ``run=False`` persists the input without starting it.
+            await event_service.send_message(message, False)
+            self._mark_admission(event_service.stored, "queued")
+            if event_service.stored.id not in self._admission_queue:
+                self._admission_queue.append(event_service.stored.id)
+            await event_service.save_meta()
+            return False
+
+    async def _admit_queued(self) -> None:
+        """Start queued conversations while slots are free, oldest first."""
+        async with self._admission_lock:
+            while self._admission_queue and self._has_free_slot():
+                conversation_id = self._admission_queue[0]
+                record = self._conversation_records.get(conversation_id)
+                if record is None or record.stored.admission_state != "queued":
+                    self._admission_queue.pop(0)
+                    continue
+                event_service = await self._get_or_load_event_service(conversation_id)
+                if event_service is None:
+                    self._admission_queue.pop(0)
+                    continue
+                try:
+                    await event_service.run()
+                except Exception:
+                    # Leave it queued and try again on the next tick; a
+                    # conversation already running is admitted by the next pass.
+                    logger.warning(
+                        "admission of %s deferred", conversation_id, exc_info=True
+                    )
+                    return
+                self._admission_queue.pop(0)
+                self._mark_admission(record.stored, "admitted")
+                await event_service.save_meta()
+
+    async def _admission_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.admission_poll_seconds)
+            try:
+                await self._admit_queued()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("admission loop failed")
+
+    def _rebuild_admission_queue(self) -> None:
+        """Recover queued work from the catalog, oldest submission first."""
+        self._admission_queue = sorted(
+            (
+                record.stored.id
+                for record in self._conversation_records.values()
+                if record.stored.admission_state == "queued"
+            ),
+            key=lambda conversation_id: (
+                self._conversation_records[conversation_id].stored.admission_enqueued_at
+                or ""
+            ),
+        )
+
+    async def capacity(self) -> dict[str, int | str | None]:
+        """Report the admission surface.
+
+        Zero (or negative) disables the run cap; that is reported as unbounded,
+        not as a numeric remainder, because there is no ceiling to subtract from.
+        """
+        used = self._count_running_runs()
+        unbounded = self.max_concurrent_runs <= 0
+        return {
+            "limiting_dimension": None if unbounded else "runs",
+            "limit": None if unbounded else self.max_concurrent_runs,
+            "running": used,
+            "queued": len(self._admission_queue),
+            "available": (
+                None if unbounded else max(0, self.max_concurrent_runs - used)
+            ),
+        }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:
         records: dict[UUID, _ConversationRecord] = {}
@@ -1613,6 +1792,15 @@ class ConversationService:
         """Start a local event_service and return its id."""
         if self._event_services is None:
             raise ValueError("inactive_service")
+        replay = self._find_by_idempotency_key(request)
+        if replay is not None:
+            # Same key, same submission: return the conversation that call
+            # created rather than making a second one.
+            replay_info = await self.get_conversation(replay.stored.id)
+            if replay_info is None:
+                raise ValueError("inactive_service")
+            return replay_info, False
+
         conversation_id = request.conversation_id or uuid4()
         existing_record = self._conversation_records.get(conversation_id)
         existing_event_service = self._event_services.get(conversation_id)
@@ -1943,6 +2131,12 @@ class ConversationService:
             # The effective mode, not the literal field: `worktree=True` with
             # no mode is isolated_worktree, and the record must say what ran.
             workspace_mode=workspace_preparation.mode,
+            idempotency_key=request.idempotency_key,
+            idempotency_fingerprint=(
+                self._submission_fingerprint(request)
+                if request.idempotency_key
+                else None
+            ),
             workspace_requested_ref=workspace_preparation.requested_ref,
             workspace_resolved_sha=workspace_preparation.resolved_sha,
             workspace_prepared_at=workspace_preparation.prepared_at,
@@ -2020,7 +2214,28 @@ class ConversationService:
 
         return conversation_info, True
 
+    async def _cancel_queued_admission(self, conversation_id: UUID) -> None:
+        """A conversation the caller stopped must not start on its own later.
+
+        Dropping it from the queue is not enough on its own: the persisted
+        admission state is what survives a restart, so it is written back as
+        admitted. The pending input stays; an explicit resume still runs it.
+        """
+        if conversation_id not in self._admission_queue:
+            return
+        self._admission_queue = [
+            queued for queued in self._admission_queue if queued != conversation_id
+        ]
+        record = self._conversation_records.get(conversation_id)
+        if record is None or record.stored.admission_state != "queued":
+            return
+        self._mark_admission(record.stored, "admitted")
+        event_service = await self._get_or_load_event_service(conversation_id)
+        if event_service is not None:
+            await event_service.save_meta()
+
     async def pause_conversation(self, conversation_id: UUID) -> bool:
+        await self._cancel_queued_admission(conversation_id)
         event_service = await self._get_or_load_event_service(conversation_id)
         if event_service:
             await event_service.pause()
@@ -2039,6 +2254,7 @@ class ConversationService:
         LLM request to finish, this cancels the running ``arun()`` task
         so the interruption takes effect mid-stream.
         """
+        await self._cancel_queued_admission(conversation_id)
         event_service = await self._get_or_load_event_service(conversation_id)
         if event_service:
             await event_service.interrupt()
@@ -2062,6 +2278,9 @@ class ConversationService:
         ):
             return False
         async with self._conversation_lifecycle(conversation_id):
+            self._admission_queue = [
+                queued for queued in self._admission_queue if queued != conversation_id
+            ]
             event_service = await self._get_or_load_event_service_locked(
                 conversation_id,
                 require_runtime_bindings=False,
@@ -2361,6 +2580,9 @@ class ConversationService:
                     stack_info=True,
                 )
 
+        self._rebuild_admission_queue()
+        self._admission_task = asyncio.create_task(self._admission_loop())
+
         self._lease_renewal_task = asyncio.create_task(self._renew_all_leases_loop())
         if self.conversation_idle_ttl_seconds:
             self._eviction_task = asyncio.create_task(
@@ -2455,6 +2677,11 @@ class ConversationService:
                         pending.setdefault(secret_name, binding)
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        if self._admission_task is not None:
+            self._admission_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._admission_task
+            self._admission_task = None
         if self._eviction_task is not None:
             self._eviction_task.cancel()
             with suppress(asyncio.CancelledError):

@@ -114,6 +114,16 @@ class ConversationConfig(BaseModel):
             "`/tmp/conversation-worktrees/<conversation_id>/<project_name>`."
         ),
     )
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "Optional submission key. Submitting the same key with the same "
+            "request returns the conversation already created for it; the same "
+            "key with a different request is refused as a conflict. This "
+            "deduplicates submission, not arbitrary tool effects."
+        ),
+    )
     workspace_dirty_overlay: bool = Field(
         default=False,
         description=(

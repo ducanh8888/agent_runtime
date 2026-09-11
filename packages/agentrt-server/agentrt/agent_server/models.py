@@ -133,6 +133,32 @@ class StoredConversation(ConversationConfig):
             "count, digest and capture window. None for a clean pin."
         ),
     )
+    # H5 durable admission. The input is persisted either way; this records
+    # whether a run has been admitted yet, so a queued conversation survives a
+    # restart and is admitted later rather than being lost or silently run.
+    admission_state: str = Field(
+        default="admitted",
+        description="`queued` while waiting for a run slot, else `admitted`.",
+    )
+    admission_enqueued_at: str | None = Field(
+        default=None,
+        description="When the conversation was queued for admission. Queue order.",
+    )
+    idempotency_key: str | None = Field(
+        default=None,
+        description=(
+            "Caller-supplied submission key. A repeat with the same key and the "
+            "same submission returns the existing conversation instead of "
+            "creating a second one."
+        ),
+    )
+    idempotency_fingerprint: str | None = Field(
+        default=None,
+        description=(
+            "Fingerprint of the submission the key was accepted with. The same "
+            "key with a different submission is a conflict, not a replay."
+        ),
+    )
     workspace_resolved_sha: str | None = Field(
         default=None,
         description=(
@@ -193,6 +219,18 @@ class _ConversationInfoBase(BaseModel):
             "unavailable (no request boundary known). Pending means the agent "
             "route returns a null response -- never the previous answer."
         ),
+    )
+    admission_state: str = Field(
+        default="admitted",
+        description=(
+            "Persisted admission: `queued` while this conversation waits for a "
+            "run slot, else `admitted`. Distinct from `admission_status`, which "
+            "is derived from the current request's execution state."
+        ),
+    )
+    admission_enqueued_at: str | None = Field(
+        default=None,
+        description="When this conversation was queued; queue order is by this.",
     )
     admission_status: AdmissionStatus = Field(
         default=AdmissionStatus.ADMITTED,

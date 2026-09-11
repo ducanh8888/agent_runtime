@@ -45,6 +45,9 @@ AREAS: dict[str, list[str]] = {
         "tests/agent_server/test_conversation_router.py",
         "tests/agent_server/test_conversation_response.py",
         "tests/agent_server/test_conversation_tags.py",
+        "tests/agent_server/test_h2_request_scope.py",
+        "tests/agent_server/test_h3_finalize.py",
+        "tests/agent_server/test_h5_admission.py",
     ],
     "server-workspace": [
         "tests/agent_server/test_workspace_router.py",
@@ -64,6 +67,7 @@ AREAS: dict[str, list[str]] = {
 
 #: Phase -> areas that phase is expected to touch. Extended as phases land.
 PHASES: dict[str, list[str]] = {
+    "h5": ["server-core", "server-openapi", "runtime"],
     "h4": [
         "workspace",
         "file-editor",

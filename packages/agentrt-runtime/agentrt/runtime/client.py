@@ -1112,6 +1112,7 @@ class Client:
         llm_profile: str | None = None,
         max_iterations: int | None = None,
         tags: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1162,6 +1163,8 @@ class Client:
             body["max_iterations"] = max_iterations
         if tags:
             body["tags"] = _clean_tags(tags)
+        if idempotency_key:
+            body["idempotency_key"] = idempotency_key
 
         data = self._send("POST", "/api/conversations", json=body).json()
         full_id = data.get("id")
@@ -1331,6 +1334,67 @@ class Client:
         payload = _response_payload(full_id, data)
         payload["status"] = status
         return payload
+
+    def dispatch_many(
+        self,
+        tasks: list[dict],
+        *,
+        max_batch: int = 25,
+    ) -> dict:
+        """Submit several tasks once and return a per-item outcome.
+
+        Every item is validated before the first side effect, so a malformed
+        item cannot leave half a batch created. Capacity overflow is not an
+        error: the daemon queues accepted work and `capacity` reports the
+        backlog, so one submission is followed by one collection of outcomes
+        rather than caller-managed re-dispatch.
+
+        An item is a dict of the same arguments `dispatch` takes (`task`,
+        `workspace`, plus optional `title`, `permission`, `tags`, `max_iterations`,
+        `idempotency_key`). Items that fail validation or creation are reported
+        individually; the rest are created.
+        """
+        if not tasks:
+            raise ValueError("dispatch_many needs at least one task")
+        if len(tasks) > max_batch:
+            raise ValueError(
+                f"{len(tasks)} tasks exceeds the batch size of {max_batch}; "
+                "submit in waves so a partial failure stays bounded"
+            )
+        # Validate everything before creating anything.
+        for index, item in enumerate(tasks):
+            if not isinstance(item, dict) or not item.get("task"):
+                raise ValueError(f"item {index} has no task")
+            if not item.get("workspace"):
+                raise ValueError(f"item {index} has no workspace")
+
+        accepted: list[dict] = []
+        failed: list[dict] = []
+        for index, item in enumerate(tasks):
+            try:
+                created = self.dispatch(**item)
+            except ClientError as exc:
+                failed.append(
+                    {"index": index, "error": type(exc).__name__, "message": str(exc)}
+                )
+                continue
+            accepted.append({"index": index, **created})
+        return {
+            "accepted": accepted,
+            "failed": failed,
+            "count": len(accepted),
+            "requested": len(tasks),
+        }
+
+    def capacity(self) -> dict:
+        """Report the daemon's admission surface.
+
+        `limiting_dimension` names the cap that is binding, or null when the run
+        cap is disabled. `available` is null in that case: there is no ceiling
+        to subtract from, and a numeric remainder would read as a small one.
+        `queued` is accepted work waiting for a slot, in submission order.
+        """
+        return self._send("GET", "/api/conversations/capacity").json()
 
     def finalize(self, session: str, *, summary: bool = False) -> dict:
         """Stop a session at a safe boundary and return the outcome it has.

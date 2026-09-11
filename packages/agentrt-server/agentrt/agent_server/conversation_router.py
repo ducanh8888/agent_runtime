@@ -21,6 +21,7 @@ from agentrt.agent_server._secrets_exposure import (
 )
 from agentrt.agent_server.conversation_service import (
     ConversationService,
+    IdempotencyConflict,
     InvalidParentConversation,
 )
 from agentrt.agent_server.dependencies import get_conversation_service
@@ -173,6 +174,18 @@ async def count_conversations(
     return count
 
 
+@conversation_router.get("/capacity")
+async def get_capacity(
+    conversation_service: ConversationService = Depends(get_conversation_service),
+) -> dict:
+    """Report the admission surface: slots, queue and the limiting dimension.
+
+    Declared before ``/{conversation_id}`` on purpose: a path parameter typed
+    UUID does not fall through to a later route, it just fails to parse.
+    """
+    return await conversation_service.capacity()
+
+
 @conversation_router.get(
     "/{conversation_id}", responses={404: {"description": "Item not found"}}
 )
@@ -289,6 +302,8 @@ async def start_conversation(
     """Start a conversation in the local environment."""
     try:
         info, is_new = await conversation_service.start_conversation(request)
+    except IdempotencyConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except DanglingMcpServerRef as e:
