@@ -273,6 +273,17 @@ def _run_git_probe(args: list[str], cwd: str | Path) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def resolve_local_commit(repo_dir: str | Path, ref: str = "HEAD") -> str | None:
+    """Resolve ``ref`` to a local commit SHA, or None when it does not exist.
+
+    Read-only and offline by construction: this goes through the hardened
+    read-only runner, whose allowlist has no ``fetch``. Pinning a workspace to
+    the commit a caller already has is the point -- a fetched ``origin/<branch>``
+    can be a different revision than the one the caller reviewed.
+    """
+    return _rev_parse(repo_dir, f"{ref}^{{commit}}")
+
+
 def get_git_repository_metadata(repo_dir: str | Path) -> dict[str, str]:
     """Return best-effort repository identity metadata."""
     metadata: dict[str, str] = {}

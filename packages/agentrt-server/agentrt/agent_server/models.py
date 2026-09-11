@@ -119,6 +119,33 @@ class StoredConversation(ConversationConfig):
             "`agent_settings`."
         ),
     )
+    # H4 workspace preparation result. Resolved server-side at creation; a
+    # caller cannot set these, and they are what makes a pinned workspace
+    # checkable after the fact.
+    workspace_requested_ref: str | None = Field(
+        default=None,
+        description="Ref the workspace was pinned to, or None for shared mode.",
+    )
+    workspace_resolved_sha: str | None = Field(
+        default=None,
+        description=(
+            "Local commit the workspace was pinned to. Never a fetched ref: a "
+            "review must see the revision the caller had."
+        ),
+    )
+    workspace_prepared_at: str | None = Field(
+        default=None,
+        description="When the workspace preparation finished, if it ran.",
+    )
+    workspace_capture: str | None = Field(
+        default=None,
+        description=(
+            "What the workspace contains: `clean-commit` for a pinned tree, "
+            "`dirty-overlay` when uncommitted changes were captured too. A "
+            "copied tree is not a proven atomic snapshot of an externally "
+            "edited source."
+        ),
+    )
 
 
 class _ConversationInfoBase(BaseModel):
@@ -253,6 +280,31 @@ class _ConversationInfoBase(BaseModel):
 
     title: str | None = Field(
         default=None, description="User-defined title for the conversation"
+    )
+    workspace_mode: str = Field(
+        default="shared",
+        description=(
+            "How this conversation's workspace relates to the caller's "
+            "checkout: shared, snapshot or isolated_worktree."
+        ),
+    )
+    workspace_resolved_sha: str | None = Field(
+        default=None,
+        description=(
+            "Local commit the workspace was pinned to, or None in shared mode. "
+            "The delivered files can be checked against it."
+        ),
+    )
+    workspace_prepared_at: str | None = Field(
+        default=None,
+        description="When workspace preparation finished, if it ran.",
+    )
+    workspace_capture: str | None = Field(
+        default=None,
+        description=(
+            "What the prepared tree contains: `clean-commit` for a pinned "
+            "tree, `dirty-overlay` when uncommitted changes were captured too."
+        ),
     )
     metrics: MetricsSnapshot | None = None
     created_at: datetime = Field(default_factory=utc_now)

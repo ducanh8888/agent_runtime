@@ -21,9 +21,10 @@ from agentrt.agent_server.conversation_lease import (
 from agentrt.agent_server.conversation_service import (
     AutoTitleSubscriber,
     ConversationService,
+    WorkspacePreparationError,
     _compose_conversation_info,
     _ConversationRecord,
-    _get_worktree_start_point,
+    _prepare_request_workspace,
 )
 from agentrt.agent_server.event_service import EventService
 from agentrt.agent_server.models import (
@@ -1851,6 +1852,12 @@ class TestConversationServiceStartConversation:
 
         assert stored.worktree is True
         assert stored.workspace.working_dir == str(expected_worktree)
+        # The preparation is recorded on the stored record, so a caller can
+        # check the delivered files against the pinned commit.
+        assert stored.workspace_mode == "isolated_worktree"
+        assert stored.workspace_resolved_sha is not None
+        assert stored.workspace_capture == "clean-commit"
+        assert stored.workspace_prepared_at is not None
         assert result.workspace.working_dir == str(expected_worktree)
         assert (expected_worktree / ".git").exists()
         assert (
@@ -1922,164 +1929,192 @@ class TestConversationServiceStartConversation:
         assert (expected_worktree / ".git").exists()
 
     @pytest.mark.asyncio
-    async def test_start_conversation_with_worktree_ignores_non_git_workspace(
+    async def test_start_conversation_with_worktree_refuses_non_git_workspace(
         self, conversation_service, tmp_path
     ):
+        """Isolation that cannot be honoured is refused, not silently skipped."""
         workspace_dir = tmp_path / "workspace"
         workspace_dir.mkdir()
-        conversation_id = uuid4()
-        worktree_root = conversation_service.conversation_worktree_root
 
         request = StartConversationRequest(
-            conversation_id=conversation_id,
+            conversation_id=uuid4(),
             agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
             workspace=LocalWorkspace(working_dir=workspace_dir),
             confirmation_policy=NeverConfirm(),
             worktree=True,
         )
 
-        captured: dict[str, Any] = {}
+        with pytest.raises(WorkspacePreparationError, match="needs a git repository"):
+            await conversation_service.start_conversation(request)
 
-        def _event_service_factory(**kwargs):
-            stored = kwargs["stored"]
-            agent = cast(AgentBase, kwargs.get("agent"))
-            captured["stored"] = stored
-            captured["agent"] = agent
-            mock_event_service = AsyncMock(spec=EventService)
-            mock_event_service.stored = stored
-            mock_event_service.get_state.return_value = ConversationState(
-                id=stored.id,
-                agent=agent or _sample_agent(),
-                workspace=stored.workspace,
-                execution_status=ConversationExecutionStatus.IDLE,
-                confirmation_policy=stored.confirmation_policy,
-            )
-            return mock_event_service
-
-        with patch(
-            "agentrt.agent_server.conversation_service.EventService",
-            side_effect=_event_service_factory,
-        ):
-            result, _ = await conversation_service.start_conversation(request)
-
-        stored = captured["stored"]
-
-        agent = captured["agent"]
-        assert stored.worktree is True
-        assert stored.workspace.working_dir == str(workspace_dir)
-        assert result.workspace.working_dir == str(workspace_dir)
-        assert agent.agent_context is None
-        assert not (worktree_root / str(conversation_id)).exists()
-
-    def test_get_worktree_start_point_prefers_origin_default_branch(self, tmp_path):
-        """With an ``origin`` remote, fetch first and return ``origin/<default>``.
-
-        Local ``main``/``master`` should not influence the choice when a remote
-        default branch is available.
-        """
-        upstream = tmp_path / "upstream.git"
-        run_git_command(["git", "init", "--bare", "-b", "trunk", str(upstream)])
-
+    def test_snapshot_pins_the_local_commit(self, tmp_path):
+        """The pinned SHA is the caller's HEAD, on a detached tree."""
         repo_dir = tmp_path / "repo"
         _init_git_repo(repo_dir)
-        # Rename the local default to "trunk" and publish it so origin/HEAD
-        # resolves to origin/trunk (not main/master).
-        run_git_command(["git", "branch", "-m", "main", "trunk"], repo_dir)
-        run_git_command(
-            ["git", "remote", "add", "origin", str(upstream)],
-            repo_dir,
-        )
-        run_git_command(["git", "push", "-u", "origin", "trunk"], repo_dir)
-        run_git_command(
-            ["git", "remote", "set-head", "origin", "trunk"],
-            repo_dir,
-        )
-        # Create a local "main" branch that we expect to be IGNORED in favor of
-        # the remote default, so this test fails if we silently fall through.
-        run_git_command(["git", "branch", "main"], repo_dir)
+        expected = run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
 
-        # Add a new upstream commit; the start point must reflect this commit,
-        # proving we fetched before resolving.
-        clone_dir = tmp_path / "publisher"
-        run_git_command(
-            ["git", "clone", str(upstream), str(clone_dir)],
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
         )
-        (clone_dir / "remote.txt").write_text("remote\n")
-        run_git_command(["git", "add", "remote.txt"], clone_dir)
+
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
+        )
+
+        assert preparation.mode == "snapshot"
+        assert preparation.resolved_sha == expected
+        assert preparation.capture == "clean-commit"
+        snapshot_dir = prepared.workspace.working_dir
+        assert (
+            run_git_command(
+                ["git", "--no-pager", "branch", "--show-current"], snapshot_dir
+            )
+            == ""
+        )
+        assert (
+            run_git_command(["git", "rev-parse", "HEAD"], snapshot_dir).strip()
+            == expected
+        )
+
+    def test_snapshot_never_uses_a_remote_ref(self, tmp_path):
+        """A commit published to origin is not what a review sees."""
+        upstream = tmp_path / "upstream.git"
+        run_git_command(
+            ["git", "init", "--bare", "--initial-branch=main", str(upstream)]
+        )
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        local_sha = run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
+        run_git_command(["git", "remote", "add", "origin", str(upstream)], repo_dir)
+        run_git_command(["git", "push", "-u", "origin", "main"], repo_dir)
+
+        # Advance the remote beyond the local commit. A fetch would move the
+        # start point; this pins must not.
+        clone = tmp_path / "clone"
+        run_git_command(["git", "clone", str(upstream), str(clone)])
+        (clone / "ahead.txt").write_text("ahead")
+        run_git_command(["git", "add", "-A"], clone)
         run_git_command(
             [
                 "git",
                 "-c",
-                "user.name=OpenHands Test",
+                "user.email=t@example.com",
                 "-c",
-                "user.email=openhands@example.com",
+                "user.name=t",
                 "commit",
                 "-m",
-                "remote update",
+                "ahead",
             ],
-            clone_dir,
+            clone,
         )
-        run_git_command(["git", "push", "origin", "trunk"], clone_dir)
-        remote_tip = run_git_command(
-            ["git", "--no-pager", "rev-parse", "trunk"], clone_dir
+        run_git_command(["git", "push", "origin", "main"], clone)
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
         )
 
-        start_point = _get_worktree_start_point(repo_dir)
-
-        assert start_point == "origin/trunk"
-        resolved = run_git_command(
-            ["git", "--no-pager", "rev-parse", start_point], repo_dir
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
         )
-        assert resolved == remote_tip
 
-    def test_get_worktree_start_point_falls_back_to_local_main(self, tmp_path):
-        """No ``origin`` remote → fall back to local ``main``."""
-        repo_dir = tmp_path / "repo"
-        _init_git_repo(repo_dir)  # creates local "main"
-        # Move HEAD off main so we prove main is selected by policy, not because
-        # it happens to be the current branch.
-        run_git_command(["git", "checkout", "-b", "feature/x"], repo_dir)
+        assert preparation.resolved_sha == local_sha
+        assert (
+            run_git_command(
+                ["git", "rev-parse", "HEAD"], prepared.workspace.working_dir
+            ).strip()
+            == local_sha
+        )
 
-        assert _get_worktree_start_point(repo_dir) == "main"
-
-    def test_get_worktree_start_point_falls_back_to_master(self, tmp_path):
-        """No remote and no local ``main`` → fall back to local ``master``."""
+    def test_legacy_worktree_flag_maps_to_isolated_worktree(self, tmp_path):
         repo_dir = tmp_path / "repo"
         _init_git_repo(repo_dir)
-        run_git_command(["git", "branch", "-m", "main", "master"], repo_dir)
-        # Detach so neither main nor master is the current branch.
-        run_git_command(["git", "checkout", "--detach"], repo_dir)
+        expected = run_git_command(["git", "rev-parse", "HEAD"], repo_dir).strip()
 
-        assert _get_worktree_start_point(repo_dir) == "master"
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            worktree=True,
+        )
 
-    def test_get_worktree_start_point_tolerates_fetch_failure(self, tmp_path):
-        """If ``git fetch origin`` fails, fall back to cached refs.
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
+        )
 
-        Simulate an unreachable remote by pointing ``origin`` at a non-existent
-        path; we still expect to resolve to ``origin/<default>`` using cached
-        refs that were set up before the remote URL was broken.
-        """
-        upstream = tmp_path / "upstream.git"
-        run_git_command(["git", "init", "--bare", "-b", "main", str(upstream)])
+        assert preparation.mode == "isolated_worktree"
+        assert preparation.resolved_sha == expected
+        # Writable isolation keeps a branch; only a review snapshot detaches.
+        assert run_git_command(
+            ["git", "--no-pager", "branch", "--show-current"],
+            prepared.workspace.working_dir,
+        )
 
+    def test_snapshot_refuses_a_repository_without_commits(self, tmp_path):
+        repo_dir = tmp_path / "empty"
+        repo_dir.mkdir()
+        run_git_command(["git", "init", str(repo_dir)])
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+        )
+
+        with pytest.raises(WorkspacePreparationError, match="at least one commit"):
+            _prepare_request_workspace(
+                request, request.conversation_id, tmp_path / "worktrees"
+            )
+
+    def test_snapshot_refuses_submodules(self, tmp_path):
         repo_dir = tmp_path / "repo"
         _init_git_repo(repo_dir)
-        run_git_command(
-            ["git", "remote", "add", "origin", str(upstream)],
-            repo_dir,
-        )
-        run_git_command(["git", "push", "-u", "origin", "main"], repo_dir)
-        run_git_command(
-            ["git", "remote", "set-head", "origin", "main"],
-            repo_dir,
-        )
-        # Break the remote URL so fetch fails, but origin/HEAD is still cached.
-        run_git_command(
-            ["git", "remote", "set-url", "origin", str(tmp_path / "does-not-exist")],
-            repo_dir,
+        (repo_dir / ".gitmodules").write_text(
+            '[submodule "x"]\n\tpath = x\n\turl = ./x\n'
         )
 
-        assert _get_worktree_start_point(repo_dir) == "origin/main"
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+        )
+
+        with pytest.raises(WorkspacePreparationError, match="submodules"):
+            _prepare_request_workspace(
+                request, request.conversation_id, tmp_path / "worktrees"
+            )
+
+    def test_snapshot_refuses_lfs_content(self, tmp_path):
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        (repo_dir / ".gitattributes").write_text(
+            "*.bin filter=lfs diff=lfs merge=lfs -text\n"
+        )
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=repo_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+        )
+
+        with pytest.raises(WorkspacePreparationError, match="LFS"):
+            _prepare_request_workspace(
+                request, request.conversation_id, tmp_path / "worktrees"
+            )
 
     @pytest.mark.asyncio
     async def test_start_conversation_with_custom_id(self, conversation_service):

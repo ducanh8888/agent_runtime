@@ -114,6 +114,17 @@ class ConversationConfig(BaseModel):
             "`/tmp/conversation-worktrees/<conversation_id>/<project_name>`."
         ),
     )
+    workspace_mode: Literal["shared", "snapshot", "isolated_worktree"] = Field(
+        default="shared",
+        description=(
+            "How the workspace relates to the caller's checkout. `shared` (the "
+            "default) uses the given directory as-is. `snapshot` materializes "
+            "the resolved local commit into a separate tree for review. "
+            "`isolated_worktree` gives this conversation its own writable "
+            "worktree, based on the resolved local commit. The two non-shared "
+            "modes pin the commit the caller already has; they never fetch."
+        ),
+    )
     conversation_id: UUID | None = Field(
         default=None,
         description=(

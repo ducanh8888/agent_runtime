@@ -75,7 +75,11 @@ from agentrt.sdk.credential import CredentialBindingError, VersionedCredentialBi
 from agentrt.sdk.event import MessageEvent
 from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
-from agentrt.sdk.git.utils import run_git_command, validate_git_repository
+from agentrt.sdk.git.utils import (
+    resolve_local_commit,
+    run_git_command,
+    validate_git_repository,
+)
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.observability import OPERATION_METADATA_KEY, observe
 from agentrt.sdk.tool import BROWSER_TOOL_NAME, Tool, is_tool_usable
@@ -156,73 +160,72 @@ def _with_load_memory(agent: AgentBase) -> AgentBase:
     )
 
 
-def _has_git_remote(repo_root: Path, remote: str = "origin") -> bool:
-    try:
-        run_git_command(["git", "remote", "get-url", remote], repo_root)
-    except GitCommandError:
-        return False
-    return True
+@dataclass(frozen=True)
+class WorkspacePreparation:
+    """What was resolved when a conversation's workspace was prepared."""
+
+    mode: str
+    requested_ref: str | None
+    resolved_sha: str | None
+    prepared_at: str
+    capture: str | None
 
 
-def _local_branch_exists(repo_root: Path, branch: str) -> bool:
-    try:
-        run_git_command(
-            ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
-            repo_root,
-        )
-    except GitCommandError:
-        return False
-    return True
+class WorkspacePreparationError(ValueError):
+    """The requested workspace mode cannot be prepared for this repository."""
 
 
-def _get_worktree_start_point(repo_root: Path) -> str:
-    """Resolve the base ref a new conversation worktree should be created from.
+def _workspace_mode(request: StartConversationRequest) -> str:
+    """The effective mode, honouring the pre-mode ``worktree`` flag.
 
-    Policy (in order):
-      1. ``origin/<default_branch>`` if an ``origin`` remote is configured.
-         ``git fetch origin`` is run first so the worktree starts from the
-         latest remote tip; the default branch is resolved via
-         ``refs/remotes/origin/HEAD``.
-      2. Local ``main`` if there is no usable remote default but ``main``
-         exists locally.
-      3. Local ``master`` if neither remote default nor local ``main`` is
-         available.
-      4. Fall back to ``HEAD`` only when none of the above applies, so worktree
-         creation still succeeds on freshly initialized repos.
+    ``worktree=True`` predates ``workspace_mode`` and meant "give this
+    conversation its own writable worktree", which is what
+    ``isolated_worktree`` now names.
     """
-    if _has_git_remote(repo_root):
-        try:
-            run_git_command(["git", "fetch", "origin"], repo_root, timeout=60)
-        except GitCommandError as exc:
-            logger.warning(
-                "git fetch origin failed while choosing worktree start point "
-                "for %s; using cached refs. Error: %s",
-                repo_root,
-                exc,
-            )
-        try:
-            ref = run_git_command(
-                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-                repo_root,
-            )
-        except GitCommandError:
-            ref = ""
-        prefix = "refs/remotes/origin/"
-        if ref.startswith(prefix):
-            return f"origin/{ref[len(prefix) :]}"
+    if request.workspace_mode == "shared" and request.worktree:
+        return "isolated_worktree"
+    return request.workspace_mode
 
-    if _local_branch_exists(repo_root, "main"):
-        return "main"
-    if _local_branch_exists(repo_root, "master"):
-        return "master"
-    return "HEAD"
+
+def _refuse_unsupported_capture(repo_root: Path, mode: str) -> None:
+    """Refuse a mode this repository cannot be captured faithfully for.
+
+    A partial capture presented as a complete one is worse than a refusal: a
+    reviewer would trust a tree that is silently missing its submodule contents
+    or has large files replaced by pointers.
+    """
+    if (repo_root / ".gitmodules").is_file():
+        raise WorkspacePreparationError(
+            f"{mode} mode does not support repositories with submodules: the "
+            "submodule contents would not be captured"
+        )
+    attributes = repo_root / ".gitattributes"
+    if attributes.is_file():
+        try:
+            text = attributes.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            text = ""
+        if "filter=lfs" in text:
+            raise WorkspacePreparationError(
+                f"{mode} mode does not support Git LFS content: the large "
+                "files would be captured as pointer files"
+            )
 
 
 def _create_conversation_worktree(
     workspace: LocalWorkspace,
     conversation_id: UUID,
     conversation_worktree_root: Path,
-) -> tuple[LocalWorkspace, Path, Path, str] | None:
+    *,
+    start_point: str,
+    detached: bool,
+) -> tuple[LocalWorkspace, Path, Path, str | None] | None:
+    """Materialize a separate tree at ``start_point`` (already resolved).
+
+    The caller resolves the commit; this function never chooses a ref and never
+    fetches. ``detached`` leaves the tree on no branch, which is what a review
+    snapshot wants -- there is nothing to advance and nothing to merge.
+    """
     source_workspace = Path(workspace.working_dir).resolve()
     try:
         validate_git_repository(source_workspace)
@@ -239,7 +242,7 @@ def _create_conversation_worktree(
     conversation_worktree_dir = conversation_worktree_root / str(conversation_id)
     worktree_root = conversation_worktree_dir / repo_root.name
     conversation_worktree_dir.mkdir(parents=True, exist_ok=True)
-    branch = f"openhands/{conversation_id}"
+    branch = None if detached else f"openhands/{conversation_id}"
 
     if worktree_root.exists():
         try:
@@ -252,21 +255,18 @@ def _create_conversation_worktree(
 
     run_git_command(["git", "worktree", "prune"], repo_root)
 
-    if run_git_command(["git", "branch", "--list", branch], repo_root):
+    if branch is not None and run_git_command(
+        ["git", "branch", "--list", branch], repo_root
+    ):
         run_git_command(["git", "branch", "-D", branch], repo_root)
 
-    run_git_command(
-        [
-            "git",
-            "worktree",
-            "add",
-            "-b",
-            branch,
-            str(worktree_root),
-            _get_worktree_start_point(repo_root),
-        ],
-        repo_root,
-    )
+    add_command = ["git", "worktree", "add"]
+    if detached:
+        add_command += ["--detach"]
+    else:
+        add_command += ["-b", branch]
+    add_command += [str(worktree_root), start_point]
+    run_git_command(add_command, repo_root)
 
     workspace_dir = worktree_root / relative_workspace
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -282,26 +282,79 @@ def _prepare_request_workspace(
     request: StartConversationRequest,
     conversation_id: UUID,
     conversation_worktree_root: Path,
-) -> StartConversationRequest:
-    if not request.worktree:
-        return request
+) -> tuple[StartConversationRequest, WorkspacePreparation]:
+    """Resolve the workspace for a new conversation and report what was pinned.
 
-    worktree = _create_conversation_worktree(
-        request.workspace, conversation_id, conversation_worktree_root
+    This is the single choke point: whatever it returns as ``working_dir`` is
+    what the file editor, the inspect tool, the server's file routes, the
+    read-evidence projection and ``artifacts`` all read the workspace from.
+    """
+    mode = _workspace_mode(request)
+    prepared_at = utc_now().isoformat()
+    if mode == "shared":
+        return request, WorkspacePreparation(
+            mode="shared",
+            requested_ref=None,
+            resolved_sha=None,
+            prepared_at=prepared_at,
+            capture=None,
+        )
+
+    source_workspace = Path(request.workspace.working_dir).resolve()
+    try:
+        validate_git_repository(source_workspace)
+        repo_root = Path(
+            run_git_command(
+                ["git", "--no-pager", "rev-parse", "--show-toplevel"],
+                source_workspace,
+            )
+        ).resolve()
+    except (GitCommandError, GitRepositoryError) as exc:
+        raise WorkspacePreparationError(
+            f"{mode} mode needs a git repository at {source_workspace}: {exc}"
+        ) from exc
+
+    requested_ref = "HEAD"
+    resolved_sha = resolve_local_commit(source_workspace, requested_ref)
+    if resolved_sha is None:
+        raise WorkspacePreparationError(
+            f"{mode} mode needs a repository with at least one commit; "
+            f"{source_workspace} has none"
+        )
+    _refuse_unsupported_capture(repo_root, mode)
+
+    created = _create_conversation_worktree(
+        request.workspace,
+        conversation_id,
+        conversation_worktree_root,
+        start_point=resolved_sha,
+        detached=(mode == "snapshot"),
     )
-    if worktree is None:
-        return request
+    if created is None:
+        raise WorkspacePreparationError(
+            f"{mode} mode could not create a worktree at {resolved_sha}"
+        )
 
-    new_workspace, source_workspace, worktree_root, branch = worktree
+    new_workspace, prepared_source, worktree_root, branch = created
     assert request.agent is not None
     agent = _append_worktree_guidance(
         request.agent,
-        source_workspace=source_workspace,
+        source_workspace=prepared_source,
         worktree_root=worktree_root,
         workspace_dir=Path(new_workspace.working_dir),
-        branch=branch,
+        branch=branch or f"detached at {resolved_sha[:12]}",
     )
-    return request.model_copy(update={"workspace": new_workspace, "agent": agent})
+    prepared = WorkspacePreparation(
+        mode=mode,
+        requested_ref=requested_ref,
+        resolved_sha=resolved_sha,
+        prepared_at=prepared_at,
+        capture="clean-commit",
+    )
+    return (
+        request.model_copy(update={"workspace": new_workspace, "agent": agent}),
+        prepared,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -531,6 +584,12 @@ def _compose_conversation_info(
     return ConversationInfo(
         **state_dump,
         title=stored.title,
+        # Workspace provenance lives on the stored record, not the state, so it
+        # is passed explicitly rather than arriving in the state dump.
+        workspace_mode=stored.workspace_mode,
+        workspace_resolved_sha=stored.workspace_resolved_sha,
+        workspace_prepared_at=stored.workspace_prepared_at,
+        workspace_capture=stored.workspace_capture,
         metrics=stored.metrics,
         created_at=stored.created_at,
         updated_at=stored.updated_at,
@@ -1667,7 +1726,7 @@ class ConversationService:
             # as a named profile. Persisted sessions never reach this path.
             enforce_agent_policy(request.agent, self.deployment_llm_policy)
 
-        request = _prepare_request_workspace(
+        request, workspace_preparation = _prepare_request_workspace(
             request, conversation_id, self.conversation_worktree_root
         )
 
@@ -1772,6 +1831,17 @@ class ConversationService:
             exclude={"agent_profile_id", "agent_launch_additions", "workspace"},
         )
         request_data["workspace"] = request.workspace
+        # Workspace preparation results are server-resolved, so they are set
+        # here rather than accepted from the request body.
+        request_data.update(
+            # The effective mode, not the literal field: `worktree=True` with
+            # no mode is isolated_worktree, and the record must say what ran.
+            workspace_mode=workspace_preparation.mode,
+            workspace_requested_ref=workspace_preparation.requested_ref,
+            workspace_resolved_sha=workspace_preparation.resolved_sha,
+            workspace_prepared_at=workspace_preparation.prepared_at,
+            workspace_capture=workspace_preparation.capture,
+        )
 
         # The agent is persisted to base_state.json (not meta.json), so it must
         # not be splatted into StoredConversation (which no longer carries the
