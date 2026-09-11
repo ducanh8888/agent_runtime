@@ -9,7 +9,7 @@ Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 
 ## Status
 
-Active follow-on implementation plan; **H0–H3 are complete, and H4 is next**.
+Active follow-on implementation plan; **H0–H5 are complete apart from two H5 sub-items** (provider request-slot accounting and shared-workspace writer limits), and H6 is next.
 The scope and thinking/high policy are user requirements. H2–H7 API
 examples and internal field names below are proposed contracts, not shipped
 capabilities; verified behavior is recorded in
@@ -58,8 +58,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H1 | Correct paging, guarded readonly tools, read evidence | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](../results/h1.md) |
 | H2 | Request/run-scoped results, errors, titles and progress | PORT + NEW | Baseline; H0 for live LLM tests | Complete — [result](../results/h2.md) |
 | H3 | Reliable waits, finalization and partial summaries | REUSE + PORT + NEW | H0, H2 | Complete — [result](../results/h3.md) |
-| H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Pending |
-| H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Pending |
+| H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Complete — [result](../results/h4.md) |
+| H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Core complete — [result](../results/h5.md) |
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Pending |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Pending |
 
@@ -527,9 +527,9 @@ carry input/run provenance and current result state independently.
 
 ## 6. Handoff and update convention
 
-The next code task is H4: revision-pinned workspaces (immutable review
-snapshots and isolated writers). It begins with pure regression fixtures against
-the checkout, not a production restart.
+The next code task is H6: images, cache visibility and complete accounting.
+The two unimplemented H5 sub-items are recorded in its result and should be
+revisited before a 50–100 worker claim.
 
 For every phase, append evidence to a dated result record only after execution:
 revision/build identity, test command and outcome, disposable fixture locations,
