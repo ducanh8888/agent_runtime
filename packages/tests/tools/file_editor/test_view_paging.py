@@ -201,6 +201,7 @@ def test_blank_lines_are_bounded_even_with_large_max_lines(tmp_path):
     assert first.cursor is not None
     assert first.truncated is True
     assert len(first.text) < 20000
+    assert first.returned_range is not None
     assert first.returned_range.end_line < 50000
 
 

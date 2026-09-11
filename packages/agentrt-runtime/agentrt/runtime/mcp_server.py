@@ -76,14 +76,14 @@ def dispatch(
     PERMISSION. One of `readonly`, `inspect`, `workspace` (the default) or
     `broad`; call `profiles` for what each grants.
 
-    Choose `readonly` when the session only needs to look -- reviewing,
-    summarising, answering a question about code. It is the only preset that
-    cannot reach the provider credential, because it has no terminal at all.
+    Choose `readonly` when the session only needs file views -- reviewing,
+    summarising, or answering a question about code. Both read-only presets
+    omit the terminal and guard aliases to the runtime's credential files.
 
-    A `readonly` session cannot write its answer to a file. Ask it to report in
-    its final message and read that with `result`; telling it to produce a
-    report file gives it an instruction it cannot carry out. `artifacts` on such
-    a session correctly lists nothing.
+    A `readonly` or `inspect` session cannot write its answer to a file. Ask it
+    to report in its final message and read that with `result`; telling it to
+    produce a report file gives it an instruction it cannot carry out.
+    `artifacts` on such a session correctly lists nothing.
 
     Choose `inspect` for read-only repository audits that need structured
     search, narrow Git status/diff/log/show, version checks or sanitized
@@ -138,8 +138,8 @@ def dispatch(
       result of fizzbuzz(15), one entry per line" beats "run it and save the
       output".
     - Name the files it should create or change -- unless the preset is
-      `readonly`, which cannot create any. Otherwise it invents names and you
-      will not know what to look for.
+      `readonly` or `inspect`, neither of which can create any. Otherwise it
+      invents names and you will not know what to look for.
     - Give line ranges, not just function names, when you point at part of a
       large file. An agent that reads a 737-line file and is then asked about a
       function by name has to find it again, and a review session spent two
@@ -157,16 +157,16 @@ def dispatch(
       what you already told it and write nothing.
     - Say what it must not touch -- committing, pushing, files outside its
       remit -- if that matters. It will not infer your conventions.
-    - Do not describe its tools. It has a terminal, a file editor and a task
-      tracker, and it knows.
+    - Do not describe its tools. The selected permission profile already tells
+      it which tools are available.
 
     WORKSPACE. An absolute path, created if missing. Give each session its own
     directory unless you specifically want them sharing one: nothing
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
 
-    Unless the preset is `readonly`, a session runs with the same authority
-    you do. Do not dispatch work you would not run yourself.
+    `workspace` and `broad` include a terminal and therefore run with the same
+    user authority you do. Do not dispatch work you would not run yourself.
     """
     return _guard(
         _get_client().dispatch,

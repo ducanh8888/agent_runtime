@@ -57,7 +57,7 @@ class GuardedFileEditorExecutor(ToolExecutor):
     ) -> None:
         self._inner = inner
         self._root = workspace_root
-        self._permission = permission
+        self._permission: permissions.Permission = permission
 
     def __call__(
         self,
@@ -116,6 +116,8 @@ class GuardedFileEditorTool(FileEditorTool):
         built = super().create(conv_state)
         guarded = []
         for tool in built:
+            if tool.executor is None:
+                raise RuntimeError("file_editor was created without an executor")
             note = (
                 f"\n\nThis session runs under the '{preset}' permission preset. "
                 + permissions.DESCRIPTIONS[preset]
