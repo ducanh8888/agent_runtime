@@ -39,6 +39,30 @@ class ResponseLatency(BaseModel):
         return max(0.0, v)
 
 
+class FirstTokenLatency(BaseModel):
+    """When the first token of a kind arrived, relative to the call's start.
+
+    Kept apart from :class:`ResponseLatency` because they answer different
+    questions: a full-call latency cannot say whether a slow call was slow to
+    start thinking or slow to finish writing.
+    """
+
+    model: str
+    latency: float = Field(ge=0.0, description="Must be non-negative")
+    reasoning: bool = Field(
+        description=(
+            "True for the first reasoning token, False for the first "
+            "user-visible content token. They are different events."
+        )
+    )
+    response_id: str
+
+    @field_validator("latency")
+    @classmethod
+    def validate_latency(cls, v: float) -> float:
+        return max(0.0, v)
+
+
 class TokenUsage(BaseModel):
     """Metric tracking detailed token usage per completion call."""
 
@@ -149,6 +173,9 @@ class Metrics(MetricsSnapshot):
     response_latencies: list[ResponseLatency] = Field(
         default_factory=list, description="List of response latencies"
     )
+    first_token_latencies: list[FirstTokenLatency] = Field(
+        default_factory=list, description="First token timing, one per call"
+    )
     token_usages: list[TokenUsage] = Field(
         default_factory=list, description="List of token usage records"
     )
@@ -191,6 +218,18 @@ class Metrics(MetricsSnapshot):
             raise ValueError("Added cost cannot be negative.")
         self.accumulated_cost += value
         self.costs.append(Cost(cost=value, model=self.model_name))
+
+    def add_first_token_latency(
+        self, value: float, *, reasoning: bool, response_id: str
+    ) -> None:
+        self.first_token_latencies.append(
+            FirstTokenLatency(
+                model=self.model_name,
+                latency=max(0.0, value),
+                reasoning=reasoning,
+                response_id=response_id,
+            )
+        )
 
     def add_response_latency(self, value: float, response_id: str) -> None:
         self.response_latencies.append(
@@ -256,6 +295,7 @@ class Metrics(MetricsSnapshot):
         self.costs += other.costs
         self.token_usages += other.token_usages
         self.response_latencies += other.response_latencies
+        self.first_token_latencies += other.first_token_latencies
 
         # Merge accumulated token usage using the __add__ operator
         if self.accumulated_token_usage is None:

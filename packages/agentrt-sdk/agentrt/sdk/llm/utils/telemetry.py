@@ -75,6 +75,10 @@ class Telemetry(BaseModel):
         default_factory=_RequestLocalProvenance
     )
     _last_latency: float = PrivateAttr(default=0.0)
+    # First token of each kind for the current request. Declared with a default
+    # so a response that never saw an on_request still reads as "nothing
+    # recorded" rather than raising.
+    _first_token_at: dict[bool, float] = PrivateAttr(default_factory=dict)
     _log_completions_callback: Callable[[str, str], None] | None = PrivateAttr(
         default=None
     )
@@ -112,7 +116,18 @@ class Telemetry(BaseModel):
     ) -> None:
         self._req_start = time.time()
         self._req_ctx = telemetry_ctx or {}
+        # Per-request: the first token of each kind, if one arrives.
+        self._first_token_at: dict[bool, float] = {}
         self._pending_provenance.set(provenance)
+
+    def on_first_token(self, *, reasoning: bool) -> None:
+        """Note when the first token of a kind arrived for this request.
+
+        Idempotent per kind: a later token never overwrites the first one.
+        """
+        if self._req_start is None:
+            return
+        self._first_token_at.setdefault(reasoning, time.time())
 
     def on_response(
         self,
@@ -129,6 +144,14 @@ class Telemetry(BaseModel):
         self._last_latency = time.time() - (self._req_start or time.time())
         response_id = resp.id or ""
         self.metrics.add_response_latency(self._last_latency, response_id)
+        # First-token timing is attached here because the response id is only
+        # known once the call returns.
+        for reasoning, at in self._first_token_at.items():
+            self.metrics.add_first_token_latency(
+                at - (self._req_start or at),
+                reasoning=reasoning,
+                response_id=response_id,
+            )
         provenance = self._take_provenance(response_id)
 
         # 2) cost

@@ -2287,7 +2287,10 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         if enable_streaming and on_token is not None:
             chunks: list[ModelResponseStream] = []
             stream = cast(Iterable[ModelResponseStream], ret)
+            pending: set[bool] = {True, False}
             for chunk in stream:
+                if pending:
+                    pending -= self._note_first_token(chunk)
                 on_token(chunk)
                 chunks.append(chunk)
             ret = litellm.stream_chunk_builder(chunks, messages=messages)
@@ -2296,6 +2299,29 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             f"Expected ModelResponse, got {type(ret)}"
         )
         return ret
+
+    def _note_first_token(self, chunk: object) -> set[bool]:
+        """Tell telemetry which kinds of token this chunk carried.
+
+        Returns the kinds seen, so a caller can stop inspecting chunks once both
+        the first reasoning token and the first visible token have arrived --
+        the check then costs nothing for the rest of a long stream.
+        """
+        telemetry = getattr(self, "telemetry", None)
+        if telemetry is None:
+            return {True, False}
+        seen: set[bool] = set()
+        choices = getattr(chunk, "choices", None)
+        delta = getattr(choices[0], "delta", None) if choices else None
+        if delta is None:
+            return seen
+        if getattr(delta, "reasoning_content", None):
+            seen.add(True)
+        if getattr(delta, "content", None):
+            seen.add(False)
+        for reasoning in seen:
+            telemetry.on_first_token(reasoning=reasoning)
+        return seen
 
     async def _atransport_call(
         self,
@@ -2321,7 +2347,10 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             # back a plain sync generator from ``litellm_acompletion``
             if hasattr(ret, "__aiter__"):
                 stream = cast(AsyncIterable[ModelResponseStream], ret)
+                pending: set[bool] = {True, False}
                 async for chunk in stream:
+                    if pending:
+                        pending -= self._note_first_token(chunk)
                     await _invoke_token_callback(on_token, chunk)
                     chunks.append(chunk)
             else:
@@ -2329,7 +2358,10 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                 synced_chunks: list[ModelResponseStream] = await loop.run_in_executor(
                     None, list, cast(Iterable[ModelResponseStream], ret)
                 )
+                fallback_pending: set[bool] = {True, False}
                 for chunk in synced_chunks:
+                    if fallback_pending:
+                        fallback_pending -= self._note_first_token(chunk)
                     await _invoke_token_callback(on_token, chunk)
                     chunks.append(chunk)
             ret = litellm.stream_chunk_builder(chunks, messages=messages)

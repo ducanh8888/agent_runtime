@@ -94,6 +94,22 @@ class UsageCall(BaseModel):
             "null for legacy records and calls without captured provenance."
         ),
     )
+    first_token_latency_ms: float | None = Field(
+        default=None,
+        description=(
+            "Milliseconds from request start to the first user-visible content "
+            "token, or null when the call did not stream or the stats owner "
+            "recorded nothing. Null means unknown, not zero."
+        ),
+    )
+    first_reasoning_token_latency_ms: float | None = Field(
+        default=None,
+        description=(
+            "Milliseconds from request start to the first reasoning token. Kept "
+            "apart from the visible one: a call that thinks for a long time and "
+            "then writes quickly is not the same as one that waits to start."
+        ),
+    )
     usage: RawTokenUsage
 
 
@@ -164,19 +180,44 @@ def _normalize(raw: RawTokenUsage) -> NormalizedTokenUsage:
     )
 
 
-def _project_call(usage_id: str, index: int, usage: TokenUsage) -> UsageCall:
+def _project_call(
+    usage_id: str,
+    index: int,
+    usage: TokenUsage,
+    first_tokens: dict[str, dict[bool, float]],
+) -> UsageCall:
     response_id = usage.response_id.strip()
     if response_id:
         call_id, call_id_source = response_id, "provider_response_id"
     else:
         call_id, call_id_source = f"{usage_id}:{index}", "ordinal"
+    seen = first_tokens.get(response_id or "", {})
     return UsageCall(
         call_id=_safe_identifier(call_id, f"{usage_id}:{index}"),
         call_id_source=call_id_source,
         model=usage.model or None,
         provenance=usage.provenance,
         usage=_raw_usage(usage),
+        first_token_latency_ms=(
+            None if seen.get(False) is None else round(seen[False] * 1000, 3)
+        ),
+        first_reasoning_token_latency_ms=(
+            None if seen.get(True) is None else round(seen[True] * 1000, 3)
+        ),
     )
+
+
+def _first_token_seconds(metrics: Metrics) -> dict[str, dict[bool, float]]:
+    """First-token timings by response id: ``{id: {reasoning: seconds}}``.
+
+    Absent on records written before the field existed, which reads as unknown
+    rather than as zero.
+    """
+    out: dict[str, dict[bool, float]] = {}
+    for entry in getattr(metrics, "first_token_latencies", None) or []:
+        if entry.response_id:
+            out.setdefault(entry.response_id, {})[entry.reasoning] = entry.latency
+    return out
 
 
 def _project_service(usage_id: str, metrics: Metrics) -> UsageService:
@@ -184,6 +225,7 @@ def _project_service(usage_id: str, metrics: Metrics) -> UsageService:
     accumulated = snapshot.accumulated_token_usage or TokenUsage()
     model = accumulated.model or snapshot.model_name or None
     raw = _raw_usage(accumulated)
+    first_tokens = _first_token_seconds(metrics)
     return UsageService(
         usage_id=_safe_identifier(usage_id, "unknown"),
         model=model,
@@ -193,7 +235,7 @@ def _project_service(usage_id: str, metrics: Metrics) -> UsageService:
         normalized=_normalize(raw),
         cache_hit_rate=snapshot.cache_hit_rate,
         calls=[
-            _project_call(usage_id, index, call)
+            _project_call(usage_id, index, call, first_tokens)
             for index, call in enumerate(metrics.token_usages)
         ],
     )
