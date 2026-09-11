@@ -8,6 +8,7 @@ callers from silently depending on different response shapes.
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -119,6 +120,36 @@ def _status_of(data: object) -> str | None:
     if not isinstance(data, dict):
         return None
     return data.get("execution_status") or data.get("status")
+
+
+#: Execution states in which a session is no longer progressing on its own.
+SETTLED_STATUSES = frozenset({"finished", "error", "stuck", "paused"})
+
+
+def _is_settled(status: dict) -> bool:
+    """Whether a status sample is terminal for waiting purposes.
+
+    Admission matters as well: a session whose input was accepted but never
+    admitted has not started, whatever its execution status reads.
+    """
+    if (status.get("status") or "").lower() not in SETTLED_STATUSES:
+        return False
+    return status.get("admission_status") not in ("queued", "preparing")
+
+
+def _wait_bucket(payload: dict) -> str:
+    """Map a settled session's result payload to its wait bucket."""
+    status = (payload.get("status") or "").lower()
+    if status == "paused":
+        return "stopped"
+    if status == "finished":
+        return "completed"
+    if payload.get("state") == "partial":
+        return "partial"
+    text = payload.get("result")
+    if isinstance(text, str) and text.strip():
+        return "partial"
+    return "failed"
 
 
 def _join_text(blocks: object) -> str:
@@ -919,6 +950,31 @@ class Client:
 
         return response
 
+    def _wait_status(self, session: str) -> dict | None:
+        """One wait sample, normalized, or None when the session is gone.
+
+        The public ``status`` raises on an unknown id; a wait must classify it
+        as missing and keep waiting for the others instead.
+        """
+        try:
+            resolved = self._resolve_session(session)
+        except ClientError:
+            return None
+        response = self._send(
+            "GET",
+            f"/api/conversations/{quote(resolved, safe='')}",
+            tolerate_404=True,
+        )
+        if response.status_code == 404:
+            return None
+        data = response.json()
+        return {
+            "id": data.get("id", resolved),
+            "status": _status_of(data),
+            "admission_status": data.get("admission_status"),
+            "result_state": data.get("result_state"),
+        }
+
     def _resolve_session(self, session: str) -> str:
         """Turn a full UUID or an unambiguous prefix into a full UUID."""
         try:
@@ -1256,6 +1312,111 @@ class Client:
             if value is not None:
                 payload[key] = value
         return payload
+
+    def wait(
+        self,
+        session_ids: list[str],
+        *,
+        mode: str = "all",
+        timeout: float = 600.0,
+        poll_interval: float = 2.0,
+    ) -> dict:
+        """Block until the sessions settle, or the timeout elapses.
+
+        This is the blocking wait of a foreground sub-agent: it returns once the
+        work has an outcome. A timeout returns the unfinished ids as
+        ``still_running`` -- never as failures, and never with partial output
+        presented as a final answer.
+
+        A session is reported settled only when its terminal execution status
+        and its admission state agree *and* the same condition held on the
+        previous sample. The second sample is deliberate: ``finished`` is
+        provisional, because a run can flip back to ``running`` for a stop hook
+        or a message that arrived during the final step, and a wait that fired on
+        the first ``finished`` would report an answer still being revised.
+
+        mode ``all`` waits for every id (or the timeout); ``any`` returns as soon
+        as one settles. The result groups ids by outcome -- ``completed``,
+        ``partial``, ``failed``, ``stopped`` (paused, resumable), ``missing``
+        (unknown or deleted) and ``still_running`` -- with ``timed_out`` saying
+        whether the deadline ended the wait.
+        """
+        if mode not in ("all", "any"):
+            raise ValueError("mode must be 'all' or 'any'")
+        interval = max(0.5, float(poll_interval))
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        ids = list(dict.fromkeys(str(session) for session in session_ids))
+
+        started = time.monotonic()
+        pending = set(ids)
+        settled: set[str] = set()
+        missing: set[str] = set()
+        terminal_prev: dict[str, bool] = {}
+
+        while True:
+            for session in list(pending):
+                status = self._wait_status(session)
+                if status is None:
+                    missing.add(session)
+                    pending.discard(session)
+                    continue
+                terminal = _is_settled(status)
+                if terminal and terminal_prev.get(session):
+                    settled.add(session)
+                    pending.discard(session)
+                else:
+                    terminal_prev[session] = terminal
+            if settled and mode == "any":
+                break
+            if not pending:
+                break
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(interval)
+
+        buckets: dict[str, list] = {
+            "completed": [],
+            "partial": [],
+            "failed": [],
+            "stopped": [],
+            "missing": [],
+            "still_running": [],
+        }
+        for session in ids:
+            if session in missing:
+                buckets["missing"].append(
+                    {"id": session, "short_id": short_id(session), "bucket": "missing"}
+                )
+            elif session in settled:
+                try:
+                    payload = self.result(session)
+                except ClientError:
+                    # Deleted between the last sample and the result read.
+                    buckets["missing"].append(
+                        {
+                            "id": session,
+                            "short_id": short_id(session),
+                            "bucket": "missing",
+                        }
+                    )
+                    continue
+                bucket = _wait_bucket(payload)
+                payload["bucket"] = bucket
+                buckets[bucket].append(payload)
+            else:
+                buckets["still_running"].append(
+                    {
+                        "id": session,
+                        "short_id": short_id(session),
+                        "bucket": "still_running",
+                    }
+                )
+
+        return {
+            **buckets,
+            "timed_out": bool(pending),
+            "waited": round(time.monotonic() - started, 3),
+        }
 
     def transcript(
         self, session: str, *, limit: int = 30, cursor: str | None = None

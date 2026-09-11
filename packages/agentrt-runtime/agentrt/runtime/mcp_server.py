@@ -274,6 +274,49 @@ def result(session: str) -> dict:
 
 
 @mcp.tool()
+def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
+    """Block until one of these sessions settles, or the timeout elapses.
+
+    This is the blocking wait of a foreground launch: dispatch several sessions,
+    then wait once instead of polling `status`. `wait_all` is the same call that
+    requires every id.
+
+    The result groups ids by outcome:
+
+    - `completed` -- finished; the item carries the same fields `result` does.
+    - `partial` -- stopped with usable output (an error or limit after work).
+    - `failed` -- terminal with no usable output.
+    - `stopped` -- paused, so it can be resumed or finalized.
+    - `missing` -- unknown or deleted; a wait for a deleted session does not
+      wait forever.
+    - `still_running` -- the timeout ended the wait. These are NOT failures and
+      carry no partial output; wait again or read `status`.
+
+    `timed_out` says whether the deadline, not completion, ended the wait. No
+    outcome means "someone must approve this" -- the caller resolves every
+    case.
+
+    A session is reported settled only after the same terminal condition has
+    held across two samples, because `finished` is provisional while a run may
+    continue for a stop hook or a message that arrived during its final step.
+    Expect at least one poll interval (about two seconds) of latency.
+    """
+    return _guard(_get_client().wait, session_ids, mode="any", timeout=timeout)
+
+
+@mcp.tool()
+def wait_all(session_ids: list[str], timeout: float = 600.0) -> dict:
+    """Block until every one of these sessions settles, or the timeout elapses.
+
+    Same result shape as `wait_any`; see that description for the buckets. A
+    timeout returns the unfinished ids under `still_running` with `timed_out`
+    true -- never as failures, and never with partial output presented as a
+    final answer.
+    """
+    return _guard(_get_client().wait, session_ids, mode="all", timeout=timeout)
+
+
+@mcp.tool()
 def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict:
     """Read what a session actually did, condensed.
 
