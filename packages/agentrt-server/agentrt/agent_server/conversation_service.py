@@ -22,6 +22,7 @@ from agentrt.agent_server.config import (
     Config,
     WebhookSpec,
     max_inflight_llm_requests,
+    max_shared_writers,
 )
 from agentrt.agent_server.conversation_lease import (
     DEFAULT_LEASE_TTL_SECONDS,
@@ -964,11 +965,48 @@ class ConversationService:
                 count += 1
         return count
 
-    def _has_free_slot(self) -> bool:
-        """Whether another run may start. Zero or negative disables the cap."""
-        if self.max_concurrent_runs <= 0:
-            return True
-        return self._count_running_runs() < self.max_concurrent_runs
+    def _shared_writers(self, workspace_root: str) -> int:
+        """Running shared-mode conversations writing in this directory.
+
+        Counted from live run tasks, like the run cap, and only for
+        AgentRT-managed sessions: an editor or an unrelated process in the same
+        directory is invisible here and always was.
+        """
+        count = 0
+        for record in self._conversation_records.values():
+            service = (self._event_services or {}).get(record.stored.id)
+            task = getattr(service, "_run_task", None) if service else None
+            if task is None or task.done():
+                continue
+            if record.stored.workspace_mode != "shared":
+                continue
+            if str(record.stored.workspace.working_dir) == workspace_root:
+                count += 1
+        return count
+
+    def _has_free_slot(
+        self, *, workspace_root: str | None = None, workspace_mode: str = "shared"
+    ) -> bool:
+        """Whether another run may start. Zero or negative disables a cap.
+
+        Two caps are checked: the run pool, and -- when the deployment asks for
+        it -- how many writers may share one workspace directory. A `snapshot`
+        or `isolated_worktree` session has its own tree, so the second does not
+        apply to it.
+        """
+        if self.max_concurrent_runs > 0 and (
+            self._count_running_runs() >= self.max_concurrent_runs
+        ):
+            return False
+        cap = max_shared_writers()
+        if (
+            cap > 0
+            and workspace_mode == "shared"
+            and workspace_root is not None
+            and self._shared_writers(workspace_root) >= cap
+        ):
+            return False
+        return True
 
     def _mark_admission(self, stored: StoredConversation, state: str) -> None:
         stored.admission_state = state
@@ -1036,7 +1074,10 @@ class ConversationService:
         dispatches cannot both find the same last slot.
         """
         async with self._admission_lock:
-            if self._has_free_slot():
+            if self._has_free_slot(
+                workspace_root=str(event_service.stored.workspace.working_dir),
+                workspace_mode=event_service.stored.workspace_mode,
+            ):
                 await event_service.send_message(message, True)
                 return True
             # ``run=False`` persists the input without starting it.
@@ -1119,8 +1160,21 @@ class ConversationService:
         slots = provider_slots()
         in_flight = slots.in_flight if slots is not None else 0
         llm_limit = slots.limit if slots is not None else None
+        shared_cap = max_shared_writers()
+        busiest = 0
+        seen_roots: set[str] = set()
+        for record in self._conversation_records.values():
+            if record.stored.workspace_mode != "shared":
+                continue
+            root = str(record.stored.workspace.working_dir)
+            if root in seen_roots:
+                continue
+            seen_roots.add(root)
+            busiest = max(busiest, self._shared_writers(root))
         if llm_limit is not None and in_flight >= llm_limit:
             limiting_dimension = "llm_requests"
+        elif shared_cap > 0 and busiest >= shared_cap:
+            limiting_dimension = "shared_writers"
         elif unbounded:
             limiting_dimension = None
         else:
@@ -1135,6 +1189,8 @@ class ConversationService:
             ),
             "in_flight_llm": in_flight,
             "llm_limit": llm_limit,
+            "shared_writer_limit": shared_cap or None,
+            "busiest_workspace_writers": busiest,
         }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:

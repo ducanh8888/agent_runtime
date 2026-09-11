@@ -154,6 +154,7 @@ _OPTIONAL_RESPONSE_KEYS = (
     "iterations_remaining",
     "last_completed_tool",
     "last_progress_at",
+    "progress_age_seconds",
     "error",
     "summary",
 )
@@ -1028,6 +1029,8 @@ class Client:
             "status": _status_of(data),
             "admission_status": data.get("admission_status"),
             "result_state": data.get("result_state"),
+            "iterations_used": data.get("iterations_used"),
+            "iterations_remaining": data.get("iterations_remaining"),
         }
 
     def _resolve_session(self, session: str) -> str:
@@ -1412,6 +1415,51 @@ class Client:
             urls.append(f"data:{mime};base64,{encoded}")
         return [{"type": "image", "image_urls": urls}] if urls else []
 
+    def dispatch_from(
+        self,
+        source: str,
+        task: str,
+        *,
+        title: str | None = None,
+        tags: dict[str, str] | None = None,
+    ) -> dict:
+        """Fork a session and give the fork the task.
+
+        This is what context inheritance means here. The native sub-agent a
+        caller may be used to forks *the caller's own conversation*, which this
+        daemon cannot read: it holds no orchestrator context. What it can do is
+        hand a new session everything another AgentRT session knows, so a
+        reviewer can start from the writer's history instead of from a summary
+        of it.
+
+        The fork inherits the source's agent, workspace and permission -- that
+        is what makes it useful -- so there is nothing to choose here except the
+        task and its metadata. It runs in the same directory as the source, so
+        two writers there are subject to the shared-writer cap.
+        """
+        resolved = self._resolve_session(source)
+        body: dict = {}
+        if title is not None:
+            body["title"] = title
+        if tags:
+            body["tags"] = _clean_tags(tags)
+        forked = self._send(
+            "POST",
+            f"/api/conversations/{quote(resolved, safe='')}/fork",
+            json=body,
+        ).json()
+        new_id = forked.get("id")
+        if not new_id:
+            raise ClientError(f"fork of {source!r} returned no conversation id")
+        self.send(new_id, task)
+        return {
+            "id": new_id,
+            "short_id": short_id(new_id),
+            "status": _status_of(forked) or self.status(new_id).get("status"),
+            "forked_from": resolved,
+            "title": forked.get("title"),
+        }
+
     def dispatch_many(
         self,
         tasks: list[dict],
@@ -1532,6 +1580,11 @@ class Client:
         or a message that arrived during the final step, and a wait that fired on
         the first ``finished`` would report an answer still being revised.
 
+        Items under ``still_running`` carry the last progress sample -- status,
+        admission, result state and iterations -- so a poller can see movement
+        without a second call. They carry no result: partial output is never
+        presented as an answer.
+
         mode ``all`` waits for every id (or the timeout); ``any`` returns as soon
         as one settles. The result groups ids by outcome -- ``completed``,
         ``partial``, ``failed``, ``stopped`` (paused, resumable), ``missing``
@@ -1551,6 +1604,7 @@ class Client:
         settled: set[str] = set()
         missing: set[str] = set()
         terminal_prev: dict[str, bool] = {}
+        last_seen: dict[str, dict] = {}
         timed_out = False
 
         while True:
@@ -1560,6 +1614,7 @@ class Client:
                     missing.add(session)
                     pending.discard(session)
                     continue
+                last_seen[session] = status
                 terminal = _is_settled(status)
                 if terminal and terminal_prev.get(session):
                     settled.add(session)
@@ -1608,13 +1663,26 @@ class Client:
                 payload["bucket"] = bucket
                 buckets[bucket].append(payload)
             else:
-                buckets["still_running"].append(
-                    {
-                        "id": session,
-                        "short_id": short_id(session),
-                        "bucket": "still_running",
-                    }
-                )
+                # Progress as last sampled, so a poller can see movement
+                # (iterations, admission) without a second call. It is the same
+                # sample the settle decision used, not a fresh one.
+                item = {
+                    "id": session,
+                    "short_id": short_id(session),
+                    "bucket": "still_running",
+                }
+                seen = last_seen.get(session) or {}
+                for key in (
+                    "status",
+                    "admission_status",
+                    "result_state",
+                    "iterations_used",
+                    "iterations_remaining",
+                ):
+                    value = seen.get(key)
+                    if value is not None:
+                        item[key] = value
+                buckets["still_running"].append(item)
 
         return {
             **buckets,

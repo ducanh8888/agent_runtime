@@ -389,3 +389,31 @@ def test_create_request_title_is_bounded(tmp_path) -> None:
         _create_request(tmp_path, title="")
     with pytest.raises(ValueError):
         _create_request(tmp_path, title="x" * 201)
+
+
+def test_projection_reports_the_age_of_the_last_progress() -> None:
+    """A stall hint, reported rather than acted on."""
+    service = _service(
+        [_user("u1", "q"), _agent("a1", "answer")],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.FINISHED,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.progress_age_seconds is not None
+    assert result.progress_age_seconds >= 0
+
+
+def test_a_pending_request_reports_no_progress_age() -> None:
+    service = _service(
+        [_user("u1", "q1"), _agent("a1", "one"), _user("u2", "q2")],
+        last_user_message_id="u2",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.RUNNING,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.progress_age_seconds is None

@@ -292,6 +292,29 @@ def result(session: str) -> dict:
 
 
 @mcp.tool()
+def dispatch_from(
+    session: str,
+    task: str,
+    title: str | None = None,
+    tags: dict[str, str] | None = None,
+) -> dict:
+    """Fork a session and give the fork the task.
+
+    `session` is the session to inherit from -- the fork gets its history, agent,
+    workspace and permission, so a reviewer can start from the writer's
+    conversation instead of from a summary of it. Only the task and its metadata
+    are yours to choose.
+
+    This is context inheritance as far as it goes here: the fork inherits
+    *another AgentRT session*, not this conversation, which the daemon cannot
+    read. The fork runs in the source's workspace, so two writers there are
+    subject to the shared-writer cap; and a fork of a session that is still
+    running copies the history as it stands, not the history it will have.
+    """
+    return _guard(_get_client().dispatch_from, session, task, title=title, tags=tags)
+
+
+@mcp.tool()
 def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
     """Submit several tasks once and get a per-item outcome.
 
@@ -336,7 +359,11 @@ def capacity() -> dict:
     `running`, `limit` and `available` describe run slots; `queued` is accepted
     work waiting for one, in submission order. `in_flight_llm` and `llm_limit`
     describe concurrent provider requests when the deployment caps them
-    (`AGENTRT_MAX_INFLIGHT_LLM`; null when it does not). `limiting_dimension`
+    (`AGENTRT_MAX_INFLIGHT_LLM`; null when it does not).
+    `shared_writer_limit` / `busiest_workspace_writers` describe the cap on
+    sessions writing in one shared directory (`AGENTRT_MAX_SHARED_WRITERS`; null
+    when unbounded). Only AgentRT-managed writers are counted: editors and
+    unrelated processes in the same directory never were. `limiting_dimension`
     names whichever cap is binding, or is null when none is -- and then
     `available` is null too, because "unbounded" is not a number to subtract
     from.

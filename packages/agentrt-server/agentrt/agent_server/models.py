@@ -778,6 +778,15 @@ class AgentResponseResult(BaseModel):
         default=None,
         description="Last error event for the current request, if any.",
     )
+    progress_age_seconds: float | None = Field(
+        default=None,
+        description=(
+            "Seconds since the last persisted event, when one was recorded. A "
+            "hint, never a verdict: a long reasoning turn persists nothing and "
+            "looks exactly like a stall, so nothing here kills a session for "
+            "it. Null when no progress time is known."
+        ),
+    )
     summary: str | None = Field(
         default=None,
         description=(

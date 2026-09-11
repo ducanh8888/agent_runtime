@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext, suppress
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
@@ -109,6 +109,25 @@ FINALIZE_SUMMARY_PROMPT = (
     "Do not claim anything the recorded work does not support.\n\n"
     "Recorded answer:\n{answer}"
 )
+
+
+def _progress_age_seconds(last_progress_at: str | None) -> float | None:
+    """Seconds since the newest persisted event, or None if it is unknown.
+
+    Reported, never acted on. The orchestration notes measured a session that
+    read its inputs and then produced nothing for five minutes while composing
+    one response: silence is not stalled-ness, and a watchdog that killed on it
+    would throw away turns that were about to land.
+    """
+    if not last_progress_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(last_progress_at)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return max(0.0, (datetime.now(UTC) - parsed).total_seconds())
 
 
 def _finalize_completion(llm, prompt: str) -> str:
@@ -2034,6 +2053,7 @@ class EventService:
             # error or tool must not be presented as this request's.
             last_tool = last_progress_at = None
             error = None
+        progress_age = _progress_age_seconds(last_progress_at)
         return AgentResponseResult(
             response=response,
             state=result_state,
@@ -2050,6 +2070,7 @@ class EventService:
             iterations_remaining=iterations_remaining(state),
             last_completed_tool=last_tool,
             last_progress_at=last_progress_at,
+            progress_age_seconds=progress_age,
             error=error,
             # The summary belongs to the input it was written for. A later
             # request that never finalized must not inherit it.

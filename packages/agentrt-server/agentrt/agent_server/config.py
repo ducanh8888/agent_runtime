@@ -32,6 +32,27 @@ ACPSkillSourcing = Literal["native", "openhands_managed"]
 _logger = logging.getLogger(__name__)
 
 
+MAX_SHARED_WRITERS_ENV = "AGENTRT_MAX_SHARED_WRITERS"
+
+
+def max_shared_writers() -> int:
+    """How many running sessions may write in one shared workspace.
+
+    Zero, the default, means no limit: shared workspaces are not coordinated
+    today, and the deployment has to ask for coordination to get it. Only
+    AgentRT-managed writers are counted -- editors and unrelated processes do
+    not participate in this at all.
+    """
+    raw = os.getenv(MAX_SHARED_WRITERS_ENV, "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        _logger.warning("%s is not an integer; ignoring it", MAX_SHARED_WRITERS_ENV)
+        return 0
+
+
 MAX_INFLIGHT_LLM_ENV = "AGENTRT_MAX_INFLIGHT_LLM"
 
 

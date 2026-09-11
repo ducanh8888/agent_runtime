@@ -234,3 +234,25 @@ def test_wait_does_not_settle_unadmitted_work() -> None:
 
     assert out["completed"] == []
     assert [item["id"] for item in out["still_running"]] == [H]
+
+
+def test_still_running_items_carry_progress() -> None:
+    """A poller sees movement without a second call."""
+    statuses = {
+        E: {
+            "execution_status": "running",
+            "result_state": "pending",
+            "admission_status": "admitted",
+            "iterations_used": 3,
+            "iterations_remaining": 47,
+        }
+    }
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([E], mode="all", timeout=1.0, poll_interval=0.5)
+
+    item = out["still_running"][0]
+    assert item["iterations_used"] == 3
+    assert item["iterations_remaining"] == 47
+    assert item["admission_status"] == "admitted"
+    assert "result" not in item  # no partial output as an answer

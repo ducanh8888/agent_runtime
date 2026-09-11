@@ -145,3 +145,33 @@ def test_broad_permission_does_not_widen_the_attachment_root(tmp_path) -> None:
         )
 
     assert "body" not in seen
+
+
+def test_dispatch_from_forks_then_sends() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.url.path.endswith("/fork"):
+            return httpx.Response(
+                200,
+                json={"id": CREATED, "execution_status": "idle", "title": "forked"},
+            )
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(
+            200, json={"id": CREATED, "execution_status": "idle", "tags": {}}
+        )
+
+    client = _mock_client(handle)
+    out = client.dispatch_from(
+        "11111111-1111-1111-1111-111111111111", "review the change"
+    )
+
+    assert (
+        "POST",
+        "/api/conversations/11111111-1111-1111-1111-111111111111/fork",
+    ) in seen
+    assert ("POST", f"/api/conversations/{CREATED}/events") in seen
+    assert out["id"] == CREATED
+    assert out["forked_from"] == "11111111-1111-1111-1111-111111111111"

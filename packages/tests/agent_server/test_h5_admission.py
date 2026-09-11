@@ -423,3 +423,61 @@ async def test_lease_releases_the_semaphore_it_acquired() -> None:
 
     assert acquired is not None and acquired._value == 1  # permit returned
     assert slots.in_flight == 0
+
+
+# --- shared-workspace writers ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_second_shared_writer_in_one_directory_is_blocked(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_MAX_SHARED_WRITERS", "1")
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=10)
+    holder = uuid4()
+    service._event_services = {holder: _Service(_Task(done=False))}
+    service._conversation_records = {holder: _record(holder)}
+
+    assert service._shared_writers("/tmp/h5") == 1
+    assert (
+        service._has_free_slot(workspace_root="/tmp/h5", workspace_mode="shared")
+        is False
+    )
+    # Another directory is unaffected, and an isolated tree is its own case.
+    assert (
+        service._has_free_slot(workspace_root="/tmp/other", workspace_mode="shared")
+        is True
+    )
+    assert (
+        service._has_free_slot(
+            workspace_root="/tmp/h5", workspace_mode="isolated_worktree"
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_capacity_names_the_shared_writer_limit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENTRT_MAX_SHARED_WRITERS", "1")
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=10)
+    holder = uuid4()
+    service._event_services = {holder: _Service(_Task(done=False))}
+    service._conversation_records = {holder: _record(holder)}
+
+    surface = await service.capacity()
+
+    assert surface["shared_writer_limit"] == 1
+    assert surface["busiest_workspace_writers"] == 1
+    assert surface["limiting_dimension"] == "shared_writers"
+
+
+@pytest.mark.asyncio
+async def test_no_shared_writer_limit_by_default(tmp_path) -> None:
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=10)
+    service._event_services = {}
+    service._conversation_records = {}
+
+    surface = await service.capacity()
+
+    assert surface["shared_writer_limit"] is None
+    assert service._has_free_slot(workspace_root="/tmp/h5", workspace_mode="shared")
