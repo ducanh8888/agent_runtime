@@ -317,6 +317,30 @@ def wait_all(session_ids: list[str], timeout: float = 600.0) -> dict:
 
 
 @mcp.tool()
+def finalize(session: str, summary: bool = False) -> dict:
+    """Stop a session now and return the outcome it has.
+
+    session is the short id or the full UUID.
+
+    This is the "wrap up now" verb. It lets the in-flight step reach a safe
+    boundary, blocks any further tool starts, and returns the same shape `result`
+    does, including `state`. It is not rollback: a command already running may
+    still be running, so an external effect is reported as unknown rather than
+    as undone. Repeating it for the same input returns the same outcome.
+
+    `summary` asks for a tools-disabled wrap-up produced by a thinking/high
+    call charged to the run's remaining iteration allowance. It is off by
+    default and the daemon may refuse it. When no summary can run -- summaries
+    disabled deployment-wide, or no allowance left -- the partial record is
+    returned and `summary` is absent rather than invented. A run stopped by its
+    iteration limit is already `partial`; this does not dress it up.
+
+    `control` has no `finalize` action; use this tool.
+    """
+    return _guard(_get_client().finalize, session, summary=summary)
+
+
+@mcp.tool()
 def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict:
     """Read what a session actually did, condensed.
 

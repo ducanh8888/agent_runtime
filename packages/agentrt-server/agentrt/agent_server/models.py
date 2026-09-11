@@ -180,6 +180,13 @@ class _ConversationInfoBase(BaseModel):
             "remaining budget is not known."
         ),
     )
+    finalized_at: str | None = Field(
+        default=None,
+        description=(
+            "When the current request was finalized, if it was. Set even when "
+            "finalization ran without a summary."
+        ),
+    )
     confirmation_policy: ConfirmationPolicyBase = Field(default=NeverConfirm())
     security_analyzer: SecurityAnalyzerBase | None = Field(
         default=None,
@@ -587,6 +594,19 @@ class StartGoalRequest(BaseModel):
     )
 
 
+class FinalizeRequest(BaseModel):
+    """Payload for finalizing a conversation's current request."""
+
+    summary: bool = Field(
+        default=False,
+        description=(
+            "Also run the tools-disabled wrap-up summary. Ignored unless the "
+            "deployment enables summaries (AGENTRT_FINALIZE_SUMMARY); the "
+            "default finalize spends no model call."
+        ),
+    )
+
+
 class ConversationErrorInfo(BaseModel):
     """Sanitized terminal error observed for the current request."""
 
@@ -653,6 +673,14 @@ class AgentResponseResult(BaseModel):
     error: ConversationErrorInfo | None = Field(
         default=None,
         description="Last error event for the current request, if any.",
+    )
+    summary: str | None = Field(
+        default=None,
+        description=(
+            "Tools-disabled wrap-up produced at finalization, when one was "
+            "requested and an iteration was available. None otherwise -- the "
+            "partial record is never dressed up as an LLM summary."
+        ),
     )
 
 

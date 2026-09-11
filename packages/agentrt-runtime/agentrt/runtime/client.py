@@ -125,16 +125,51 @@ def _status_of(data: object) -> str | None:
 #: Execution states in which a session is no longer progressing on its own.
 SETTLED_STATUSES = frozenset({"finished", "error", "stuck", "paused"})
 
+#: Optional answer fields copied through from the daemon when present. A null is
+#: omitted rather than sent as None, so a caller can tell "not reported" from an
+#: explicit empty value.
+_OPTIONAL_RESPONSE_KEYS = (
+    "request_message_id",
+    "iterations_used",
+    "iterations_remaining",
+    "last_completed_tool",
+    "last_progress_at",
+    "error",
+    "summary",
+)
+
+
+def _response_payload(full_id: str, data: dict) -> dict:
+    """Project a daemon answer payload for the CLI/MCP/orchestrator."""
+    payload: dict = {
+        "id": full_id,
+        "short_id": short_id(full_id) if full_id else None,
+        "state": data.get("state"),
+        "result": _text_from_response(data),
+    }
+    for key in _OPTIONAL_RESPONSE_KEYS:
+        value = data.get(key)
+        if value is not None:
+            payload[key] = value
+    return payload
+
 
 def _is_settled(status: dict) -> bool:
     """Whether a status sample is terminal for waiting purposes.
 
-    Admission matters as well: a session whose input was accepted but never
-    admitted has not started, whatever its execution status reads.
+    Both the admission state and the result state have to agree. Admission
+    catches accepted-but-unstarted input. The result state catches the mirror
+    case: a session whose execution status already reads terminal while a newer
+    input is still unconsumed -- the server reports that as terminal-but-
+    admitted, and its answer is `pending`, so it is not an outcome yet. A
+    daemon that predates result_state reports nothing, and an absent value is
+    treated as no objection.
     """
     if (status.get("status") or "").lower() not in SETTLED_STATUSES:
         return False
-    return status.get("admission_status") not in ("queued", "preparing")
+    if status.get("admission_status") in ("queued", "preparing"):
+        return False
+    return status.get("result_state") != "pending"
 
 
 def _wait_bucket(payload: dict) -> str:
@@ -1293,24 +1328,30 @@ class Client:
         if status is None:
             status = self.status(session).get("status")
 
-        payload = {
-            "id": full_id,
-            "short_id": short_id(full_id) if full_id else None,
-            "status": status,
-            "state": data.get("state"),
-            "result": _text_from_response(data),
-        }
-        for key in (
-            "request_message_id",
-            "iterations_used",
-            "iterations_remaining",
-            "last_completed_tool",
-            "last_progress_at",
-            "error",
-        ):
-            value = data.get(key)
-            if value is not None:
-                payload[key] = value
+        payload = _response_payload(full_id, data)
+        payload["status"] = status
+        return payload
+
+    def finalize(self, session: str, *, summary: bool = False) -> dict:
+        """Stop a session at a safe boundary and return the outcome it has.
+
+        The barrier lets the in-flight step reach a safe boundary and blocks
+        further tool starts. Cancellation is not rollback: an external effect
+        already running may still be. Repeating the call for the same input
+        returns the same outcome rather than running anything again.
+
+        `summary` asks for the tools-disabled wrap-up. It is off by default and
+        the deployment may refuse it; when no summary can run, the partial
+        record is returned rather than a summary that does not exist.
+        """
+        resolved = self._resolve_session(session)
+        data = self._send(
+            "POST",
+            f"/api/conversations/{quote(resolved, safe='')}/finalize",
+            json={"summary": bool(summary)},
+        ).json()
+        payload = _response_payload(resolved, data)
+        payload["status"] = self.status(resolved).get("status")
         return payload
 
     def wait(
@@ -1339,7 +1380,9 @@ class Client:
         as one settles. The result groups ids by outcome -- ``completed``,
         ``partial``, ``failed``, ``stopped`` (paused, resumable), ``missing``
         (unknown or deleted) and ``still_running`` -- with ``timed_out`` saying
-        whether the deadline ended the wait.
+        whether the deadline ended the wait. A ``wait_any`` that returns on its
+        first outcome reports ``timed_out`` false even though other ids are
+        still running: the deadline is not what ended it.
         """
         if mode not in ("all", "any"):
             raise ValueError("mode must be 'all' or 'any'")
@@ -1352,6 +1395,7 @@ class Client:
         settled: set[str] = set()
         missing: set[str] = set()
         terminal_prev: dict[str, bool] = {}
+        timed_out = False
 
         while True:
             for session in list(pending):
@@ -1370,9 +1414,13 @@ class Client:
                 break
             if not pending:
                 break
-            if time.monotonic() >= deadline:
+            remaining_time = deadline - time.monotonic()
+            if remaining_time <= 0:
+                timed_out = True
                 break
-            time.sleep(interval)
+            # Never sleep past the deadline: a sweep plus the interval would
+            # otherwise overshoot the timeout the caller asked for.
+            time.sleep(min(interval, remaining_time))
 
         buckets: dict[str, list] = {
             "completed": [],
@@ -1414,7 +1462,7 @@ class Client:
 
         return {
             **buckets,
-            "timed_out": bool(pending),
+            "timed_out": timed_out,
             "waited": round(time.monotonic() - started, 3),
         }
 

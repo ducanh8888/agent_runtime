@@ -31,6 +31,11 @@ def _state(**overrides):
         "iterations_used": 0,
         "max_iterations": 500,
         "events": [],
+        # Added by H3; the projection reads them, and a fake missing one fails
+        # rather than silently diverging from the real state.
+        "final_summary": None,
+        "finalized_request_id": None,
+        "finalized_at": None,
     }
     base.update(overrides)
     return SimpleNamespace(**base)

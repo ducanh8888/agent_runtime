@@ -32,6 +32,24 @@ ACPSkillSourcing = Literal["native", "openhands_managed"]
 _logger = logging.getLogger(__name__)
 
 
+FINALIZE_SUMMARY_ENV = "AGENTRT_FINALIZE_SUMMARY"
+
+
+def finalize_summary_enabled() -> bool:
+    """Whether a finalize request may run the tools-disabled summary call.
+
+    Off by default. Finalization itself is a barrier over work already done and
+    costs nothing; the summary is the only part that spends a model call, so an
+    operator opts into it here, or per request through the endpoint.
+    """
+    return os.getenv(FINALIZE_SUMMARY_ENV, "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _default_session_api_keys():
     """
     This function exists as a fallback to using this old V0 environment

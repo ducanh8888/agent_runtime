@@ -198,6 +198,28 @@ class ConversationState(OpenHandsModel):
         ),
     )
 
+    # H3 finalization. The request is recorded against the input boundary it
+    # finalized, so repeating it is a no-op rather than a second summary or a
+    # replay of work already done.
+    finalized_at: str | None = Field(
+        default=None,
+        description="When the current request was finalized, if it was.",
+    )
+    finalized_request_id: EventID | None = Field(
+        default=None,
+        description=(
+            "User-message boundary the finalization applies to. A repeat "
+            "finalize for the same boundary returns the recorded outcome."
+        ),
+    )
+    final_summary: str | None = Field(
+        default=None,
+        description=(
+            "Optional tools-disabled summary produced at finalization. None "
+            "when finalization did not request one or no allowance remained."
+        ),
+    )
+
     # Movable HEAD of the conversation tree.
     leaf_event_id: EventID | None = Field(
         default=None,

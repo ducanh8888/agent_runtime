@@ -6,6 +6,7 @@ every sample is deterministic.
 
 from __future__ import annotations
 
+import json
 import types
 from collections.abc import Callable
 
@@ -135,6 +136,25 @@ def test_wait_any_returns_on_the_first_outcome() -> None:
 
     assert [item["id"] for item in out["completed"]] == [A]
     assert [item["id"] for item in out["still_running"]] == [E]
+    # An early return is not a timeout: the deadline did not end the wait.
+    assert out["timed_out"] is False
+
+
+def test_wait_does_not_settle_a_terminal_session_with_unconsumed_input() -> None:
+    """`finished` with a newer unconsumed input still has no answer."""
+    statuses = {
+        A: {
+            "execution_status": "finished",
+            "result_state": "pending",
+            "admission_status": "admitted",
+        }
+    }
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([A], mode="all", timeout=1.0, poll_interval=0.5)
+
+    assert out["completed"] == []
+    assert [item["id"] for item in out["still_running"]] == [A]
     assert out["timed_out"] is True
 
 
@@ -154,6 +174,49 @@ def test_wait_rejects_a_provisional_finished() -> None:
     assert out["completed"] == []
     assert [item["id"] for item in out["still_running"]] == [G]
     assert out["timed_out"] is True
+
+
+def test_finalize_passes_summary_and_returns_the_outcome() -> None:
+    seen: dict = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/finalize"):
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "response": "half",
+                    "state": "partial",
+                    "summary": "did X; Y remains",
+                },
+            )
+        return httpx.Response(
+            200, json={"id": A, "execution_status": "paused", "tags": {}}
+        )
+
+    client = _mock_client(handle)
+    out = client.finalize(A, summary=True)
+
+    assert seen["body"] == {"summary": True}
+    assert out["state"] == "partial"
+    assert out["result"] == "half"
+    assert out["summary"] == "did X; Y remains"
+    assert out["status"] == "paused"
+
+
+def test_finalize_omits_an_absent_summary() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/finalize"):
+            return httpx.Response(200, json={"response": None, "state": "pending"})
+        return httpx.Response(
+            200, json={"id": A, "execution_status": "paused", "tags": {}}
+        )
+
+    client = _mock_client(handle)
+    out = client.finalize(A)
+
+    assert out["result"] is None
+    assert "summary" not in out
 
 
 def test_wait_does_not_settle_unadmitted_work() -> None:

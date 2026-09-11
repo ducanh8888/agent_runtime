@@ -36,6 +36,7 @@ from agentrt.agent_server.models import (
     ConversationInfo,
     ConversationPage,
     ConversationSortOrder,
+    FinalizeRequest,
     ForkConversationRequest,
     NavigateConversationRequest,
     SendMessageRequest,
@@ -209,6 +210,28 @@ async def get_conversation_agent_final_response(
     if event_service is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     return await event_service.get_agent_response_result()
+
+
+@conversation_router.post(
+    "/{conversation_id}/finalize",
+    responses={404: {"description": "Conversation not found"}},
+)
+async def finalize_conversation(
+    conversation_id: UUID,
+    request: FinalizeRequest,
+    conversation_service: ConversationService = Depends(get_conversation_service),
+) -> AgentResponseResult:
+    """Stop the run at a safe boundary and return the outcome it has.
+
+    Repeating the request for the same input returns the same outcome rather
+    than running anything again. Cancellation is not rollback: an external
+    effect already in flight may still be running, and the result says what is
+    known instead of claiming a clean stop.
+    """
+    event_service = await conversation_service.get_event_service(conversation_id)
+    if event_service is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return await event_service.finalize(summary=request.summary)
 
 
 @conversation_router.get(

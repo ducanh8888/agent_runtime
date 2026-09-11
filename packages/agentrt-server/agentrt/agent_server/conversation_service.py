@@ -524,8 +524,12 @@ def _compose_conversation_info(
     supports_runtime_model_switch = bool(
         agent_state.get("acp_supports_runtime_model_switch", False)
     )
+    state_dump = state.model_dump(mode="json")
+    # `finalized_at` is re-derived below, scoped to the input it applies to;
+    # drop the raw value so it is not passed twice.
+    state_dump.pop("finalized_at", None)
     return ConversationInfo(
-        **state.model_dump(mode="json"),
+        **state_dump,
         title=stored.title,
         metrics=stored.metrics,
         created_at=stored.created_at,
@@ -545,6 +549,14 @@ def _compose_conversation_info(
         result_state=derive_result_state(state),
         admission_status=derive_admission_status(state),
         iterations_remaining=iterations_remaining(state),
+        # Only the input the finalization applies to may report it; a later
+        # request must not inherit the previous one's timestamp.
+        finalized_at=(
+            state.finalized_at
+            if state.consumed_user_message_id is not None
+            and state.finalized_request_id == state.consumed_user_message_id
+            else None
+        ),
     )
 
 

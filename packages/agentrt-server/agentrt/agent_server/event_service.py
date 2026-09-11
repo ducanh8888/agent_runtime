@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
+from agentrt.agent_server.config import finalize_summary_enabled
 from agentrt.agent_server.conversation_lease import (
     DEFAULT_LEASE_TTL_SECONDS,
     ConversationLease,
@@ -87,10 +88,39 @@ from agentrt.sdk.llm.streaming import LLMStreamChunk
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
 from agentrt.sdk.security.confirmation_policy import ConfirmationPolicyBase
+from agentrt.sdk.utils import utc_now
 from agentrt.sdk.utils.async_utils import AsyncCallbackWrapper
 from agentrt.sdk.utils.cipher import Cipher
 from agentrt.sdk.utils.files import atomic_write_text
 from agentrt.sdk.workspace import LocalWorkspace
+
+
+#: Prompt for the opt-in finalize summary. It asks for a report of work already
+#: recorded, not for more work, and says so, because the summary runs with tools
+#: disabled and must not claim anything the transcript does not support.
+FINALIZE_SUMMARY_PROMPT = (
+    "A task was stopped before it finished. Using only the work already "
+    "recorded as the answer below, write a short report for the caller: what "
+    "was completed, what remains, and anything a follow-up run needs to know. "
+    "Do not claim anything the recorded work does not support.\n\n"
+    "Recorded answer:\n{answer}"
+)
+
+
+def _finalize_completion(llm, prompt: str) -> str:
+    """One tools-disabled completion for the finalize summary.
+
+    No tools are passed, so none can be offered or executed. Streaming is off
+    because the text is consumed whole with no token callback.
+    """
+    if getattr(llm, "stream", False):
+        llm = llm.model_copy(update={"stream": False})
+    messages = [Message(role="user", content=[TextContent(text=prompt)])]
+    response = llm.completion(messages)
+    blocks = getattr(getattr(response, "message", None), "content", None) or []
+    return "".join(
+        block.text for block in blocks if isinstance(block, TextContent)
+    ).strip()
 
 
 LEASE_RENEW_INTERVAL_SECONDS = 15.0
@@ -1973,6 +2003,13 @@ class EventService:
             last_completed_tool=last_tool,
             last_progress_at=last_progress_at,
             error=error,
+            # The summary belongs to the input it was written for. A later
+            # request that never finalized must not inherit it.
+            summary=(
+                state.final_summary
+                if boundary is not None and state.finalized_request_id == boundary
+                else None
+            ),
         )
 
     async def get_agent_response_result(self) -> AgentResponseResult:
@@ -1981,6 +2018,104 @@ class EventService:
             raise ValueError("inactive_service")
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_agent_response_result_sync)
+
+    async def finalize(self, *, summary: bool = False) -> AgentResponseResult:
+        """Stop the run at a safe boundary and return the outcome it has.
+
+        The barrier is the existing pause: it lets the in-flight step reach a
+        safe boundary and blocks further tool starts. Cancellation is not
+        rollback -- an external effect already started may still be running --
+        so the result reports what is known rather than claiming a clean stop.
+
+        The request is recorded against the consumed input, so repeating it
+        returns the same outcome instead of re-running anything. The summary is
+        opt-in and off by default; when it runs it is a tools-disabled call
+        charged to the run's remaining allowance, and no summary is claimed
+        when none could run.
+        """
+        if not self._conversation:
+            raise ValueError("inactive_service")
+        await self._pause_to_boundary()
+        state = self._conversation._state
+        boundary = state.consumed_user_message_id
+        claimed = False
+        if boundary is not None:
+            # Claim the request under the lock and without an await in between,
+            # so two concurrent finalize calls cannot both run the summary.
+            with state:
+                if state.finalized_request_id != boundary or state.finalized_at is None:
+                    state.finalized_request_id = boundary
+                    state.finalized_at = utc_now().isoformat()
+                    claimed = True
+        if claimed and boundary is not None and summary and finalize_summary_enabled():
+            await self._run_final_summary(boundary)
+        return await self.get_agent_response_result()
+
+    async def _pause_to_boundary(self) -> None:
+        """Pause until the session can no longer start new tools.
+
+        ``pause`` is a no-op when the status already reads FINISHED, and
+        FINISHED is provisional: a stop hook can deny the stop and put the run
+        back to RUNNING, which would let tools start after finalize claimed to
+        have stopped them. Re-pausing covers that window, bounded so a run that
+        genuinely keeps going does not block the caller -- the result's own
+        status then shows it is still running rather than claiming a stop.
+        """
+        for attempt in range(3):
+            await self.pause()
+            if self._run_task is None or self._run_task.done():
+                return
+            conversation = self._conversation
+            if conversation is None:
+                return
+            status = conversation._state.execution_status
+            if status not in (
+                ConversationExecutionStatus.RUNNING,
+                ConversationExecutionStatus.FINISHED,
+            ):
+                return
+            if attempt < 2:
+                await asyncio.sleep(0.2)
+
+    async def _run_final_summary(self, boundary: str) -> None:
+        """Run the opt-in tools-disabled wrap-up. Best-effort: never raises."""
+        conversation = self._conversation
+        if conversation is None:
+            return
+        state = conversation._state
+        remaining = iterations_remaining(state)
+        if remaining <= 0:
+            logger.info(
+                "finalize summary skipped for %s: no iteration allowance left",
+                self.stored.id,
+            )
+            return
+        if remaining == 1:
+            logger.warning(
+                "finalize summary takes the last iteration of the run for %s",
+                self.stored.id,
+            )
+        llm = getattr(conversation.agent, "llm", None)
+        if llm is None:
+            return
+        answer = get_agent_final_response(state.events, after_id=boundary)
+        prompt = FINALIZE_SUMMARY_PROMPT.format(
+            answer=(answer or "(none recorded)")[-4000:]
+        )
+        try:
+            loop = asyncio.get_running_loop()
+            text = await loop.run_in_executor(None, _finalize_completion, llm, prompt)
+        except Exception:
+            logger.warning(
+                "finalize summary failed for %s", self.stored.id, exc_info=True
+            )
+            return
+        if not text:
+            return
+        with state:
+            state.final_summary = text
+            # The call is charged to the same allowance the run was given.
+            state.iterations_used = min(state.max_iterations, state.iterations_used + 1)
 
     async def get_state(self) -> ConversationState:
         if not self._conversation:
