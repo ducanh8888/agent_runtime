@@ -208,6 +208,24 @@ def switch_llm_enabled(agent: AgentBase) -> bool:
     return any(tool.name == "switch_llm" for tool in agent.tools)
 
 
+def refuse_unsupported_attachments(content, llm) -> None:
+    """Refuse an image attachment the worker model cannot see.
+
+    Sending it anyway would strip it silently at the provider, and the caller
+    would read a confident answer about an image that never arrived.
+    """
+    has_image = any(getattr(block, "type", None) == "image" for block in content or ())
+    if not has_image:
+        return
+    if getattr(llm, "vision_is_active", lambda: False)():
+        return
+    raise DeploymentPolicyError(
+        "this session's model has no active vision capability, so an image "
+        "attachment would be dropped before the model saw it; remove the "
+        "attachment or dispatch under a vision-capable model"
+    )
+
+
 def enforce_agent_policy(agent: AgentBase, policy: DeploymentLLMPolicy) -> None:
     """Raise :class:`DeploymentPolicyError` when ``agent`` breaks ``policy``.
 

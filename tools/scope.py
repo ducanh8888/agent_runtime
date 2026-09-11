@@ -74,6 +74,7 @@ AREAS: dict[str, list[str]] = {
 
 #: Phase -> areas that phase is expected to touch. Extended as phases land.
 PHASES: dict[str, list[str]] = {
+    "h6": ["runtime", "server-core", "server-openapi", "file-editor"],
     "h5": ["server-core", "server-openapi", "runtime"],
     "h4": [
         "workspace",

@@ -31,6 +31,7 @@ from agentrt.agent_server.deployment_policy import (
     DeploymentLLMPolicy,
     enforce_agent_policy,
     llm_policy_violations,
+    refuse_unsupported_attachments,
 )
 from agentrt.agent_server.event_service import (
     LEASE_RENEW_INTERVAL_SECONDS,
@@ -2060,6 +2061,14 @@ class ConversationService:
         if suffix:
             request = request.model_copy(
                 update={"agent": _append_system_message_suffix(request.agent, suffix)}
+            )
+
+        if request.initial_message is not None:
+            # Checked for every creation path, not only when a deployment policy
+            # is configured: an attachment the model cannot see is refused
+            # rather than sent and ignored.
+            refuse_unsupported_attachments(
+                request.initial_message.content, request.agent.llm
             )
 
         if self.deployment_llm_policy is not None:

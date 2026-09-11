@@ -27,6 +27,7 @@ from agentrt.agent_server.conversation_service import (
 from agentrt.agent_server.dependencies import get_conversation_service
 from agentrt.agent_server.deployment_policy import (
     DeploymentLLMPolicy,
+    DeploymentPolicyError,
     llm_policy_violations,
 )
 from agentrt.agent_server.models import (
@@ -302,6 +303,10 @@ async def start_conversation(
     """Start a conversation in the local environment."""
     try:
         info, is_new = await conversation_service.start_conversation(request)
+    except DeploymentPolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     except IdempotencyConflict as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileNotFound as e:

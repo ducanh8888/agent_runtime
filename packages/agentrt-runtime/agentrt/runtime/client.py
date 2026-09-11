@@ -7,6 +7,7 @@ callers from silently depending on different response shapes.
 
 from __future__ import annotations
 
+import base64
 import os
 import time
 import uuid
@@ -120,6 +121,25 @@ def _status_of(data: object) -> str | None:
     if not isinstance(data, dict):
         return None
     return data.get("execution_status") or data.get("status")
+
+
+#: Image formats an attachment may carry, and the size above which one is
+#: refused. The format is sniffed from the file's own bytes: an extension is
+#: the caller's claim, and the MIME type is what the provider acts on.
+MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+
+
+def _sniff_image_mime(head: bytes) -> str | None:
+    """The allowed image MIME a file's leading bytes claim, or None."""
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if head.startswith(b"RIFF") and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 #: Execution states in which a session is no longer progressing on its own.
@@ -1113,6 +1133,7 @@ class Client:
         max_iterations: int | None = None,
         tags: dict[str, str] | None = None,
         idempotency_key: str | None = None,
+        attachments: list[str] | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1165,6 +1186,14 @@ class Client:
             body["tags"] = _clean_tags(tags)
         if idempotency_key:
             body["idempotency_key"] = idempotency_key
+        if attachments:
+            blocks = self._attachment_blocks(
+                attachments, workspace=workspace, permission=preset
+            )
+            body["initial_message"]["content"] = [
+                {"type": "text", "text": task},
+                *blocks,
+            ]
 
         data = self._send("POST", "/api/conversations", json=body).json()
         full_id = data.get("id")
@@ -1334,6 +1363,52 @@ class Client:
         payload = _response_payload(full_id, data)
         payload["status"] = status
         return payload
+
+    def _attachment_blocks(
+        self,
+        attachments: list[str],
+        *,
+        workspace: str,
+        permission: str,
+    ) -> list[dict]:
+        """Typed image blocks for the initial message, guarded.
+
+        Each path must resolve inside the workspace, must not be another name
+        for one of the runtime's credential files, must sniff as an allowed
+        image format, and must be within the size cap. Reading is enough: the
+        session's permission does not have to grant writing.
+        """
+        urls: list[str] = []
+        for raw in attachments:
+            try:
+                resolved = permissions.check_path(
+                    str(raw),
+                    root=workspace,
+                    permission=permissions.normalise(permission),
+                    writing=False,
+                )
+            except permissions.PermissionDenied as exc:
+                raise ClientError(
+                    f"attachment {raw!r} is not readable from this workspace: {exc}"
+                ) from exc
+            if not resolved.is_file():
+                raise ClientError(f"attachment {raw!r} is not a file")
+            size = resolved.stat().st_size
+            if size > MAX_ATTACHMENT_BYTES:
+                raise ClientError(
+                    f"attachment {raw!r} is {size} bytes, above the "
+                    f"{MAX_ATTACHMENT_BYTES} byte cap"
+                )
+            with resolved.open("rb") as handle:
+                mime = _sniff_image_mime(handle.read(16))
+            if mime is None:
+                raise ClientError(
+                    f"attachment {raw!r} is not a PNG, JPEG, GIF or WebP image "
+                    "(detected from its bytes, not its name)"
+                )
+            encoded = base64.b64encode(resolved.read_bytes()).decode("ascii")
+            urls.append(f"data:{mime};base64,{encoded}")
+        return [{"type": "image", "image_urls": urls}] if urls else []
 
     def dispatch_many(
         self,

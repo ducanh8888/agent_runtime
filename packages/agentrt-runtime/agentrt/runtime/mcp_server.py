@@ -69,6 +69,7 @@ def dispatch(
     max_iterations: int | None = None,
     tags: dict[str, str] | None = None,
     idempotency_key: str | None = None,
+    attachments: list[str] | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -181,6 +182,14 @@ def dispatch(
     the input; `admission_status` is `queued` until then, so a freshly
     dispatched session is never reported as merely `idle`.
 
+    ATTACHMENTS. `attachments` is a list of image paths to put on the first
+    message. Each must be readable from the workspace, must sniff as PNG, JPEG,
+    GIF or WebP from its own bytes (the extension is not consulted), and must be
+    under a 5 MB cap. The session's model must have vision: otherwise the
+    dispatch is refused, because sending it anyway would have the provider
+    drop the image and the session answer confidently about something it never
+    saw.
+
     CAPACITY. A full run pool does not refuse a dispatch: the input is
     persisted and the conversation is queued, then admitted when a slot frees.
     Read `capacity` for the backlog. `idempotency_key` makes a repeated
@@ -197,6 +206,7 @@ def dispatch(
         max_iterations=max_iterations,
         tags=tags,
         idempotency_key=idempotency_key,
+        attachments=attachments,
     )
 
 
