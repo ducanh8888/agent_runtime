@@ -79,6 +79,7 @@ MAX_RESULTS = 500
 MAX_OUTPUT_CHARS = 200_000
 REGEX_TIMEOUT_SECONDS = 0.05
 SEARCH_MATCH_BUDGET = MAX_OUTPUT_CHARS - 20_000
+MAX_SEARCH_MATCHES_SCANNED = 10_000
 
 #: A revision may not begin with `-` (option injection) and is kept to the
 #: characters git itself uses in a ref, so `a..b` and `HEAD~2` work while
@@ -280,6 +281,7 @@ class InspectAction(Action):
     offset: int = Field(
         default=0,
         ge=0,
+        le=MAX_SEARCH_MATCHES_SCANNED,
         description=(
             "`search`: how many matches to skip. Pass a previous call's "
             "`next_offset` to continue."
@@ -376,6 +378,7 @@ class InspectObservation(Observation):
     include: str | None = None
     matches: list[SearchMatch] = Field(default_factory=list)
     match_count: int = 0
+    match_count_exact: bool = True
     files_scanned: int = 0
     offset: int = 0
     next_offset: int | None = None
@@ -474,6 +477,8 @@ class InspectExecutor(ToolExecutor):
 
         regex = timeout_regex.compile(action.pattern)
         matches: list[SearchMatch] = []
+        total = 0
+        scan_limit_hit = False
         files_scanned = 0
         clipped = False
 
@@ -495,20 +500,37 @@ class InspectExecutor(ToolExecutor):
                 candidate = self._approve_optional(Path(dirpath) / name)
                 if candidate is None or not candidate.is_file():
                     continue
-                found, was_clipped = self._scan_file(candidate, regex, action)
+                if total >= MAX_SEARCH_MATCHES_SCANNED:
+                    scan_limit_hit = True
+                    break
+                found, count, was_clipped, file_limit_hit = self._scan_file(
+                    candidate,
+                    regex,
+                    action,
+                    skip=max(0, action.offset - total),
+                    take=max(0, action.max_results - len(matches)),
+                    scan_limit=MAX_SEARCH_MATCHES_SCANNED - total,
+                )
                 files_scanned += 1
                 clipped = clipped or was_clipped
                 matches.extend(found)
+                total += count
+                if file_limit_hit:
+                    scan_limit_hit = True
+                    break
+            if scan_limit_hit:
+                break
 
-        total = len(matches)
-        candidates = matches[action.offset : action.offset + action.max_results]
-        page, budget_clipped = _fit_search_page(candidates)
+        page, budget_clipped = _fit_search_page(matches)
         clipped = clipped or budget_clipped
         next_offset = (
-            action.offset + len(page) if action.offset + len(page) < total else None
+            action.offset + len(page)
+            if action.offset + len(page) < total or scan_limit_hit
+            else None
         )
+        count_text = f"at least {total}" if scan_limit_hit else str(total)
         text = (
-            f"{total} match(es) for {action.pattern!r} under "
+            f"{count_text} match(es) for {action.pattern!r} under "
             f"{self._relative(start)}; returning {len(page)} from offset "
             f"{action.offset}."
         )
@@ -522,30 +544,47 @@ class InspectExecutor(ToolExecutor):
             include=action.include,
             matches=page,
             match_count=total,
+            match_count_exact=not scan_limit_hit,
             files_scanned=files_scanned,
             offset=action.offset,
             next_offset=next_offset,
-            truncated=next_offset is not None or clipped,
+            truncated=next_offset is not None or clipped or scan_limit_hit,
         )
 
     def _scan_file(
-        self, path: Path, regex: Any, action: InspectAction
-    ) -> tuple[list[SearchMatch], bool]:
+        self,
+        path: Path,
+        regex: Any,
+        action: InspectAction,
+        *,
+        skip: int,
+        take: int,
+        scan_limit: int,
+    ) -> tuple[list[SearchMatch], int, bool, bool]:
         try:
             if path.stat().st_size > MAX_FILE_BYTES:
-                return [], True
+                return [], 0, True, False
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            return [], False
+            return [], 0, False, False
 
         lines = text.splitlines()
         found: list[SearchMatch] = []
+        count = 0
         clipped = False
+        limit_hit = False
         for index, line in enumerate(lines):
             if len(line) > MAX_LINE_CHARS:
                 line = line[:MAX_LINE_CHARS]
                 clipped = True
             if not regex.search(line, timeout=REGEX_TIMEOUT_SECONDS):
+                continue
+            if count >= scan_limit:
+                limit_hit = True
+                break
+            include_match = count >= skip and len(found) < take
+            count += 1
+            if not include_match:
                 continue
             before = [
                 value[:MAX_LINE_CHARS]
@@ -564,7 +603,7 @@ class InspectExecutor(ToolExecutor):
                     context_after=after,
                 )
             )
-        return found, clipped
+        return found, count, clipped, limit_hit
 
     # -- git -----------------------------------------------------------
 

@@ -205,6 +205,33 @@ def test_inspect_refuses_every_runtime_state_alias(
         )
 
 
+@pytest.mark.parametrize(
+    "environment_name", ["AGENTRT_PERSISTENCE_DIR", "AGENTRT_CONVERSATIONS_PATH"]
+)
+def test_inspect_refuses_aliases_from_explicit_persistence_locations(
+    state_dir: Path,
+    workspace: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    environment_name: str,
+) -> None:
+    external = tmp_path / environment_name.lower()
+    if environment_name == "AGENTRT_CONVERSATIONS_PATH":
+        protected = external / "session-a" / "base_state.json"
+    else:
+        protected = external / "secrets.json"
+    protected.parent.mkdir(parents=True)
+    protected.write_text('{"secret": "DO-NOT-LEAK"}', encoding="utf-8")
+    monkeypatch.setenv(environment_name, str(external))
+    alias = workspace / "explicit-location-alias.json"
+    alias.hardlink_to(protected)
+
+    with pytest.raises(permissions.PermissionDenied):
+        permissions.check_path(
+            str(alias), root=workspace, permission="inspect", writing=False
+        )
+
+
 def test_inspect_allows_unrelated_hard_link(
     state_dir: Path, workspace: Path, tmp_path: Path
 ) -> None:
@@ -312,6 +339,24 @@ def test_oversized_file_marks_search_incomplete(
 
     assert obs.match_count == 0
     assert obs.truncated is True
+
+
+def test_search_caps_total_matches_before_materializing_them(
+    state_dir: Path, workspace: Path
+) -> None:
+    (workspace / "dense.txt").write_text(
+        "a\n" * (inspect_tools.MAX_SEARCH_MATCHES_SCANNED + 100), encoding="utf-8"
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="a", max_results=10)
+    )
+
+    assert len(obs.matches) == 10
+    assert obs.match_count == inspect_tools.MAX_SEARCH_MATCHES_SCANNED
+    assert obs.match_count_exact is False
+    assert obs.truncated is True
+    assert obs.next_offset == 10
 
 
 # -- mutation attempts -------------------------------------------------

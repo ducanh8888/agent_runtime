@@ -213,25 +213,40 @@ def runtime_secret_identities() -> set[tuple[int, int]]:
     """
     from agentrt.runtime import config
 
-    state = config.state_dir()
-    candidates = [
-        state / ".env",
-        state / "daemon.json",
-        state / "settings.json",
-        state / "secrets.json",
-        *(state / "profiles").glob("*.json"),
-        *(state / "provider-connections").rglob("*.json"),
-        *(state / "agent-profiles").glob("*.json"),
-    ]
-    conversations = state / "conversations"
-    try:
-        conversation_dirs = list(conversations.iterdir())
-    except OSError:
-        conversation_dirs = []
-    for conversation in conversation_dirs:
+    roots = {config.state_dir()}
+    configured_persistence = os.environ.get("AGENTRT_PERSISTENCE_DIR")
+    if configured_persistence:
+        roots.add(Path(configured_persistence).expanduser().resolve())
+
+    candidates: list[Path] = []
+    conversation_roots: set[Path] = set()
+    for state in roots:
         candidates.extend(
-            (conversation / "meta.json", conversation / "base_state.json")
+            [
+                state / ".env",
+                state / "daemon.json",
+                state / "settings.json",
+                state / "secrets.json",
+                *(state / "profiles").glob("*.json"),
+                *(state / "provider-connections").rglob("*.json"),
+                *(state / "agent-profiles").glob("*.json"),
+            ]
         )
+        conversation_roots.add(state / "conversations")
+
+    configured_conversations = os.environ.get("AGENTRT_CONVERSATIONS_PATH")
+    if configured_conversations:
+        conversation_roots.add(Path(configured_conversations).expanduser().resolve())
+
+    for conversations in conversation_roots:
+        try:
+            conversation_dirs = list(conversations.iterdir())
+        except OSError:
+            conversation_dirs = []
+        for conversation in conversation_dirs:
+            candidates.extend(
+                (conversation / "meta.json", conversation / "base_state.json")
+            )
     out: set[tuple[int, int]] = set()
     for path in candidates:
         try:

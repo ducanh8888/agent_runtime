@@ -381,7 +381,77 @@ _ARCHIVE_GIT_CONFIG_OVERRIDES: tuple[str, ...] = (
     "core.hooksPath=" + os.devnull,
     "-c",
     "core.pager=cat",
+    "-c",
+    "credential.helper=",
 )
+
+
+def _archive_git_environment(index_path: Path) -> dict[str, str]:
+    """Sanitized environment for the archive's scratch-index Git commands."""
+    env = {
+        name: value for name, value in os.environ.items() if not name.startswith("GIT_")
+    }
+    env.update(
+        {
+            "GIT_INDEX_FILE": str(index_path),
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_ATTR_NOSYSTEM": "1",
+        }
+    )
+    return env
+
+
+def _archive_filter_overrides(root: Path, env: dict[str, str]) -> list[str]:
+    """Disable every clean/process filter configured by the repository.
+
+    ``git add`` applies clean filters even with a throwaway index. Driver names
+    come from Git's parsed local config rather than from shell text, then fixed
+    command-line overrides (which have higher precedence) turn the executable
+    hooks off. A missing filter is harmless; a required filter is made optional.
+    """
+    result = subprocess.run(
+        [
+            "git",
+            *_ARCHIVE_GIT_CONFIG_OVERRIDES,
+            "config",
+            "--local",
+            "--includes",
+            "--name-only",
+            "--get-regexp",
+            r"^filter\..*\.(clean|process)$",
+        ],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+        timeout=30,
+    )
+    if result.returncode not in (0, 1):
+        raise GitCommandError(
+            message="Failed to inspect repository filter configuration",
+            command=["git", "config", "--local", "--get-regexp", "filter"],
+            exit_code=result.returncode,
+            stderr=result.stderr.strip(),
+        )
+    prefixes: set[str] = set()
+    for key in result.stdout.splitlines():
+        lowered = key.lower()
+        if lowered.endswith(".clean") or lowered.endswith(".process"):
+            prefixes.add(key.rsplit(".", 1)[0])
+    overrides: list[str] = []
+    for prefix in sorted(prefixes):
+        for suffix, value in (
+            ("clean", ""),
+            ("process", ""),
+            ("required", "false"),
+        ):
+            overrides.extend(["-c", f"{prefix}.{suffix}={value}"])
+    return overrides
 
 
 def _protected_relative_pathspecs(
@@ -452,21 +522,19 @@ def _create_git_delta(
         *_excludes_to_git_pathspecs(excludes),
         *(protected_pathspecs or []),
     ]
-    env = {**os.environ, "GIT_INDEX_FILE": str(index_path)}
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    env["GIT_OPTIONAL_LOCKS"] = "0"
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env.pop("GIT_EXTERNAL_DIFF", None)
-    env.pop("GIT_CONFIG_PARAMETERS", None)
+    env = _archive_git_environment(index_path)
     try:
+        archive_overrides = [
+            *_ARCHIVE_GIT_CONFIG_OVERRIDES,
+            *_archive_filter_overrides(root, env),
+        ]
         # Seed the scratch index from the base ref, stage the working tree on
         # top of it (skipping the requested excludes), then diff. The ``-- .``
         # pathspec scopes staging and the diff to the requested directory, so a
         # ``path`` that is a subdirectory of a larger repo yields only that
         # subtree's delta rather than the whole repository's.
         subprocess.run(
-            ["git", *_ARCHIVE_GIT_CONFIG_OVERRIDES, "read-tree", ref],
+            ["git", *archive_overrides, "read-tree", ref],
             cwd=root,
             env=env,
             capture_output=True,
@@ -474,7 +542,7 @@ def _create_git_delta(
             timeout=60,
         )
         subprocess.run(
-            ["git", *_ARCHIVE_GIT_CONFIG_OVERRIDES, "add", "-A", "--", ".", *pathspecs],
+            ["git", *archive_overrides, "add", "-A", "--", ".", *pathspecs],
             cwd=root,
             env=env,
             capture_output=True,
@@ -487,7 +555,7 @@ def _create_git_delta(
             subprocess.run(
                 [
                     "git",
-                    *_ARCHIVE_GIT_CONFIG_OVERRIDES,
+                    *archive_overrides,
                     "diff",
                     "--no-textconv",
                     "--no-ext-diff",

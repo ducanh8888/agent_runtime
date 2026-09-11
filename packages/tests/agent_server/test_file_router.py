@@ -1990,3 +1990,62 @@ def test_git_delta_archive_does_not_execute_hostile_diff_command(tmp_path):
     assert resp.status_code == 200, resp.text
     assert not marker.exists(), "hostile diff command executed during archive"
     assert b"changed" in resp.content
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX marker script")
+def test_git_delta_archive_does_not_execute_clean_filter(tmp_path):
+    helper = tmp_path / "clean-filter.sh"
+    marker = tmp_path / "MARKER-clean-filter"
+    helper.write_text(f"#!/bin/sh\necho ran > {marker}\ncat\n")
+    helper.chmod(0o755)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-b", "main"], repo)
+    (repo / ".gitattributes").write_text("*.txt filter=hostile\n", encoding="utf-8")
+    _git(["config", "filter.hostile.clean", str(helper)], repo)
+    _git(["config", "filter.hostile.required", "true"], repo)
+    (repo / "new.txt").write_text("clean-filter-content\n", encoding="utf-8")
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+
+    resp = client.get(
+        "/api/file/archive", params={"path": str(repo), "format": "git-delta"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert not marker.exists(), "repository clean filter executed during archive"
+    assert b"clean-filter-content" in resp.content
+
+
+def test_git_delta_archive_ignores_ambient_repository_redirection(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-b", "main"], repo)
+    (repo / "repo-a.txt").write_text("base-a\n", encoding="utf-8")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-m", "base-a"], repo)
+    (repo / "repo-a.txt").write_text("changed-a\n", encoding="utf-8")
+
+    other = tmp_path / "other"
+    other.mkdir()
+    _git(["init", "-b", "main"], other)
+    (other / "repo-b.txt").write_text("base-b\n", encoding="utf-8")
+    _git(["add", "-A"], other)
+    _git(["commit", "-m", "base-b"], other)
+    (other / "repo-b.txt").write_text("changed-b\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+    resp = client.get(
+        "/api/file/archive", params={"path": str(repo), "format": "git-delta"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert b"changed-a" in resp.content
+    assert b"changed-b" not in resp.content
