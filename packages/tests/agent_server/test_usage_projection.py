@@ -164,6 +164,8 @@ def test_projection_carries_only_numeric_and_identifier_fields():
         "model",
         "provenance",
         "usage",
+        "first_token_latency_ms",
+        "first_reasoning_token_latency_ms",
     }
     assert set(call.usage.model_dump()) == {
         "prompt_tokens",

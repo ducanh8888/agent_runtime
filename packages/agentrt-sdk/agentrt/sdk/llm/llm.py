@@ -2358,10 +2358,11 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                 synced_chunks: list[ModelResponseStream] = await loop.run_in_executor(
                     None, list, cast(Iterable[ModelResponseStream], ret)
                 )
-                fallback_pending: set[bool] = {True, False}
+                # No first-token timing here: this branch drains the whole
+                # generator before the loop runs, so every chunk is stamped at
+                # stream end and the measurement would just restate the full
+                # latency. Null means unknown, which is the honest answer.
                 for chunk in synced_chunks:
-                    if fallback_pending:
-                        fallback_pending -= self._note_first_token(chunk)
                     await _invoke_token_callback(on_token, chunk)
                     chunks.append(chunk)
             ret = litellm.stream_chunk_builder(chunks, messages=messages)

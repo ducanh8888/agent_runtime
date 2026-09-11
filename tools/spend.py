@@ -40,7 +40,15 @@ PRICE_TABLE: dict[str, dict] = {
     },
 }
 
-TOKEN_FIELDS = ("prompt", "completion", "cache_read", "cache_write", "reasoning")
+#: The ledger and the live records both use the full field names; a report
+#: must not be right for one and silently zero for the other.
+TOKEN_FIELDS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+)
 
 
 def rates_for(model: str | None) -> dict | None:
@@ -48,8 +56,12 @@ def rates_for(model: str | None) -> dict | None:
     if not model:
         return None
     name = model.casefold()
+    # Exact, after dropping a provider-routing prefix: `openai/deepseek-flash`
+    # is the same billed model as `deepseek-flash`, but `deepseek-flash-lite`
+    # is not, and charging it the flash rate would be a guess.
+    leaf = name.rsplit("/", 1)[-1]
     for key, card in PRICE_TABLE.items():
-        if key in name:
+        if leaf == key:
             return card
     return None
 
@@ -69,13 +81,13 @@ def usage_by_model(stats: dict | None) -> dict[str, dict[str, int]]:
                 model = call.get("model") or "unknown"
                 bucket = totals.setdefault(model, dict.fromkeys(TOKEN_FIELDS, 0))
                 for field in TOKEN_FIELDS:
-                    bucket[field] += call.get(f"{field}_tokens") or 0
+                    bucket[field] += call.get(field) or 0
             continue
         # Older records only carry the accumulated bucket, with no model.
         usage = service.get("accumulated_token_usage") or {}
         bucket = totals.setdefault("unknown", dict.fromkeys(TOKEN_FIELDS, 0))
         for field in TOKEN_FIELDS:
-            bucket[field] += usage.get(f"{field}_tokens") or 0
+            bucket[field] += usage.get(field) or 0
     return totals
 
 
@@ -89,8 +101,8 @@ def cost_for(model: str | None, usage: dict[str, int]) -> tuple[float, bool]:
     card = rates_for(model)
     if card is None:
         return 0.0, False
-    prompt = usage.get("prompt", 0)
-    cache_read = usage.get("cache_read", 0)
+    prompt = usage.get("prompt_tokens", 0)
+    cache_read = usage.get("cache_read_tokens", 0)
     # ``prompt`` includes anything served from cache, so the fresh portion is
     # the difference. Clamped at zero for a provider that reports them
     # separately rather than inclusively.
@@ -98,7 +110,7 @@ def cost_for(model: str | None, usage: dict[str, int]) -> tuple[float, bool]:
     return (
         fresh / 1_000_000 * card["cache_miss"]
         + cache_read / 1_000_000 * card["cache_hit"]
-        + usage.get("completion", 0) / 1_000_000 * card["output"],
+        + usage.get("completion_tokens", 0) / 1_000_000 * card["output"],
         True,
     )
 
@@ -131,7 +143,12 @@ def main() -> int:
         timeout=60,
     ).json()
 
-    grand = {"prompt": 0, "completion": 0, "cache_read": 0, "reasoning": 0}
+    grand = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cache_read_tokens": 0,
+        "reasoning_tokens": 0,
+    }
     sessions = 0.0
     unpriced_grand: dict[str, int] = dict.fromkeys(TOKEN_FIELDS, 0)
     unpriced_models: set[str] = set()
@@ -148,46 +165,43 @@ def main() -> int:
         for usage in by_model.values():
             for field in TOKEN_FIELDS:
                 session[field] += usage.get(field, 0)
-        for field in ("prompt", "completion", "cache_read", "reasoning"):
+        for field in (
+            "prompt_tokens",
+            "completion_tokens",
+            "cache_read_tokens",
+            "reasoning_tokens",
+        ):
             grand[field] += session[field]
         usd, unpriced, models = price_session(stats)
         sessions += usd
         unpriced_models |= models
         for field in TOKEN_FIELDS:
             unpriced_grand[field] += unpriced[field]
-        marker = " (unpriced: %s)" % ",".join(sorted(models)) if models else ""
+        marker = f" (unpriced: {','.join(sorted(models))})" if models else ""
+        fresh = max(session["prompt_tokens"] - session["cache_read_tokens"], 0)
+        title = (item.get("title") or "")[:28]
         print(
-            "%s  fresh=%-7d cached=%-8d out=%-6d ~$%.4f  %s%s"
-            % (
-                item["id"][:8],
-                max(session["prompt"] - session["cache_read"], 0),
-                session["cache_read"],
-                session["completion"],
-                usd,
-                (item.get("title") or "")[:28],
-                marker,
-            )
+            f"{item['id'][:8]}  fresh={fresh:<7d} "
+            f"cached={session['cache_read_tokens']:<8d} "
+            f"out={session['completion_tokens']:<6d} ~${usd:.4f}  {title}{marker}"
         )
 
-    hit_rate = grand["cache_read"] / grand["prompt"] * 100 if grand["prompt"] else 0
-    print(
-        "\ntokens : fresh=%d cached=%d (%.0f%% hit) out=%d reasoning=%d"
-        % (
-            max(grand["prompt"] - grand["cache_read"], 0),
-            grand["cache_read"],
-            hit_rate,
-            grand["completion"],
-            grand["reasoning"],
-        )
+    hit_rate = (
+        grand["cache_read_tokens"] / grand["prompt_tokens"] * 100
+        if grand["prompt_tokens"]
+        else 0
     )
-    print("daemon sessions ~$%.4f" % sessions)
+    fresh = max(grand["prompt_tokens"] - grand["cache_read_tokens"], 0)
+    print(
+        f"\ntokens : fresh={fresh} cached={grand['cache_read_tokens']} "
+        f"({hit_rate:.0f}% hit) out={grand['completion_tokens']} "
+        f"reasoning={grand['reasoning_tokens']}"
+    )
+    print(f"daemon sessions ~${sessions:.4f}")
     if unpriced_models:
         print(
-            "                 %d tokens at an unknown rate: %s"
-            % (
-                sum(unpriced_grand.values()),
-                ", ".join(sorted(unpriced_models)),
-            )
+            f"                 {sum(unpriced_grand.values())} tokens at an "
+            f"unknown rate: {', '.join(sorted(unpriced_models))}"
         )
 
     archive = httpx.get(
@@ -203,17 +217,18 @@ def main() -> int:
             archived_total += usd
         else:
             archived_unpriced += sum(usage.values())
-    print(
-        "archived       ~$%.4f  (%d deleted sessions%s)"
-        % (
-            archived_total,
-            archive.get("sessions", 0),
-            (
-                "; %d tokens at an unknown rate" % archived_unpriced
-                if archived_unpriced
-                else ""
-            ),
+    unarchived = len(archive.get("unarchived") or [])
+    if unarchived:
+        print(
+            f"                 {unarchived} deleted session(s) could not be "
+            "archived; the lifetime total is short by them"
         )
+    unpriced_note = (
+        f"; {archived_unpriced} tokens at an unknown rate" if archived_unpriced else ""
+    )
+    print(
+        f"archived       ~${archived_total:.4f}  "
+        f"({archive.get('sessions', 0)} deleted sessions{unpriced_note})"
     )
 
     try:
@@ -222,19 +237,19 @@ def main() -> int:
         # delegate.py makes single-shot calls with no cache reuse between them.
         delegated, _ = cost_for(
             d.get("model", "deepseek-flash"),
-            {"prompt": d["in"], "completion": d["out"]},
+            {"prompt_tokens": d["in"], "completion_tokens": d["out"]},
         )
-        print("delegate.py    ~$%.4f  (%d calls)" % (delegated, d["calls"]))
-        print("COMBINED       ~$%.4f" % (sessions + archived_total + delegated))
+        print(f"delegate.py    ~${delegated:.4f}  ({d['calls']} calls)")
+        print(f"COMBINED       ~${sessions + archived_total + delegated:.4f}")
     except OSError:
-        print("COMBINED       ~$%.4f" % (sessions + archived_total))
+        print(f"COMBINED       ~${sessions + archived_total:.4f}")
 
     versions = ", ".join(
         f"{name}@{card['version']}" for name, card in PRICE_TABLE.items()
     )
     print(
-        "\nEstimate only. Prices: %s. These are published rates applied to "
-        "reported tokens, not provider-confirmed charges." % versions
+        f"\nEstimate only. Prices: {versions}. These are published rates applied "
+        "to reported tokens, not provider-confirmed charges."
     )
     print("A model missing from the table is reported as a token count, not a price.")
     return 0

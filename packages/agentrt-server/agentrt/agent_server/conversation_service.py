@@ -57,7 +57,12 @@ from agentrt.agent_server.run_scope import (
 )
 from agentrt.agent_server.server_details_router import update_last_execution_time
 from agentrt.agent_server.skills_service import discover_profile_skills
-from agentrt.agent_server.spend_archive import fold_conversation, read_archive
+from agentrt.agent_server.spend_archive import (
+    SpendArchiveError,
+    fold_conversation,
+    read_archive,
+    record_unarchived,
+)
 from agentrt.agent_server.telemetry import (
     ConversationTelemetryContext,
     DiagnosticEventFactory,
@@ -940,6 +945,9 @@ class ConversationService:
     _admission_queue: list[UUID] = field(default_factory=list, init=False)
     _admission_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
     _idempotency_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    # Folding is a read-modify-write of one file, so concurrent deletes of
+    # different sessions must not interleave it.
+    _spend_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
     _admission_task: asyncio.Task | None = field(default=None, init=False)
 
     def _count_running_runs(self) -> int:
@@ -2380,20 +2388,38 @@ class ConversationService:
             # Fold the session's totals into the lifetime ledger before the
             # directory is removed: a total measured from the store falls when
             # its rows go, and the money does not come back.
+            # Folding happens before the directory goes. A failure does not
+            # block the delete -- a state read that fails should not leave an
+            # operator unable to remove a session -- but it is written into the
+            # ledger, so an under-reported lifetime total says so instead of
+            # looking complete.
             try:
-                # The stats live on the conversation state, not on the stored
-                # record.
-                fold_conversation(
-                    self.conversations_dir,
-                    (await event_service.get_state()).stats,
-                    at=utc_now().isoformat(),
-                )
-            except Exception:
-                logger.exception(
-                    "could not archive spend for %s; the delete proceeds and "
-                    "the lifetime total may under-report this session",
-                    conversation_id,
-                )
+                state_for_usage = await event_service.get_state()
+                async with self._spend_lock:
+                    fold_conversation(
+                        self.conversations_dir,
+                        state_for_usage.stats,
+                        at=utc_now().isoformat(),
+                        conversation_id=str(conversation_id),
+                    )
+            except Exception as exc:
+                logger.exception("could not archive spend for %s", conversation_id)
+                try:
+                    async with self._spend_lock:
+                        record_unarchived(
+                            self.conversations_dir,
+                            conversation_id=str(conversation_id),
+                            reason=type(exc).__name__,
+                            at=utc_now().isoformat(),
+                        )
+                except Exception as exc2:
+                    # Nothing was recorded anywhere, so this delete would lower
+                    # the total with no trace: refuse it instead.
+                    raise SpendArchiveError(
+                        f"refusing to delete {conversation_id}: its usage could "
+                        "not be archived and the gap could not be recorded "
+                        f"({type(exc2).__name__})"
+                    ) from exc2
 
             # Close the event service
             try:

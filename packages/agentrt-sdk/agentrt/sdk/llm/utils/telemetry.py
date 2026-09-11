@@ -44,6 +44,42 @@ class _RequestLocalProvenance:
         return copied
 
 
+class _RequestLocalTiming:
+    """First-token timing for one request, held per context.
+
+    One LLM instance runs the worker and the auto-title call concurrently (the
+    same reason `_RequestLocalProvenance` exists), so timing kept on the
+    instance is attributed to whichever call reads it first.
+    """
+
+    def __init__(self) -> None:
+        self._value: ContextVar[dict | None] = ContextVar(
+            "agentrt_request_timing", default=None
+        )
+
+    def start(self, *, at: float) -> None:
+        """Begin tracking, reusing the request's own start time."""
+        self._value.set({"req_start": at, "first": {}})
+
+    def note(self, *, reasoning: bool) -> None:
+        state = self._value.get()
+        if state is None:
+            return
+        state["first"].setdefault(reasoning, time.time())
+
+    def take(self) -> tuple[float, dict[bool, float]] | None:
+        state = self._value.get()
+        if state is None:
+            return None
+        self._value.set(None)
+        return state["req_start"], state["first"]
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_RequestLocalTiming":
+        copied = type(self)()
+        memo[id(self)] = copied
+        return copied
+
+
 class Telemetry(BaseModel):
     """
     Handles latency, token/cost accounting, and optional logging.
@@ -75,10 +111,9 @@ class Telemetry(BaseModel):
         default_factory=_RequestLocalProvenance
     )
     _last_latency: float = PrivateAttr(default=0.0)
-    # First token of each kind for the current request. Declared with a default
-    # so a response that never saw an on_request still reads as "nothing
-    # recorded" rather than raising.
-    _first_token_at: dict[bool, float] = PrivateAttr(default_factory=dict)
+    # First token of each kind, per request and per context. A response that
+    # never saw an on_request reads as "nothing recorded" rather than raising.
+    _timing: _RequestLocalTiming = PrivateAttr(default_factory=_RequestLocalTiming)
     _log_completions_callback: Callable[[str, str], None] | None = PrivateAttr(
         default=None
     )
@@ -116,18 +151,16 @@ class Telemetry(BaseModel):
     ) -> None:
         self._req_start = time.time()
         self._req_ctx = telemetry_ctx or {}
-        # Per-request: the first token of each kind, if one arrives.
-        self._first_token_at: dict[bool, float] = {}
+        self._timing.start(at=self._req_start)
         self._pending_provenance.set(provenance)
 
     def on_first_token(self, *, reasoning: bool) -> None:
         """Note when the first token of a kind arrived for this request.
 
-        Idempotent per kind: a later token never overwrites the first one.
+        Idempotent per kind: a later token never overwrites the first one. A
+        no-op when no request is in flight in this context.
         """
-        if self._req_start is None:
-            return
-        self._first_token_at.setdefault(reasoning, time.time())
+        self._timing.note(reasoning=reasoning)
 
     def on_response(
         self,
@@ -146,12 +179,13 @@ class Telemetry(BaseModel):
         self.metrics.add_response_latency(self._last_latency, response_id)
         # First-token timing is attached here because the response id is only
         # known once the call returns.
-        for reasoning, at in self._first_token_at.items():
-            self.metrics.add_first_token_latency(
-                at - (self._req_start or at),
-                reasoning=reasoning,
-                response_id=response_id,
-            )
+        timing = self._timing.take()
+        if timing is not None:
+            started, firsts = timing
+            for reasoning, at in firsts.items():
+                self.metrics.add_first_token_latency(
+                    at - started, reasoning=reasoning, response_id=response_id
+                )
         provenance = self._take_provenance(response_id)
 
         # 2) cost

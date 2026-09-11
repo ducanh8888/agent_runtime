@@ -1187,9 +1187,7 @@ class Client:
         if idempotency_key:
             body["idempotency_key"] = idempotency_key
         if attachments:
-            blocks = self._attachment_blocks(
-                attachments, workspace=workspace, permission=preset
-            )
+            blocks = self._attachment_blocks(attachments, workspace=workspace)
             body["initial_message"]["content"] = [
                 {"type": "text", "text": task},
                 *blocks,
@@ -1369,7 +1367,6 @@ class Client:
         attachments: list[str],
         *,
         workspace: str,
-        permission: str,
     ) -> list[dict]:
         """Typed image blocks for the initial message, guarded.
 
@@ -1377,6 +1374,10 @@ class Client:
         for one of the runtime's credential files, must sniff as an allowed
         image format, and must be within the size cap. Reading is enough: the
         session's permission does not have to grant writing.
+
+        The guard is applied as the workspace permission regardless of the
+        session's own preset. `broad` short-circuits `check_path`, so honouring
+        it here would embed any file on the machine into the message.
         """
         urls: list[str] = []
         for raw in attachments:
@@ -1384,7 +1385,8 @@ class Client:
                 resolved = permissions.check_path(
                     str(raw),
                     root=workspace,
-                    permission=permissions.normalise(permission),
+                    # Not the session's preset: see the docstring.
+                    permission="workspace",
                     writing=False,
                 )
             except permissions.PermissionDenied as exc:

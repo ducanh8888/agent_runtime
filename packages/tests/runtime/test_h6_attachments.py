@@ -127,3 +127,21 @@ def test_usage_is_read_through(tmp_path) -> None:
     assert payload["services"][0]["service_id"] == "worker"
     # Zero is reported as zero; an absent field is not the same thing.
     assert payload["services"][0]["raw"]["reasoning_tokens"] == 0
+
+
+def test_broad_permission_does_not_widen_the_attachment_root(tmp_path) -> None:
+    """A broad session still may not attach a file from outside its workspace."""
+    outside = tmp_path.parent / "elsewhere.png"
+    outside.write_bytes(PNG_BYTES)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    client, seen = _capturing_client()
+
+    with pytest.raises(
+        client_mod.ClientError, match="not readable from this workspace"
+    ):
+        client.dispatch(
+            "t", str(workspace), permission="broad", attachments=[str(outside)]
+        )
+
+    assert "body" not in seen

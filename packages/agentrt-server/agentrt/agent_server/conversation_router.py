@@ -51,6 +51,7 @@ from agentrt.agent_server.models import (
     UpdateSecretsRequest,
     trim_conversation_response_skills,
 )
+from agentrt.agent_server.spend_archive import SpendArchiveError
 from agentrt.agent_server.usage_projection import (
     ConversationUsage,
     project_conversation_usage,
@@ -399,7 +400,10 @@ async def delete_conversation(
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> Success:
     """Permanently delete a conversation."""
-    deleted = await conversation_service.delete_conversation(conversation_id)
+    try:
+        deleted = await conversation_service.delete_conversation(conversation_id)
+    except SpendArchiveError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     if not deleted:
         raise HTTPException(status.HTTP_400_BAD_REQUEST)
     return Success()
