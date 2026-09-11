@@ -48,6 +48,13 @@ AREAS: dict[str, list[str]] = {
         "tests/agent_server/test_h2_request_scope.py",
         "tests/agent_server/test_h3_finalize.py",
         "tests/agent_server/test_h5_admission.py",
+        # These build a mock `stored` record with explicit field values, so a
+        # new projected field is caught here or not at all: they were missed by
+        # the H4/H5 narrow runs and only the full suite failed.
+        "tests/agent_server/test_agent_profile_conv_start.py",
+        "tests/agent_server/test_agent_launch_additions.py",
+        "tests/agent_server/test_auto_title_span_metadata.py",
+        "tests/agent_server/test_deployment_llm_policy_wiring.py",
     ],
     "server-workspace": [
         "tests/agent_server/test_workspace_router.py",
