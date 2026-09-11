@@ -228,13 +228,11 @@ _READ_RETURNED_LINE_KEYS = (
 _READ_START_LINE_KEYS = ("start_line", "first_line", "returned_start_line")
 _READ_END_LINE_KEYS = ("end_line", "last_line", "returned_end_line")
 _READ_REQUESTED_CHAR_KEYS = (
-    "requested_range",
     "requested_chars",
     "requested_char_range",
     "requested_character_range",
 )
 _READ_RETURNED_CHAR_KEYS = (
-    "returned_range",
     "returned_chars",
     "returned_char_range",
     "returned_character_range",
@@ -252,6 +250,7 @@ _READ_TRUNCATED_KEYS = (
 _READ_DELIVERED_KEYS = ("delivered", "is_delivered", "llm_delivered", "in_llm_request")
 _READ_UNDERSTOOD_KEYS = ("understood", "is_understood", "model_understood")
 _READ_STATUS_KEYS = ("view_status",)
+_READ_PARTIAL_LINE_KEYS = ("partial_line",)
 
 _READ_METADATA_KEYS = (
     _READ_PATH_KEYS
@@ -269,6 +268,7 @@ _READ_METADATA_KEYS = (
     + _READ_DELIVERED_KEYS
     + _READ_UNDERSTOOD_KEYS
     + _READ_STATUS_KEYS
+    + _READ_PARTIAL_LINE_KEYS
 )
 
 #: Nested dicts under an observation or event that may carry read metadata.
@@ -439,6 +439,20 @@ def _as_range(value: object, *, dimension: str = "generic") -> dict | None:
     return result
 
 
+def _file_range_chars(value: object) -> dict | None:
+    """Meaningful line-relative character offsets from a FileRange payload."""
+    if not isinstance(value, dict):
+        return None
+    start = _as_int(value.get("start_char"))
+    end = _as_int(value.get("end_char"))
+    # FileRange serializes its default start_char=0 for every whole-line read.
+    # That default is not a file-level character range and must not be projected
+    # as one. A non-zero continuation or a bounded partial end is meaningful.
+    if (start is None or start == 0) and end is None:
+        return None
+    return {"start": start if start is not None else 0, "end": end}
+
+
 def _merge_ranges(ranges: list[dict], *, adjacent: bool) -> list[list[int]]:
     """Merge closed ranges that overlap (lines may also touch end to start)."""
     closed = sorted(
@@ -523,12 +537,10 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
     version = _read_value(containers, _READ_VERSION_KEYS)
     version_text = str(version) if isinstance(version, (str, int)) else None
 
-    requested_lines = _as_range(
-        _read_value(containers, _READ_REQUESTED_LINE_KEYS), dimension="lines"
-    )
-    returned_lines = _as_range(
-        _read_value(containers, _READ_RETURNED_LINE_KEYS), dimension="lines"
-    )
+    requested_value = _read_value(containers, _READ_REQUESTED_LINE_KEYS)
+    returned_value = _read_value(containers, _READ_RETURNED_LINE_KEYS)
+    requested_lines = _as_range(requested_value, dimension="lines")
+    returned_lines = _as_range(returned_value, dimension="lines")
     if returned_lines is None:
         start_line = _as_int(_read_value(containers, _READ_START_LINE_KEYS))
         if start_line is not None:
@@ -542,6 +554,12 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
     returned_chars = _as_range(
         _read_value(containers, _READ_RETURNED_CHAR_KEYS), dimension="chars"
     )
+    requested_file_chars = _file_range_chars(requested_value)
+    returned_file_chars = _file_range_chars(returned_value)
+    if requested_file_chars is not None:
+        requested_chars = requested_file_chars
+    if returned_file_chars is not None:
+        returned_chars = returned_file_chars
     if returned_chars is None:
         offset = _as_int(_read_value(containers, _READ_OFFSET_KEYS))
         length = _as_int(_read_value(containers, _READ_LENGTH_KEYS))
@@ -578,8 +596,16 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
         "version_known": version_text is not None,
         "requested": {"lines": requested_lines, "chars": requested_chars},
         "returned": {"lines": returned_lines, "chars": returned_chars},
+        "char_range_unit": (
+            "line_relative"
+            if returned_file_chars is not None
+            else "unspecified"
+            if returned_chars is not None
+            else None
+        ),
         "eof": _as_bool(_read_value(containers, _READ_EOF_KEYS)),
         "truncated": _as_bool(_read_value(containers, _READ_TRUNCATED_KEYS)),
+        "partial_line": _as_bool(_read_value(containers, _READ_PARTIAL_LINE_KEYS)),
         "stages": {
             "observed": "confirmed",
             "delivered": _stage_of(
@@ -625,12 +651,28 @@ def _group_reads(reads: list[dict]) -> list[dict]:
             read["returned"]["lines"]
             for read in included
             if read["returned"]["lines"] is not None
+            and read.get("char_range_unit") != "line_relative"
         ]
         chars = [
             read["returned"]["chars"]
             for read in included
             if read["returned"]["chars"] is not None
+            and read.get("char_range_unit") != "line_relative"
         ]
+        line_chars: dict[int, list[dict]] = {}
+        for read in included:
+            line_range = read["returned"]["lines"]
+            char_range = read["returned"]["chars"]
+            if (
+                read.get("char_range_unit") != "line_relative"
+                or not isinstance(line_range, dict)
+                or not isinstance(char_range, dict)
+                or line_range.get("start") != line_range.get("end")
+            ):
+                continue
+            line = line_range.get("start")
+            if isinstance(line, int):
+                line_chars.setdefault(line, []).append(char_range)
         result.append(
             {
                 "path": group["path"],
@@ -641,6 +683,16 @@ def _group_reads(reads: list[dict]) -> list[dict]:
                 "event_ids": [read["event_id"] for read in included],
                 "merged_lines": _merge_ranges(lines, adjacent=True),
                 "merged_chars": _merge_ranges(chars, adjacent=False),
+                "line_char_ranges": [
+                    {
+                        "line": line,
+                        "merged": _merge_ranges(ranges, adjacent=False),
+                        "open_ended": [
+                            item for item in ranges if item.get("end") is None
+                        ],
+                    }
+                    for line, ranges in sorted(line_chars.items())
+                ],
                 "open_ended_lines": [item for item in lines if item.get("open_end")],
                 "eof_confirmed": any(read["eof"] is True for read in included),
                 "truncation_observed": any(
@@ -661,16 +713,22 @@ def _group_reads(reads: list[dict]) -> list[dict]:
 
 
 def _repeated_reads(reads: list[dict]) -> list[dict]:
-    """Repeated requests for the same path and range, per observed version."""
+    """Repeated returned spans for the same path and observed version."""
     seen: dict[tuple, list[str]] = {}
     sample: dict[tuple, dict] = {}
     order: list[tuple] = []
     for read in reads:
-        lines = _range_key(read["requested"]["lines"])
-        chars = _range_key(read["requested"]["chars"])
+        returned = read["returned"]
+        basis = "returned"
+        lines = _range_key(returned["lines"])
+        chars = _range_key(returned["chars"])
+        if lines is None and chars is None:
+            basis = "requested"
+            lines = _range_key(read["requested"]["lines"])
+            chars = _range_key(read["requested"]["chars"])
         if lines is None and chars is None:
             continue
-        key = (read["path"], read.get("version"), lines, chars)
+        key = (read["path"], read.get("version"), basis, lines, chars)
         if key not in seen:
             seen[key] = []
             sample[key] = read
@@ -690,12 +748,14 @@ def _repeated_reads(reads: list[dict]) -> list[dict]:
                 "version": read.get("version"),
                 "version_known": version_known,
                 "requested": read["requested"],
+                "returned": read["returned"],
+                "range_basis": key[2],
                 "count": len(seen[key]),
                 "event_ids": seen[key],
                 "note": (
-                    "same requested range observed more than once"
+                    f"same {key[2]} range observed more than once"
                     if version_known
-                    else "same requested range observed more than once; "
+                    else f"same {key[2]} range observed more than once; "
                     "file version unverified"
                 ),
             }

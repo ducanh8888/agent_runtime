@@ -310,9 +310,11 @@ def read_evidence(
     ranges, EOF and truncation come from optional metadata on the observation.
     Where a source event did not record one, the value is null -- never guessed.
     Ranges are merged only between reads with the same explicit `version`; a
-    read with `version_known` false is never merged with another. `repeated_reads`
-    flags the same requested range observed more than once, which usually means
-    the agent re-read what it already had.
+    read with `version_known` false is never merged with another. FileEditor
+    character offsets are line-relative and are grouped under
+    `line_char_ranges`; partial-line spans are never promoted to whole-line
+    coverage. `repeated_reads` flags the same returned span observed more than
+    once, so ordinary continuation pages are not mislabeled as re-reads.
 
     Example use: after checking `artifacts`, call this to see whether the session
     read the file it claims to have reviewed, and whether it reached EOF or

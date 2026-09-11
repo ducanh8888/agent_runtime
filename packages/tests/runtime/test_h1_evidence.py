@@ -215,6 +215,7 @@ def test_reports_repeated_identical_reads() -> None:
     assert repeated["count"] == 2
     assert repeated["event_ids"] == ["e1", "e2"]
     assert repeated["version_known"] is True
+    assert repeated["range_basis"] == "returned"
 
 
 def test_never_invents_eof_or_ranges() -> None:
@@ -441,11 +442,11 @@ def test_projects_and_merges_the_actual_file_editor_paging_schema() -> None:
     assert read["version"] == "sha256-exact"
     assert read["requested"] == {
         "lines": {"start": 1, "end": 1200},
-        "chars": {"start": 0, "end": None},
+        "chars": None,
     }
     assert read["returned"] == {
         "lines": {"start": 1, "end": 500},
-        "chars": {"start": 0, "end": None},
+        "chars": None,
     }
     assert read["eof"] is False
     assert read["truncated"] is True
@@ -453,6 +454,60 @@ def test_projects_and_merges_the_actual_file_editor_paging_schema() -> None:
     assert len(read["metadata_keys"]) == len(set(read["metadata_keys"]))
     assert len(out["file_versions"]) == 1
     assert out["file_versions"][0]["merged_lines"] == [[1, 1200]]
+    assert out["repeated_reads"] == []
+
+
+def test_partial_line_ranges_are_not_claimed_as_whole_line_coverage() -> None:
+    events = []
+    for index, (start_char, end_char, partial, eof) in enumerate(
+        (
+            (0, 16000, True, False),
+            (16000, 32000, True, False),
+            (32000, None, False, True),
+        ),
+        start=1,
+    ):
+        observation = FileEditorObservation.from_text(
+            text="partial",
+            command="view",
+            path="/ws/long.txt",
+            requested_range=FileRange(start_line=1, end_line=1),
+            returned_range=FileRange(
+                start_line=1,
+                end_line=1,
+                start_char=start_char,
+                end_char=end_char,
+            ),
+            file_hash="long-hash",
+            eof=eof,
+            truncated=not eof,
+            partial_line=partial,
+        ).model_dump(mode="json", exclude_none=True)
+        events.append(
+            {
+                "kind": "ObservationEvent",
+                "id": f"partial-{index}",
+                "timestamp": f"2026-01-01T00:00:0{index}",
+                "tool_name": "file_editor",
+                "tool_call_id": f"call-partial-{index}",
+                "observation": observation,
+            }
+        )
+    out = _mock_client(
+        _make_handler(workspace="/ws", pages={None: (events, None)})
+    ).read_evidence(SESSION)
+
+    group = out["file_versions"][0]
+    assert group["merged_lines"] == []
+    assert group["merged_chars"] == []
+    assert group["line_char_ranges"] == [
+        {
+            "line": 1,
+            "merged": [[0, 32000]],
+            "open_ended": [{"start": 32000, "end": None}],
+        }
+    ]
+    assert out["repeated_reads"] == []
 
 
 @pytest.mark.parametrize("view_status", ["directory", "image"])
