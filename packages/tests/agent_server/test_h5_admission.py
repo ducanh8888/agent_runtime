@@ -7,10 +7,18 @@ from uuid import uuid4
 import pytest
 from pydantic import SecretStr
 
+from agentrt.agent_server import (
+    conversation_service as conversation_service_mod,
+    llm_slots as llm_slots_mod,
+)
 from agentrt.agent_server.conversation_service import (
     ConversationService,
     IdempotencyConflict,
     _ConversationRecord,
+)
+from agentrt.agent_server.llm_slots import (
+    ProviderSlots,
+    install_provider_slots,
 )
 from agentrt.agent_server.models import StoredConversation
 from agentrt.sdk import Agent
@@ -205,3 +213,107 @@ def test_a_request_without_a_key_never_replays(tmp_path) -> None:
     service = ConversationService(conversations_dir=tmp_path)
 
     assert service._find_by_idempotency_key(_request()) is None
+
+
+# --- provider slots -------------------------------------------------------
+
+
+class _Slots:
+    def __init__(self, limit: int, in_flight: int = 0) -> None:
+        self.limit = limit
+        self.in_flight = in_flight
+
+
+@pytest.mark.asyncio
+async def test_provider_slots_cap_concurrency() -> None:
+    import asyncio
+
+    slots = ProviderSlots(limit=1)
+    order: list[str] = []
+
+    async def worker(name: str, hold: float) -> None:
+        async with slots.lease():
+            order.append(f"{name}-in")
+            await asyncio.sleep(hold)
+            order.append(f"{name}-out")
+
+    await asyncio.gather(worker("a", 0.05), worker("b", 0.001))
+
+    # One slot: the second cannot enter before the first has left.
+    assert order == ["a-in", "a-out", "b-in", "b-out"]
+    assert slots.in_flight == 0
+
+
+@pytest.mark.asyncio
+async def test_provider_slots_allow_the_limit() -> None:
+    import asyncio
+
+    slots = ProviderSlots(limit=2)
+    barrier = asyncio.Event()
+
+    async def worker() -> None:
+        async with slots.lease():
+            if slots.in_flight == 2:
+                barrier.set()
+            await asyncio.wait_for(barrier.wait(), timeout=1)
+
+    await asyncio.gather(worker(), worker())
+    assert slots.in_flight == 0
+
+
+def test_install_provider_slots_is_a_noop_at_zero() -> None:
+    assert install_provider_slots(0) is None
+    assert install_provider_slots(-1) is None
+
+
+@pytest.mark.asyncio
+async def test_install_patches_the_transport_once() -> None:
+    from agentrt.sdk.llm.llm import LLM
+
+    original = LLM._atransport_call
+    try:
+        slots = install_provider_slots(1)
+        assert slots is not None
+        patched = LLM._atransport_call
+        assert patched is not original
+
+        # A second install updates the limit instead of stacking a patch.
+        again = install_provider_slots(3)
+        assert again is slots
+        assert LLM._atransport_call is patched
+        assert slots.limit == 3
+    finally:
+        LLM._atransport_call = original
+        llm_slots_mod._slots = None
+        llm_slots_mod._installed = False
+
+
+@pytest.mark.asyncio
+async def test_capacity_names_the_binding_llm_limit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        conversation_service_mod, "provider_slots", lambda: _Slots(4, in_flight=4)
+    )
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=10)
+    service._event_services = {}
+
+    surface = await service.capacity()
+
+    assert surface["llm_limit"] == 4
+    assert surface["in_flight_llm"] == 4
+    # The LLM cap is what is binding, not the run cap.
+    assert surface["limiting_dimension"] == "llm_requests"
+
+
+@pytest.mark.asyncio
+async def test_capacity_has_no_llm_limit_when_uninstalled(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(conversation_service_mod, "provider_slots", lambda: None)
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=5)
+    service._event_services = {}
+
+    surface = await service.capacity()
+
+    assert surface["llm_limit"] is None
+    assert surface["in_flight_llm"] == 0
+    assert surface["limiting_dimension"] == "runs"

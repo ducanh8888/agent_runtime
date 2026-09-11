@@ -32,6 +32,25 @@ ACPSkillSourcing = Literal["native", "openhands_managed"]
 _logger = logging.getLogger(__name__)
 
 
+MAX_INFLIGHT_LLM_ENV = "AGENTRT_MAX_INFLIGHT_LLM"
+
+
+def max_inflight_llm_requests() -> int:
+    """Concurrent in-flight LLM requests this process will allow.
+
+    Zero, the default, means the deployment does not cap them: the account's
+    own limit applies and is reported by the provider, not guessed here.
+    """
+    raw = os.getenv(MAX_INFLIGHT_LLM_ENV, "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        _logger.warning("%s is not an integer; ignoring it", MAX_INFLIGHT_LLM_ENV)
+        return 0
+
+
 FINALIZE_SUMMARY_ENV = "AGENTRT_FINALIZE_SUMMARY"
 
 

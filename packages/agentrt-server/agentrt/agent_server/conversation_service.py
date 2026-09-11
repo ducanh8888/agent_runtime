@@ -17,7 +17,12 @@ from weakref import WeakValueDictionary
 import httpx
 from pydantic import BaseModel
 
-from agentrt.agent_server.config import ACPSkillSourcing, Config, WebhookSpec
+from agentrt.agent_server.config import (
+    ACPSkillSourcing,
+    Config,
+    WebhookSpec,
+    max_inflight_llm_requests,
+)
 from agentrt.agent_server.conversation_lease import (
     DEFAULT_LEASE_TTL_SECONDS,
     ConversationLeaseHeldError,
@@ -32,6 +37,7 @@ from agentrt.agent_server.event_service import (
     EventService,
     _without_agent_context_secret,
 )
+from agentrt.agent_server.llm_slots import install_provider_slots, provider_slots
 from agentrt.agent_server.models import (
     ConversationInfo,
     ConversationPage,
@@ -1079,14 +1085,25 @@ class ConversationService:
         """
         used = self._count_running_runs()
         unbounded = self.max_concurrent_runs <= 0
+        slots = provider_slots()
+        in_flight = slots.in_flight if slots is not None else 0
+        llm_limit = slots.limit if slots is not None else None
+        if llm_limit is not None and in_flight >= llm_limit:
+            limiting_dimension = "llm_requests"
+        elif unbounded:
+            limiting_dimension = None
+        else:
+            limiting_dimension = "runs"
         return {
-            "limiting_dimension": None if unbounded else "runs",
+            "limiting_dimension": limiting_dimension,
             "limit": None if unbounded else self.max_concurrent_runs,
             "running": used,
             "queued": len(self._admission_queue),
             "available": (
                 None if unbounded else max(0, self.max_concurrent_runs - used)
             ),
+            "in_flight_llm": in_flight,
+            "llm_limit": llm_limit,
         }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:
@@ -2579,6 +2596,10 @@ class ConversationService:
                     conversation_id,
                     stack_info=True,
                 )
+
+        # Deployment-level provider cap, installed once per process. Zero
+        # leaves the SDK's own behaviour alone.
+        install_provider_slots(max_inflight_llm_requests())
 
         self._rebuild_admission_queue()
         self._admission_task = asyncio.create_task(self._admission_loop())

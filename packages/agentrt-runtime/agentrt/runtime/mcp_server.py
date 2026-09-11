@@ -304,9 +304,16 @@ def capacity() -> dict:
     """Report how much work the daemon will admit right now.
 
     `running`, `limit` and `available` describe run slots; `queued` is accepted
-    work waiting for one, in submission order. `limiting_dimension` names the
-    binding cap, or is null when the run cap is disabled -- and then `available`
-    is null too, because "unbounded" is not a number to subtract from.
+    work waiting for one, in submission order. `in_flight_llm` and `llm_limit`
+    describe concurrent provider requests when the deployment caps them
+    (`AGENTRT_MAX_INFLIGHT_LLM`; null when it does not). `limiting_dimension`
+    names whichever cap is binding, or is null when none is -- and then
+    `available` is null too, because "unbounded" is not a number to subtract
+    from.
+
+    The LLM slot is held for one transport call, not across a retry's backoff
+    sleep: a request waiting to retry a 429 should not be occupying the capacity
+    it is waiting to use.
 
     A full pool does not refuse a dispatch: the input is persisted and queued.
     This call is how you see that backlog instead of inferring it from refusals.
