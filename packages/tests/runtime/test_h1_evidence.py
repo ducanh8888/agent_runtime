@@ -450,6 +450,7 @@ def test_projects_and_merges_the_actual_file_editor_paging_schema() -> None:
     assert read["eof"] is False
     assert read["truncated"] is True
     assert "page_content" not in read
+    assert len(read["metadata_keys"]) == len(set(read["metadata_keys"]))
     assert len(out["file_versions"]) == 1
     assert out["file_versions"][0]["merged_lines"] == [[1, 1200]]
 

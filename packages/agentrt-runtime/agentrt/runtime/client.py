@@ -312,7 +312,7 @@ def _read_value(containers: list[dict], keys: tuple[str, ...]) -> object:
 def _present_keys(containers: list[dict], keys: tuple[str, ...]) -> list[str]:
     """Names from ``keys`` that appear with a non-None value anywhere."""
     found: list[str] = []
-    for key in keys:
+    for key in dict.fromkeys(keys):
         for container in containers:
             if key in container and container[key] is not None:
                 found.append(key)
