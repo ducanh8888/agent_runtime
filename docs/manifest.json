@@ -6,6 +6,7 @@
   "documents": [
     {"id": "guide.migration", "path": "docs/guides/migration.md", "type": "guide", "lifecycle": "current", "authority": "normative"},
     {"id": "guide.orchestration", "path": "docs/guides/orchestration.md", "type": "guide", "lifecycle": "current", "authority": "normative"},
+    {"id": "guide.testing", "path": "docs/guides/testing.md", "type": "guide", "lifecycle": "current", "authority": "normative"},
     {"id": "plan.deepseek-hardening", "path": "docs/plans/deepseek-hardening.md", "type": "plan", "lifecycle": "active", "authority": "normative"},
     {"id": "plan.initial-runtime", "path": "docs/plans/initial-runtime.md", "type": "plan", "lifecycle": "historical", "authority": "informative"},
     {"id": "reference.daemon-behavior", "path": "docs/reference/daemon-behavior.md", "type": "reference", "lifecycle": "current", "authority": "reference"},
