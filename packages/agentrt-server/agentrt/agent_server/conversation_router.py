@@ -175,6 +175,33 @@ async def count_conversations(
     return count
 
 
+@conversation_router.get("/spend-archive")
+async def get_spend_archive(
+    conversation_service: ConversationService = Depends(get_conversation_service),
+) -> dict:
+    """The lifetime token ledger.
+
+    Token counts per model for sessions that have been deleted. Kept because a
+    total measured from the conversation store falls when a session is removed
+    and the money does not come back. Declared before ``/{conversation_id}``.
+    """
+    return conversation_service.spend_archive()
+
+
+@conversation_router.delete("/spend-archive")
+async def purge_spend_archive(
+    conversation_service: ConversationService = Depends(get_conversation_service),
+) -> Success:
+    """Discard the lifetime ledger.
+
+    Explicit and separate from deleting a session: this is the only operation
+    that may lower a lifetime total, and it is not something a cleanup does by
+    accident.
+    """
+    conversation_service.purge_spend_archive(conversation_service.conversations_dir)
+    return Success()
+
+
 @conversation_router.get("/capacity")
 async def get_capacity(
     conversation_service: ConversationService = Depends(get_conversation_service),

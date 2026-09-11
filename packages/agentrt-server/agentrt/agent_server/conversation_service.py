@@ -57,6 +57,7 @@ from agentrt.agent_server.run_scope import (
 )
 from agentrt.agent_server.server_details_router import update_last_execution_time
 from agentrt.agent_server.skills_service import discover_profile_skills
+from agentrt.agent_server.spend_archive import fold_conversation, read_archive
 from agentrt.agent_server.telemetry import (
     ConversationTelemetryContext,
     DiagnosticEventFactory,
@@ -1087,6 +1088,17 @@ class ConversationService:
                 or ""
             ),
         )
+
+    def spend_archive(self) -> dict:
+        """The lifetime ledger, which session deletion does not reach."""
+        return read_archive(self.conversations_dir)
+
+    @staticmethod
+    def purge_spend_archive(conversations_dir) -> bool:
+        """Remove the lifetime ledger. Explicit, and not part of any delete."""
+        from agentrt.agent_server.spend_archive import purge
+
+        return purge(conversations_dir)
 
     async def capacity(self) -> dict[str, int | str | None]:
         """Report the admission surface.
@@ -2363,6 +2375,24 @@ class ConversationService:
             except Exception as e:
                 logger.warning(
                     f"Failed to notify webhooks for conversation {conversation_id}: {e}"
+                )
+
+            # Fold the session's totals into the lifetime ledger before the
+            # directory is removed: a total measured from the store falls when
+            # its rows go, and the money does not come back.
+            try:
+                # The stats live on the conversation state, not on the stored
+                # record.
+                fold_conversation(
+                    self.conversations_dir,
+                    (await event_service.get_state()).stats,
+                    at=utc_now().isoformat(),
+                )
+            except Exception:
+                logger.exception(
+                    "could not archive spend for %s; the delete proceeds and "
+                    "the lifetime total may under-report this session",
+                    conversation_id,
                 )
 
             # Close the event service
