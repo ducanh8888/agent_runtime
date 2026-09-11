@@ -549,6 +549,7 @@ class FileEditor:
             view_status=self._page_status(page, more),
             requested_range=FileRange(start_line=req_start, end_line=requested_end),
             returned_range=page.returned_range,
+            page_content=page.page_content,
             eof=eof,
             truncated=more,
             partial_line=page.partial,
@@ -646,7 +647,7 @@ class FileEditor:
         encoding: str,
         warning: str | None,
     ) -> FileEditorObservation:
-        output = self._make_output("", str(path), 1)
+        output = f"Here's the result of running `cat -n` on {path}:\n"
         output += "\nNOTE: The file is empty (0 bytes; 0 lines).\n"
         if warning:
             output = f"NOTE: {warning}\n{output}"
@@ -658,6 +659,7 @@ class FileEditor:
             view_status="empty",
             requested_range=None,
             returned_range=None,
+            page_content="",
             eof=True,
             truncated=False,
             partial_line=False,

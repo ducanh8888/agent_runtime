@@ -132,6 +132,7 @@ _DIFF_LIKE_SUBCOMMANDS = frozenset({"diff", "log", "show"})
 # hooks path points at the null device (a non-directory), so no hook can run.
 _READONLY_HARDENING_CONFIG: tuple[str, ...] = (
     "diff.external=",
+    "credential.helper=",
     "core.fsmonitor=false",
     "core.hooksPath=" + os.devnull,
     "core.pager=cat",
@@ -151,21 +152,24 @@ def _readonly_git_env() -> dict[str, str]:
     driver. Config injected through ``GIT_CONFIG_COUNT``/``GIT_CONFIG_KEY_n``
     env vars is stripped for the same reason.
     """
-    env = dict(os.environ)
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    env["GIT_OPTIONAL_LOCKS"] = "0"
-    env["GIT_PAGER"] = "cat"
+    # Drop every ambient GIT_* variable before adding the few fixed values this
+    # runner owns. Besides injected config, GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE
+    # and object-directory variables can redirect a nominal read to a different
+    # repository or index.
+    env = {
+        name: value for name, value in os.environ.items() if not name.startswith("GIT_")
+    }
+    env.update(
+        {
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_PAGER": "cat",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_ATTR_NOSYSTEM": "1",
+        }
+    )
     env["PAGER"] = "cat"
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env.pop("GIT_EXTERNAL_DIFF", None)
-    env.pop("GIT_CONFIG", None)
-    env.pop("GIT_CONFIG_PARAMETERS", None)
-    env.pop("GIT_CONFIG_COUNT", None)
-    for key in [
-        k for k in env if k.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
-    ]:
-        env.pop(key, None)
     return env
 
 

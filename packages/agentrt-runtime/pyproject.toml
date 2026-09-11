@@ -25,6 +25,10 @@ dependencies = [
     # clean install and the MCP server fails to start. packages/uv.lock already
     # pins 1.28.1; this makes a standalone `uv tool install` agree with it.
     "mcp>=1.28,<2",
+    # The inspect preset accepts regular expressions from an untrusted worker.
+    # Python's stdlib engine has no timeout; regex provides a hard per-match
+    # deadline so a catastrophic pattern cannot stall the daemon.
+    "regex>=2025.9.18",
 ]
 
 [tool.setuptools.packages.find]

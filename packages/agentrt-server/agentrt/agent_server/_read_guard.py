@@ -17,8 +17,6 @@ copied secrets.
 from __future__ import annotations
 
 import stat
-import threading
-import time
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -30,21 +28,18 @@ from agentrt.sdk.utils.path import get_user_persistence_dir
 # Credential-bearing files under the user persistence dir (settings/secrets) and
 # its credential subdirectories. The provider-connections store keeps its keys
 # in one JSON file per directory, hence the glob.
-_PERSISTENCE_CREDENTIAL_FILES = ("settings.json", "secrets.json")
+_PERSISTENCE_CREDENTIAL_FILES = (
+    ".env",
+    "daemon.json",
+    "settings.json",
+    "secrets.json",
+)
 _PERSISTENCE_CREDENTIAL_DIRS = ("provider-connections", "profiles", "agent-profiles")
 
 # Per-conversation state files that can carry agent/LLM state.
 _CONVERSATION_STATE_FILES = ("meta.json", "base_state.json")
 
 Inode = tuple[int, int]
-
-# A read request must not pay an O(conversations) directory walk every time, so
-# the protected-inode scan is cached briefly. The window only delays protecting a
-# credential file created moments before a read; persistence/conversations paths
-# are part of the key, so separate server instances never share entries.
-_INODE_CACHE_TTL_SECONDS = 5.0
-_inode_cache_lock = threading.Lock()
-_inode_cache: dict[tuple[str, str], tuple[float, frozenset[Inode]]] = {}
 
 
 def _resolve_config(config: Config | None) -> Config:
@@ -55,8 +50,8 @@ def protected_state_paths(config: Config | None = None) -> list[Path]:
     """Existing server-owned credential files, resolved.
 
     Best-effort: unreadable or missing paths are skipped so a scan never turns a
-    read request into a 500. Not used on the hot read path (see
-    :func:`protected_state_inodes`), which avoids resolving every candidate.
+    read request into a 500. The hot read path compares inode identities instead
+    of resolving every protected path.
     """
     resolved: list[Path] = []
     for path in _candidate_state_paths(config):
@@ -104,31 +99,46 @@ def _inode(path: Path) -> Inode | None:
     return (stat_result.st_dev, stat_result.st_ino)
 
 
+def _is_protected_state_location(candidate: Path, config: Config | None) -> bool:
+    """Whether a resolved path names a protected state location.
+
+    Unlike inode matching, this also protects a credential file before it has
+    been created. That matters to write routes: uploading directly to a missing
+    ``settings.json`` must not be the operation that creates it.
+    """
+    try:
+        resolved = candidate.resolve(strict=False)
+        persistence = get_user_persistence_dir().resolve(strict=False)
+        conversations = _resolve_config(config).conversations_path.resolve(strict=False)
+    except OSError:
+        return False
+
+    if (
+        resolved.parent == persistence
+        and resolved.name in _PERSISTENCE_CREDENTIAL_FILES
+    ):
+        return True
+    if resolved.suffix == ".json" and resolved.parent.parent == persistence:
+        if resolved.parent.name in _PERSISTENCE_CREDENTIAL_DIRS:
+            return True
+    if (
+        resolved.name in _CONVERSATION_STATE_FILES
+        and resolved.parent.parent == conversations
+    ):
+        return True
+    return False
+
+
 def protected_state_inodes(config: Config | None = None) -> set[Inode]:
     """Inodes of the existing server-owned credential files.
 
-    Scans the persistence dir and every conversation dir, so the result is
-    cached briefly: a read request must not pay an O(conversations) directory
-    walk on every file. ``AGENTRT_PERSISTENCE_DIR`` and the conversations path
-    are part of the cache key, so distinct server instances never share state.
+    Recomputed for every read. Correctness is more important than caching here:
+    a newly written credential or conversation state file must be protected on
+    its first read attempt, not after a time window expires. A future cache may
+    only be introduced with write-side invalidation owned by every persistence
+    writer.
     """
-    key = (
-        str(get_user_persistence_dir()),
-        str(_resolve_config(config).conversations_path),
-    )
-    now = time.monotonic()
-    with _inode_cache_lock:
-        entry = _inode_cache.get(key)
-        if entry is not None and entry[0] > now:
-            return set(entry[1])
-
-    inodes = _scan_protected_state_inodes(config)
-    with _inode_cache_lock:
-        _inode_cache[key] = (now + _INODE_CACHE_TTL_SECONDS, frozenset(inodes))
-        expired = [k for k, (expiry, _) in _inode_cache.items() if expiry <= now]
-        for expired_key in expired:
-            del _inode_cache[expired_key]
-    return inodes
+    return _scan_protected_state_inodes(config)
 
 
 def _scan_protected_state_inodes(config: Config | None) -> set[Inode]:
@@ -146,6 +156,8 @@ def is_protected_state_path(candidate: Path, config: Config | None = None) -> bo
     Comparing inodes (rather than resolved paths) also catches symlinks and hard
     links to the protected files without resolving every protected path.
     """
+    if _is_protected_state_location(candidate, config):
+        return True
     candidate_inode = _inode(candidate)
     if candidate_inode is None:
         return False

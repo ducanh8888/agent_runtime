@@ -69,6 +69,7 @@ class Page(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     lines: list[tuple[int, str]]
+    page_content: str
     returned_range: FileRange | None
     partial: bool
     truncated: bool
@@ -148,12 +149,12 @@ def scan_file(path: Path, chunk_size: int = 1 << 16) -> FileScan:
     )
 
 
-def _strip_terminator(line: str) -> str:
+def _split_terminator(line: str) -> tuple[str, str]:
     if line.endswith("\r\n"):
-        return line[:-2]
+        return line[:-2], "\r\n"
     if line.endswith("\n") or line.endswith("\r"):
-        return line[:-1]
-    return line
+        return line[:-1], line[-1]
+    return line, ""
 
 
 def read_page(
@@ -172,7 +173,9 @@ def read_page(
     ``next_char`` always advances past ``start_char`` so callers cannot loop.
     """
     out: list[tuple[int, str]] = []
+    raw_out: list[str] = []
     used = 0
+    rendered_used = 0
     partial = False
     next_line: int | None = None
     next_char = 0
@@ -186,14 +189,21 @@ def read_page(
             if req_end is not None and lineno > req_end:
                 break
 
-            content = _strip_terminator(raw)
+            content, terminator = _split_terminator(raw)
             offset = start_char if lineno == start_line else 0
             if offset:
                 if offset >= len(content):
                     continue
                 content = content[offset:]
 
-            if len(out) >= max_lines or (used + len(content) > char_budget and out):
+            rendered_cost = len(f"{lineno:6}\t") + len(content) + 1
+            if len(out) >= max_lines or (
+                out
+                and (
+                    used + len(content) > char_budget
+                    or rendered_used + rendered_cost > char_budget
+                )
+            ):
                 next_line = lineno
                 next_char = 0
                 break
@@ -201,13 +211,16 @@ def read_page(
                 room = max(1, char_budget - used)
                 piece = content[:room]
                 out.append((lineno, piece))
+                raw_out.append(piece)
                 partial = True
                 next_line = lineno
                 next_char = offset + len(piece)
                 break
 
             out.append((lineno, content))
+            raw_out.append(content + terminator)
             used += len(content)
+            rendered_used += rendered_cost
 
     returned_range: FileRange | None = None
     if out:
@@ -221,6 +234,7 @@ def read_page(
 
     return Page(
         lines=out,
+        page_content="".join(raw_out),
         returned_range=returned_range,
         partial=partial,
         truncated=next_line is not None,
@@ -287,7 +301,7 @@ def decode_cursor(token: str) -> dict[str, Any]:
 
     signature = body.get("sig")
     if not isinstance(signature, str) or signature != _signature(body):
-        raise InvalidCursorError("integrity check failed")
+        raise InvalidCursorError("checksum mismatch")
 
     if body.get("v") != CURSOR_VERSION:
         raise InvalidCursorError("unsupported cursor version")

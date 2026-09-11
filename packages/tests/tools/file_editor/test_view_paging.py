@@ -70,6 +70,7 @@ def test_paged_view_reconstructs_long_file(tmp_path):
     assert recovered == expected
     assert _numbered_lines(pages[0])[-1] == (500, "line 500")
     assert _numbered_lines(pages[1])[0] == (501, "line 501")
+    assert "".join(page.page_content for page in pages) == path.read_text()
 
 
 def test_small_file_single_page_has_no_phantom_line(tmp_path):
@@ -104,6 +105,7 @@ def test_long_single_line_continuation_always_advances(tmp_path):
     assert "partial line" in pages[0].text
     assert "continues at character 16000" in pages[0].text
     assert pages[-1].eof is True
+    assert "".join(page.page_content for page in pages) == path.read_text()
 
 
 def test_partial_line_offsets_are_characters_not_bytes(tmp_path):
@@ -121,6 +123,7 @@ def test_partial_line_offsets_are_characters_not_bytes(tmp_path):
         content for page in pages for _, content in _numbered_lines(page)
     )
     assert recovered == content
+    assert "".join(page.page_content for page in pages) == path.read_text()
 
 
 def test_unicode_line_numbers_and_reconstruction(tmp_path):
@@ -145,6 +148,7 @@ def test_crlf_metadata_and_numbering(tmp_path):
     assert result.has_final_newline is True
     assert result.line_count == 3
     assert _numbered_lines(result) == [(1, "alpha"), (2, "beta"), (3, "gamma")]
+    assert result.page_content == path.read_bytes().decode("utf-8")
 
 
 def test_missing_final_newline_counts_last_line(tmp_path):
@@ -157,6 +161,7 @@ def test_missing_final_newline_counts_last_line(tmp_path):
     assert result.has_final_newline is False
     assert result.line_count == 2
     assert _numbered_lines(result) == [(1, "alpha"), (2, "beta")]
+    assert result.page_content == "alpha\r\nbeta"
 
 
 def test_empty_file_is_explicit(tmp_path):
@@ -172,8 +177,31 @@ def test_empty_file_is_explicit(tmp_path):
     assert result.file_size == 0
     assert result.returned_range is None
     assert "empty" in result.text.lower()
-    # Backwards compatible with the historical empty-line rendering.
-    assert "1\t" in result.text
+    assert result.page_content == ""
+    assert "1\t" not in result.text
+
+
+def test_repetitive_utf8_is_not_misdetected(tmp_path):
+    path = tmp_path / "repetitive-utf8.txt"
+    expected = "café 世界 ✓\n" * 800
+    path.write_text(expected, encoding="utf-8", newline="")
+
+    pages = _collect_pages(path, max_lines=113)
+
+    assert all(page.encoding == "utf-8" for page in pages)
+    assert "".join(page.page_content for page in pages) == expected
+
+
+def test_blank_lines_are_bounded_even_with_large_max_lines(tmp_path):
+    path = tmp_path / "blank-lines.txt"
+    path.write_text("\n" * 50000, encoding="utf-8")
+
+    first = file_editor(command="view", path=str(path), max_lines=100000)
+
+    assert first.cursor is not None
+    assert first.truncated is True
+    assert len(first.text) < 20000
+    assert first.returned_range.end_line < 50000
 
 
 def test_binary_file_is_typed(tmp_path):

@@ -9,6 +9,7 @@ the returned observation, not against a prompt.
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -178,6 +179,48 @@ def test_search_refuses_a_hard_link_to_the_runtime_credential(
     assert obs.files_scanned == 2
 
 
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "settings.json",
+        "secrets.json",
+        "provider-connections/provider_connections.json",
+        "agent-profiles/inspect.json",
+        "conversations/session-a/meta.json",
+        "conversations/session-a/base_state.json",
+    ],
+)
+def test_inspect_refuses_every_runtime_state_alias(
+    state_dir: Path, workspace: Path, relative: str
+) -> None:
+    protected = state_dir / relative
+    protected.parent.mkdir(parents=True, exist_ok=True)
+    protected.write_text('{"secret": "DO-NOT-LEAK"}', encoding="utf-8")
+    alias = workspace / "alias.json"
+    alias.hardlink_to(protected)
+
+    with pytest.raises(permissions.PermissionDenied):
+        permissions.check_path(
+            str(alias), root=workspace, permission="inspect", writing=False
+        )
+
+
+def test_inspect_allows_unrelated_hard_link(
+    state_dir: Path, workspace: Path, tmp_path: Path
+) -> None:
+    public = tmp_path / "public.txt"
+    public.write_text("safe", encoding="utf-8")
+    alias = workspace / "public-link.txt"
+    alias.hardlink_to(public)
+
+    assert (
+        permissions.check_path(
+            str(alias), root=workspace, permission="inspect", writing=False
+        )
+        == alias.resolve()
+    )
+
+
 def test_search_does_not_descend_git_metadata(state_dir: Path, workspace: Path) -> None:
     # A remote URL in .git/config can embed a credential; search must not read it.
     git_dir = workspace / ".git"
@@ -215,6 +258,60 @@ def test_search_cursor_advances_and_reports_continuation(
         )
     )
     assert [m.line for m in second.matches] == [3, 4]
+
+
+def test_pathological_regex_cannot_stall_the_runtime(
+    state_dir: Path, workspace: Path
+) -> None:
+    (workspace / "pathological.txt").write_text(
+        "a" * (inspect_tools.MAX_LINE_CHARS - 1) + "X\n", encoding="utf-8"
+    )
+    started = time.monotonic()
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern=r"^(a+)+$")
+    )
+
+    assert time.monotonic() - started < 1.0
+    assert obs.is_error is True
+    assert "deadline" in obs.text.lower()
+
+
+def test_search_structured_output_obeys_the_budget(
+    state_dir: Path, workspace: Path
+) -> None:
+    large = "x" * (inspect_tools.MAX_LINE_CHARS - 1000)
+    (workspace / "large.txt").write_text(
+        "\n".join([large] * 100) + "\n", encoding="utf-8"
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(
+            command="search",
+            pattern="x",
+            context_lines=5,
+            max_results=100,
+        )
+    )
+
+    assert len(obs.model_dump_json()) <= inspect_tools.MAX_OUTPUT_CHARS
+    assert obs.truncated is True
+    assert obs.next_offset is not None
+
+
+def test_oversized_file_marks_search_incomplete(
+    state_dir: Path, workspace: Path
+) -> None:
+    (workspace / "oversized.txt").write_bytes(
+        b"needle" + b"x" * inspect_tools.MAX_FILE_BYTES
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="needle")
+    )
+
+    assert obs.match_count == 0
+    assert obs.truncated is True
 
 
 # -- mutation attempts -------------------------------------------------

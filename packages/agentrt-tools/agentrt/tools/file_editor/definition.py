@@ -71,7 +71,8 @@ class FileEditorAction(Action):
         "of the same file. Pass it back to read the next page. The cursor is "
         "bound to the file's identity, content version and view options, so it "
         "is rejected with a typed `file_changed` result if the file changed. "
-        "Cannot be combined with `view_range`.",
+        "It is a continuity token, not an authorization boundary, and cannot "
+        "be combined with `view_range`.",
     )
     max_lines: int | None = Field(
         default=None,
@@ -121,6 +122,12 @@ class FileEditorObservation(Observation):
         default=None,
         description="The line/character span actually returned. For a partial "
         "line, `end_char` marks where the next page continues.",
+    )
+    page_content: str | None = Field(
+        default=None,
+        description="Exact decoded source represented by this page, including "
+        "its original line terminators. Concatenating consecutive pages for "
+        "one file version reconstructs the decoded file exactly.",
     )
     eof: bool | None = Field(
         default=None, description="Whether the returned page reached end of file."
@@ -240,7 +247,7 @@ TOOL_DESCRIPTION = """Custom editing tool for viewing, creating and editing file
 * If `path` is a text file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
 * The `create` command cannot be used if the specified `path` already exists as a file
 * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
-* `view` returns whole-line pages and reports `requested_range`, `returned_range`, `eof`, `truncated`, the detected `encoding`/`newline`, and a continuation `cursor` when more content remains. Pass that `cursor` back to read the next page; if the file was modified since the page was read, the result is a typed `file_changed` and you must re-run `view` without the cursor. A line too long for one page is returned partially with a `partial_line` cursor that continues inside the line.
+* `view` returns whole-line pages and reports `requested_range`, `returned_range`, `eof`, `truncated`, the detected `encoding`/`newline`, and a continuation `cursor` when more content remains. Pass that `cursor` back to read the next page; if the file was modified since the page was read, the result is a typed `file_changed` and you must re-run `view` without the cursor. The cursor is a continuity token, not an authorization boundary. A line too long for one page is returned partially with a `partial_line` cursor that continues inside the line.
 * The `undo_edit` command will revert the last edit made to the file at `path`
 * This tool can be used for creating and editing files in plain-text format.
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -202,6 +203,7 @@ READ_STAGES = ("observed", "delivered", "understood")
 #: range, EOF, or hash.
 _READ_PATH_KEYS = ("path", "file", "file_path", "filename")
 _READ_VERSION_KEYS = (
+    "file_hash",
     "file_version",
     "version",
     "content_hash",
@@ -217,6 +219,7 @@ _READ_REQUESTED_LINE_KEYS = (
     "requested_range",
 )
 _READ_RETURNED_LINE_KEYS = (
+    "returned_range",
     "returned_lines",
     "returned_line_range",
     "line_range",
@@ -225,11 +228,13 @@ _READ_RETURNED_LINE_KEYS = (
 _READ_START_LINE_KEYS = ("start_line", "first_line", "returned_start_line")
 _READ_END_LINE_KEYS = ("end_line", "last_line", "returned_end_line")
 _READ_REQUESTED_CHAR_KEYS = (
+    "requested_range",
     "requested_chars",
     "requested_char_range",
     "requested_character_range",
 )
 _READ_RETURNED_CHAR_KEYS = (
+    "returned_range",
     "returned_chars",
     "returned_char_range",
     "returned_character_range",
@@ -246,6 +251,7 @@ _READ_TRUNCATED_KEYS = (
 )
 _READ_DELIVERED_KEYS = ("delivered", "is_delivered", "llm_delivered", "in_llm_request")
 _READ_UNDERSTOOD_KEYS = ("understood", "is_understood", "model_understood")
+_READ_STATUS_KEYS = ("view_status",)
 
 _READ_METADATA_KEYS = (
     _READ_PATH_KEYS
@@ -262,6 +268,7 @@ _READ_METADATA_KEYS = (
     + _READ_TRUNCATED_KEYS
     + _READ_DELIVERED_KEYS
     + _READ_UNDERSTOOD_KEYS
+    + _READ_STATUS_KEYS
 )
 
 #: Nested dicts under an observation or event that may carry read metadata.
@@ -351,7 +358,7 @@ def _as_bool(value: object) -> bool | None:
     return None
 
 
-def _as_range(value: object) -> dict | None:
+def _as_range(value: object, *, dimension: str = "generic") -> dict | None:
     """Normalise a range to ``{"start", "end"}`` without inventing an end.
 
     Accepts the shapes a persisted payload plausibly uses: a two-element list, a
@@ -363,8 +370,49 @@ def _as_range(value: object) -> dict | None:
     end: int | None = None
     length: int | None = None
     if isinstance(value, dict):
-        start = _first_int(value, ("start", "from", "first", "begin", "min", "gte"))
-        end = _first_int(value, ("end", "to", "last", "max", "lt", "finish"))
+        if dimension == "lines":
+            start_keys = (
+                "start_line",
+                "start",
+                "from",
+                "first",
+                "begin",
+                "min",
+                "gte",
+            )
+            end_keys = (
+                "end_line",
+                "end",
+                "to",
+                "last",
+                "max",
+                "lt",
+                "finish",
+            )
+        elif dimension == "chars":
+            start_keys = (
+                "start_char",
+                "start",
+                "from",
+                "first",
+                "begin",
+                "min",
+                "gte",
+            )
+            end_keys = (
+                "end_char",
+                "end",
+                "to",
+                "last",
+                "max",
+                "lt",
+                "finish",
+            )
+        else:
+            start_keys = ("start", "from", "first", "begin", "min", "gte")
+            end_keys = ("end", "to", "last", "max", "lt", "finish")
+        start = _first_int(value, start_keys)
+        end = _first_int(value, end_keys)
         length = _first_int(value, ("length", "count", "size"))
     elif isinstance(value, (list, tuple)) and len(value) >= 2:
         start = _as_int(value[0])
@@ -462,6 +510,8 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
         return None
     if _as_bool(observation.get("is_error")) is True:
         return None
+    if observation.get("view_status") in {"directory", "image"}:
+        return None
     command = observation.get("command")
     if command is None:
         command = event.get("command")
@@ -473,8 +523,12 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
     version = _read_value(containers, _READ_VERSION_KEYS)
     version_text = str(version) if isinstance(version, (str, int)) else None
 
-    requested_lines = _as_range(_read_value(containers, _READ_REQUESTED_LINE_KEYS))
-    returned_lines = _as_range(_read_value(containers, _READ_RETURNED_LINE_KEYS))
+    requested_lines = _as_range(
+        _read_value(containers, _READ_REQUESTED_LINE_KEYS), dimension="lines"
+    )
+    returned_lines = _as_range(
+        _read_value(containers, _READ_RETURNED_LINE_KEYS), dimension="lines"
+    )
     if returned_lines is None:
         start_line = _as_int(_read_value(containers, _READ_START_LINE_KEYS))
         if start_line is not None:
@@ -482,8 +536,12 @@ def _project_read(event: dict, workspace: str | None) -> dict | None:
                 "start": start_line,
                 "end": _as_int(_read_value(containers, _READ_END_LINE_KEYS)),
             }
-    requested_chars = _as_range(_read_value(containers, _READ_REQUESTED_CHAR_KEYS))
-    returned_chars = _as_range(_read_value(containers, _READ_RETURNED_CHAR_KEYS))
+    requested_chars = _as_range(
+        _read_value(containers, _READ_REQUESTED_CHAR_KEYS), dimension="chars"
+    )
+    returned_chars = _as_range(
+        _read_value(containers, _READ_RETURNED_CHAR_KEYS), dimension="chars"
+    )
     if returned_chars is None:
         offset = _as_int(_read_value(containers, _READ_OFFSET_KEYS))
         length = _as_int(_read_value(containers, _READ_LENGTH_KEYS))
@@ -739,7 +797,7 @@ class Client:
         path: str,
         *,
         tolerate_404: bool = False,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> httpx.Response:
         """Perform an authenticated HTTP call and unify error reporting."""
         self._ensure_ready()
@@ -1226,9 +1284,6 @@ class Client:
                 break
         else:
             complete = False
-        if pages == 0:
-            complete = True
-
         status = self.status(resolved)
         workspace = status.get("workspace")
 
@@ -1418,7 +1473,7 @@ class Client:
             # earlier version asked only "is it inside the workspace", which is
             # most of the guard's job and not all of it: a hard link inside the
             # workspace is a second name for a file outside it, so the same
-            # credential leak that `_is_runtime_secret` was written to close
+            # credential leak that `is_runtime_secret` was written to close
             # stayed open on this path -- reachable not by the agent but by the
             # orchestrator reading what it thought was a workspace file, which
             # puts the key in a model's context. Found by a dispatched review

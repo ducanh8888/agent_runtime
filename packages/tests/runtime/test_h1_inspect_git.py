@@ -162,6 +162,44 @@ def test_git_refuses_a_work_tree_above_the_workspace(
     assert "outside the workspace" in obs.text
 
 
+def test_git_refuses_metadata_directory_outside_workspace(
+    tmp_path: Path, state_dir: Path
+) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    _git("init", "-q", cwd=external)
+    (external / "secret.txt").write_text("EXTERNAL-CONTENT\n", encoding="utf-8")
+    _git("add", "-A", cwd=external)
+    _git("commit", "-qm", "external", cwd=external)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".git").write_text(f"gitdir: {external / '.git'}\n", encoding="utf-8")
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="git", git_command="show")
+    )
+
+    assert obs.is_error is True
+    assert "metadata directory is outside" in obs.text
+    assert "EXTERNAL-CONTENT" not in obs.text
+
+
+def test_git_diff_excludes_runtime_secret_hardlinks(
+    repo: Path, state_dir: Path
+) -> None:
+    secret = state_dir / "profiles" / "default.json"
+    secret.write_text('{"api_key":"DO-NOT-LEAK"}\n', encoding="utf-8")
+    alias = repo / "alias.json"
+    alias.hardlink_to(secret)
+    _git("add", "alias.json", cwd=repo)
+
+    obs = _run(repo, git_command="diff", git_cached=True)
+
+    assert obs.exit_code == 0
+    assert "alias.json" not in (obs.stdout or "")
+    assert "DO-NOT-LEAK" not in (obs.stdout or "")
+
+
 def test_sanitized_environment_overrides_a_hostile_global_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -14,6 +14,8 @@ import httpx
 import pytest
 
 from agentrt.runtime import client as client_mod
+from agentrt.tools.file_editor.definition import FileEditorObservation
+from agentrt.tools.file_editor.view_contract import FileRange
 
 
 SESSION = "11111111-1111-1111-1111-111111111111"
@@ -403,6 +405,89 @@ def test_recognizes_nested_metadata_and_path_relative_to_workspace() -> None:
     assert read["version"] == "nested"
     assert read["path_relative"] == "src/a.py"
     assert read["returned"]["lines"] == {"start": 1, "end": 2}
+
+
+def test_projects_and_merges_the_actual_file_editor_paging_schema() -> None:
+    events = []
+    for index, (start, end, eof) in enumerate(
+        ((1, 500, False), (501, 1000, False), (1001, 1200, True)), start=1
+    ):
+        observation = FileEditorObservation.from_text(
+            text="page",
+            command="view",
+            path="/ws/src/exact.py",
+            requested_range=FileRange(start_line=1, end_line=1200),
+            returned_range=FileRange(start_line=start, end_line=end),
+            page_content=f"line {start}\n",
+            file_hash="sha256-exact",
+            eof=eof,
+            truncated=not eof,
+        ).model_dump(mode="json", exclude_none=True)
+        events.append(
+            {
+                "kind": "ObservationEvent",
+                "id": f"exact-{index}",
+                "timestamp": f"2026-01-01T00:00:0{index}",
+                "tool_name": "file_editor",
+                "tool_call_id": f"call-exact-{index}",
+                "observation": observation,
+            }
+        )
+    client = _mock_client(_make_handler(workspace="/ws", pages={None: (events, None)}))
+
+    out = client.read_evidence(SESSION)
+
+    read = out["reads"][0]
+    assert read["version"] == "sha256-exact"
+    assert read["requested"] == {
+        "lines": {"start": 1, "end": 1200},
+        "chars": {"start": 0, "end": None},
+    }
+    assert read["returned"] == {
+        "lines": {"start": 1, "end": 500},
+        "chars": {"start": 0, "end": None},
+    }
+    assert read["eof"] is False
+    assert read["truncated"] is True
+    assert "page_content" not in read
+    assert len(out["file_versions"]) == 1
+    assert out["file_versions"][0]["merged_lines"] == [[1, 1200]]
+
+
+@pytest.mark.parametrize("view_status", ["directory", "image"])
+def test_non_text_views_are_not_projected_as_file_reads(view_status: str) -> None:
+    pages = {
+        None: (
+            [
+                _obs(
+                    "non-text",
+                    timestamp="2026-01-01T00:00:01",
+                    extra={"view_status": view_status},
+                )
+            ],
+            None,
+        )
+    }
+
+    out = _mock_client(_make_handler(workspace="/ws", pages=pages)).read_evidence(
+        SESSION
+    )
+
+    assert out["reads"] == []
+
+
+def test_malformed_first_event_page_is_incomplete() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/conversations/{SESSION}":
+            return httpx.Response(200, json=_conversation_payload("/ws"))
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(200, json={"unexpected": True})
+        return httpx.Response(404)
+
+    out = _mock_client(handler).read_evidence(SESSION)
+
+    assert out["complete"] is False
+    assert out["pages"] == 0
 
 
 # ---------------------------------------------------------------------------

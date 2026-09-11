@@ -186,7 +186,7 @@ def check_path(
             f"path is outside the workspace: {resolved} is not inside {workspace}"
         )
 
-    if _is_runtime_secret(resolved):
+    if is_runtime_secret(resolved):
         raise PermissionDenied(
             f"refusing {resolved}: it is the same file as one of the runtime's "
             "own credential files, reached under a different name"
@@ -194,16 +194,17 @@ def check_path(
     return resolved
 
 
-def _secret_identities() -> set[tuple[int, int]]:
+def runtime_secret_identities() -> set[tuple[int, int]]:
     """(device, inode) of every file in the state directory holding a secret.
 
     Identity rather than path, because that is the thing a second name cannot
     disguise. Recomputed per call: these files are few, and caching them would
     mean a credential rewritten after startup stopped being recognised.
 
-    `agent-profiles/` is deliberately absent -- those name a permission preset
-    and a tool list, and hold no secret. Only `profiles/` carries the LLM
-    profile, and with it the key.
+    Protect the complete set of runtime-owned configuration/state files that
+    may contain credentials or private agent state. Some currently contain
+    references rather than plaintext keys, but treating aliases to them as
+    readable would make the guard depend on today's persistence schema.
 
     On a filesystem that reports no inode -- FAT, and some network shares --
     `st_ino` is 0 and this returns nothing. The hard-link protection is then
@@ -216,8 +217,21 @@ def _secret_identities() -> set[tuple[int, int]]:
     candidates = [
         state / ".env",
         state / "daemon.json",
+        state / "settings.json",
+        state / "secrets.json",
         *(state / "profiles").glob("*.json"),
+        *(state / "provider-connections").rglob("*.json"),
+        *(state / "agent-profiles").glob("*.json"),
     ]
+    conversations = state / "conversations"
+    try:
+        conversation_dirs = list(conversations.iterdir())
+    except OSError:
+        conversation_dirs = []
+    for conversation in conversation_dirs:
+        candidates.extend(
+            (conversation / "meta.json", conversation / "base_state.json")
+        )
     out: set[tuple[int, int]] = set()
     for path in candidates:
         try:
@@ -229,7 +243,7 @@ def _secret_identities() -> set[tuple[int, int]]:
     return out
 
 
-def _is_runtime_secret(resolved: Path) -> bool:
+def is_runtime_secret(resolved: Path) -> bool:
     """Is this path another name for one of the runtime's credential files?
 
     A hard link is a second name for one file, and no path resolution reveals
@@ -257,7 +271,7 @@ def _is_runtime_secret(resolved: Path) -> bool:
         return False
     if not info.st_ino:
         return False
-    return (info.st_dev, info.st_ino) in _secret_identities()
+    return (info.st_dev, info.st_ino) in runtime_secret_identities()
 
 
 def tools_for(permission: Permission) -> list[str]:

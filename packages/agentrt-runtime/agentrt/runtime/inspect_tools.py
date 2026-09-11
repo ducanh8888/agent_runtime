@@ -34,6 +34,7 @@ installs its guards) also registers this tool.
 from __future__ import annotations
 
 import fnmatch
+import json
 import os
 import re
 import shutil
@@ -45,6 +46,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+import regex as timeout_regex
 from pydantic import BaseModel, Field, model_validator
 
 from agentrt.runtime import permissions
@@ -75,6 +77,8 @@ MAX_LINE_CHARS = 10_000
 MAX_CONTEXT_LINES = 5
 MAX_RESULTS = 500
 MAX_OUTPUT_CHARS = 200_000
+REGEX_TIMEOUT_SECONDS = 0.05
+SEARCH_MATCH_BUDGET = MAX_OUTPUT_CHARS - 20_000
 
 #: A revision may not begin with `-` (option injection) and is kept to the
 #: characters git itself uses in a ref, so `a..b` and `HEAD~2` work while
@@ -204,6 +208,31 @@ def _clip(text: str, limit: int = MAX_OUTPUT_CHARS) -> tuple[str, bool]:
     return text[:limit] + "\n...<clipped>", True
 
 
+def _fit_search_page(matches: list[SearchMatch]) -> tuple[list[SearchMatch], bool]:
+    """Fit a match page under the structured observation's output budget."""
+    page: list[SearchMatch] = []
+    used = 0
+    clipped = False
+    for match in matches:
+        size = len(json.dumps(match.model_dump(mode="json"), ensure_ascii=False))
+        if page and used + size > SEARCH_MATCH_BUDGET:
+            clipped = True
+            break
+        if not page and size > SEARCH_MATCH_BUDGET:
+            match = match.model_copy(
+                update={
+                    "text": match.text[:1024],
+                    "context_before": [value[:1024] for value in match.context_before],
+                    "context_after": [value[:1024] for value in match.context_after],
+                }
+            )
+            size = len(json.dumps(match.model_dump(mode="json"), ensure_ascii=False))
+            clipped = True
+        page.append(match)
+        used += size
+    return page, clipped
+
+
 class InspectAction(Action):
     """The closed parameter set for one `inspect` command.
 
@@ -310,8 +339,8 @@ class InspectAction(Action):
                     f"pattern is longer than {MAX_PATTERN_CHARS} characters"
                 )
             try:
-                re.compile(self.pattern)
-            except re.error as exc:
+                timeout_regex.compile(self.pattern)
+            except timeout_regex.error as exc:
                 raise ValueError(f"invalid regular expression: {exc}") from exc
         elif self.command == "git":
             if self.git_command is None:
@@ -419,6 +448,16 @@ class InspectExecutor(ToolExecutor):
                 is_error=True,
                 command=action.command,
             )
+        except TimeoutError:
+            return InspectObservation.from_text(
+                text=(
+                    "Search refused: the regular expression exceeded the "
+                    "per-match execution deadline."
+                ),
+                is_error=True,
+                command=action.command,
+                pattern=action.pattern,
+            )
 
     # -- search --------------------------------------------------------
 
@@ -433,7 +472,7 @@ class InspectExecutor(ToolExecutor):
                 search_root=self._relative(start),
             )
 
-        regex = re.compile(action.pattern)
+        regex = timeout_regex.compile(action.pattern)
         matches: list[SearchMatch] = []
         files_scanned = 0
         clipped = False
@@ -462,7 +501,9 @@ class InspectExecutor(ToolExecutor):
                 matches.extend(found)
 
         total = len(matches)
-        page = matches[action.offset : action.offset + action.max_results]
+        candidates = matches[action.offset : action.offset + action.max_results]
+        page, budget_clipped = _fit_search_page(candidates)
+        clipped = clipped or budget_clipped
         next_offset = (
             action.offset + len(page) if action.offset + len(page) < total else None
         )
@@ -484,11 +525,11 @@ class InspectExecutor(ToolExecutor):
             files_scanned=files_scanned,
             offset=action.offset,
             next_offset=next_offset,
-            truncated=next_offset is not None,
+            truncated=next_offset is not None or clipped,
         )
 
     def _scan_file(
-        self, path: Path, regex: re.Pattern[str], action: InspectAction
+        self, path: Path, regex: Any, action: InspectAction
     ) -> tuple[list[SearchMatch], bool]:
         try:
             if path.stat().st_size > MAX_FILE_BYTES:
@@ -504,7 +545,7 @@ class InspectExecutor(ToolExecutor):
             if len(line) > MAX_LINE_CHARS:
                 line = line[:MAX_LINE_CHARS]
                 clipped = True
-            if not regex.search(line):
+            if not regex.search(line, timeout=REGEX_TIMEOUT_SECONDS):
                 continue
             before = [
                 value[:MAX_LINE_CHARS]
@@ -563,6 +604,29 @@ class InspectExecutor(ToolExecutor):
             "core.quotepath=false",
         ]
 
+    def _protected_git_pathspecs(self, toplevel: Path) -> list[str]:
+        """Top-relative exclusions for files aliasing runtime-owned state."""
+        protected = permissions.runtime_secret_identities()
+        if not protected:
+            return []
+        pathspecs: list[str] = []
+        for dirpath, dirnames, filenames in os.walk(toplevel, followlinks=False):
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name != ".git" and not (Path(dirpath) / name).is_symlink()
+            ]
+            for name in filenames:
+                candidate = Path(dirpath) / name
+                try:
+                    info = candidate.stat()
+                except OSError:
+                    continue
+                if info.st_ino and (info.st_dev, info.st_ino) in protected:
+                    relative = candidate.relative_to(toplevel).as_posix()
+                    pathspecs.append(f":(top,exclude,literal){relative}")
+        return sorted(pathspecs)
+
     def _run_git(
         self, tail: list[str], cwd: Path, timeout: int = 20
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
@@ -597,7 +661,14 @@ class InspectExecutor(ToolExecutor):
             )
 
         top_proc, _ = self._run_git(
-            ["rev-parse", "--show-toplevel", "--absolute-git-dir"], cwd
+            [
+                "rev-parse",
+                "--path-format=absolute",
+                "--show-toplevel",
+                "--absolute-git-dir",
+                "--git-common-dir",
+            ],
+            cwd,
         )
         if top_proc.returncode != 0:
             return InspectObservation.from_text(
@@ -610,7 +681,7 @@ class InspectExecutor(ToolExecutor):
                 git_command=action.git_command,
             )
         top_lines = top_proc.stdout.splitlines()
-        if len(top_lines) < 1:
+        if len(top_lines) < 3:
             return InspectObservation.from_text(
                 text="git did not report a work tree root",
                 is_error=True,
@@ -622,9 +693,14 @@ class InspectExecutor(ToolExecutor):
         # pointed at a directory the session was never given.
         try:
             toplevel = self._approve(top_lines[0].strip())
+            self._approve(top_lines[1].strip())
+            self._approve(top_lines[2].strip())
         except permissions.PermissionDenied as denied:
             return InspectObservation.from_text(
-                text=f"Refused: git work tree is outside the workspace ({denied})",
+                text=(
+                    "Refused: git work tree or metadata directory is outside "
+                    f"the workspace ({denied})"
+                ),
                 is_error=True,
                 command="git",
                 git_command=action.git_command,
@@ -673,6 +749,13 @@ class InspectExecutor(ToolExecutor):
                     git_command=action.git_command,
                 )
             tail += ["--", os.path.relpath(str(approved), str(cwd))]
+
+        if action.git_command in ("status", "diff", "show"):
+            protected_pathspecs = self._protected_git_pathspecs(toplevel)
+            if protected_pathspecs:
+                if "--" not in tail:
+                    tail.append("--")
+                tail.extend(protected_pathspecs)
 
         completed, argv = self._run_git(tail, cwd)
         stdout, clipped = _clip(completed.stdout.rstrip("\n"))

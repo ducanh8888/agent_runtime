@@ -70,7 +70,9 @@ logger = get_logger(__name__)
 file_router = APIRouter(prefix="/file", tags=["Files"])
 
 
-async def _upload_file(path: str, file: UploadFile) -> Success:
+async def _upload_file(
+    path: str, file: UploadFile, config: Config | None = None
+) -> Success:
     """Internal helper to upload a file to the workspace."""
     update_last_execution_time()
     logger.info(f"Uploading file: {path}")
@@ -82,16 +84,31 @@ async def _upload_file(path: str, file: UploadFile) -> Success:
                 detail="Path must be absolute",
             )
 
+        reject_protected_state_path(target_path, config)
+
         # Ensure target directory exists
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Stream the file to disk to avoid memory issues with large files.
-        # Offload writes to a worker thread so slow storage (NFS, FUSE,
-        # encrypted FS) cannot starve the event loop for the upload's
-        # duration.
-        with open(target_path, "wb") as f:
-            while chunk := await file.read(8192):  # Read in 8KB chunks
-                await asyncio.to_thread(f.write, chunk)
+        # Open without truncating, validate the opened inode, and only then
+        # clear it. This closes the check/open race where an alias could be
+        # swapped to a credential after the path check but before ``open('wb')``.
+        fd = os.open(target_path, os.O_WRONLY | os.O_CREAT, 0o666)
+        try:
+            opened = os.fstat(fd)
+            if (opened.st_dev, opened.st_ino) in protected_state_inodes(config):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="File not found",
+                )
+            os.ftruncate(fd, 0)
+            stream = os.fdopen(fd, "wb")
+            fd = -1
+            with stream as f:
+                while chunk := await file.read(8192):  # Read in 8KB chunks
+                    await asyncio.to_thread(f.write, chunk)
+        finally:
+            if fd >= 0:
+                os.close(fd)
 
         logger.info(f"Uploaded file to {target_path}")
         return Success()
@@ -736,11 +753,12 @@ def _create_tar_gz_archive(
 
 @file_router.post("/upload")
 async def upload_file_query(
+    request: Request,
     path: Annotated[str, Query(description="Absolute file path")],
     file: Annotated[UploadFile, File()],
 ) -> Success:
     """Upload a file to the workspace using query parameter (preferred method)."""
-    return await _upload_file(path, file)
+    return await _upload_file(path, file, getattr(request.app.state, "config", None))
 
 
 @file_router.get("/download")

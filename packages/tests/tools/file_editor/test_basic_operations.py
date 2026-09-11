@@ -344,7 +344,8 @@ def test_create_with_empty_string(editor):
     # Test the view command showing an empty line
     result = editor(command="view", path=str(new_file))
     assert f"Here's the result of running `cat -n` on {new_file}:" in result.text
-    assert "1\t" in result.text  # Check for empty line
+    assert "empty" in result.text.lower()
+    assert "1\t" not in result.text
 
 
 def test_create_with_none_file_text(editor):

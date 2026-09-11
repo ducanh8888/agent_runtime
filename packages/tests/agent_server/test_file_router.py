@@ -1803,6 +1803,19 @@ def test_download_of_direct_persistence_secret_is_rejected(
     assert "server-secret" not in resp.text
 
 
+@pytest.mark.parametrize("name", [".env", "daemon.json"])
+def test_download_of_runtime_bootstrap_state_is_rejected(
+    client, tmp_path, monkeypatch, name
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persisted_secret(tmp_path, name)
+
+    resp = client.get("/api/file/download", params={"path": str(secret)})
+
+    assert resp.status_code == 404
+    assert "server-secret" not in resp.text
+
+
 def test_download_of_hard_link_to_secret_is_rejected(client, tmp_path, monkeypatch):
     monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
     secret = _make_persisted_secret(tmp_path, "secrets.json")
@@ -1841,6 +1854,59 @@ def test_download_of_plain_file_still_succeeds(client, tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.content == b"public"
+
+
+def test_new_secret_is_rejected_immediately_after_a_plain_read(
+    client, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    plain = tmp_path / "plain.txt"
+    plain.write_text("public")
+    assert (
+        client.get("/api/file/download", params={"path": str(plain)}).status_code == 200
+    )
+
+    secret = _make_persisted_secret(tmp_path, "settings.json", "fresh-secret")
+    alias = tmp_path / "fresh-alias.json"
+    os.link(secret, alias)
+    resp = client.get("/api/file/download", params={"path": str(alias)})
+
+    assert resp.status_code == 404
+    assert "fresh-secret" not in resp.text
+
+
+def test_upload_cannot_overwrite_a_hard_linked_secret(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path / "persist"))
+    secret = _make_persisted_secret(tmp_path, "settings.json", "original-secret")
+    alias = tmp_path / "upload-alias.json"
+    os.link(secret, alias)
+
+    resp = client.post(
+        "/api/file/upload",
+        params={"path": str(alias)},
+        files={"file": ("replacement.json", b"replacement", "application/json")},
+    )
+
+    assert resp.status_code == 404
+    assert secret.read_text() == "original-secret"
+
+
+def test_upload_cannot_create_a_direct_protected_state_file(
+    client, tmp_path, monkeypatch
+):
+    persistence = tmp_path / "persist"
+    persistence.mkdir()
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(persistence))
+    target = persistence / "settings.json"
+
+    resp = client.post(
+        "/api/file/upload",
+        params={"path": str(target)},
+        files={"file": ("settings.json", b"new-secret", "application/json")},
+    )
+
+    assert resp.status_code == 404
+    assert not target.exists()
 
 
 def _init_repo_with_secret_hard_link(tmp_path: Path) -> Path:

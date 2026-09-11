@@ -49,6 +49,17 @@ class EncodingManager:
         with open(path, "rb") as f:
             raw_data = f.read(sample_size)
 
+        # UTF-8 is the runtime's default and must win whenever the sampled bytes
+        # are valid UTF-8. Statistical detectors can confidently misclassify
+        # short or repetitive UTF-8 as a legacy single-byte encoding, which
+        # then makes later paging fail or corrupt Unicode reconstruction.
+        try:
+            raw_data.decode(self.default_encoding)
+        except UnicodeDecodeError:
+            pass
+        else:
+            return self.default_encoding
+
         # Use charset_normalizer instead of chardet
         results = charset_normalizer.detect(raw_data)
 

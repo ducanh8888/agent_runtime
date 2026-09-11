@@ -79,6 +79,7 @@ dependencies = [
     { name = "agentrt-workspace" },
     { name = "httpx" },
     { name = "mcp" },
+    { name = "regex" },
 ]
 
 [package.metadata]
@@ -89,6 +90,7 @@ requires-dist = [
     { name = "agentrt-workspace", editable = "agentrt-workspace" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "mcp", specifier = ">=1.28,<2" },
+    { name = "regex", specifier = ">=2025.9.18" },
 ]
 
 [[package]]

@@ -73,8 +73,8 @@ def dispatch(
     The session keeps running after this conversation ends. Returns a
     short_id -- how you refer to the session in every other tool here.
 
-    PERMISSION. One of `readonly`, `workspace` (the default) or `broad`; call
-    `profiles` for what each grants.
+    PERMISSION. One of `readonly`, `inspect`, `workspace` (the default) or
+    `broad`; call `profiles` for what each grants.
 
     Choose `readonly` when the session only needs to look -- reviewing,
     summarising, answering a question about code. It is the only preset that
@@ -84,6 +84,10 @@ def dispatch(
     its final message and read that with `result`; telling it to produce a
     report file gives it an instruction it cannot carry out. `artifacts` on such
     a session correctly lists nothing.
+
+    Choose `inspect` for read-only repository audits that need structured
+    search, narrow Git status/diff/log/show, version checks or sanitized
+    environment metadata. It has no shell and cannot mutate files.
 
     `workspace` confines the file editor to the workspace but still grants a
     terminal, and a terminal can open any file you can. Treat it as constraining

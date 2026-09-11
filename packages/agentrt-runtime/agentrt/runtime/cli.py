@@ -12,7 +12,7 @@ import json
 import sys
 from collections import deque
 
-from agentrt.runtime import bootstrap, client as client_mod, config, daemon
+from agentrt.runtime import bootstrap, client as client_mod, config, daemon, permissions
 
 
 def _print_json(value: object) -> None:
@@ -227,7 +227,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--title")
     dispatch_parser.add_argument(
         "--permission",
-        choices=["readonly", "workspace", "broad"],
+        choices=list(permissions.PRESETS),
         help="permission preset (default: workspace)",
     )
     dispatch_parser.add_argument(
@@ -382,7 +382,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
 
     parser = _build_parser()
     args = parser.parse_args(argv)

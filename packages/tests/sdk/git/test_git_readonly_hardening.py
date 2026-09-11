@@ -141,6 +141,30 @@ def test_readonly_command_ignores_git_external_diff_env(
     assert _ran(markers) == set()
 
 
+def test_readonly_command_ignores_ambient_repository_redirection(
+    hostile_repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    repo, _ = hostile_repo
+    other = tmp_path / "other"
+    other.mkdir()
+    _run(["git", "init", "-b", "main"], other)
+    _run(["git", "config", "user.email", "t@example.com"], other)
+    _run(["git", "config", "user.name", "T"], other)
+    (other / "other.txt").write_text("other\n")
+    _run(["git", "add", "-A"], other)
+    _run(["git", "commit", "-m", "other"], other)
+    expected = _run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+    redirected = _run(["git", "rev-parse", "HEAD"], other).stdout.strip()
+    assert expected != redirected
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(other / ".git" / "index"))
+
+    output = run_readonly_git_command(["git", "rev-parse", "HEAD"], repo)
+
+    assert output == expected
+
+
 def test_readonly_command_refuses_mutating_subcommand(hostile_repo):
     repo, _ = hostile_repo
     with pytest.raises(GitCommandError, match="non-readonly"):
