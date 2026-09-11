@@ -9,7 +9,7 @@ immutable result records. Machine consumers should read
 1. [DeepSeek hardening plan](plans/deepseek-hardening.md) — active H0–H7 plan.
 2. [Daemon behavior](reference/daemon-behavior.md) — measured runtime behavior.
 3. [Orchestration guide](guides/orchestration.md) — how to dispatch and verify.
-4. [H6 result](results/h6.md) — latest completed stage evidence.
+4. [H7 result](results/h7.md) — the production cutover record.
 
 ## Layout
 

@@ -8,6 +8,15 @@ names; this gives what they do.
 Re-derive with `python tools/api_context.py` plus the probes described here if
 the vendored server is ever updated.
 
+## The port is chosen, not reserved
+
+A restart can land on a different port (observed: 38887 → 40785 after the
+2026-09-12 cutover). Clients read the port and token from `daemon.json` on each
+call; anything that cached them from a previous process will talk to a dead
+port. The stdio MCP servers are the ones to watch: they are long-lived children
+of an orchestrator, so they hold both the code they started with and, for a
+while, the port they first read.
+
 ## Lifecycle verbs
 
 Observed transitions on a session executing a 50-second shell command:
@@ -78,6 +87,22 @@ session that is a silent no-op: HTTP 200, message stored, nothing happens. Any
 - `GET .../events/count` returns a bare integer.
 - `GET .../events` (no `/search`) is a **batch fetch by id** and requires a
   request body; called bare it returns 422.
+
+## Admission, capacity and the spend ledger
+
+`POST /api/conversations` queues rather than refuses when the run pool is full:
+the conversation is stored with `admission_state: queued` and a scheduler admits
+it oldest-first. `GET /api/conversations/capacity` reports `running`, `limit`,
+`available`, `queued`, `limiting_dimension` and the in-flight LLM count; a
+disabled cap is reported as null rather than as a large number. Submissions may
+carry an `idempotency_key`: the same key with the same submission returns the
+existing conversation, a different submission is a 409.
+
+`GET /api/conversations/spend-archive` is the lifetime ledger: deleting a
+session folds its per-model token totals there first, so a lifetime total does
+not fall when sessions are removed. `DELETE` on the same path is the only
+operation that lowers it. A fold that fails is recorded in `unarchived` rather
+than hidden.
 
 ## Usage and cost
 
