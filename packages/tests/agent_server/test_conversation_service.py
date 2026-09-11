@@ -4391,3 +4391,64 @@ class TestIsolatedWriters:
         self._prepare(repo_dir, worktrees)
 
         assert (keep / "uncollected.txt").read_text() == "work nobody has collected\n"
+
+
+class TestPinnedWorkspaceHead:
+    def test_refuses_a_snapshot_with_no_resolvable_head(self, tmp_path):
+        """An empty repository is not a match for a pinned snapshot."""
+        repo_dir = tmp_path / "empty"
+        repo_dir.mkdir()
+        run_git_command(["git", "init", str(repo_dir)])
+        stored = SimpleNamespace(
+            workspace_mode="snapshot", workspace_resolved_sha="d" * 40
+        )
+        service = EventService(stored=stored, conversations_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="no resolvable HEAD"):
+            service._verify_pinned_workspace(repo_dir, "d" * 40)
+
+
+class TestDirtyOverlaySubdirectory:
+    def test_overlay_lands_at_the_repo_relative_path(self, tmp_path):
+        """A workspace that is a subdirectory must not nest the copied paths."""
+        repo_dir = tmp_path / "repo"
+        _init_git_repo(repo_dir)
+        package_dir = repo_dir / "pkg"
+        package_dir.mkdir()
+        tracked = package_dir / "a.py"
+        tracked.write_text("committed\n")
+        run_git_command(["git", "add", "pkg/a.py"], repo_dir)
+        run_git_command(
+            [
+                "git",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-m",
+                "add pkg",
+            ],
+            repo_dir,
+        )
+        tracked.write_text("edited\n")
+
+        request = StartConversationRequest(
+            conversation_id=uuid4(),
+            agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir=package_dir),
+            confirmation_policy=NeverConfirm(),
+            workspace_mode="snapshot",
+            workspace_dirty_overlay=True,
+        )
+
+        prepared, preparation = _prepare_request_workspace(
+            request, request.conversation_id, tmp_path / "worktrees"
+        )
+
+        workspace_dir = Path(prepared.workspace.working_dir)
+        assert preparation.capture == "dirty-overlay"
+        # The edit is in the delivered tree at the repo-relative location.
+        assert (workspace_dir / "a.py").read_text() == "edited\n"
+        # ...and not nested a second time.
+        assert not (workspace_dir / "pkg").exists()

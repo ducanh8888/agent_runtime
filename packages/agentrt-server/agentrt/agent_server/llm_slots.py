@@ -48,25 +48,27 @@ class ProviderSlots:
 class _SlotLease:
     def __init__(self, slots: ProviderSlots) -> None:
         self._slots = slots
-        self._acquired = False
+        # The semaphore actually acquired. Releasing `slots._semaphore` later
+        # would release one the limiter may have replaced when the loop changed,
+        # leaking this permit and over-releasing the new semaphore.
+        self._semaphore: asyncio.Semaphore | None = None
 
     async def __aenter__(self) -> _SlotLease:
         semaphore = self._slots._semaphore_for_loop()
         await semaphore.acquire()
-        self._acquired = True
+        self._semaphore = semaphore
         with self._slots._counter_lock:
             self._slots.in_flight += 1
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        if not self._acquired:
+        semaphore = self._semaphore
+        if semaphore is None:
             return
-        self._acquired = False
+        self._semaphore = None
         with self._slots._counter_lock:
             self._slots.in_flight -= 1
-        semaphore = self._slots._semaphore
-        if semaphore is not None:
-            semaphore.release()
+        semaphore.release()
 
 
 _slots: ProviderSlots | None = None

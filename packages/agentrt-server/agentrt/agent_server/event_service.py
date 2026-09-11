@@ -259,7 +259,15 @@ class EventService:
             # immutable review tree has a revision that must not change.
             return
         head = resolve_local_commit(working_dir)
-        if head is not None and head != pinned_sha:
+        if head is None:
+            # An unresolvable HEAD is not evidence of a match: a worktree whose
+            # pinned object was pruned looks exactly like one replaced by a
+            # fresh empty repository, and `validate_git_repository` accepts both.
+            raise ValueError(
+                f"snapshot workspace {working_dir} has no resolvable HEAD; "
+                f"cannot confirm the pinned {pinned_sha[:12]}"
+            )
+        if head != pinned_sha:
             raise ValueError(
                 f"snapshot workspace {working_dir} is at {head[:12]}, not the "
                 f"pinned {pinned_sha[:12]}; refusing to run against a "

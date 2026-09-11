@@ -178,7 +178,9 @@ def test_repeated_submission_replays_the_existing_record(tmp_path) -> None:
         )
     }
 
-    found = service._find_by_idempotency_key(request)
+    found = service._find_by_idempotency_key(
+        request, ConversationService._submission_fingerprint(request)
+    )
 
     assert found is not None
     assert found.stored.id == existing_id
@@ -206,13 +208,15 @@ def test_same_key_with_different_work_is_a_conflict(tmp_path) -> None:
     }
 
     with pytest.raises(IdempotencyConflict, match="different submission"):
-        service._find_by_idempotency_key(other_request)
+        service._find_by_idempotency_key(
+            other_request, ConversationService._submission_fingerprint(other_request)
+        )
 
 
 def test_a_request_without_a_key_never_replays(tmp_path) -> None:
     service = ConversationService(conversations_dir=tmp_path)
 
-    assert service._find_by_idempotency_key(_request()) is None
+    assert service._find_by_idempotency_key(_request(), None) is None
 
 
 # --- provider slots -------------------------------------------------------
@@ -317,3 +321,105 @@ async def test_capacity_has_no_llm_limit_when_uninstalled(
     assert surface["llm_limit"] is None
     assert surface["in_flight_llm"] == 0
     assert surface["limiting_dimension"] == "runs"
+
+
+class _FakeEventService:
+    """Just enough of an EventService for the admission branches."""
+
+    def __init__(self, conversation_id) -> None:
+        self.stored = _stored(conversation_id)
+        self.calls: list[bool] = []
+        self.saved = 0
+
+    async def send_message(self, message, run) -> None:
+        self.calls.append(run)
+
+    async def save_meta(self) -> None:
+        self.saved += 1
+
+
+def _message():
+    from agentrt.sdk.llm import Message, TextContent
+
+    return Message(role="user", content=[TextContent(text="do the thing")])
+
+
+@pytest.mark.asyncio
+async def test_admission_starts_the_run_when_a_slot_is_free(tmp_path) -> None:
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=1)
+    service._event_services = {}
+    fake = _FakeEventService(uuid4())
+
+    admitted = await service._admit_or_queue(fake, _message())
+
+    assert admitted is True
+    assert fake.calls == [True]
+    assert fake.stored.admission_state == "admitted"
+    assert service._admission_queue == []
+
+
+@pytest.mark.asyncio
+async def test_admission_queues_and_persists_when_saturated(tmp_path) -> None:
+    """The input is written even though no slot is free, and no run starts."""
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=1)
+    service._event_services = {uuid4(): _Service(_Task(done=False))}
+    fake = _FakeEventService(uuid4())
+
+    admitted = await service._admit_or_queue(fake, _message())
+
+    assert admitted is False
+    assert fake.calls == [False]  # persisted, not started
+    assert fake.stored.admission_state == "queued"
+    assert fake.stored.id in service._admission_queue
+    assert fake.saved == 1
+
+
+def test_replay_uses_the_fingerprint_it_is_given(tmp_path) -> None:
+    """A fingerprint taken before preparation must still match afterwards.
+
+    Preparation rewrites the workspace path, so a lookup that recomputed the
+    fingerprint from the (prepared) request would never match a retry.
+    """
+    service = ConversationService(conversations_dir=tmp_path)
+    request = _request(idempotency_key="batch-1")
+    fingerprint = ConversationService._submission_fingerprint(request)
+    existing_id = uuid4()
+    service._conversation_records = {
+        existing_id: _record(
+            existing_id, idempotency_key="batch-1", idempotency_fingerprint=fingerprint
+        )
+    }
+    prepared = request.model_copy(
+        update={"workspace": LocalWorkspace(working_dir="/tmp/prepared-worktree")}
+    )
+
+    found = service._find_by_idempotency_key(prepared, fingerprint)
+
+    assert found is not None and found.stored.id == existing_id
+
+
+def test_worktree_flag_is_part_of_the_fingerprint() -> None:
+    """`worktree` maps to a mode server-side, so it must be hashed."""
+    plain = _request(idempotency_key="k")
+    worktree = _request(idempotency_key="k", worktree=True)
+
+    assert ConversationService._submission_fingerprint(
+        plain
+    ) != ConversationService._submission_fingerprint(worktree)
+
+
+@pytest.mark.asyncio
+async def test_lease_releases_the_semaphore_it_acquired() -> None:
+    import asyncio
+
+    slots = ProviderSlots(limit=1)
+    lease = slots.lease()
+    await lease.__aenter__()
+    acquired = lease._semaphore
+    # A loop change replaces the limiter's current semaphore.
+    slots._semaphore = asyncio.Semaphore(1)
+
+    await lease.__aexit__(None, None, None)
+
+    assert acquired is not None and acquired._value == 1  # permit returned
+    assert slots.in_flight == 0

@@ -315,29 +315,38 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _dirty_entries(repo_root: Path) -> list[tuple[str, str]]:
-    """``(status, path)`` for every changed, deleted or untracked file."""
-    output = run_readonly_git_command(
-        ["git", "--no-pager", "status", "--porcelain", "-z", "--untracked-files=all"],
-        repo_root,
-    )
-    fields = output.split("\0")
+def _dirty_entries(repo_root: Path, pinned_sha: str) -> list[tuple[str, str]]:
+    """``(status, path)`` for worktree changes relative to ``pinned_sha``.
+
+    Compared against the pinned commit rather than the index, so a change the
+    caller staged still counts as theirs. The porcelain status format is
+    deliberately avoided: the shared git runner strips its output, which eats
+    the leading space of the first XY record and shifts its path by one
+    character.
+    """
     entries: list[tuple[str, str]] = []
+    fields = run_readonly_git_command(
+        ["git", "--no-pager", "diff", "--name-status", "-z", pinned_sha], repo_root
+    ).split("\0")
     index = 0
-    while index < len(fields):
-        entry = fields[index]
-        index += 1
-        if not entry:
+    while index + 1 < len(fields):
+        status, path = fields[index], fields[index + 1]
+        index += 2
+        if not status:
             continue
-        status, path = entry[:2], entry[3:]
         if status[:1] in ("R", "C"):
-            # Rename/copy entries carry the original path as the next field.
+            # A rename/copy carries the old path as the next field.
             index += 1
         entries.append((status, path))
+    untracked = run_readonly_git_command(
+        ["git", "--no-pager", "ls-files", "--others", "--exclude-standard", "-z"],
+        repo_root,
+    )
+    entries.extend(("A", path) for path in untracked.split("\0") if path)
     return entries
 
 
-def _capture_dirty_overlay(repo_root: Path, workspace_dir: Path) -> str:
+def _capture_dirty_overlay(repo_root: Path, target_root: Path, pinned_sha: str) -> str:
     """Copy the caller's uncommitted work onto a pinned tree.
 
     Returns a detail string for the record. The copy is verified, not atomic: a
@@ -348,11 +357,11 @@ def _capture_dirty_overlay(repo_root: Path, workspace_dir: Path) -> str:
     started_at = utc_now().isoformat()
     digests: list[tuple[str, str]] = []
     copied = removed = 0
-    for status, path in _dirty_entries(repo_root):
+    for status, path in _dirty_entries(repo_root, pinned_sha):
         if any(part in _DIRTY_OVERLAY_EXCLUDES for part in PurePosixPath(path).parts):
             continue
         source = repo_root / path
-        target = workspace_dir / path
+        target = target_root / path
         if status.strip() == "D" or not source.exists():
             if target.is_file():
                 target.unlink()
@@ -453,9 +462,9 @@ def _prepare_request_workspace(
     capture = "clean-commit"
     capture_detail = None
     if request.workspace_dirty_overlay:
-        capture_detail = _capture_dirty_overlay(
-            repo_root, Path(new_workspace.working_dir)
-        )
+        # Repo-relative paths go to the prepared tree's root, not to the
+        # workspace subdirectory, which would nest them a second time.
+        capture_detail = _capture_dirty_overlay(repo_root, worktree_root, resolved_sha)
         capture = "dirty-overlay"
 
     prepared = WorkspacePreparation(
@@ -928,6 +937,7 @@ class ConversationService:
     admission_poll_seconds: float = 2.0
     _admission_queue: list[UUID] = field(default_factory=list, init=False)
     _admission_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _idempotency_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
     _admission_task: asyncio.Task | None = field(default=None, init=False)
 
     def _count_running_runs(self) -> int:
@@ -973,6 +983,7 @@ class ConversationService:
             "tags": sorted((request.tags or {}).items()),
             "max_iterations": request.max_iterations,
             "workspace_mode": request.workspace_mode,
+            "worktree": request.worktree,
             "workspace_dirty_overlay": request.workspace_dirty_overlay,
             "agent_profile_id": (
                 str(request.agent_profile_id) if request.agent_profile_id else None
@@ -988,12 +999,11 @@ class ConversationService:
         ).hexdigest()
 
     def _find_by_idempotency_key(
-        self, request: StartConversationRequest
+        self, request: StartConversationRequest, fingerprint: str | None
     ) -> _ConversationRecord | None:
         """The record a repeated submission should replay, if there is one."""
-        if not request.idempotency_key:
+        if not request.idempotency_key or fingerprint is None:
             return None
-        fingerprint = self._submission_fingerprint(request)
         for record in self._conversation_records.values():
             if record.stored.idempotency_key != request.idempotency_key:
                 continue
@@ -1017,7 +1027,7 @@ class ConversationService:
         """
         async with self._admission_lock:
             if self._has_free_slot():
-                await self._admit_or_queue(event_service, message)
+                await event_service.send_message(message, True)
                 return True
             # ``run=False`` persists the input without starting it.
             await event_service.send_message(message, False)
@@ -1806,10 +1816,31 @@ class ConversationService:
         self,
         request: StartConversationRequest,
     ) -> tuple[ConversationInfo, bool]:
+        """Start a local event_service and return its id.
+
+        A keyed submission holds the idempotency lock across the whole create,
+        so two concurrent identical submissions cannot both miss the lookup and
+        each create a conversation for the same key.
+        """
+        if not request.idempotency_key:
+            return await self._start_conversation_inner(request)
+        async with self._idempotency_lock:
+            return await self._start_conversation_inner(request)
+
+    async def _start_conversation_inner(
+        self,
+        request: StartConversationRequest,
+    ) -> tuple[ConversationInfo, bool]:
         """Start a local event_service and return its id."""
         if self._event_services is None:
             raise ValueError("inactive_service")
-        replay = self._find_by_idempotency_key(request)
+        # Computed before preparation rewrites the workspace path, and reused
+        # for the record: a fingerprint taken from the prepared request would
+        # never match the one a retry computes from the caller's request.
+        submission_fingerprint = (
+            self._submission_fingerprint(request) if request.idempotency_key else None
+        )
+        replay = self._find_by_idempotency_key(request, submission_fingerprint)
         if replay is not None:
             # Same key, same submission: return the conversation that call
             # created rather than making a second one.
@@ -2037,8 +2068,17 @@ class ConversationService:
             # as a named profile. Persisted sessions never reach this path.
             enforce_agent_policy(request.agent, self.deployment_llm_policy)
 
-        request, workspace_preparation = _prepare_request_workspace(
-            request, conversation_id, self.conversation_worktree_root
+        # Preparation does git work and can copy a dirty tree; keep it off the
+        # event loop.
+        (
+            request,
+            workspace_preparation,
+        ) = await asyncio.get_running_loop().run_in_executor(
+            None,
+            _prepare_request_workspace,
+            request,
+            conversation_id,
+            self.conversation_worktree_root,
         )
 
         managed_codex_credential = self._is_codex_agent(request.agent) and (
@@ -2149,11 +2189,7 @@ class ConversationService:
             # no mode is isolated_worktree, and the record must say what ran.
             workspace_mode=workspace_preparation.mode,
             idempotency_key=request.idempotency_key,
-            idempotency_fingerprint=(
-                self._submission_fingerprint(request)
-                if request.idempotency_key
-                else None
-            ),
+            idempotency_fingerprint=submission_fingerprint,
             workspace_requested_ref=workspace_preparation.requested_ref,
             workspace_resolved_sha=workspace_preparation.resolved_sha,
             workspace_prepared_at=workspace_preparation.prepared_at,
@@ -2219,7 +2255,7 @@ class ConversationService:
             message = Message(
                 role=initial_message.role, content=initial_message.content
             )
-            await event_service.send_message(message, True)
+            await self._admit_or_queue(event_service, message)
 
         state = await event_service.get_state()
         conversation_info = _compose_conversation_info(event_service.stored, state)
