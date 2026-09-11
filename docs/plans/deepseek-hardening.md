@@ -9,7 +9,7 @@ Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 
 ## Status
 
-Active follow-on implementation plan; **H0–H6 are complete** apart from one H5 sub-item (a limit on writers sharing one workspace), and **H7 ran its production cutover on 2026-09-12**. H7's staged scale verification and the sub-agent items in H7.9 remain.
+Active follow-on implementation plan; **H0–H6 are complete** and **H7 ran its production cutover on 2026-09-12**, with the sub-agent items and the H5 shared-writer limit finished afterwards. H7's staged scale verification (50–100 workers) remains and needs an agreed load and window.
 The scope and thinking/high policy are user requirements. H2–H7 API
 examples and internal field names below are proposed contracts, not shipped
 capabilities; verified behavior is recorded in
@@ -61,7 +61,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H4 | Revision-pinned snapshots and writer isolation | REUSE + PORT + NEW | H1, H2 | Complete — [result](../results/h4.md) |
 | H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Complete — [result](../results/h5.md) |
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
-| H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover done — [result](../results/h7.md); scale and sub-agent items outstanding |
+| H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -453,18 +453,18 @@ cannot change the high policy or silently stop a run.
    new-format state. Keep the pre-cutover backup and reconcile any work created
    after cutover instead of deleting it. Do not hot-replace a live installation
    whose process may import modules lazily.
-9. Carry forward the sub-agent comparison recorded on 2026-09-11. Comparing
-   this surface against the native sub-agent lifecycle it mimics left three
-   gaps worth closing here rather than in a new phase: (a) context inheritance
-   -- a dispatched session receives the task text and nothing else, where a fork
-   would carry the caller's conversation and its warm prompt cache; (b) a stall
-   watchdog -- an explicit no-progress window that aborts and reports, distinct
-   from the SDK's loop detection and from idle eviction; (c) progress
-   visibility -- either a pushed completion (transport permitting) or, failing
-   that, durable progress inside `status`, because today the orchestrator reads
-   a transcript to learn what a session is doing. Each is a contract change and
-   needs its own tests and docstrings; none is a reason to weaken the permission
-   or workspace guarantees already in place.
+9. Carry forward the sub-agent comparison recorded on 2026-09-11, now
+   implemented and recorded in [the H7 result](../results/h7.md): (a) context
+   inheritance ships as `dispatch_from`, which forks *another AgentRT session*
+   -- the orchestrator's own conversation is not readable by the daemon, so that
+   is the limit, and a fork inherits the source's agent, workspace and
+   permission; (b) the stall signal ships as `progress_age_seconds` on the
+   answer, reported and never acted on, because a long reasoning turn persists
+   nothing and is indistinguishable from a stall -- no automatic abort is
+   implemented, deliberately; (c) progress visibility ships in the wait surface,
+   where `still_running` items carry the last sampled status, admission, result
+   state and iteration counts. A pushed completion remains impossible over the
+   stdio transport and is not attempted.
 10. On each verified release update MCP docstrings first for operational behavior,
    then daemon/orchestrator/migration docs. Keep safety guidance concise and
    accurate; reducing schema prose is not a reason to remove permission caveats.
