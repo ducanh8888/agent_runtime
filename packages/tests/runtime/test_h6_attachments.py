@@ -102,3 +102,28 @@ def test_an_oversized_attachment_is_refused(tmp_path, monkeypatch) -> None:
 
     with pytest.raises(client_mod.ClientError, match="above the 4 byte cap"):
         client.dispatch("t", str(tmp_path), attachments=[str(image)])
+
+
+def test_usage_is_read_through(tmp_path) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/usage")
+        return httpx.Response(
+            200,
+            json={
+                "conversation_id": CREATED,
+                "services": [
+                    {
+                        "service_id": "worker",
+                        "raw": {"prompt_tokens": 10, "reasoning_tokens": 0},
+                    }
+                ],
+            },
+        )
+
+    client = _mock_client(handle)
+
+    payload = client.usage(CREATED)
+
+    assert payload["services"][0]["service_id"] == "worker"
+    # Zero is reported as zero; an absent field is not the same thing.
+    assert payload["services"][0]["raw"]["reasoning_tokens"] == 0

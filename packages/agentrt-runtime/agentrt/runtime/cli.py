@@ -76,6 +76,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         llm_profile=args.llm_profile,
         max_iterations=args.max_iterations,
         tags=_parse_tags(args.tag),
+        attachments=args.attachment or None,
     )
 
 
@@ -95,6 +96,11 @@ def _cmd_result(args: argparse.Namespace) -> dict:
     """Return the final result produced by a session."""
     client = client_mod.Client()
     return client.result(args.session)
+
+
+def _cmd_usage(args: argparse.Namespace) -> dict:
+    """Return the per-call token usage of a session."""
+    return client_mod.Client().usage(args.session)
 
 
 def _cmd_profiles(_args: argparse.Namespace) -> dict:
@@ -258,6 +264,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="stop the run after this many agent steps (daemon default: 500)",
     )
     dispatch_parser.add_argument(
+        "--attachment",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="attach an image from the workspace; repeatable",
+    )
+    dispatch_parser.add_argument(
         "--tag",
         action="append",
         default=[],
@@ -272,6 +285,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     status_parser = _add_subparser(subparsers, "status", help="show session status")
     status_parser.add_argument("session")
+
+    usage_parser = _add_subparser(subparsers, "usage", help="show model usage")
+    usage_parser.add_argument("session")
+    usage_parser.set_defaults(func=_cmd_usage)
     status_parser.set_defaults(func=_cmd_status)
 
     result_parser = _add_subparser(subparsers, "result", help="show session result")

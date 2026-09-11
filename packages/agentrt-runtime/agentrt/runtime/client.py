@@ -1461,6 +1461,21 @@ class Client:
             "requested": len(tasks),
         }
 
+    def usage(self, session: str) -> dict:
+        """Report what a session's model calls consumed.
+
+        Raw counts are the provider's own numbers, copied verbatim; the
+        normalized view is derived alongside them. The projection never guesses:
+        a field the stats owner did not record is reported as unavailable rather
+        than as zero. Nothing here contains a prompt, completion, reasoning
+        content or credential.
+        """
+        resolved = self._resolve_session(session)
+        return self._send(
+            "GET",
+            f"/api/conversations/{quote(resolved, safe='')}/usage",
+        ).json()
+
     def capacity(self) -> dict:
         """Report the daemon's admission surface.
 

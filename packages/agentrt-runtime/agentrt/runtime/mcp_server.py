@@ -310,6 +310,26 @@ def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
 
 
 @mcp.tool()
+def usage(session: str) -> dict:
+    """Report what a session's model calls consumed.
+
+    Per service and per call: the raw provider token counts (prompt, completion,
+    cache read, cache write, reasoning) and a normalized view derived from them.
+    Read both. A provider that nests cache reads inside its prompt count is
+    adjusted in the normalized view, and a field the stats owner did not record
+    is reported as unavailable rather than as zero -- so "unknown" and "free"
+    stay distinguishable.
+
+    This is spend telemetry; it never changes the model, the effort or the run.
+    No prompt, completion, reasoning content or credential is included.
+
+    The projection is present on the conversation record for every session, so
+    it works for sessions that ran before this tool existed.
+    """
+    return _guard(_get_client().usage, session)
+
+
+@mcp.tool()
 def capacity() -> dict:
     """Report how much work the daemon will admit right now.
 
