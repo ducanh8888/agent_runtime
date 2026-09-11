@@ -16,10 +16,16 @@ copied secrets.
 
 from __future__ import annotations
 
+import asyncio
+import os
 import stat
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException, status
+from fastapi.responses import FileResponse
+from starlette.datastructures import MutableHeaders
+from starlette.types import Receive, Scope, Send
 
 from agentrt.agent_server.config import Config, get_default_config
 from agentrt.sdk.utils.path import get_user_persistence_dir
@@ -40,6 +46,134 @@ _PERSISTENCE_CREDENTIAL_DIRS = ("provider-connections", "profiles", "agent-profi
 _CONVERSATION_STATE_FILES = ("meta.json", "base_state.json")
 
 Inode = tuple[int, int]
+
+
+class OpenedFileResponse(FileResponse):
+    """A range-capable response pinned to an already-verified file descriptor."""
+
+    def __init__(self, fd: int, path: Path, **kwargs: Any) -> None:
+        self._fd = fd
+        super().__init__(path=path, stat_result=os.fstat(fd), **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if self._fd >= 0:
+                os.close(self._fd)
+                self._fd = -1
+
+    async def _seek(self, offset: int) -> None:
+        await asyncio.to_thread(os.lseek, self._fd, offset, os.SEEK_SET)
+
+    async def _read(self, size: int) -> bytes:
+        return await asyncio.to_thread(os.read, self._fd, size)
+
+    async def _handle_simple(
+        self, send: Send, send_header_only: bool, send_pathsend: bool
+    ) -> None:
+        del send_pathsend  # A path send would reopen the untrusted name.
+        await send(
+            {
+                "type": "http.response.start",
+                "status": self.status_code,
+                "headers": self.raw_headers,
+            }
+        )
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        await self._seek(0)
+        while True:
+            chunk = await self._read(self.chunk_size)
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": chunk,
+                    "more_body": len(chunk) == self.chunk_size,
+                }
+            )
+            if len(chunk) < self.chunk_size:
+                return
+
+    async def _handle_single_range(
+        self,
+        send: Send,
+        start: int,
+        end: int,
+        file_size: int,
+        send_header_only: bool,
+    ) -> None:
+        headers = MutableHeaders(raw=list(self.raw_headers))
+        headers["content-range"] = f"bytes {start}-{end - 1}/{file_size}"
+        headers["content-length"] = str(end - start)
+        await send(
+            {"type": "http.response.start", "status": 206, "headers": headers.raw}
+        )
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        await self._seek(start)
+        while start < end:
+            chunk = await self._read(min(self.chunk_size, end - start))
+            start += len(chunk)
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": chunk,
+                    "more_body": bool(chunk) and start < end,
+                }
+            )
+            if not chunk:
+                return
+
+    async def _handle_multiple_ranges(
+        self,
+        send: Send,
+        ranges: list[tuple[int, int]],
+        file_size: int,
+        send_header_only: bool,
+    ) -> None:
+        boundary = os.urandom(13).hex()
+        content_length, header = self.generate_multipart(
+            ranges, boundary, file_size, self.headers["content-type"]
+        )
+        headers = MutableHeaders(raw=list(self.raw_headers))
+        headers["content-type"] = f"multipart/byteranges; boundary={boundary}"
+        headers["content-length"] = str(content_length)
+        await send(
+            {"type": "http.response.start", "status": 206, "headers": headers.raw}
+        )
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        for start, end in ranges:
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": header(start, end),
+                    "more_body": True,
+                }
+            )
+            await self._seek(start)
+            while start < end:
+                chunk = await self._read(min(self.chunk_size, end - start))
+                if not chunk:
+                    break
+                start += len(chunk)
+                await send(
+                    {"type": "http.response.body", "body": chunk, "more_body": True}
+                )
+            await send(
+                {"type": "http.response.body", "body": b"\r\n", "more_body": True}
+            )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": f"--{boundary}--".encode("latin-1"),
+                "more_body": False,
+            }
+        )
 
 
 def _resolve_config(config: Config | None) -> Config:
@@ -181,3 +315,43 @@ def reject_protected_state_path(candidate: Path, config: Config | None = None) -
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found",
         )
+
+
+def open_guarded_file_response(
+    candidate: Path,
+    config: Config | None = None,
+    **kwargs: Any,
+) -> OpenedFileResponse:
+    """Open, verify and serve one immutable inode instead of reopening a path.
+
+    The ordinary path guard runs first. The post-open inode check then closes
+    the remaining swap window: even if the final path changes between those
+    operations, the response can only stream the descriptor checked here.
+    """
+    reject_protected_state_path(candidate, config)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(candidate, flags)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found",
+        ) from exc
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Path is not a file",
+            )
+        if (opened.st_dev, opened.st_ino) in protected_state_inodes(config):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found",
+            )
+        response = OpenedFileResponse(fd, candidate, **kwargs)
+        fd = -1
+        return response
+    finally:
+        if fd >= 0:
+            os.close(fd)

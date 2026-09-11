@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from agentrt.agent_server._read_guard import (
+    open_guarded_file_response,
     protected_state_inodes,
     reject_protected_state_path,
 )
@@ -95,10 +96,7 @@ async def _upload_file(
         fd = os.open(target_path, os.O_WRONLY | os.O_CREAT, 0o666)
         try:
             opened = os.fstat(fd)
-            if opened.st_nlink >= 2 and (
-                opened.st_dev,
-                opened.st_ino,
-            ) in protected_state_inodes(config):
+            if (opened.st_dev, opened.st_ino) in protected_state_inodes(config):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="File not found",
@@ -148,10 +146,9 @@ async def _download_file(path: str, config: Config | None = None) -> FileRespons
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Path is not a file"
             )
 
-        reject_protected_state_path(target_path, config)
-
-        return FileResponse(
-            path=target_path,
+        return open_guarded_file_response(
+            target_path,
+            config,
             filename=target_path.name,
             media_type="application/octet-stream",
         )
@@ -417,7 +414,6 @@ def _archive_filter_overrides(root: Path, env: dict[str, str]) -> list[str]:
             "git",
             *_ARCHIVE_GIT_CONFIG_OVERRIDES,
             "config",
-            "--local",
             "--includes",
             "--name-only",
             "--get-regexp",
@@ -434,7 +430,7 @@ def _archive_filter_overrides(root: Path, env: dict[str, str]) -> list[str]:
     if result.returncode not in (0, 1):
         raise GitCommandError(
             message="Failed to inspect repository filter configuration",
-            command=["git", "config", "--local", "--get-regexp", "filter"],
+            command=["git", "config", "--get-regexp", "filter"],
             exit_code=result.returncode,
             stderr=result.stderr.strip(),
         )

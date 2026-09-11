@@ -234,6 +234,17 @@ def _fit_search_page(matches: list[SearchMatch]) -> tuple[list[SearchMatch], boo
     return page, clipped
 
 
+def _source_lines(text: str) -> list[str]:
+    """Split only the newline sequences used by file-editor line ranges."""
+    if not text:
+        return []
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 class InspectAction(Action):
     """The closed parameter set for one `inspect` command.
 
@@ -521,11 +532,17 @@ class InspectExecutor(ToolExecutor):
             if scan_limit_hit:
                 break
 
+        source_clipped = clipped
         page, budget_clipped = _fit_search_page(matches)
         clipped = clipped or budget_clipped
+        returned_end = action.offset + len(page)
+        has_more_in_scanned_window = returned_end < total
+        has_more_before_scan_cap = (
+            scan_limit_hit and returned_end < MAX_SEARCH_MATCHES_SCANNED
+        )
         next_offset = (
-            action.offset + len(page)
-            if action.offset + len(page) < total or scan_limit_hit
+            returned_end
+            if page and (has_more_in_scanned_window or has_more_before_scan_cap)
             else None
         )
         count_text = f"at least {total}" if scan_limit_hit else str(total)
@@ -544,7 +561,7 @@ class InspectExecutor(ToolExecutor):
             include=action.include,
             matches=page,
             match_count=total,
-            match_count_exact=not scan_limit_hit,
+            match_count_exact=not scan_limit_hit and not source_clipped,
             files_scanned=files_scanned,
             offset=action.offset,
             next_offset=next_offset,
@@ -568,7 +585,7 @@ class InspectExecutor(ToolExecutor):
         except OSError:
             return [], 0, False, False
 
-        lines = text.splitlines()
+        lines = _source_lines(text)
         found: list[SearchMatch] = []
         count = 0
         clipped = False

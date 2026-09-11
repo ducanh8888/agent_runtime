@@ -194,6 +194,59 @@ def check_path(
     return resolved
 
 
+def _runtime_state_roots() -> set[Path]:
+    from agentrt.runtime import config
+
+    roots = {config.state_dir()}
+    configured = os.environ.get("AGENTRT_PERSISTENCE_DIR")
+    if configured:
+        from agentrt.sdk.utils.path import get_user_persistence_dir
+
+        roots.add(get_user_persistence_dir().resolve())
+    return roots
+
+
+def _runtime_conversation_roots() -> set[Path]:
+    roots = {state / "conversations" for state in _runtime_state_roots()}
+    configured = os.environ.get("AGENTRT_CONVERSATIONS_PATH")
+    if configured:
+        roots.add(Path(configured).expanduser().resolve())
+    return roots
+
+
+def is_runtime_secret_location(resolved: Path) -> bool:
+    """Whether ``resolved`` is a runtime-owned state location by path."""
+    for state in _runtime_state_roots():
+        try:
+            relative = resolved.relative_to(state)
+        except ValueError:
+            continue
+        parts = relative.parts
+        if len(parts) == 1 and parts[0] in {
+            ".env",
+            "daemon.json",
+            "settings.json",
+            "secrets.json",
+        }:
+            return True
+        if len(parts) == 2 and parts[0] in {"profiles", "agent-profiles"}:
+            return relative.suffix == ".json"
+        if len(parts) >= 2 and parts[0] == "provider-connections":
+            return relative.suffix == ".json"
+
+    for conversations in _runtime_conversation_roots():
+        try:
+            relative = resolved.relative_to(conversations)
+        except ValueError:
+            continue
+        if len(relative.parts) == 2 and relative.name in {
+            "meta.json",
+            "base_state.json",
+        }:
+            return True
+    return False
+
+
 def runtime_secret_identities() -> set[tuple[int, int]]:
     """(device, inode) of every file in the state directory holding a secret.
 
@@ -211,16 +264,8 @@ def runtime_secret_identities() -> set[tuple[int, int]]:
     simply off rather than weakened, and a workspace on such a volume gets the
     behaviour that existed before it: path confinement, blind to aliases.
     """
-    from agentrt.runtime import config
-
-    roots = {config.state_dir()}
-    configured_persistence = os.environ.get("AGENTRT_PERSISTENCE_DIR")
-    if configured_persistence:
-        roots.add(Path(configured_persistence).expanduser().resolve())
-
     candidates: list[Path] = []
-    conversation_roots: set[Path] = set()
-    for state in roots:
+    for state in _runtime_state_roots():
         candidates.extend(
             [
                 state / ".env",
@@ -232,13 +277,7 @@ def runtime_secret_identities() -> set[tuple[int, int]]:
                 *(state / "agent-profiles").glob("*.json"),
             ]
         )
-        conversation_roots.add(state / "conversations")
-
-    configured_conversations = os.environ.get("AGENTRT_CONVERSATIONS_PATH")
-    if configured_conversations:
-        conversation_roots.add(Path(configured_conversations).expanduser().resolve())
-
-    for conversations in conversation_roots:
+    for conversations in _runtime_conversation_roots():
         try:
             conversation_dirs = list(conversations.iterdir())
         except OSError:
@@ -280,6 +319,8 @@ def is_runtime_secret(resolved: Path) -> bool:
     confinement by path cannot see aliasing it is not told about. Closing that
     properly needs a sandbox, not a cleverer check.
     """
+    if is_runtime_secret_location(resolved):
+        return True
     try:
         info = resolved.stat()
     except OSError:

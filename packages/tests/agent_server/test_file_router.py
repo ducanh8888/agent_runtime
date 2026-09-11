@@ -18,7 +18,10 @@ import pytest
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
-from agentrt.agent_server import file_router as file_router_module
+from agentrt.agent_server import (
+    _read_guard as read_guard_module,
+    file_router as file_router_module,
+)
 from agentrt.agent_server.api import create_app
 from agentrt.agent_server.config import Config
 from agentrt.agent_server.file_router import ARCHIVE_MANIFEST_NAME, _upload_file
@@ -77,6 +80,38 @@ def test_upload_file_query_param_creates_parent_dirs(client, tmp_path):
     assert target_path.read_bytes() == file_content
 
 
+def test_upload_rechecks_opened_inode_after_symlink_swap(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    state.mkdir()
+    secret = state / "secrets.json"
+    secret.write_text("DO-NOT-OVERWRITE", encoding="utf-8")
+    target = tmp_path / "upload.txt"
+    target.write_text("benign", encoding="utf-8")
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(state))
+    original_guard = file_router_module.reject_protected_state_path
+
+    def guard_then_swap(path, config):
+        original_guard(path, config)
+        path.unlink()
+        path.symlink_to(secret)
+
+    monkeypatch.setattr(
+        file_router_module, "reject_protected_state_path", guard_then_swap
+    )
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+
+    response = client.post(
+        "/api/file/upload",
+        params={"path": str(target)},
+        files={"file": ("payload.txt", io.BytesIO(b"ATTACK"), "text/plain")},
+    )
+
+    assert response.status_code == 404
+    assert secret.read_text(encoding="utf-8") == "DO-NOT-OVERWRITE"
+
+
 def test_upload_file_query_param_relative_path_fails(client):
     """Test that upload with relative path returns 400."""
     response = client.post(
@@ -126,6 +161,46 @@ def test_download_file_query_param_success(client, temp_file):
     assert response.status_code == 200
     assert response.content == b"test file content"
     assert response.headers["content-type"] == "application/octet-stream"
+
+
+def test_download_preserves_byte_range_support(client, temp_file):
+    response = client.get(
+        "/api/file/download",
+        params={"path": str(temp_file)},
+        headers={"Range": "bytes=5-8"},
+    )
+
+    assert response.status_code == 206
+    assert response.content == b"file"
+    assert response.headers["content-range"] == "bytes 5-8/17"
+
+
+def test_download_serves_opened_inode_after_symlink_swap(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    state.mkdir()
+    secret = state / "secrets.json"
+    secret.write_text("DO-NOT-SERVE", encoding="utf-8")
+    target = tmp_path / "download.txt"
+    target.write_text("benign", encoding="utf-8")
+    monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(state))
+    original_guard = read_guard_module.reject_protected_state_path
+
+    def guard_then_swap(path, config):
+        original_guard(path, config)
+        path.unlink()
+        path.symlink_to(secret)
+
+    monkeypatch.setattr(
+        read_guard_module, "reject_protected_state_path", guard_then_swap
+    )
+    client = TestClient(
+        create_app(Config(session_api_keys=[])), raise_server_exceptions=False
+    )
+
+    response = client.get("/api/file/download", params={"path": str(target)})
+
+    assert response.status_code == 404
+    assert b"DO-NOT-SERVE" not in response.content
 
 
 def test_download_file_query_param_not_found(client, tmp_path):
@@ -1993,7 +2068,8 @@ def test_git_delta_archive_does_not_execute_hostile_diff_command(tmp_path):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX marker script")
-def test_git_delta_archive_does_not_execute_clean_filter(tmp_path):
+@pytest.mark.parametrize("config_scope", ["--local", "--worktree"])
+def test_git_delta_archive_does_not_execute_clean_filter(tmp_path, config_scope):
     helper = tmp_path / "clean-filter.sh"
     marker = tmp_path / "MARKER-clean-filter"
     helper.write_text(f"#!/bin/sh\necho ran > {marker}\ncat\n")
@@ -2002,8 +2078,10 @@ def test_git_delta_archive_does_not_execute_clean_filter(tmp_path):
     repo.mkdir()
     _git(["init", "-b", "main"], repo)
     (repo / ".gitattributes").write_text("*.txt filter=hostile\n", encoding="utf-8")
-    _git(["config", "filter.hostile.clean", str(helper)], repo)
-    _git(["config", "filter.hostile.required", "true"], repo)
+    if config_scope == "--worktree":
+        _git(["config", "extensions.worktreeConfig", "true"], repo)
+    _git(["config", config_scope, "filter.hostile.clean", str(helper)], repo)
+    _git(["config", config_scope, "filter.hostile.required", "true"], repo)
     (repo / "new.txt").write_text("clean-filter-content\n", encoding="utf-8")
     client = TestClient(
         create_app(Config(session_api_keys=[])), raise_server_exceptions=False

@@ -18,7 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 
-from agentrt.agent_server._read_guard import reject_protected_state_path
+from agentrt.agent_server._read_guard import open_guarded_file_response
 from agentrt.agent_server.config import Config
 from agentrt.agent_server.conversation_service import ConversationService
 from agentrt.agent_server.dependencies import get_conversation_service
@@ -91,16 +91,14 @@ def _serve_path(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No index.html in directory",
             )
-        reject_protected_state_path(index_file, config)
-        return FileResponse(path=index_file)
+        return open_guarded_file_response(index_file, config)
 
     if not target.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found",
         )
-    reject_protected_state_path(target, config)
-    return FileResponse(path=target)
+    return open_guarded_file_response(target, config)
 
 
 @workspace_router.get(

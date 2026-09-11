@@ -232,6 +232,26 @@ def test_inspect_refuses_aliases_from_explicit_persistence_locations(
         )
 
 
+def test_inspect_refuses_direct_and_symlinked_state_inside_workspace(
+    state_dir: Path, tmp_path: Path
+) -> None:
+    credential = state_dir / ".env"
+    credential.write_text("AGENTRT_API_KEY=DO-NOT-LEAK", encoding="utf-8")
+    alias = tmp_path / "credential-link"
+    alias.symlink_to(credential)
+
+    for candidate in (credential, alias):
+        with pytest.raises(permissions.PermissionDenied):
+            permissions.check_path(
+                str(candidate), root=tmp_path, permission="inspect", writing=False
+            )
+
+    obs = _executor(tmp_path)(
+        inspect_tools.InspectAction(command="search", pattern="DO-NOT-LEAK")
+    )
+    assert obs.match_count == 0
+
+
 def test_inspect_allows_unrelated_hard_link(
     state_dir: Path, workspace: Path, tmp_path: Path
 ) -> None:
@@ -357,6 +377,58 @@ def test_search_caps_total_matches_before_materializing_them(
     assert obs.match_count_exact is False
     assert obs.truncated is True
     assert obs.next_offset == 10
+
+
+def test_search_pagination_stops_at_the_scan_cap(
+    state_dir: Path, workspace: Path
+) -> None:
+    (workspace / "dense.txt").write_text(
+        "a\n" * (inspect_tools.MAX_SEARCH_MATCHES_SCANNED + 100), encoding="utf-8"
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(
+            command="search",
+            pattern="a",
+            max_results=10,
+            offset=inspect_tools.MAX_SEARCH_MATCHES_SCANNED - 5,
+        )
+    )
+
+    assert len(obs.matches) == 5
+    assert obs.match_count == inspect_tools.MAX_SEARCH_MATCHES_SCANNED
+    assert obs.match_count_exact is False
+    assert obs.truncated is True
+    assert obs.next_offset is None
+
+
+def test_search_marks_count_inexact_when_long_line_is_clipped(
+    state_dir: Path, workspace: Path
+) -> None:
+    (workspace / "long.txt").write_text(
+        "x" * (inspect_tools.MAX_LINE_CHARS + 1) + "needle\n", encoding="utf-8"
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="needle")
+    )
+
+    assert obs.match_count == 0
+    assert obs.match_count_exact is False
+    assert obs.truncated is True
+
+
+def test_search_uses_the_file_view_line_model(state_dir: Path, workspace: Path) -> None:
+    (workspace / "page-break.py").write_text(
+        "def first():\n    pass\n\f\ndef second():\n    target = 1\n",
+        encoding="utf-8",
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="target")
+    )
+
+    assert obs.matches[0].line == 5
 
 
 # -- mutation attempts -------------------------------------------------
