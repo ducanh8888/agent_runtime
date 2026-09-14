@@ -432,3 +432,64 @@ Widening `ConversationConfig.workspace` to accept the fix's beneficiary
 the entry above and `docker-recon.md`. The type stays narrow because nothing
 downstream can use a wider one yet; landing it alone would only reintroduce
 "looks supported from outside" for a different field.
+
+## The first LLM call can hang forever, and `finalize` cannot touch it
+
+Two sessions dispatched in the same instant (`b51ec288`, `28c02d3d`, both
+20:40:55 UTC 2026-09-15) sat at `iterations_used: 0` for 7m34s with no
+observation. `finalize()` returned 200 and a partial result at 03:48:29 local
+without stopping anything -- the run stayed `running`. Only a manual
+`interrupt()` at 03:48:40 actually ended it: the log shows
+`interrupt(): cancelled in-flight arun() task`, proving the task was still
+genuinely alive, not orphaned.
+
+**First suspect, ruled out.** A burst of 142 `Failed to decrypt secret value`
+warnings landed in the same two seconds the sessions were created, which looked
+causal. It is not. Bucketing the full daemon log by restart boundary shows the
+burst at *every* restart since 2026-09-09, scaling with the number of stored
+sessions, including dozens of restarts where dispatches worked fine through
+H4-H7. `AGENTRT_SECRET_KEY` is unset, so the cipher key is ephemeral per
+restart by design -- already known, harmless (`docker-recon.md`). And decisively:
+the LLM profile's own `api_key` is a plain `sk-...` string, never Fernet-
+encrypted, so it was never a candidate for this cipher's failures at all.
+Nearby in time was not the same subsystem.
+
+**What the evidence actually shows.** Both conversations' event logs stop dead
+after `ConversationStateUpdateEvent{key: consumed_user_message_id}` --
+`SystemPromptEvent`, the user `MessageEvent`, state bookkeeping, then nothing.
+Zero `ActionEvent`, zero `ObservationEvent`. The agent loop reached its first
+LLM completion call and that call never returned. The daemon log carries no
+retry, timeout, or error trace for the outbound call during the whole gap --
+only the orchestrator's own periodic status polls. Scanned across all 75
+stored sessions, this signature (reached `consumed_user_message_id`, zero
+`ActionEvent`) appears in exactly these two and no others: not a systemic
+defect, an isolated stall, most likely a transient provider/network condition
+at that specific moment (both sessions submitted ~200ms apart, ~1m48s after a
+daemon restart).
+
+**Why `finalize` did not stop it.** `_pause_to_boundary()` is cooperative: it
+retries `pause()` up to three times over ~0.6s total, then gives up and
+returns whatever partial state exists with the run still `running` -- by
+design, per its own comment. `pause()` sets a flag the agent loop checks
+between steps; it has nothing to act on when the loop is blocked inside its
+first, not-yet-returned LLM call. Only `interrupt()` reaches that: it cancels
+the `arun()` task directly rather than waiting for a safe point.
+
+**Not proposed: a general stall watchdog.** H7 already measured and rejected
+one -- a session can legitimately produce nothing for minutes while composing
+one long answer, and killing on silence would discard real work. `iterations_used
+== 0` with zero persisted events is a different case: nothing has run yet, so
+there is nothing to discard. The narrow fix that survives H7's own argument is
+a **start deadline** (bounded time to the first event), not a general
+stall timeout.
+
+**Open, not fixed.** Two changes scoped, neither shipped yet:
+
+- A start deadline distinct from the rejected stall watchdog, per above.
+- `finalize` either escalates to `interrupt()` once its cooperative window is
+  exhausted, or its docstring stops claiming "stop a session at a safe
+  boundary" when the measured behavior is a best-effort 0.6s attempt.
+
+Also worth having independent of root cause: the daemon logs nothing at all
+about what an outbound LLM call is doing while it runs. That gap is what made
+this take log archaeology instead of a status field.
