@@ -308,7 +308,14 @@ def read_dotenv(path: Path) -> dict[str, str]:
     return values
 
 
-DEFAULT_MAX_RUNNING_SESSIONS = 5
+# 0 means unlimited, per max_running_sessions()'s own documented semantics.
+# This client-side check sits on top of the daemon's own admission pool
+# (`capacity`'s `limit`), which already queues gracefully instead of refusing
+# when full -- so the safety this constant existed for is handled there, and
+# an unrelated Claude/Codex session's real work should not hit an abrupt
+# refusal from a second, redundant, stricter cap. Set AGENTRT_MAX_SESSIONS to
+# reintroduce a per-dispatcher ceiling if a specific deployment wants one.
+DEFAULT_MAX_RUNNING_SESSIONS = 0
 
 
 def max_running_sessions() -> int:
