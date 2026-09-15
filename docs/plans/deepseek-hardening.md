@@ -10,6 +10,15 @@ Implementation baseline: `203f493a4fb0736b384a1c370556c30d16c9c421`.
 ## Status
 
 Active follow-on implementation plan; **H0–H6 are complete** and **H7 ran its production cutover on 2026-09-12**, with the sub-agent items and the H5 shared-writer limit finished afterwards. H7's staged scale verification (50–100 workers) remains and needs an agreed load and window.
+
+**H8 and H9 are planned, not started**, added 2026-09-16 from consumer feedback
+received after the H7 cutover (`../research/friction-log.md`'s stall/finalize
+entry, and a second, more detailed consumer report). Both are diagnosis and
+design only — no code has changed for either. H8 closes the fifteen items in
+that report; H9 is a deliberate architecture comparison against Claude Code's
+and Codex's native sub-agent primitives, aimed at closing the gaps H8 cannot by
+itself (the two-process, MCP-mediated design is not going away, but several of
+its rough edges are the *reason* it does not yet feel native).
 The scope and thinking/high policy are user requirements. H2–H7 API
 examples and internal field names below are proposed contracts, not shipped
 capabilities; verified behavior is recorded in
@@ -62,6 +71,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Complete — [result](../results/h5.md) |
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
+| H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | Planned — not started |
+| H9 | Native sub-agent parity: close the experiential gap against Claude Code's `Task` tool and Codex's collaboration-mode sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | Planned — not started |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -465,6 +476,201 @@ cannot change the high policy or silently stop a run.
    where `still_running` items carry the last sampled status, admission, result
    state and iteration counts. A pushed completion remains impossible over the
    stdio transport and is not attempted.
+
+### H8 — Fifteen consumer-report defects
+
+Basis: a consumer feedback report received 2026-09-16, fifteen numbered items
+plus a kept-behavior list, and `../research/friction-log.md`'s "the first LLM
+call can hang forever" entry from the day before, which items 1 and 12 below
+turn out to explain. Every item was checked against the current tree before
+being scoped here -- several confirmed exactly as reported, one confirmed
+*false* as reported (with the real defect relocated), one confirmed only
+partially (the CLI path does not reproduce it; a related, more serious path is
+untested). Items are grouped by the consumer's own severity labels.
+
+**Verification performed, so H9/implementation does not have to re-derive it:**
+
+- Item 1 (reasoning_content dropped on resume) and item 12 (0-iteration
+  `LLMServiceUnavailableError` after a 900s provider queue timeout) are the
+  same failure family as yesterday's friction-log entry, and the missing piece
+  is now found: `LLM._retry_listener_fn` (`agentrt/sdk/llm/llm.py`) does not
+  log per-attempt retries *by design* -- its own comment says logging every
+  retry "would create noisy duplicate error logs" -- and only
+  `Telemetry.on_error` logs, after retries are exhausted. `APIConnectionError`
+  and `ServiceUnavailableError` are already in `LLM_RETRY_EXCEPTIONS`, so a
+  900s-queue rejection is plausibly already being retried, silently, for up to
+  `num_retries * (attempt latency + backoff)` -- which is consistent with both
+  yesterday's 7m34s hang (a live, cancellable task the whole time, per
+  `interrupt()`'s log line) and not needing a new retry *path*, only visibility
+  into the one that exists and a bound on how long "silently retrying" is
+  allowed to look identical to "hung."
+- Item 5 (empty-result errors bucketed as `partial`) does not reproduce against
+  `_wait_bucket` (`agentrt/runtime/client.py`): read literally, an empty/blank
+  `result` string falls through to `return "failed"`, not `"partial"`. The
+  function only returns `"partial"` when the daemon's own payload already
+  carries `state == "partial"` -- a field `_response_payload` relays verbatim
+  from the daemon (`agent_server`), not one this package computes. The
+  consumer's session likely had `state: "partial"` set upstream on a
+  genuinely-empty-result error, which is a *different* bug one layer down,
+  not yet traced to its origin in `agent_server`.
+- Item 11 (tag key charset) confirmed exactly: `TAG_KEY_PATTERN =
+  re.compile(r"^[a-z0-9]+$")` (`agentrt/sdk/conversation/types.py`) rejects
+  `superseded-by`. This codebase already has the fix's shape elsewhere --
+  `PLUGIN_NAME_PATTERN` and `CANVAS_EXTENSION_NAME_PATTERN`
+  (`agent_server/plugins_router.py`, `canvas_extensions_router.py`) are both
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$` -- so widening the tag pattern to match is a
+  precedented change, not a new one.
+- The CLI positional-flag complaint reproduces exactly: `agentrt list --text`
+  fails with argparse's generic `unrecognized arguments: --text`, no hint that
+  global flags must precede the subcommand.
+- The stdout/banner complaint does **not** reproduce over the path tested:
+  `agentrt list` (cold daemon, first call, `2>/dev/null`) prints clean JSON
+  immediately, because the CLI and the daemon are different, undetached-stdio
+  processes by design (`daemon.py`'s own docstring: "fully detached from the
+  client's console, stdio, and process group") -- the daemon's own startup
+  banner cannot structurally reach the CLI's stdout. What was **not** tested is
+  the path where this would be catastrophic rather than cosmetic: `agentrt-mcp`
+  shares a process with FastMCP, and stdout *is* the JSON-RPC channel there. If
+  the vendored SDK's banner print (suppressed by `AGENTRT_SUPPRESS_BANNER=1`,
+  per `CLAUDE.md`) or any of its own startup logging writes to stdout rather
+  than stderr inside that process, it corrupts the protocol stream itself, not
+  just a terminal's readability. Unverified; check before assuming the
+  consumer's report was simply wrong about the mechanism.
+
+**Implementation, grouped by the consumer's severity labels**
+
+*Nghiêm trọng (critical):*
+
+1. **Reasoning-content resend (item 1).** Trace how `LocalConversation`
+   rebuilds message history for a resumed/continued turn and confirm whether
+   `reasoning_content` on prior assistant tool-call turns is included when the
+   provider is in thinking mode. If it is dropped, carry it through
+   serialization and resume, matching what the provider's own error names as
+   the requirement. Treat `LLMBadRequestError` naming this specific shape as
+   retryable-after-repair (fix the resend, then retry once) rather than
+   terminal. Do not build a generic non-thinking fallback profile as part of
+   this item -- that is H8 item 9, a separate, opt-in profile, not an implicit
+   silent-fallback (which H0 already excludes as a non-goal).
+2. **No completion signal (item 2).** The stdio MCP transport cannot push;
+   H7.9 already recorded that limit rather than working around it with
+   something fragile. Ship the CLI-side piece that is genuinely missing: a
+   blocking `agentrt wait <id> [id...]` that exits 0/timeout-code on settlement,
+   so an orchestrator that does not want to hold an MCP call open can background
+   the CLI process and get a real process-exit signal instead of a poll loop.
+   Do not attempt a webhook/callback registry in this pass -- no deployment
+   need for it has been stated, and it is a different trust boundary (an
+   outbound call from the daemon to somewhere).
+12. **0-iteration provider timeouts are not distinguished (item 12, folded into
+    item 4's design).** Add a start deadline: bounded time from dispatch/resume
+    admission to the first persisted event (`ActionEvent` or
+    `ObservationEvent`). This is deliberately narrower than a stall watchdog --
+    H7 already measured and rejected a general one, because a session that
+    produces nothing for minutes while composing one long answer is not
+    stalled and killing it discards real work. `iterations_used == 0` with zero
+    events has nothing to discard. On the deadline, surface a distinct
+    execution status (not the existing undifferentiated `error`) naming the
+    provider exception class and attempt count, per item 4 below.
+
+*Cao (high):*
+
+3. **Unpaged payloads (item 3).** `wait_all`/`wait_any` return status and
+   metadata (length, a content hash) by default instead of full result text;
+   add offset/limit paging to `result`, matching the shape `read_evidence`
+   already established for transcripts. This is consistent with H1's paging
+   work, extended to the two call sites that currently skip it.
+4. **Silent truncation (item 4).** Persist and report `finish_reason` (or an
+   equivalent explicit `truncated: bool`) on the final message, and keep the
+   untruncated text retrievable through the new paged `result` from item 3
+   rather than only through raw events. A `final_summary` (H3's finalize
+   summary) needs the same field.
+
+*Trung bình (medium):*
+
+5. **`partial` bucket misclassification (item 5).** Traced above to
+   `agent_server`'s own `state` field, not to `_wait_bucket`. Find where a
+   session with `execution_status: "error"` and an empty result gets
+   `state: "partial"` assigned, and correct the assignment so `state` and
+   `result_state` agree with `execution_status` -- `_wait_bucket` needs no
+   change once its input is honest.
+6. **`inspect` search usability (item 6).** Return `path:line` per match
+   (bounded count, matching the existing truncation convention), accept a
+   single file as `scope` instead of only a directory (currently
+   `"Not a directory"`), and fix the inconsistent match counts between nested
+   scopes -- a parent directory and a file inside it disagreeing on whether a
+   pattern exists there is a correctness bug in the search implementation, not
+   a documentation gap.
+7. **No readonly output channel (item 7).** A write-only directory outside the
+   dispatched workspace, listed through `artifacts` like the workspace itself,
+   for a `readonly`/`inspect` session's report -- without granting write access
+   to anything the session can read, which would reopen the exact
+   confinement-by-path problem `orchestration.md`'s "Limits worth knowing"
+   section already describes for hard links. Needs the same device/inode
+   comparison the workspace guard already uses, applied to the new directory's
+   boundary.
+8. **No workspace snapshot for readonly sessions (item 8).** A `snapshot=<git
+   ref>` workspace mode that creates a detached worktree, records the resolved
+   commit on `status`, and removes the worktree on session delete -- the
+   `snapshot` name and shape are already reserved in section 4's proposed
+   contract (`workspace_mode="snapshot"`) and H4's revision-pinning work; this
+   item is exposing that existing design to `readonly`/`inspect` callers who
+   currently hand-roll worktree creation and cleanup themselves.
+9. **Only one LLM profile (item 9).** Add a second, explicit, opt-in
+   non-thinking profile alongside `deepseek-high`, satisfying both item 1's
+   fallback ask and diversifying worker/reviewer model choice -- without
+   relaxing H0's "no silent fallback to 9Router" or "no automatic effort
+   reduction" non-goals. Selection stays explicit per dispatch
+   (`llm_profile=...`, already in section 4's contract), never automatic.
+
+*Thấp (low):*
+
+10. **Transcript hygiene (item 10).** Populate `thought` on condensed
+    transcript entries where the source `ActionEvent` carries one (currently
+    always empty -- a condensation defect, not a data-availability one, since
+    `daemon-behavior.md` confirms `ActionEvent.thought` exists on the raw
+    event); strip ANSI escape sequences from terminal-tool output before it
+    reaches a transcript; add a deterministic progress summary field to an
+    errored session's payload (what ran before the failure), distinct from
+    the opt-in LLM-generated finalize summary.
+11. **Tag key charset (item 11).** Widen `TAG_KEY_PATTERN` to
+    `^[a-z0-9]+(?:-[a-z0-9]+)*$` (`_`-permitting variant if underscores are
+    also wanted), matching the existing `PLUGIN_NAME_PATTERN`/
+    `CANVAS_EXTENSION_NAME_PATTERN` precedent, and state the constraint in the
+    tag-setting tool's own docstring rather than only in a validation error.
+
+**Also raised, not part of a numbered item above:**
+
+- The MCP-transport stdout-corruption risk flagged during verification, above
+  -- resolve by checking (not assuming) before H8 implementation starts.
+- `wait_any`/`wait_all` reportedly hitting a ~1800s idle-timeout at a transport
+  layer below the documented arbitrary `timeout` parameter, aborting with a
+  generic transport error instead of the schema's `still_running`/`timed_out`.
+  Unverified against this tree in this pass -- if real, it is a second
+  instance of "a bound the caller cannot see is a bound the caller will cross"
+  (`../research/friction-log.md` already named this pattern for `list --limit`)
+  and belongs with item 3's paging work: either raise/remove the hidden bound,
+  or have `wait_*` chunk its own long poll into sub-timeouts under it so the
+  documented `timeout` is what actually governs.
+- No `transcript --tail N` for a running session's last few steps without
+  reading the full JSONL. A thin wrapper over the existing transcript
+  cursor/limit machinery, not a new storage format.
+- No expiry/supersession marker for old sessions accumulating across a long
+  orchestration run. `tags` already exists and is durable
+  (`daemon-behavior.md`); the missing piece is a convention/helper for marking
+  one session as superseded by another, not new storage.
+
+**Primary seams:** `agentrt/sdk/llm/llm.py` (retry/logging), `event_service.py`
+(start deadline, execution status), `client.py`/`mcp_server.py` (paging,
+`_wait_bucket`'s upstream `state` input, CLI `wait`), the `inspect` preset's
+search tool, the workspace/artifacts guard (readonly output channel,
+snapshot mode), `agent_server`'s LLM profile store (second profile),
+transcript condensation, `TAG_KEY_PATTERN`.
+
+**Done:** each numbered item above has a fixture reproducing the reported
+defect (or, for items 5 and the stdout risk, reproducing the *relocated* real
+one) before the fix, and a regression test after. The retry-visibility and
+start-deadline work (items 1, 2's CLI half, 12) is checked against a session
+that genuinely takes several minutes of legitimate silent thinking, to confirm
+H7's rejected-stall-watchdog scenario still is not killed.
 10. On each verified release update MCP docstrings first for operational behavior,
    then daemon/orchestrator/migration docs. Keep safety guidance concise and
    accurate; reducing schema prose is not a reason to remove permission caveats.
@@ -474,6 +680,121 @@ cannot change the high policy or silently stop a run.
 live fixture outcomes and unresolved limitations. Profile/state migration and
 rollback are demonstrated on a copy. Any production cutover is separately
 authorized and recorded; documentation never marks planned APIs as shipped.
+
+### H9 — Native sub-agent parity
+
+Basis: a direct request to make AgentRT feel as close as possible to Claude
+Code's own `Task` tool and to Codex's built-in collaboration-mode sub-agents,
+the two native sub-agent primitives an orchestrator already knows how to use
+without documentation. This phase is a comparison and a design, not a
+reduction of AgentRT to something it structurally is not -- H7's own reason
+for existing (a session must survive the orchestrator exiting) is incompatible
+with a purely in-process context fork, and nothing here proposes giving that
+up.
+
+**What "native" actually means for each reference point, checked rather than
+assumed:**
+
+- **Claude Code's `Task` tool.** A single tool call that blocks the orchestrator
+  and returns one final message when the sub-agent finishes -- no polling, no
+  session id to track afterward, no separate "read the result" step. The
+  sub-agent's context is isolated (a fresh window, not a slice of the
+  orchestrator's own history) and it shares the same filesystem and tools as
+  the parent by default. Named sub-agent *types* (`.claude/agents/*.md`) bundle
+  a model, a tool allowlist and a system prompt behind one identifier, so
+  choosing a sub-agent is choosing a role, not assembling parameters. Long
+  tasks may run in the background with a completion notification rather than a
+  held call, but even then the unit the orchestrator reasons about is one
+  named agent with one eventual outcome, not a REST resource with a status
+  enum to poll.
+- **Codex's collaboration-mode sub-agents.** Evidenced directly, not inferred:
+  the installed Codex binary's own string table (extracted while wiring Codex
+  in an earlier session, see the migration history) names the actual verbs --
+  `spawn_agent`, `send_input`, `send_message`, `resume_agent`,
+  `interrupt_agent`, `close_agent`, `list_agents`, `followup_task` -- plus
+  per-agent identity fields `agent_thread_id`, `agent_nickname`, `agent_role`,
+  and explicit terminal-reason vocabulary: `interrupted`, `review_ended`,
+  `budget_limited`. The shape that matters here: actions are named verbs on an
+  agent, not CRUD on a session resource, and *why an agent stopped* is a
+  first-class enumerated fact, not something inferred from log archaeology --
+  exactly the gap H8 items 4 and 12 are already closing for AgentRT
+  independently.
+
+**What can converge, and the H8 item each depends on:**
+
+1. **Named terminal reasons, not one `error`.** Both references enumerate why
+   an agent stopped (`budget_limited`, `interrupted`, `review_ended` for
+   Codex; a distinct completion vs. cutoff for Claude Code's `Task`). AgentRT
+   currently collapses "ran out of iterations," "provider gave up," and "the
+   agent code raised" into the same `execution_status: error` with no reason
+   field (`daemon-behavior.md`, confirmed unchanged). H8 items 4 and 12 already
+   commit to a start-deadline status and a `finish_reason`/`truncated` field;
+   this item asks for the same enumeration to also cover iteration exhaustion
+   and provider failure, so every terminal state names a reason from a closed
+   set, matching the shape both references already use.
+2. **A genuinely blocking, single-result call.** `wait_any`/`wait_all` already
+   block, but the orchestrator still holds a session id and calls a second
+   tool (`result`, `usage`, `artifacts`) to learn what happened. A `dispatch`
+   variant (or a `wait_all(..., mode="collect")` addition) that returns the
+   condensed final answer *in the same call* that settles -- title, result
+   text (paged per H8 item 3), terminal reason, token usage -- removes the
+   second round-trip for the common single-session case, which is the shape
+   `Task` actually has. Multi-session fan-out keeps the current
+   dispatch-then-wait split; the convenience is for the common one-session
+   case, not a replacement for `dispatch_many`/`wait_all`.
+3. **A role, not a parameter tuple.** Claude Code's named sub-agent types
+   bundle model + tools + prompt behind one identifier the orchestrator
+   chooses instead of assembling. AgentRT's `agent_profile_id`
+   (`permission` preset) is the same idea for tool access; H8 item 9 adds a
+   second LLM profile. Extending profiles to also carry a short task-shaped
+   description (what this profile is *for*, not only what it grants) turns
+   profile selection into role selection -- additive to the existing
+   `permission`/`llm_profile` fields, not a replacement for them.
+4. **Verb naming, where it is free.** `dispatch_from`/`dispatch_many`/
+   `wait_any`/`wait_all`/`finalize` already read as verbs on an agent rather
+   than REST-flavored CRUD, and should stay that way; nothing here proposes
+   renaming a shipped surface to chase Codex's exact vocabulary. Where H8
+   introduces new surface (item 2's `agentrt wait`, item 8's `snapshot=`),
+   name it to match this existing convention rather than the REST paths
+   underneath.
+
+**What cannot converge, and why not -- stated so nobody spends effort chasing
+it later:**
+
+- **No true context sharing.** A `Task` sub-agent's isolation is enforced by
+  both agents living in the same process; AgentRT's isolation is enforced by
+  being a *different* process behind a daemon, which is the entire point (the
+  session outlives the orchestrator). `dispatch_from` already closes the part
+  of this gap that is closable -- forking another AgentRT session's history --
+  and is explicit in its own docstring about the part that is not: the daemon
+  cannot read the orchestrator's own conversation.
+- **No push notification over stdio.** Recorded in H7.9 and restated in H8:
+  the transport cannot push. A background `Task` or a Codex agent's completion
+  can reach the caller through the same process boundary that dispatched it;
+  AgentRT's boundary is a separate daemon over stdio MCP, which structurally
+  cannot. Item 2's blocking `agentrt wait` CLI is the closest available
+  substitute -- a real process-exit signal for a caller willing to background
+  a process -- not a notification.
+- **No implicit shared filesystem/tool default.** `Task` shares the parent's
+  cwd and tools unless told otherwise; AgentRT requires an explicit
+  `workspace` and an explicit permission preset on every dispatch, by design
+  (`orchestration.md`'s confinement-by-path discussion). This is not a gap to
+  close -- an implicit shared workspace is exactly the "shared workspaces are
+  not coordinated" hazard the same document already names, and H8 item 8's
+  `snapshot=` mode is the isolated alternative, not a shared default.
+
+**Primary seams:** `mcp_server.py`/`client.py` (new `wait`/`dispatch` variant,
+terminal-reason enum), `agent_server`'s execution-status projection (reason
+enumeration underlying H8 items 4/12), the LLM/permission profile store (H8
+item 9's role description field), `agentrt` CLI (item 2's `wait` subcommand
+naming).
+
+**Done:** an orchestrator using only the converged surface (role-shaped
+profile choice, one blocking call for the single-session case, a named reason
+on every terminal state) can drive a common single-task dispatch without ever
+calling `status` to disambiguate an `error`. The three "cannot converge" items
+are documented at the point a new contributor would otherwise propose closing
+them, with the reason recorded here rather than re-litigated.
 
 ## 4. Proposed API contract
 
@@ -536,13 +857,35 @@ carry input/run provenance and current result state independently.
 | Missing conventional CLI `--version` | H0 local runtime version flag |
 | No command-capable readonly preset | H1 `inspect` preset with no general shell or file mutation |
 | Empty artifacts are ambiguous | H1 typed/documented empty-success semantics |
+| Consumer report (2026-09-16) 1. Reasoning-content dropped on resend, session dies | H8 item 1: trace history rebuild, repair-then-retry, not a silent fallback |
+| Consumer report 2. No completion signal, orchestrator must poll or block | H8 item 2: blocking `agentrt wait` CLI; push remains impossible over stdio (H7.9) |
+| Consumer report 3. `wait_*`/`result` payloads unpaged, overflow client limits | H8 item 3: status+metadata default, paged `result`, matching H1's paging shape |
+| Consumer report 4. Truncated final answer with no flag | H8 item 4: `finish_reason`/`truncated` on the final message and finalize summary |
+| Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: relocated to `agent_server`'s `state` field, not `_wait_bucket` |
+| Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: correctness fix in the search implementation |
+| Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
+| Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
+| Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: second opt-in non-thinking profile, explicit selection only |
+| Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: condensation and stripping fixes, deterministic progress field |
+| Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
+| Consumer report 12. 0-iteration provider timeout not retried/surfaced | H8 item 12: start deadline distinct from H7's rejected stall watchdog |
+| Consumer report: hidden ~1800s transport idle timeout under the documented `wait_*` timeout | H8, unverified -- pair with item 3's paging work if confirmed |
+| Consumer report: no `transcript --tail N` | H8, thin wrapper over existing cursor/limit |
+| Consumer report: no expiry/supersession marker for accumulated sessions | H8, convention over existing durable `tags`, not new storage |
+| Request to mimic Claude Code's `Task` tool and Codex's native sub-agents | H9: named terminal reasons, one blocking single-result call, role-shaped profiles; explicit non-goals where the daemon's own reason for existing forbids convergence |
 
 ## 6. Handoff and update convention
 
-The next code task is H7: verification, documentation and the production
-cutover, which now also carries the three sub-agent gaps recorded in H7.9. The
-unimplemented H5 sub-item is recorded in its result and should be revisited
-before a 50–100 worker claim.
+H7's cutover and sub-agent items are done; its staged 50-100 worker scale
+verification remains outstanding and should be revisited before that claim is
+made. The next code task is **H8**: the fifteen consumer-report items, in the
+severity order recorded there -- critical items 1 and 2/12 first, since they
+are the only ones that can silently destroy a session's work rather than
+merely inconvenience reading its output. **H9** (native sub-agent parity)
+should follow H8 rather than run in parallel with it: three of H9's four
+convergence points cite an H8 item as their prerequisite, and implementing
+them out of order would mean redoing the terminal-reason and paging work
+twice.
 
 For every phase, append evidence to a dated result record only after execution:
 revision/build identity, test command and outcome, disposable fixture locations,
