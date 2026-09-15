@@ -641,15 +641,34 @@ untested). Items are grouped by the consumer's own severity labels.
 
 - The MCP-transport stdout-corruption risk flagged during verification, above
   -- resolve by checking (not assuming) before H8 implementation starts.
-- `wait_any`/`wait_all` reportedly hitting a ~1800s idle-timeout at a transport
-  layer below the documented arbitrary `timeout` parameter, aborting with a
-  generic transport error instead of the schema's `still_running`/`timed_out`.
-  Unverified against this tree in this pass -- if real, it is a second
-  instance of "a bound the caller cannot see is a bound the caller will cross"
-  (`../research/friction-log.md` already named this pattern for `list --limit`)
-  and belongs with item 3's paging work: either raise/remove the hidden bound,
-  or have `wait_*` chunk its own long poll into sub-timeouts under it so the
-  documented `timeout` is what actually governs.
+- **`wait_any`/`wait_all` hanging past a hidden transport ceiling -- mechanism
+  now understood, 2026-09-17.** Read directly: `Client.wait()`
+  (`agentrt/runtime/client.py`) is a plain synchronous `while True: ...
+  time.sleep(...)` loop, and the MCP tool functions `wait_any`/`wait_all`
+  (`mcp_server.py`) take no `Context` and never call `report_progress` --
+  the whole call sends **zero bytes back over the MCP channel** for up to the
+  full `timeout` requested, no matter how long that is. The loop's own logic
+  is correct and returns exactly the documented `still_running`/`timed_out`
+  schema *if it is allowed to run to completion*. The break is one layer up: a
+  consumer report separately measured a ~1800s idle ceiling on the stdio
+  transport between the orchestrator and `agentrt-mcp`
+  ("sent no response or progress for 1800s; aborting"), and a large or
+  cumulatively-long `timeout` (the default is 600s; consumers pass larger
+  ones, e.g. 3600s, or several unsettled sessions push the same call close to
+  the ceiling) lets that outer timeout fire first -- killing the connection
+  with a generic transport error before AgentRT's own code ever gets to
+  return its graceful answer. This is a second instance of "a bound the
+  caller cannot see is a bound the caller will cross"
+  (`../research/friction-log.md` already named this pattern for
+  `list --limit`), now with the mechanism traced rather than only reported.
+  Interim guidance until fixed: do not pass a `timeout` anywhere near 1800s;
+  call `wait_*` with a short bound, treat `still_running` as "call again," or
+  poll `status` directly for a session expected to run long. The fix belongs
+  with item 3's paging work: `wait_*` should self-impose sub-timeouts safely
+  under the real ceiling (measure it, do not assume 1800s transfers to every
+  deployment) and return `still_running` at a safe interior boundary --
+  raising/removing the outer bound is not this package's to change, since it
+  sits at the transport the orchestrator supplies, not in AgentRT.
 - No `transcript --tail N` for a running session's last few steps without
   reading the full JSONL. A thin wrapper over the existing transcript
   cursor/limit machinery, not a new storage format.
@@ -974,7 +993,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: condensation and stripping fixes, deterministic progress field |
 | Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
 | Consumer report 12. 0-iteration provider timeout not retried/surfaced | H8 item 12: start deadline distinct from H7's rejected stall watchdog |
-| Consumer report: hidden ~1800s transport idle timeout under the documented `wait_*` timeout | H8, unverified -- pair with item 3's paging work if confirmed |
+| Consumer report + live 2026-09-17 observation: hidden transport idle ceiling under the documented `wait_*` timeout | H8: mechanism traced (silent blocking loop, zero MCP-level signal for the full `timeout`); fix is self-imposed sub-timeouts under the real ceiling, paired with item 3's paging |
 | Consumer report: no `transcript --tail N` | H8, thin wrapper over existing cursor/limit |
 | Consumer report: no expiry/supersession marker for accumulated sessions | H8, convention over existing durable `tags`, not new storage |
 | Request to mimic Claude Code's and Codex's native sub-agents, researched against primary sources | H9: named terminal reasons, one blocking single-result call, role-shaped profiles, partial-history fork, spawn-depth cap, interrupt visibility; explicit non-goals where the daemon's own reason for existing forbids convergence |
