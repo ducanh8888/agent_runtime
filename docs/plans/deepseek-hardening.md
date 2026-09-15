@@ -677,6 +677,57 @@ untested). Items are grouped by the consumer's own severity labels.
   (`daemon-behavior.md`); the missing piece is a convention/helper for marking
   one session as superseded by another, not new storage.
 
+**Zero-additional-docs onboarding is a stated requirement, checked directly
+against the tool docstrings a fresh orchestrator actually sees -- not against
+`docs/`, which `CLAUDE.md` already says "never reaches a session working in
+another repository."** The project's own design premise
+(`mcp_server.py`'s docstrings "are the product's documentation") makes this
+checkable: for any Claude/Codex session installed with no other context, does
+the MCP surface alone let it operate without hitting an undocumented
+surprise? Audited directly (read every tool docstring, not assumed), 2026-09-17:
+
+- **Already met**, worth naming so it is not accidentally weakened while H8
+  ships: `dispatch` states a `readonly`/`inspect` session cannot write its
+  answer to a file; the "Measured" bullets state iteration exhaustion lands in
+  `error` with no message, and `status`'s own docstring gives the workaround
+  (`iterations_used`/`iterations_remaining`); `capacity`'s docstring states a
+  full pool queues rather than refuses; `control`'s docstring states `delete`
+  is irreversible and gives the measured latency difference between `stop`
+  (28s, waits for the boundary) and `interrupt` (2s) unprompted. This is the
+  bar the gaps below are held to, not a lower one.
+- **Gap: `wait_any`/`wait_all`'s docstrings say nothing about the transport
+  idle-ceiling risk** traced above. A fresh orchestrator has no warning before
+  passing a large `timeout` and hitting the exact failure a live session
+  produced today. The fix for the wait-timeout entry above must ship with a
+  docstring line stating the safe bound, not only the code change -- the
+  behavioral fix alone does not satisfy this phase's own requirement if the
+  tool does not say so.
+- **Gap: `control`'s `tag` action's own example does not reveal the key
+  charset.** It shows `key=value` pairs (`keep=evidence for the guide,
+  round=3`) but never states the `^[a-z0-9]+$` constraint item 11 already
+  targets -- a natural key like `superseded-by` fails with no docstring
+  warning. Item 11's widened pattern needs the docstring to state whatever
+  the new constraint is, explicitly, not leave it to be discovered by a
+  rejected call.
+- **Gap, newly found in this pass: `dispatch`'s docstring never mentions
+  first-run/cold-daemon timing.** A fresh install's first daemon start can
+  take up to the documented 240s ceiling (`daemon.py`'s own comment, cited
+  in earlier migration work); nothing in `dispatch` warns a first-time caller
+  that an apparent multi-minute hang on the very first call is expected
+  rather than broken. Add one sentence.
+- **Resolved by the `AGENTRT_MAX_SESSIONS` default fix (2026-09-17,
+  `config.py`), not by documentation.** The client-side session cap that
+  just blocked a real dispatch (one Claude/Codex session's unrelated running
+  work exhausting a stricter cap than the daemon's own, which already queues
+  gracefully) defaulted to 5; it now defaults to unlimited, so most
+  deployments never encounter this gap at all -- the better fix here was
+  removing the surprise, not documenting it.
+
+Add to every item above's "Done" gate: the docstring of any tool whose
+behavior the item changes states the constraint/limit/timing the item was
+about, in the same commit as the behavioral fix -- a fix without an updated
+docstring has not met this phase's own onboarding requirement.
+
 **Primary seams:** `agentrt/sdk/llm/llm.py` (retry/logging), `event_service.py`
 (start deadline, execution status), `client.py`/`mcp_server.py` (paging,
 `_wait_bucket`'s upstream `state` input, CLI `wait`), the `inspect` preset's
@@ -994,6 +1045,8 @@ carry input/run provenance and current result state independently.
 | Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
 | Consumer report 12. 0-iteration provider timeout not retried/surfaced | H8 item 12: start deadline distinct from H7's rejected stall watchdog |
 | Consumer report + live 2026-09-17 observation: hidden transport idle ceiling under the documented `wait_*` timeout | H8: mechanism traced (silent blocking loop, zero MCP-level signal for the full `timeout`); fix is self-imposed sub-timeouts under the real ceiling, paired with item 3's paging |
+| Requirement: any Claude/Codex session installed with AgentRT should operate smoothly with no additional docs handed to it | H8: audited directly against tool docstrings, not `docs/`; three gaps named (`wait_*` timeout risk, `tag`'s undocumented key charset, `dispatch`'s unmentioned cold-start timing) and a "Done" gate added to every item requiring the docstring, not only the code, to state what changed |
+| Client-side session cap (`AGENTRT_MAX_SESSIONS`, default 5) blocking a dispatch while the daemon's own pool had room and queues gracefully | Fixed 2026-09-17 (`config.py`): default is now unlimited, deferring to the daemon's already-documented queueing instead of a second, stricter, undocumented refusal |
 | Consumer report: no `transcript --tail N` | H8, thin wrapper over existing cursor/limit |
 | Consumer report: no expiry/supersession marker for accumulated sessions | H8, convention over existing durable `tags`, not new storage |
 | Request to mimic Claude Code's and Codex's native sub-agents, researched against primary sources | H9: named terminal reasons, one blocking single-result call, role-shaped profiles, partial-history fork, spawn-depth cap, interrupt visibility; explicit non-goals where the daemon's own reason for existing forbids convergence |
