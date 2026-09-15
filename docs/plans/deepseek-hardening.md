@@ -684,73 +684,120 @@ authorized and recorded; documentation never marks planned APIs as shipped.
 ### H9 — Native sub-agent parity
 
 Basis: a direct request to make AgentRT feel as close as possible to Claude
-Code's own `Task` tool and to Codex's built-in collaboration-mode sub-agents,
-the two native sub-agent primitives an orchestrator already knows how to use
-without documentation. This phase is a comparison and a design, not a
-reduction of AgentRT to something it structurally is not -- H7's own reason
-for existing (a session must survive the orchestrator exiting) is incompatible
-with a purely in-process context fork, and nothing here proposes giving that
-up.
+Code's and Codex's own native sub-agent primitives -- researched against
+primary sources (official docs and, for Codex, the public source repository)
+rather than recalled, per an explicit instruction partway through this phase's
+drafting; the first draft's Claude Code framing and its Codex tool list (drawn
+from an old binary string-table extraction) were both incomplete or wrong in
+ways the research below corrects. This phase is a comparison and a design,
+not a reduction of AgentRT to something it structurally is not -- H7's own
+reason for existing (a session must survive the orchestrator exiting) is
+incompatible with a purely in-process context fork, and nothing here proposes
+giving that up.
 
-**What "native" actually means for each reference point, checked rather than
-assumed:**
+**What "native" actually means for each reference point, from primary
+sources, corrected from an earlier draft:**
 
-- **Claude Code's `Task` tool.** A single tool call that blocks the orchestrator
-  and returns one final message when the sub-agent finishes -- no polling, no
-  session id to track afterward, no separate "read the result" step. The
-  sub-agent's context is isolated (a fresh window, not a slice of the
-  orchestrator's own history) and it shares the same filesystem and tools as
-  the parent by default. Named sub-agent *types* (`.claude/agents/*.md`) bundle
-  a model, a tool allowlist and a system prompt behind one identifier, so
-  choosing a sub-agent is choosing a role, not assembling parameters. Long
-  tasks may run in the background with a completion notification rather than a
-  held call, but even then the unit the orchestrator reasons about is one
-  named agent with one eventual outcome, not a REST resource with a status
-  enum to poll.
-- **Codex's collaboration-mode sub-agents.** Evidenced directly, not inferred:
-  the installed Codex binary's own string table (extracted while wiring Codex
-  in an earlier session, see the migration history) names the actual verbs --
-  `spawn_agent`, `send_input`, `send_message`, `resume_agent`,
-  `interrupt_agent`, `close_agent`, `list_agents`, `followup_task` -- plus
-  per-agent identity fields `agent_thread_id`, `agent_nickname`, `agent_role`,
-  and explicit terminal-reason vocabulary: `interrupted`, `review_ended`,
-  `budget_limited`. The shape that matters here: actions are named verbs on an
-  agent, not CRUD on a session resource, and *why an agent stopped* is a
-  first-class enumerated fact, not something inferred from log archaeology --
-  exactly the gap H8 items 4 and 12 are already closing for AgentRT
-  independently.
+- **Claude Code has four distinct multi-work primitives, not one "Task
+  tool"** (code.claude.com/docs/en/agent-sdk/subagents;
+  code.claude.com/docs/en/docs/claude-code/agents, "Run agents in parallel").
+  **Subagents**: in-session delegated workers, isolated context window, only
+  the final message returns to the parent -- this is the one the earlier draft
+  called "Task" and described mostly correctly (blocking, one result, no
+  session id to track afterward). **Agent view** (`claude agents`, "Research
+  preview"): dispatch and monitor sessions running in the *background*, each
+  moved into its own git worktree automatically -- this is the primitive
+  AgentRT structurally resembles, not Subagents: background, listable,
+  monitorable, one session per unit of work. **Agent teams** (experimental,
+  off by default): coordinated sessions with a shared task list and
+  inter-agent messaging, managed by a lead. **Dynamic workflows**: a script
+  running many subagents and cross-checking results, for work too large to
+  coordinate turn-by-turn -- the `Workflow` tool available in this very
+  session is this primitive. A **forked subagent** inherits the *full* parent
+  conversation instead of starting fresh -- documented as "a way to spawn a
+  subagent, not a separate surface," which is the closest official analogue to
+  `dispatch_from`. Multi-agent work costs roughly 4-7x the tokens of a
+  single-agent session, stated directly rather than left to be discovered.
+- **Codex's multi-agent v2** (developers.openai.com/codex/subagents;
+  `codex-rs/tools/src/agent_tool.rs` and
+  `codex-rs/core/src/tools/handlers/multi_agents_v2/spawn.rs` in
+  github.com/openai/codex, read directly, not paraphrased from memory). Six
+  tools: `spawn_agent`, `send_input`, `send_message`, `followup_task`,
+  `wait_agent`, `list_agents`, `close_agent`. **Path-based addressing**:
+  agents are named by a hierarchical `task_name` under their spawner
+  (`/root/analyzer/summarizer`), not a flat id -- richer than AgentRT's flat
+  `short_id` namespace. **`fork_turns`**: `"none" | "all" | <N>`, controlling
+  how much of the *spawning* agent's history a new one inherits -- a more
+  granular version of what `dispatch_from` currently does as an all-or-nothing
+  fork. **`agent_max_depth`** (default 3) bounds recursive spawning; AgentRT's
+  `dispatch_from` has no equivalent depth cap today. **Interruption is
+  model-visible by default** (`agents.interrupt_message`, default `true`): the
+  interrupted agent's own context records that it was interrupted, which
+  AgentRT does not currently surface to the dispatched agent at all. **Spawn
+  is explicit only** -- "Codex only spawns subagents when you explicitly ask
+  it to," and a 2026-06 commit tightened the tool's own description further:
+  "Default to doing the work yourself... Do not delegate simple tasks, small
+  edits, routine searches, or work you can complete quickly yourself" --
+  matching AgentRT's own `dispatch` docstring's existing "WHEN THIS IS WORTH
+  IT" framing, not a new idea to import. Batch work
+  (`spawn_agents_on_csv`) enforces a **named completion contract**: each
+  worker calls `report_agent_job_result` exactly once, and a worker that
+  exits without calling it is marked `status: error` with `last_error`
+  populated -- an enumerated, named failure mode instead of an undifferentiated
+  one, the same shape H8 items 4 and 12 are already building for AgentRT.
 
-**What can converge, and the H8 item each depends on:**
+**What can converge, and the H8 item or precedent each depends on:**
 
 1. **Named terminal reasons, not one `error`.** Both references enumerate why
-   an agent stopped (`budget_limited`, `interrupted`, `review_ended` for
-   Codex; a distinct completion vs. cutoff for Claude Code's `Task`). AgentRT
-   currently collapses "ran out of iterations," "provider gave up," and "the
-   agent code raised" into the same `execution_status: error` with no reason
-   field (`daemon-behavior.md`, confirmed unchanged). H8 items 4 and 12 already
-   commit to a start-deadline status and a `finish_reason`/`truncated` field;
-   this item asks for the same enumeration to also cover iteration exhaustion
-   and provider failure, so every terminal state names a reason from a closed
-   set, matching the shape both references already use.
-2. **A genuinely blocking, single-result call.** `wait_any`/`wait_all` already
-   block, but the orchestrator still holds a session id and calls a second
-   tool (`result`, `usage`, `artifacts`) to learn what happened. A `dispatch`
-   variant (or a `wait_all(..., mode="collect")` addition) that returns the
-   condensed final answer *in the same call* that settles -- title, result
-   text (paged per H8 item 3), terminal reason, token usage -- removes the
-   second round-trip for the common single-session case, which is the shape
-   `Task` actually has. Multi-session fan-out keeps the current
-   dispatch-then-wait split; the convenience is for the common one-session
-   case, not a replacement for `dispatch_many`/`wait_all`.
-3. **A role, not a parameter tuple.** Claude Code's named sub-agent types
+   an agent stopped: Codex's `report_agent_job_result` contract names
+   `status: error`/`last_error` for a worker that never reported; Claude
+   Code's Agent view distinguishes a running/background session from a
+   settled one with a real outcome. AgentRT currently collapses "ran out of
+   iterations," "provider gave up," and "the agent code raised" into the same
+   `execution_status: error` with no reason field (`daemon-behavior.md`,
+   confirmed unchanged). H8 items 4 and 12 already commit to a start-deadline
+   status and a `finish_reason`/`truncated` field; this item asks for the same
+   enumeration to also cover iteration exhaustion and provider failure, so
+   every terminal state names a reason from a closed set.
+2. **A genuinely blocking, single-result call for the common case.**
+   `wait_any`/`wait_all` already block, but the orchestrator still holds a
+   session id and calls a second tool (`result`, `usage`, `artifacts`) to
+   learn what happened. A `dispatch` variant (or a `wait_all(...,
+   mode="collect")` addition) that returns the condensed final answer *in the
+   same call* that settles -- title, result text (paged per H8 item 3),
+   terminal reason, token usage -- removes the second round-trip for a single
+   session, matching Subagents' shape even though AgentRT as a whole is closer
+   to Agent view. Multi-session fan-out keeps the current dispatch-then-wait
+   split; the convenience is for the common one-session case, not a
+   replacement for `dispatch_many`/`wait_all`.
+3. **A role, not a parameter tuple.** Claude Code's named subagent types
    bundle model + tools + prompt behind one identifier the orchestrator
-   chooses instead of assembling. AgentRT's `agent_profile_id`
-   (`permission` preset) is the same idea for tool access; H8 item 9 adds a
-   second LLM profile. Extending profiles to also carry a short task-shaped
-   description (what this profile is *for*, not only what it grants) turns
-   profile selection into role selection -- additive to the existing
+   chooses instead of assembling; Codex's TOML agent definitions
+   (`.codex/agents/*.toml`, `name`/`description`/`developer_instructions`) do
+   the same. AgentRT's `agent_profile_id` (permission preset) is the same
+   idea for tool access; H8 item 9 adds a second LLM profile. Extending
+   profiles to also carry a short task-shaped description turns profile
+   selection into role selection -- additive to the existing
    `permission`/`llm_profile` fields, not a replacement for them.
-4. **Verb naming, where it is free.** `dispatch_from`/`dispatch_many`/
+4. **Partial history fork, not only all-or-nothing.** Codex's `fork_turns`
+   accepts `"none"`, `"all"`, or a last-N-turns integer. `dispatch_from`
+   currently forks a source session's history as a single mode; adding an
+   equivalent bound (fork the last N turns, not the whole thing) is a small,
+   precedented extension once item 2's paged result work exists to bound the
+   response size of a long source history.
+5. **A spawn-depth cap.** Codex bounds recursive spawning at
+   `agent_max_depth` (default 3) and returns an error instructing the agent to
+   solve the task itself past that. `dispatch_from` has no such cap today --
+   check whether a chain of forks can recurse unbounded, and if so, add the
+   same kind of limit for the same reason (runaway nesting, not a
+   theoretical concern once fork depth is possible at all).
+6. **Interruption visible to the interrupted agent.** Codex records a
+   model-visible message on interrupt by default
+   (`agents.interrupt_message`). AgentRT's `interrupt()`/`finalize()` stop a
+   session without the agent's own context ever reflecting that it happened --
+   irrelevant to a session that is genuinely done, but relevant to one that
+   gets resumed later and has no record of why its prior run ended abruptly.
+7. **Verb naming, where it is free.** `dispatch_from`/`dispatch_many`/
    `wait_any`/`wait_all`/`finalize` already read as verbs on an agent rather
    than REST-flavored CRUD, and should stay that way; nothing here proposes
    renaming a shipped surface to chase Codex's exact vocabulary. Where H8
@@ -761,33 +808,91 @@ assumed:**
 **What cannot converge, and why not -- stated so nobody spends effort chasing
 it later:**
 
-- **No true context sharing.** A `Task` sub-agent's isolation is enforced by
-  both agents living in the same process; AgentRT's isolation is enforced by
-  being a *different* process behind a daemon, which is the entire point (the
-  session outlives the orchestrator). `dispatch_from` already closes the part
-  of this gap that is closable -- forking another AgentRT session's history --
-  and is explicit in its own docstring about the part that is not: the daemon
-  cannot read the orchestrator's own conversation.
+- **No true context sharing.** A Claude Code Subagent's or a Codex sub-agent's
+  isolation is enforced by both agents living in the same process; AgentRT's
+  isolation is enforced by being a *different* process behind a daemon, which
+  is the entire point (the session outlives the orchestrator). `dispatch_from`
+  already closes the part of this gap that is closable -- forking another
+  AgentRT session's history, now with a precedent for partial fork via item 4
+  -- and is explicit in its own docstring about the part that is not: the
+  daemon cannot read the orchestrator's own conversation.
 - **No push notification over stdio.** Recorded in H7.9 and restated in H8:
-  the transport cannot push. A background `Task` or a Codex agent's completion
-  can reach the caller through the same process boundary that dispatched it;
-  AgentRT's boundary is a separate daemon over stdio MCP, which structurally
-  cannot. Item 2's blocking `agentrt wait` CLI is the closest available
-  substitute -- a real process-exit signal for a caller willing to background
-  a process -- not a notification.
-- **No implicit shared filesystem/tool default.** `Task` shares the parent's
-  cwd and tools unless told otherwise; AgentRT requires an explicit
-  `workspace` and an explicit permission preset on every dispatch, by design
-  (`orchestration.md`'s confinement-by-path discussion). This is not a gap to
-  close -- an implicit shared workspace is exactly the "shared workspaces are
-  not coordinated" hazard the same document already names, and H8 item 8's
-  `snapshot=` mode is the isolated alternative, not a shared default.
+  the transport cannot push. A background Claude Code session or a Codex
+  agent's completion can reach the caller through the same process boundary
+  that dispatched it; AgentRT's boundary is a separate daemon over stdio MCP,
+  which structurally cannot. Item 2's blocking `agentrt wait` CLI is the
+  closest available substitute -- a real process-exit signal for a caller
+  willing to background a process -- not a notification. (Not verified: how
+  Claude Code's own Agent view, itself a background-dispatch screen and the
+  primitive AgentRT structurally resembles, surfaces completion internally --
+  if it also polls rather than pushes, this gap may be smaller than it looks.)
+- **No implicit shared filesystem/tool default.** A Claude Code Subagent
+  shares the parent's cwd and tools unless told otherwise; AgentRT requires an
+  explicit `workspace` and an explicit permission preset on every dispatch, by
+  design (`orchestration.md`'s confinement-by-path discussion). This is not a
+  gap to close -- an implicit shared workspace is exactly the "shared
+  workspaces are not coordinated" hazard the same document already names.
+  What *should* close, on precedent rather than by AgentRT's own invention:
+  Agent view's automatic per-session worktree is exactly H8 item 8's
+  `workspace_mode="snapshot"` proposal, already shipped by the reference this
+  phase is chasing -- one more reason item 8 belongs in H8 rather than staying
+  optional.
+
+**OpenHands ceremony that AgentRT's own surface can never reach, checked
+rather than assumed.** "Native-feeling" is not only added convergence --
+some of the daily friction is OpenHands machinery running by default that no
+AgentRT-dispatched session can even invoke, because Claude Code and Codex are
+*already* the sub-agent layer an orchestrator uses; a second, vendored
+sub-agent product living one layer further in is pure cost. Traced, not
+inferred:
+
+- **The `delegate` tool and its four builtin sub-agents are dead weight for
+  every AgentRT preset, provably.** `register_builtins_agents()`
+  (`agentrt/tools/preset/default.py`) unconditionally registers four vendored
+  agent definitions (`code_explorer`, `bash_runner`, `web_researcher`,
+  `default`, shipped as `.md` files inside the `agentrt-tools` package) at
+  every daemon boot, and with `enable_browser=True` also probes for Chromium
+  purely to decide whether to include the browser-using one. The tool that
+  would let a running session *use* any of this -- `delegate`
+  (`agentrt/tools/delegate/impl.py`, which calls `get_agent_factory` to spawn
+  a registered agent) -- is granted by **none** of AgentRT's four permission
+  profiles: `readonly`, `inspect`, `broad` and `workspace` grant only
+  `file_editor`/`terminal`/`task_tracker` (`inspect` also `inspect`), checked
+  directly against the live profile files. This is OpenHands' own internal
+  multi-agent orchestration, a third, competing sub-agent concept underneath
+  `dispatch_from` (AgentRT's) and Claude Code's/Codex's own (the actual
+  orchestrator), registered, logged and probed at every boot for a capability
+  no dispatched session has ever been able to reach.
+- **The VSCode service self-evidently does not belong in a headless,
+  MCP-driven daemon.** It fails and warns at every single boot
+  (`VSCode server binary not found`, `VSCode service failed to start`) because
+  nothing about AgentRT's usage connects an editor to it -- the failure itself
+  is the evidence; no session workflow depends on it succeeding.
+- **Skills loading (63 files, every restart) is a named, open question, not a
+  confirmed finding.** No tool definition anywhere in `agentrt-tools` matches
+  `invoke_skill`, so skills are not gated by the same per-preset tool grant
+  that proved `delegate` unreachable -- they are very plausibly injected into
+  the system prompt by a different mechanism this pass did not trace far
+  enough to call either way. Verify before deciding whether to gate it; do not
+  extend the `delegate` finding to this one by resemblance alone.
+
+The fix this points to is narrow and reversible: skip
+`register_builtins_agents`/VSCode-service init from AgentRT's *own* startup
+wiring (`agentrt.runtime.server_launch`/`bootstrap`, which already customizes
+what the vendored server initializes -- the workspace-kind registration H7
+already added there is the same kind of seam), not edit the vendored
+`agentrt.tools`/`agentrt.sdk` files directly. Deleting vendored code trades
+away easy upstream sync for a saving this seam already gets more safely,
+which is why H9 proposes gating the call, not removing the files it calls.
 
 **Primary seams:** `mcp_server.py`/`client.py` (new `wait`/`dispatch` variant,
-terminal-reason enum), `agent_server`'s execution-status projection (reason
-enumeration underlying H8 items 4/12), the LLM/permission profile store (H8
-item 9's role description field), `agentrt` CLI (item 2's `wait` subcommand
-naming).
+terminal-reason enum, `dispatch_from`'s fork-depth and partial-history
+parameters, interrupt visibility on the target session), `agent_server`'s
+execution-status projection (reason enumeration underlying H8 items 4/12),
+the LLM/permission profile store (H8 item 9's role description field),
+`agentrt` CLI (item 2's `wait` subcommand naming),
+`agentrt.runtime.server_launch`/`bootstrap` (skip builtin-subagent and
+VSCode-service registration at AgentRT's own startup, not upstream).
 
 **Done:** an orchestrator using only the converged surface (role-shaped
 profile choice, one blocking call for the single-session case, a named reason
@@ -872,7 +977,8 @@ carry input/run provenance and current result state independently.
 | Consumer report: hidden ~1800s transport idle timeout under the documented `wait_*` timeout | H8, unverified -- pair with item 3's paging work if confirmed |
 | Consumer report: no `transcript --tail N` | H8, thin wrapper over existing cursor/limit |
 | Consumer report: no expiry/supersession marker for accumulated sessions | H8, convention over existing durable `tags`, not new storage |
-| Request to mimic Claude Code's `Task` tool and Codex's native sub-agents | H9: named terminal reasons, one blocking single-result call, role-shaped profiles; explicit non-goals where the daemon's own reason for existing forbids convergence |
+| Request to mimic Claude Code's and Codex's native sub-agents, researched against primary sources | H9: named terminal reasons, one blocking single-result call, role-shaped profiles, partial-history fork, spawn-depth cap, interrupt visibility; explicit non-goals where the daemon's own reason for existing forbids convergence |
+| Request to strip OpenHands over-engineering that daily Claude/Codex use never reaches | H9: gate `register_builtins_agents`/VSCode-service init at AgentRT's own startup seam; `delegate` and its four builtin sub-agents confirmed unreachable by every permission profile |
 
 ## 6. Handoff and update convention
 
