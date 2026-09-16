@@ -63,6 +63,29 @@ def test_status_surfaces_request_scope() -> None:
     assert status["iterations_remaining"] == 493
 
 
+def test_status_surfaces_the_pinned_commit_for_snapshot_mode() -> None:
+    """H8 item 8: a caller can check what a session actually ran against
+    without a separate call."""
+    client = _mock_client(
+        lambda request: httpx.Response(
+            200,
+            json=_conversation(
+                workspace_mode="snapshot", workspace_resolved_sha="deadbee"
+            ),
+        )
+    )
+    status = client.status(SESSION)
+    assert status["workspace_mode"] == "snapshot"
+    assert status["workspace_resolved_sha"] == "deadbee"
+
+
+def test_status_omits_pinned_commit_for_shared_mode() -> None:
+    client = _mock_client(lambda request: httpx.Response(200, json=_conversation()))
+    status = client.status(SESSION)
+    assert "workspace_resolved_sha" not in status
+    assert "workspace_mode" not in status
+
+
 def test_result_pending_is_null_not_the_previous_answer() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/agent_final_response"):

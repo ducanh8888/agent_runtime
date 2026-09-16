@@ -1167,12 +1167,26 @@ class Client:
         tags: dict[str, str] | None = None,
         idempotency_key: str | None = None,
         attachments: list[str] | None = None,
+        workspace_mode: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
         ``llm_profile`` names the allowed LLM profile to run under. It is a
         reference the daemon resolves against its own stores, so no credential
         crosses this boundary; an unknown or unbound name is refused.
+
+        ``workspace_mode`` is ``"shared"`` (default -- the session reads and
+        writes ``workspace`` directly, coordinating with anything else in it
+        is the orchestrator's job) or ``"snapshot"``: ``workspace`` must be a
+        git repository, and the daemon creates a detached worktree pinned to
+        its current ``HEAD`` for the session to work in instead, isolated
+        from concurrent writers and reproducible against the commit it saw.
+        The pinned commit comes back as ``workspace_resolved_sha`` on this
+        response and on `status`. This exists for the case H8 item 8 named:
+        fan-out read-only workers into one repository without each one
+        hand-rolling its own worktree setup and cleanup. Server-side support
+        (`workspace_mode`, worktree creation, pinned-commit tracking) already
+        existed; this is what exposes it here.
         """
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
@@ -1219,6 +1233,8 @@ class Client:
             body["tags"] = _clean_tags(tags)
         if idempotency_key:
             body["idempotency_key"] = idempotency_key
+        if workspace_mode:
+            body["workspace_mode"] = workspace_mode
         if attachments:
             blocks = self._attachment_blocks(attachments, workspace=workspace)
             body["initial_message"]["content"] = [
@@ -1228,7 +1244,7 @@ class Client:
 
         data = self._send("POST", "/api/conversations", json=body).json()
         full_id = data.get("id")
-        return {
+        result: dict = {
             "id": full_id,
             "short_id": short_id(full_id) if full_id else None,
             "status": _status_of(data),
@@ -1236,6 +1252,11 @@ class Client:
             "permission": preset,
             "llm_profile": resolved_llm,
         }
+        resolved_sha = data.get("workspace_resolved_sha")
+        if resolved_sha:
+            result["workspace_mode"] = data.get("workspace_mode") or workspace_mode
+            result["workspace_resolved_sha"] = resolved_sha
+        return result
 
     def _all_sessions(self) -> list[dict]:
         """Every session the daemon knows, paged.
@@ -1354,6 +1375,13 @@ class Client:
         result["admission_status"] = data.get("admission_status")
         result["iterations_used"] = data.get("iterations_used")
         result["iterations_remaining"] = data.get("iterations_remaining")
+        # H8 item 8: a snapshot-mode session's pinned commit, so a caller can
+        # check what a review actually ran against without a separate call --
+        # absent for the default "shared" mode, which has nothing pinned.
+        resolved_sha = data.get("workspace_resolved_sha")
+        if resolved_sha:
+            result["workspace_mode"] = data.get("workspace_mode")
+            result["workspace_resolved_sha"] = resolved_sha
         return result
 
     def result(self, session: str) -> dict:

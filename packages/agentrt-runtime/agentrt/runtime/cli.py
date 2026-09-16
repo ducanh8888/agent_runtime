@@ -77,6 +77,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         max_iterations=args.max_iterations,
         tags=_parse_tags(args.tag),
         attachments=args.attachment or None,
+        workspace_mode=args.workspace_mode,
     )
 
 
@@ -284,6 +285,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-iterations",
         type=int,
         help="stop the run after this many agent steps (daemon default: 500)",
+    )
+    dispatch_parser.add_argument(
+        "--workspace-mode",
+        choices=("shared", "snapshot", "isolated_worktree"),
+        help=(
+            "shared (default): read/write --workspace directly. snapshot: "
+            "--workspace must be a git repo; the daemon creates a detached "
+            "worktree pinned to its current HEAD and the session works "
+            "there, isolated and reproducible against the pinned commit "
+            "(reported as workspace_resolved_sha on `status`)."
+        ),
     )
     dispatch_parser.add_argument(
         "--attachment",

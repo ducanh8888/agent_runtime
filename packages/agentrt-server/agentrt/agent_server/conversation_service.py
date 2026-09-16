@@ -2493,6 +2493,48 @@ class ConversationService:
             self._conversation_records.pop(conversation_id, None)
             self._credential_bindings.pop(conversation_id, None)
 
+            # "Workspace is preserved" above is right for the default `shared`
+            # mode -- it is the caller's own directory, never AgentRT's to
+            # delete. It is wrong for `snapshot`/`isolated_worktree`: that
+            # workspace is a detached worktree this daemon created solely for
+            # this conversation's lifetime, and leaving it in
+            # conversation-worktrees/ on every delete is exactly the
+            # "dọn khi xoá phiên" (clean up on delete) H8 item 8 named and
+            # this service did not yet do. Best-effort, same as the
+            # conversation-directory removal below: a failure here must not
+            # block the delete the caller asked for.
+            # docs/plans/deepseek-hardening.md H8 item 8, 2026-09-17.
+            stored_workspace_mode = getattr(
+                event_service.stored, "workspace_mode", "shared"
+            )
+            if stored_workspace_mode != "shared":
+                worktree_dir = Path(event_service.stored.workspace.working_dir)
+                if worktree_dir.exists():
+                    try:
+                        run_git_command(
+                            ["git", "worktree", "remove", "--force", str(worktree_dir)],
+                            cwd=worktree_dir,
+                        )
+                    except (GitCommandError, OSError) as exc:
+                        logger.warning(
+                            f"Failed to remove {stored_workspace_mode} worktree "
+                            f"{worktree_dir} for conversation {conversation_id}: "
+                            f"{exc}. Removing the directory directly instead."
+                        )
+                        safe_rmtree(
+                            worktree_dir,
+                            f"{stored_workspace_mode} worktree for {conversation_id}",
+                        )
+                    # `worktree_dir` is `<conversation_worktree_root>/<id>/
+                    # <repo-name>` (_create_conversation_worktree); its parent
+                    # is the per-conversation directory that held only this
+                    # worktree, now an empty husk either way.
+                    safe_rmtree(
+                        worktree_dir.parent,
+                        f"{stored_workspace_mode} worktree parent for "
+                        f"{conversation_id}",
+                    )
+
             # Safely remove only the conversation directory (workspace is preserved).
             # This operation may fail due to permission issues, but we don't want that
             # to prevent the conversation from being marked as deleted.

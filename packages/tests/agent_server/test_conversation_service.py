@@ -48,6 +48,7 @@ from agentrt.sdk.critic.impl.api import APIBasedCritic
 from agentrt.sdk.event import ActionEvent, AgentErrorEvent, ObservationEvent
 from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.git.exceptions import GitCommandError
 from agentrt.sdk.git.utils import run_git_command
 from agentrt.sdk.llm import MessageToolCall, TextContent
 from agentrt.sdk.mcp.config import dump_mcp_config
@@ -2857,6 +2858,137 @@ class TestConversationServiceDeleteConversation:
                 "/tmp/test_conversation",
                 "conversation directory for " + str(conversation_id),
             )
+
+    @pytest.mark.asyncio
+    async def test_delete_conversation_removes_a_snapshot_worktree(
+        self, conversation_service, tmp_path
+    ):
+        """H8 item 8: `snapshot`/`isolated_worktree` mode gets its detached
+        worktree torn down on delete -- the default `shared` mode's
+        "workspace is preserved" (test_delete_conversation_success, above) is
+        correct there because it's the caller's own directory; it is wrong
+        for a worktree this daemon created solely for the conversation's
+        lifetime. docs/plans/deepseek-hardening.md H8 item 8, 2026-09-17."""
+        conversation_id = uuid4()
+        # <conversation_worktree_root>/<id>/<repo-name>, matching
+        # _create_conversation_worktree's own layout.
+        worktree_parent = tmp_path / "worktrees" / str(conversation_id)
+        worktree_dir = worktree_parent / "repo"
+        worktree_dir.mkdir(parents=True)
+
+        mock_service = AsyncMock(spec=EventService)
+        mock_service.conversation_dir = "/tmp/test_conversation"
+        mock_service.stored = StoredConversation(
+            id=conversation_id,
+            workspace=LocalWorkspace(working_dir=str(worktree_dir)),
+            confirmation_policy=NeverConfirm(),
+            initial_message=None,
+            metrics=None,
+            created_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC),
+            workspace_mode="snapshot",
+        )
+        mock_state = ConversationState(
+            id=conversation_id,
+            agent=_sample_agent(),
+            workspace=mock_service.stored.workspace,
+            execution_status=ConversationExecutionStatus.IDLE,
+            confirmation_policy=mock_service.stored.confirmation_policy,
+        )
+        mock_service.get_state.return_value = mock_state
+        conversation_service._event_services[conversation_id] = mock_service
+
+        with (
+            patch(
+                "agentrt.agent_server.conversation_service.run_git_command"
+            ) as mock_git,
+            patch(
+                "agentrt.agent_server.conversation_service.safe_rmtree"
+            ) as mock_rmtree,
+        ):
+            mock_rmtree.return_value = True
+
+            result = await conversation_service.delete_conversation(conversation_id)
+
+            assert result is True
+            mock_git.assert_called_once_with(
+                ["git", "worktree", "remove", "--force", str(worktree_dir)],
+                cwd=worktree_dir,
+            )
+            # The now-empty per-conversation parent directory, plus the
+            # unrelated conversation-record directory -- two calls, not the
+            # worktree_dir itself (git worktree remove already handled that).
+            mock_rmtree.assert_any_call(
+                worktree_parent,
+                f"snapshot worktree parent for {conversation_id}",
+            )
+            mock_rmtree.assert_any_call(
+                "/tmp/test_conversation",
+                "conversation directory for " + str(conversation_id),
+            )
+            assert mock_rmtree.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_delete_conversation_falls_back_to_rmtree_when_worktree_remove_fails(
+        self, conversation_service, tmp_path
+    ):
+        """A failed `git worktree remove` (corrupted git state, already
+        manually deleted) falls back to a direct removal rather than leaving
+        the directory and failing the whole delete."""
+        conversation_id = uuid4()
+        worktree_parent = tmp_path / "worktrees" / str(conversation_id)
+        worktree_dir = worktree_parent / "repo"
+        worktree_dir.mkdir(parents=True)
+
+        mock_service = AsyncMock(spec=EventService)
+        mock_service.conversation_dir = "/tmp/test_conversation"
+        mock_service.stored = StoredConversation(
+            id=conversation_id,
+            workspace=LocalWorkspace(working_dir=str(worktree_dir)),
+            confirmation_policy=NeverConfirm(),
+            initial_message=None,
+            metrics=None,
+            created_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC),
+            workspace_mode="isolated_worktree",
+        )
+        mock_state = ConversationState(
+            id=conversation_id,
+            agent=_sample_agent(),
+            workspace=mock_service.stored.workspace,
+            execution_status=ConversationExecutionStatus.IDLE,
+            confirmation_policy=mock_service.stored.confirmation_policy,
+        )
+        mock_service.get_state.return_value = mock_state
+        conversation_service._event_services[conversation_id] = mock_service
+
+        with (
+            patch(
+                "agentrt.agent_server.conversation_service.run_git_command",
+                side_effect=GitCommandError(
+                    "worktree remove failed", command="git worktree remove", exit_code=1
+                ),
+            ),
+            patch(
+                "agentrt.agent_server.conversation_service.safe_rmtree"
+            ) as mock_rmtree,
+        ):
+            mock_rmtree.return_value = True
+
+            result = await conversation_service.delete_conversation(conversation_id)
+
+            assert result is True
+            # Fallback direct removal of the worktree itself, plus its now-
+            # empty parent, plus the conversation-record directory.
+            mock_rmtree.assert_any_call(
+                worktree_dir,
+                f"isolated_worktree worktree for {conversation_id}",
+            )
+            mock_rmtree.assert_any_call(
+                worktree_parent,
+                f"isolated_worktree worktree parent for {conversation_id}",
+            )
+            assert mock_rmtree.call_count == 3
 
     @pytest.mark.asyncio
     async def test_delete_conversation_notifies_webhooks_with_deleting_status(

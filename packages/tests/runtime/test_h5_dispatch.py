@@ -85,6 +85,62 @@ def test_dispatch_sends_the_idempotency_key() -> None:
     assert seen["body"]["idempotency_key"] == "batch-1:0"
 
 
+def test_dispatch_omits_workspace_mode_by_default() -> None:
+    """H8 item 8: the default (shared) mode is not sent as an explicit
+    value -- absence, not the string "shared", is what "default" means on
+    the wire, matching every other optional dispatch field."""
+    seen: dict = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch("task", "/tmp/ws")
+
+    assert "workspace_mode" not in seen["body"]
+
+
+def test_dispatch_sends_snapshot_workspace_mode() -> None:
+    seen: dict = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch("task", "/tmp/ws", workspace_mode="snapshot")
+
+    assert seen["body"]["workspace_mode"] == "snapshot"
+
+
+def test_dispatch_surfaces_the_pinned_commit() -> None:
+    """H8 item 8: a snapshot session's pinned SHA comes back on dispatch's
+    own response, not only from a separate status call."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = _created_body(request)
+        body["workspace_mode"] = "snapshot"
+        body["workspace_resolved_sha"] = "abc1234"
+        return httpx.Response(201, json=body)
+
+    client = _mock_client(handle)
+    created = client.dispatch("task", "/tmp/ws", workspace_mode="snapshot")
+
+    assert created["workspace_mode"] == "snapshot"
+    assert created["workspace_resolved_sha"] == "abc1234"
+
+
+def test_dispatch_response_omits_pinned_commit_for_shared_mode() -> None:
+    client = _mock_client(
+        lambda request: httpx.Response(201, json=_created_body(request))
+    )
+    created = client.dispatch("task", "/tmp/ws")
+
+    assert "workspace_resolved_sha" not in created
+    assert "workspace_mode" not in created
+
+
 def test_dispatch_many_validates_before_any_side_effect() -> None:
     calls = {"n": 0}
 

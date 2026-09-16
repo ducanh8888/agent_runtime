@@ -70,6 +70,7 @@ def dispatch(
     tags: dict[str, str] | None = None,
     idempotency_key: str | None = None,
     attachments: list[str] | None = None,
+    workspace_mode: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -173,6 +174,16 @@ def dispatch(
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
 
+    WORKSPACE_MODE. `"shared"` (default) is the above. `"snapshot"` needs
+    `workspace` to be a git repository: the daemon creates a detached
+    worktree pinned to its current HEAD and the session works there instead,
+    isolated from anything else touching the real directory and reproducible
+    against the exact commit it saw -- the pinned SHA comes back as
+    `workspace_resolved_sha` on this response and on `status`. Use it to
+    fan out several read-only reviewers into one repository without hand-
+    rolling worktree setup and cleanup yourself; not needed for a single
+    session or one you already gave its own directory.
+
     `workspace` and `broad` include a terminal and therefore run with the same
     user authority you do. Do not dispatch work you would not run yourself.
 
@@ -212,6 +223,7 @@ def dispatch(
         tags=tags,
         idempotency_key=idempotency_key,
         attachments=attachments,
+        workspace_mode=workspace_mode,
     )
 
 
@@ -263,6 +275,11 @@ def status(session: str) -> dict:
     the sanitized code/detail and `transcript` for where it stopped.
     Server-side tracebacks go to the daemon log (`agentrt daemon logs`), not
     into this response.
+
+    `workspace_mode`/`workspace_resolved_sha` appear when the session was
+    dispatched with `workspace_mode="snapshot"`: the commit its detached
+    worktree is pinned to, so you can check what a review actually ran
+    against without a separate call. Absent for the default `"shared"` mode.
     """
     return _guard(_get_client().status, session)
 
