@@ -674,9 +674,10 @@ def artifacts(session: str, path: str | None = None) -> dict:
     session wrote to its report channel (see `dispatch`'s WORKSPACE_MODE and
     permission sections), same shape as `files`, no time filter since the
     directory is session-dedicated. `workspace`/`broad` sessions never get one,
-    so it is `[]` for them. A path is checked against the reports directory
-    before the workspace, so a session's report and a same-named workspace file
-    read as the report -- the one this channel exists to read back.
+    so it is `[]` for them. With a path, the reports directory is tried first;
+    a file there wins over a same-named workspace file -- it is the one this
+    channel exists to read back. A single-file read's response names which one
+    it found in `source` (`"reports"` or `"workspace"`).
 
     Check `filtered`. It is true in normal use. False means the session's start
     time could not be read, so nothing was filtered and `files` is every file in

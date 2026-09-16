@@ -320,12 +320,19 @@ def test_artifacts_path_reads_report_before_workspace(tmp_path, monkeypatch) -> 
     client = _mock_client(handler)
     result = client.artifacts(SESSION, path="answer.txt")
     assert result["content"] == "from the report channel"
+    assert result["source"] == "reports"
 
 
 def test_artifacts_path_falls_back_to_workspace_when_not_a_report(
     tmp_path, monkeypatch
 ) -> None:
-    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    """A reports directory existing (any readonly/inspect session that has
+    started has one -- `GuardedFileEditorTool.create` makes it eagerly) must
+    not stop a path that is not a report in it from reaching the workspace.
+    `check_path` alone cannot tell these apart: it does not test existence,
+    so `only_in_workspace.txt` "resolves inside" the empty reports root too."""
+    reports_dir = _reports_dir(tmp_path, monkeypatch)
+    (reports_dir / "unrelated_report.txt").write_text("not the file asked for")
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "only_in_workspace.txt").write_text("workspace content")
@@ -341,3 +348,4 @@ def test_artifacts_path_falls_back_to_workspace_when_not_a_report(
     client = _mock_client(handler)
     result = client.artifacts(SESSION, path="only_in_workspace.txt")
     assert result["content"] == "workspace content"
+    assert result["source"] == "workspace"

@@ -2186,10 +2186,15 @@ class Client:
             # Reports live outside the workspace and are checked first: a
             # readonly/inspect session's report and a same-named workspace
             # file are different files, and the report is the one this
-            # channel exists to read back. `check_path` with the reports
-            # root raises `PermissionDenied` for anything not under it
-            # (including when there is no reports directory at all), which
-            # falls through to the ordinary workspace read below.
+            # channel exists to read back. `check_path` alone is not enough
+            # to decide that a report was meant, though -- it does not test
+            # existence (`_real` resolves `strict=False` on purpose, for a
+            # path a `create` is about to make), so a workspace-only path
+            # like `src/app.py` "resolves inside" the reports root too, it
+            # just is not a file there. `is_file()` is the real discriminator
+            # for "was a report meant"; anything else falls through to the
+            # ordinary workspace read below, including when there is no
+            # reports directory at all.
             reports_dir = _reports_dir(resolved)
             if os.path.isdir(reports_dir):
                 try:
@@ -2197,16 +2202,17 @@ class Client:
                         path, root=reports_dir, permission="workspace", writing=False
                     )
                 except permissions.PermissionDenied:
-                    pass
-                else:
+                    approved = None
+                if approved is not None and approved.is_file():
                     try:
                         content = approved.read_text()
-                    except OSError as exc:
+                    except (OSError, UnicodeDecodeError) as exc:
                         raise ClientError(f"could not read {path!r}: {exc}") from exc
                     return {
                         "id": resolved,
                         "short_id": short_id(resolved),
                         "path": path,
+                        "source": "reports",
                         "content": content,
                     }
             if not workspace:
@@ -2243,6 +2249,7 @@ class Client:
                 "id": resolved,
                 "short_id": short_id(resolved),
                 "path": path,
+                "source": "workspace",
                 "content": response.text,
             }
 
