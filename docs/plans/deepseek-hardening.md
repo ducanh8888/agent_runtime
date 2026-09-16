@@ -660,12 +660,21 @@ untested). Items are grouped by the consumer's own severity labels.
    contract (`workspace_mode="snapshot"`) and H4's revision-pinning work; this
    item is exposing that existing design to `readonly`/`inspect` callers who
    currently hand-roll worktree creation and cleanup themselves.
-9. **Only one LLM profile (item 9).** Add a second, explicit, opt-in
-   non-thinking profile alongside `deepseek-high`, satisfying both item 1's
-   fallback ask and diversifying worker/reviewer model choice -- without
-   relaxing H0's "no silent fallback to 9Router" or "no automatic effort
-   reduction" non-goals. Selection stays explicit per dispatch
-   (`llm_profile=...`, already in section 4's contract), never automatic.
+9. **Only one LLM profile (item 9). Decided 2026-09-17: skipped, not
+   deferred -- structurally blocked by a decision H0 already made on
+   purpose.** The plan as written assumed a second profile was a
+   configuration addition. It is not: `DeploymentLLMPolicy`
+   (`deployment_policy.py`) is a single frozen contract enforced on every
+   conversation LLM -- `enforce_agent_policy`/`llm_policy_violations` reject
+   any LLM whose `thinking_mode` differs from the one deployment-wide value,
+   currently `"enabled"`. A second, non-thinking profile would be
+   configured successfully and then refused at every dispatch that tried to
+   use it, unless `DeploymentLLMPolicy` itself widens from one frozen value
+   to an allowlist -- which is not a config change, it is reopening H0's own
+   explicit choice ("no automatic effort reduction," a single allowed
+   deployment LLM profile). Asked directly; the answer was to keep the
+   single H0 policy rather than reopen it. If this is revisited, it is an
+   H0-policy decision first, and only a profile-addition task second.
 
 *Thấp (low):*
 
@@ -1201,7 +1210,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: correctness fix in the search implementation |
 | Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
 | Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
-| Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: second opt-in non-thinking profile, explicit selection only |
+| Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: skipped 2026-09-17 -- blocked by H0's single frozen `DeploymentLLMPolicy`, not a config gap; reopening it is an H0-policy decision, declined |
 | Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: condensation and stripping fixes, deterministic progress field |
 | Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
 | Consumer report 12. 0-iteration provider timeout not retried/surfaced | H8 item 12: start deadline distinct from H7's rejected stall watchdog |
