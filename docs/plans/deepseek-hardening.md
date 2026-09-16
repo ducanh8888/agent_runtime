@@ -785,6 +785,16 @@ untested). Items are grouped by the consumer's own severity labels.
     compliant example. Verified against `test_conversation_tags.py`'s
     existing invalid-key fixture, unaffected (it fails on uppercase, not the
     hyphen).
+    **That verification was incomplete, corrected 2026-09-17 (`<hash>`).** It
+    checked one fixture and left the suite red: `test_tags.py` had its own
+    `test_validate_tags_invalid_key_with_hyphen` asserting `my-key` raises,
+    which the widening deliberately made false -- so `main` carried a failing
+    test that was read as pre-existing breakage rather than as this item's
+    unfinished tail. Replaced with a test asserting the shipped rule (a hyphen
+    between alphanumeric runs is valid) plus a parametrised one for the
+    malformed forms that stay invalid (leading, trailing, doubled, bare
+    hyphen), so the charset is pinned in both directions instead of dropped.
+    The suite is fully green again: 1870 passed, 0 failed.
 
 **Also raised, not part of a numbered item above:**
 

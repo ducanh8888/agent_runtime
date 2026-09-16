@@ -32,9 +32,31 @@ def test_validate_tags_invalid_key_uppercase():
         _validate_tags({"Env": "prod"})
 
 
-def test_validate_tags_invalid_key_with_hyphen():
+def test_validate_tags_hyphenated_key_is_accepted():
+    """H8 item 11 widened the charset to allow hyphens mid-key.
+
+    This test used to assert the opposite -- that ``my-key`` raises -- which was
+    the pre-H8 rule. It stayed behind when ``TAG_KEY_PATTERN`` was widened to
+    ``^[a-z0-9]+(?:-[a-z0-9]+)*$`` (matching the existing PLUGIN_NAME_PATTERN
+    precedent), so it was the one test asserting a rule the shipped code had
+    deliberately stopped enforcing. The plan doc's note that it had checked
+    "the existing invalid-key fixture" pointed at
+    ``test_conversation_tags.py``, which fails on uppercase and so was
+    unaffected -- this file's fixture was not looked at.
+    """
+    assert _validate_tags({"my-key": "value"}) == {"my-key": "value"}
+    assert _validate_tags({"a-b-c": "value"}) == {"a-b-c": "value"}
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["-leading", "trailing-", "doubled--hyphen", "-"],
+)
+def test_validate_tags_malformed_hyphen_key_is_still_rejected(key):
+    """Widening the charset kept the separators well-formed: a hyphen must sit
+    between alphanumeric runs, so these are still invalid."""
     with pytest.raises(ValueError, match="lowercase alphanumeric"):
-        _validate_tags({"my-key": "value"})
+        _validate_tags({key: "value"})
 
 
 def test_validate_tags_invalid_key_with_underscore():
