@@ -928,6 +928,9 @@ written, one is harder, and the premise of two was only partly right:**
   mismatched `llm_profile` refused outright (`client.py:1071-1106`) -- "role
   selection" needs a new selection dimension, not an additive field on top of
   `permission`/`llm_profile` as written here.
+  **Decided 2026-09-17: deferred to a later phase.** Meaningless with only
+  two LLM profiles in play (`deepseek-high` plus H8 item 9's second one) --
+  revisit once a third profile makes "which role" a real question, not before.
 - **Item 5's "check whether" is answered**: no dispatched or forked session
   has any tool that could call `dispatch_from` -- no permission preset grants
   `delegate`, the SDK task-tool set, or the AgentRT MCP server itself, and
@@ -937,6 +940,16 @@ written, one is harder, and the premise of two was only partly right:**
   defined first, since `fork` inherits the source's `parent_conversation_id`
   rather than setting one, making forks siblings of their source, not
   children of a chain.
+  **Decided 2026-09-17: fix the prerequisite, not the cap.** No depth cap
+  yet -- there is nothing live to cap. Fix `fork_conversation`
+  (`conversation_service.py:2664-2677`) to set the fork's
+  `parent_conversation_id` to its actual source instead of inheriting the
+  source's own parent, so forks become real children in a chain rather than
+  siblings at the same level. This is the correct ancestry regardless of
+  whether a depth cap is ever added on top of it -- `_children_index()`
+  already exists and reads whatever this field says, so today it reports the
+  wrong tree. A depth cap becomes a one-line addition once the chain is real;
+  do not build the cap before the chain it would walk is correct.
 
 **What cannot converge, and why not -- stated so nobody spends effort chasing
 it later:**
@@ -1050,7 +1063,13 @@ alone.
   `enable_vscode` already uses elsewhere in the same package), or accept the
   monkeypatch and document why. Either is a real decision, not a
   already-safe seam to execute against -- do not start this one without
-  picking.
+  picking. **Decided 2026-09-17: the vendored edit.** An `AGENTRT_*`-gated
+  `if` around the `register_builtins_agents(enable_browser=True)` call in
+  `tool_router.py`, matching the existing `enable_vscode` style in the same
+  package -- explicit and traceable in a diff against upstream, over a
+  monkeypatch that hides the change from anyone reading `tool_router.py`
+  directly and would silently stop working if upstream restructures the
+  import.
 - **Chromium/browser preload is a separate item this section conflated with
   builtin-agent registration.** If startup cost is the actual goal, it needs
   its own line: `AGENTRT_PRELOAD_TOOLS=0` (or equivalent), independent of
