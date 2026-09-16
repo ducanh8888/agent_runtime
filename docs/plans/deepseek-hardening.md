@@ -72,7 +72,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 | H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
-| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry) and the OpenHands-ceremony gate done, 2026-09-17; role-shaped profiles (item 3) deferred; rest open |
+| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry) and the OpenHands-ceremony gate done, 2026-09-17; interrupt visibility (item 6) done for post-init `interrupt()` only (`finalize()`, and the `_ensure_agent_ready` window, still open); role-shaped profiles (item 3) deferred; rest open |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -1022,12 +1022,63 @@ sources, corrected from an earlier draft:**
    check whether a chain of forks can recurse unbounded, and if so, add the
    same kind of limit for the same reason (runaway nesting, not a
    theoretical concern once fork depth is possible at all).
-6. **Interruption visible to the interrupted agent.** Codex records a
-   model-visible message on interrupt by default
-   (`agents.interrupt_message`). AgentRT's `interrupt()`/`finalize()` stop a
+6. **Interruption visible to the interrupted agent. Done, 2026-09-17
+   (`<hash>`).** Codex records a model-visible message on interrupt by default
+   (`agents.interrupt_message`). AgentRT's `interrupt()`/`finalize()` stopped a
    session without the agent's own context ever reflecting that it happened --
    irrelevant to a session that is genuinely done, but relevant to one that
    gets resumed later and has no record of why its prior run ended abruptly.
+   `_emit_interrupt_notice` now records it: an `environment`/`user`
+   `MessageEvent` carrying `[Interrupted] ...`, emitted from the
+   `CancelledError` handler when nothing was orphaned. **Scoped to
+   `interrupt()`, not `finalize()`** -- `finalize` stops through `pause()`,
+   which emits a `PauseEvent` and never reaches this handler, so covering it
+   needs a second emission point on a public method called from several
+   places; left as a follow-up rather than sprayed on every ordinary pause.
+   **Measured, not assumed:** the gap reproduced first (a probe interrupting
+   mid-`acompletion` and capturing the next call's messages found
+   `'do something longcontinue please'` and no interruption word anywhere),
+   the four behavioural tests fail on the pre-fix source, and a real
+   dispatch/interrupt/`send` against a daemon on an isolated
+   `AGENTRT_STATE_DIR` persisted the notice as `event-00005`, between the
+   interrupted prompt and the `InterruptEvent`, with `iterations_used: 0`
+   confirming the no-orphan case. **Three things the design had to correct,
+   one of them found by review rather than by the author.** (a) A second
+   cancel path exists -- `event_service.py` calls
+   `interrupt(internal_acp_rerun=True)` when a new user message supersedes an
+   in-flight ACP prompt, reaching the same handler, where a notice would be
+   noise because that message *is* the context; the handler's existing
+   `superseded_by_new_message` and `completed_cancelled_prompt` flags now gate
+   it (an interrupt landing after `FINISHED` cut nothing short, so claiming
+   otherwise would be false). (b) **A defect the first draft shipped: the
+   notice named a cause it could not know.** `EventService.close()` pauses and
+   then cancels the run task -- on server shutdown and on conversation delete
+   (`event_service.py:1862-1875`) -- which lands in this handler with both
+   gates *false*, so every in-flight run at shutdown got a persisted,
+   LLM-visible "the user interrupted" written into a session that is exactly
+   the resumable-PAUSED kind this item exists to help. Reproduced at SDK level
+   (`pause()` then `task.cancel()` -> one notice naming the user) and fixed by
+   rewording to name no actor -- true for a user interrupt, a shutdown and a
+   delete alike -- with a test asserting the notice never says "the user"
+   again. Naming the cause would need a teardown flag mirroring
+   `ACP_SUPERSEDE_INFLIGHT_PROMPT`; not worth it while the neutral sentence is
+   accurate in every case. (c) `events_to_messages` coalesces adjacent plain
+   user turns, verified against the real run: the prompt, the notice and the
+   next user message arrived as *one* user turn -- so the notice carries its
+   own blank-line padding and a bracketed prefix rather than relying on being
+   a separate turn. `InterruptEvent` itself was left alone: it is a
+   UI-facing event, and making it `LLMConvertibleEvent` would have injected
+   the same notice on the supersede path unless line 2638 were gated anyway.
+   **Two gaps left open, stated so the "done" is not read as wider than it
+   is.** An interrupt landing during lazy init --
+   `await asyncio.to_thread(self._ensure_agent_ready)`, above the `try` that
+   contains this handler -- still records *nothing*: no `InterruptEvent`, no
+   notice, and `CancelledError` propagates to the caller (reproduced: status
+   left `IDLE`, zero interrupt events). That is pre-existing, not a
+   regression, and the window is not short (it loads plugins and, for ACP,
+   resolves credentials through the blocking lookup documented at 2170-2176) --
+   but it means "interrupt visibility done" is true for post-init interrupts
+   only. And `finalize()`, per above.
 7. **Verb naming, where it is free.** `dispatch_from`/`dispatch_many`/
    `wait_any`/`wait_all`/`finalize` already read as verbs on an agent rather
    than REST-flavored CRUD, and should stay that way; nothing here proposes
@@ -1053,7 +1104,8 @@ written, one is harder, and the premise of two was only partly right:**
   already classifies into it. The real gap is projecting that existing data
   onto `status`/`result`, not inventing an enum -- H8 items 4/12 should reuse
   `ErrorClassification`, not define a second one.
-- **Item 6 confirmed directly, unprompted**: one of this section's own audit
+- **Item 6 confirmed and since fixed** (see item 6 above): one of this
+  section's own audit
   dispatches hit `LLMBadRequestError` naming exactly H8 item 1's failure
   (recorded below) three tool calls in, and its `InterruptEvent` is real,
   persisted (`local_conversation.py:2638`) and confirmed not

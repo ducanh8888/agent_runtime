@@ -2632,7 +2632,23 @@ class LocalConversation(BaseConversation):
                 # these the LLM history would contain tool-call requests
                 # with no tool-result, which causes provider errors on
                 # the next completion call.
-                self._emit_orphaned_action_errors()
+                orphans_backfilled = self._emit_orphaned_action_errors()
+
+                # With nothing in flight there is nothing to backfill and
+                # the backfilled AgentErrorEvent that would have told the
+                # agent what happened does not exist, so record the
+                # interruption itself.  Skipped when the run had already
+                # finished -- an interrupt landing that late did not cut
+                # anything short, and saying otherwise would be false --
+                # and when a new user message superseded the in-flight
+                # prompt, where that message is the context and the run
+                # resumes immediately off it.
+                if (
+                    not orphans_backfilled
+                    and not superseded_by_new_message
+                    and not completed_cancelled_prompt
+                ):
+                    self._emit_interrupt_notice()
 
                 self._state.execution_status = ConversationExecutionStatus.PAUSED
                 self._on_event(InterruptEvent())
@@ -2734,7 +2750,7 @@ class LocalConversation(BaseConversation):
                 self._on_event(rejection_event)
                 logger.info(f"Rejected pending action: {action_event} - {reason}")
 
-    def _emit_orphaned_action_errors(self) -> None:
+    def _emit_orphaned_action_errors(self) -> bool:
         """Emit ``AgentErrorEvent`` for actions that have no observation.
 
         After an interrupt, tool calls that were in-flight may have their
@@ -2742,6 +2758,11 @@ class LocalConversation(BaseConversation):
         ``ObservationEvent``.  LLM providers reject conversation
         histories with orphaned tool-call requests, so we backfill
         them with a synthetic error.
+
+        Returns whether anything was backfilled.  The caller uses this to
+        decide whether the interrupted run still needs recording for the
+        agent: a backfilled ``AgentErrorEvent`` is itself LLM-visible, an
+        empty history is not.
 
         Must be called while holding ``self._state``.
         """
@@ -2763,6 +2784,56 @@ class LocalConversation(BaseConversation):
                     classification=AGENT_OUTCOME,
                 )
             )
+        return bool(orphans)
+
+    def _emit_interrupt_notice(self) -> None:
+        """Record the interruption where the agent itself can read it.
+
+        ``InterruptEvent`` is not an ``LLMConvertibleEvent``, so an interrupt
+        that lands between turns -- nothing in flight, nothing for
+        :meth:`_emit_orphaned_action_errors` to backfill -- used to leave the
+        agent's own history with no trace of it.  A session resumed later then
+        had no way to know why its previous run produced nothing.  Emit a
+        message the next completion call will see.
+
+        Shaped like the stop-hook feedback above: an ``environment``
+        ``MessageEvent`` carrying a ``user``-role message, distinguished by a
+        bracketed prefix.  It shares that emission's exposure to
+        ``events_to_messages`` coalescing adjacent plain user turns into one
+        message -- verified against a real interrupt, where this notice, the
+        interrupted prompt and the next user message arrived as a single user
+        turn.  The blank-line padding is for that case: without it the notice
+        runs into the neighbouring text, and the bracketed prefix has to carry
+        the whole meaning rather than relying on being its own turn.
+
+        The wording deliberately does not say *who* interrupted.  This handler
+        is reached by more than one cancel path -- ``EventService.close()``
+        pauses and then cancels the run task on server shutdown and on
+        conversation delete, and lands here with both gates below false -- so
+        naming the user would write a false account into the history of
+        exactly the resumable sessions this exists to help.
+
+        Must be called while holding ``self._state``.
+        """
+        self._on_event(
+            MessageEvent(
+                source="environment",
+                llm_message=Message(
+                    role="user",
+                    content=[
+                        TextContent(
+                            text=(
+                                "\n\n[Interrupted] The previous run was "
+                                "interrupted before it finished, so nothing "
+                                "after this point ran. No tool call was left "
+                                "without a result. Check the current state of "
+                                "the workspace before relying on it.\n\n"
+                            )
+                        )
+                    ],
+                ),
+            )
+        )
 
     def pause(self) -> None:
         """Pause agent execution.
