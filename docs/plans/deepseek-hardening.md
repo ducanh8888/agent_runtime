@@ -596,7 +596,8 @@ untested). Items are grouped by the consumer's own severity labels.
    rather than dropped.
    Transcript available via `transcript(session="2e1d9496")` as a fixture
    seed.
-2. **No completion signal (item 2).** The stdio MCP transport cannot push;
+2. **No completion signal (item 2). CLI half done, 2026-09-17 (`74bba35`).**
+   The stdio MCP transport cannot push;
    H7.9 already recorded that limit rather than working around it with
    something fragile. Ship the CLI-side piece that is genuinely missing: a
    blocking `agentrt wait <id> [id...]` that exits 0/timeout-code on settlement,
@@ -1233,7 +1234,7 @@ carry input/run provenance and current result state independently.
 | No command-capable readonly preset | H1 `inspect` preset with no general shell or file mutation |
 | Empty artifacts are ambiguous | H1 typed/documented empty-success semantics |
 | Consumer report (2026-09-16) 1. Reasoning-content dropped on resend, session dies | H8 item 1: trace history rebuild, repair-then-retry, not a silent fallback |
-| Consumer report 2. No completion signal, orchestrator must poll or block | H8 item 2: blocking `agentrt wait` CLI; push remains impossible over stdio (H7.9) |
+| Consumer report 2. No completion signal, orchestrator must poll or block | H8 item 2: shipped 2026-09-17 (`74bba35`) -- `agentrt wait`, exit 0/3 on settle/timeout; push remains impossible over stdio (H7.9) |
 | Consumer report 3. `wait_*`/`result` payloads unpaged, overflow client limits | H8 item 3: status+metadata default, paged `result`, matching H1's paging shape |
 | Consumer report 4. Truncated final answer with no flag | H8 item 4: `finish_reason`/`truncated` on the final message and finalize summary |
 | Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: fixed 2026-09-17 (`49a55ad`) -- `_wait_bucket` trusted an upstream `state` field ahead of the text itself; text now decides |
