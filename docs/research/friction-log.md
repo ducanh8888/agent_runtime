@@ -549,11 +549,14 @@ a content fix cannot explain a bill that shows caching throughout.
 
 Two further things the cross-check turned up, both worth knowing on their own:
 
-- **The API under-reports cache hits, and under-reports tokens.** For the same
-  day it accounts for 39.8M prompt tokens where the provider billed 78.5M, and
-  13.1M cached where the provider billed 76.6M. An orchestrator reading
-  `usage` therefore sees both a smaller bill and a worse cache rate than
-  reality. That is what misled me, and it is a defect in its own right.
+- **The API under-reported cache hits, and it did not under-report tokens.**
+  For that day the daemon accounted for 13.1M cached where the provider billed
+  76.6M across the account; the miss-count argument above is what establishes
+  the gap, since the two prompt totals are not comparable. An orchestrator
+  reading `usage` therefore saw a worse cache rate than reality, which is what
+  misled me. The live check above shows this is no longer the case, so it is
+  history rather than a standing defect -- but it is the reason the earlier
+  conclusion in this entry looked right.
 - The cause of the recording change is **not established** from the records
   available. It is not a route or model-name change (the same model name is
   recorded on both sides of the break) and not the reinstall that followed it
@@ -571,6 +574,22 @@ prompt build, but sending the same prompt with a *deliberately changing* dynamic
 block still hit ~92%, because the provider matches the longest common prefix and
 the long static block ahead of it is unchanged. Nothing should be changed to
 "fix" that.
+
+**Is the accounting defect live? Checked, and no.** A fresh two-call session
+dispatched against the running daemon records `cache_read=17,920` of
+`prompt_tokens=26,250` -- 68%, which is what a two-call session looks like, since
+its first call cannot hit. So the daemon records cache correctly now; the
+sessions scoring 0.00 were recorded by an earlier build, and the difference
+between those records and the bill is history rather than a present fault.
+
+One inference made on the way to that answer did not hold and is worth recording
+as such: those sessions have an empty per-call `token_usages` list, which looked
+like the signature of an older code path -- but the *current* daemon leaves that
+list empty too, and `usage_by_model` falls back to the accumulated bucket for
+every session on this deployment. The empty list is the normal shape here, not
+evidence of age, so it cannot date the change. The per-call records the code
+expects are simply not written by the build in use, which is its own small
+observation and not the defect it first appeared to be.
 
 **What shipped, revised.** `tools/probe_cache.py` still guards, but its subject
 is now honest: it checks whether the API's accounting is self-consistent, since
