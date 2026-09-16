@@ -668,14 +668,45 @@ untested). Items are grouped by the consumer's own severity labels.
    error, not a genuine 0-match result), and extending the fix to it by
    resemblance alone would not meet this project's own verification
    standard, so it stays unconfirmed rather than claimed fixed.
-7. **No readonly output channel (item 7).** A write-only directory outside the
-   dispatched workspace, listed through `artifacts` like the workspace itself,
-   for a `readonly`/`inspect` session's report -- without granting write access
-   to anything the session can read, which would reopen the exact
-   confinement-by-path problem `orchestration.md`'s "Limits worth knowing"
-   section already describes for hard links. Needs the same device/inode
-   comparison the workspace guard already uses, applied to the new directory's
-   boundary.
+7. **No readonly output channel (item 7). Done, 2026-09-17 (`<pending>`).** A
+   write-only directory outside the dispatched workspace, listed through
+   `artifacts` like the workspace itself, for a `readonly`/`inspect` session's
+   report -- without granting write access to anything the session can read,
+   which would reopen the exact confinement-by-path problem
+   `orchestration.md`'s "Limits worth knowing" section already describes for
+   hard links. Needs the same device/inode comparison the workspace guard
+   already uses, applied to the new directory's boundary.
+
+   **What was built**: no new server-side state. The directory is
+   `<persistence_dir>/reports`, the same "subdirectory of `persistence_dir`"
+   convention `env_observation_persistence_dir` already uses, computed
+   identically on the client side from `config.state_dir() /
+   "conversations" / uuid.hex` (verified against the real on-disk layout, and
+   against `event_service.py`'s `persistence_dir=str(self.conversations_dir)`
+   plus `get_persistence_dir`'s `/ conversation_id.hex`, so the two
+   computations are provably the same path, not just usually the same path).
+   `GuardedFileEditorExecutor` gets a second root; `permissions.check_path`
+   still runs unmodified, closing the hard-link/UNC/dots-and-spaces cases the
+   same way it already does for the workspace. `client.artifacts` lists this
+   directory as a `reports` field alongside the existing `files` listing,
+   unfiltered by time (session-dedicated, not a repository), and checks it
+   before the workspace when reading a single `path`.
+
+   **What the first version got wrong, found by writing the tests**: trying
+   the reports root before the workspace, for *any* relative path, meant
+   every relative write from a readonly/inspect session -- including an
+   ordinary illegitimate one like `src/app.py` -- silently landed inside
+   `reports/` instead of being refused. A relative path always resolves
+   inside whatever root it is joined to, so "not under the reports root"
+   almost never fires for one. Fixed by checking the workspace first (as
+   before) and falling back to the reports root only for an *absolute* path
+   that fails there -- matching what the tool's own description hands the
+   model: `reports_root` as an absolute string, not a hint to write a
+   relative name that happens to land somewhere new. Verified end-to-end
+   against the real daemon: a dispatched `readonly` session wrote its report
+   to the exact absolute path from its own tool description, `artifacts`
+   listed it under `reports` without the workspace listing changing, and
+   `artifacts(session, path="findings.md")` read its content back.
 8. **No workspace snapshot for readonly sessions (item 8). Done, 2026-09-17
    (`16693c0`).** A `snapshot=<git ref>` workspace mode that creates a
    detached worktree, records the resolved commit on `status`, and removes
