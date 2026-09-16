@@ -1011,7 +1011,7 @@ sources, corrected from an earlier draft:**
    selection into role selection -- additive to the existing
    `permission`/`llm_profile` fields, not a replacement for them.
 4. **Partial history fork, not only all-or-nothing. Done as an exact event
-   bound, 2026-09-17 (`<hash>`); `fork_turns` deliberately not built.** Codex's
+   bound, 2026-09-17 (`808af4f`); `fork_turns` deliberately not built.** Codex's
    `fork_turns` accepts `"none"`, `"all"`, or a last-N-turns integer.
    `dispatch_from` forked a source session's history as a single mode. The
    server already did the hard part -- `POST /{id}/fork` takes `from_event_id`,
