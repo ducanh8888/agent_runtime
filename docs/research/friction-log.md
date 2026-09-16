@@ -555,3 +555,34 @@ studying that history and will report the old breakage by design.
 `tools/spend.py` also now prints a recent-window hit rate beside the lifetime
 one, for the same reason the entry above exists: a single lifetime number read as
 a statement about today.
+
+## The rate card was wrong, and the docs said so
+
+Same session, a second thing the bill exposed. `tools/spend.py` priced against
+a flat triple — cache miss 0.28, cache hit 0.028, output 0.42 USD/M — and the
+provider's own published pricing page disagrees with all three. The provider
+prices by a **peak/off-peak clock**: cache hit 0.006 / 0.003, cache miss 0.30 /
+0.15, output 1.20 / 0.60, with peak defined as 01:00-04:00 and 06:00-10:00 UTC
+Monday to Friday and off-peak at half. Two things follow that were not obvious
+from the card:
+
+- **A flat card cannot be right.** The windows are a factor of two apart, and
+  for anyone working UTC+7 the peak windows (08:00-11:00 and 13:00-17:00 local)
+  cover most of a working day. The card matched neither window, so the report
+  was wrong in *both* directions at once: it charged cache hits about four
+  times too much and output about half too little. On a cache-heavy workload
+  the first dominates, which is why the total was overstated — about $102 where
+  the same tokens price at about $66.
+- **The retired model name is a pricing lookup, not a guess.** Sessions recorded
+  as `openai/ds/deepseek-v4-flash` were reported as *unpriced*, 8.7M tokens at
+  an unknown rate. The pricing page states that the legacy names are still
+  accepted, that the models behind them were retired, and that their requests
+  are "served by the DeepSeek-V4.1-Flash model and billed at the Flash price".
+  So pricing them at the Flash rate is what the provider documents, and the
+  card now says so rather than leaving a hole.
+
+The card is now per-window, each session is priced in the window it actually
+started in, and an unknown start time is priced at peak — for a spend watch,
+over-stating is the safer error. A model the table does not cover is still
+reported as a token count rather than charged someone else's rate; the alias
+table is only for names the provider itself documents.

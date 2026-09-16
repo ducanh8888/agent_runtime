@@ -40,15 +40,51 @@ RECENT_WINDOW_DAYS = 1
 #: Versioned rate cards, USD per million tokens. Each card records where the
 #: rate came from and which period it applies to, so a figure can say which
 #: prices it used.
+#:
+#: The provider prices by a peak/off-peak clock and half-rates the off-peak
+#: window, so a single flat triple cannot be right for a session that ran in
+#: either -- both are carried and the caller picks per session. The numbers
+#: before this change (miss 0.28 / hit 0.028 / output 0.42) matched neither
+#: window, which is why a report built on them was wrong in both directions.
 PRICE_TABLE: dict[str, dict] = {
     "deepseek-flash": {
         "version": "deepseek-2026-09",
         "source": "https://api-docs.deepseek.com/quick_start/pricing/",
-        "cache_miss": 0.28,
-        "cache_hit": 0.028,
-        "output": 0.42,
+        "off_peak": {"cache_miss": 0.15, "cache_hit": 0.003, "output": 0.60},
+        "peak": {"cache_miss": 0.30, "cache_hit": 0.006, "output": 1.20},
     },
 }
+
+#: Names the provider still accepts for a model it has retired, and the current
+#: model that serves them. Per the pricing page: "The legacy names
+#: deepseek-v4-flash and deepseek-v4-flash-vision-exp are still accepted", "the
+#: corresponding models have been retired", "their requests are served by the
+#: DeepSeek-V4.1-Flash model and billed at the Flash price". Pricing them at the
+#: Flash rate is therefore the documented answer, not a guess -- and it is what
+#: stops older sessions being reported as unpriced.
+MODEL_ALIASES = {
+    "deepseek-v4-flash": "deepseek-flash",
+    "deepseek-v4-flash-vision-exp": "deepseek-flash",
+}
+
+#: Peak is 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday; everything else,
+#: weekends included, is off-peak and half the price.
+PEAK_WINDOWS_UTC = ((1, 4), (6, 10))
+
+
+def is_peak(when: datetime | None) -> bool:
+    """Is ``when`` inside a peak billing window?
+
+    An unknown time is treated as peak: this is an estimate used to watch
+    spend, and over-stating it is the safer error of the two.
+    """
+    if when is None:
+        return True
+    utc = when.astimezone(timezone.utc)
+    if utc.weekday() >= 5:  # Saturday and Sunday
+        return False
+    return any(start <= utc.hour < end for start, end in PEAK_WINDOWS_UTC)
+
 
 #: The ledger and the live records both use the full field names; a report
 #: must not be right for one and silently zero for the other.
@@ -61,19 +97,21 @@ TOKEN_FIELDS = (
 )
 
 
-def rates_for(model: str | None) -> dict | None:
-    """The rate card for a model, or None when the table does not cover it."""
+def rates_for(model: str | None, *, peak: bool = True) -> dict | None:
+    """The rate card for a model in the window asked for, or None if unpriced."""
     if not model:
         return None
     name = model.casefold()
     # Exact, after dropping a provider-routing prefix: `openai/deepseek-flash`
     # is the same billed model as `deepseek-flash`, but `deepseek-flash-lite`
-    # is not, and charging it the flash rate would be a guess.
-    leaf = name.rsplit("/", 1)[-1]
-    for key, card in PRICE_TABLE.items():
-        if leaf == key:
-            return card
-    return None
+    # is not, and charging it the flash rate would be a guess. A *retired* name
+    # is different: the provider documents what serves it, so that one is a
+    # lookup rather than a guess.
+    leaf = MODEL_ALIASES.get(name.rsplit("/", 1)[-1], name.rsplit("/", 1)[-1])
+    card = PRICE_TABLE.get(leaf)
+    if card is None:
+        return None
+    return card["peak"] if peak else card["off_peak"]
 
 
 def usage_by_model(stats: dict | None) -> dict[str, dict[str, int]]:
@@ -101,14 +139,16 @@ def usage_by_model(stats: dict | None) -> dict[str, dict[str, int]]:
     return totals
 
 
-def cost_for(model: str | None, usage: dict[str, int]) -> tuple[float, bool]:
+def cost_for(
+    model: str | None, usage: dict[str, int], *, peak: bool = True
+) -> tuple[float, bool]:
     """Price one model's usage. Returns ``(usd, priced)``.
 
     ``priced`` is False when the table does not cover the model; the caller
     reports those tokens separately instead of folding them into a total that
     would look complete.
     """
-    card = rates_for(model)
+    card = rates_for(model, peak=peak)
     if card is None:
         return 0.0, False
     prompt = usage.get("prompt_tokens", 0)
@@ -125,13 +165,15 @@ def cost_for(model: str | None, usage: dict[str, int]) -> tuple[float, bool]:
     )
 
 
-def price_session(stats: dict | None) -> tuple[float, dict[str, int], set[str]]:
+def price_session(
+    stats: dict | None, *, peak: bool = True
+) -> tuple[float, dict[str, int], set[str]]:
     """Total cost, unpriced token totals and the unpriced model names."""
     total = 0.0
     unpriced: dict[str, int] = dict.fromkeys(TOKEN_FIELDS, 0)
     unpriced_models: set[str] = set()
     for model, usage in usage_by_model(stats).items():
-        usd, priced = cost_for(model, usage)
+        usd, priced = cost_for(model, usage, peak=peak)
         if priced:
             total += usd
         else:
@@ -190,7 +232,12 @@ def main() -> int:
             "reasoning_tokens",
         ):
             grand[field] += session[field]
-        usd, unpriced, models = price_session(stats)
+        # Priced in the window the session actually started in: the two are a
+        # factor of two apart, and a session's own start time is the closest
+        # thing to the truth this has.
+        usd, unpriced, models = price_session(
+            stats, peak=is_peak(_created_at(item.get("created_at")))
+        )
         sessions += usd
         unpriced_models |= models
         for field in TOKEN_FIELDS:
@@ -294,8 +341,24 @@ def main() -> int:
         f"\nEstimate only. Prices: {versions}. These are published rates applied "
         "to reported tokens, not provider-confirmed charges."
     )
+    print(
+        "Each session is priced in the window it started in: peak is "
+        "01:00-04:00 and 06:00-10:00 UTC Monday to Friday, off-peak is half "
+        "price, and a session with no readable start time is priced at peak."
+    )
     print("A model missing from the table is reported as a token count, not a price.")
     return 0
+
+
+def _created_at(value: object) -> datetime | None:
+    """A session's creation time, or None when it cannot be read."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        created = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return created if created.tzinfo else created.replace(tzinfo=timezone.utc)
 
 
 def _created_within(value: object, cutoff: datetime) -> bool:
@@ -305,15 +368,8 @@ def _created_within(value: object, cutoff: datetime) -> bool:
     is the one that claims to describe the current build, so it should not
     absorb sessions whose age is unknown.
     """
-    if not isinstance(value, str) or not value:
-        return False
-    try:
-        created = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    return created >= cutoff
+    created = _created_at(value)
+    return created is not None and created >= cutoff
 
 
 if __name__ == "__main__":
