@@ -556,11 +556,32 @@ untested). Items are grouped by the consumer's own severity labels.
    this plan's own audit dispatches, `inspect` preset) hit exactly
    `LLMBadRequestError: litellm.BadRequestError: OpenAIException - The
    reasoning_content in the thinking mode must be passed back to the API`
-   on its third tool-call turn -- two `file_editor` reads and one `inspect`
-   search in, not after dozens of steps. This raises the confirmed severity
-   above the original consumer report's 2/8 sessions: the failure surfaces
-   this early and this reliably, a short session doing ordinary multi-step
-   work is enough to hit it, not an edge case reached only by long runs.
+   -- **correction to an earlier read of this evidence**: the first
+   `transcript()` call without a cursor pages backwards from the *most
+   recent* events, not from the start, and was misread as "the third
+   tool-call turn." The raw event files (`~/.agentrt/conversations/<id>/
+   events/*.json`) show the true shape: 45 successful iterations first,
+   error at event ~199 of 200. Severity is still real -- a session doing
+   ordinary work over 45 turns is not a rare edge case either -- but "hits on
+   turn three" was wrong and is retracted.
+
+   **Candidate mechanism, found in the raw events, not yet proven as the sole
+   cause**: `Message.to_chat_dict` (`llm/message.py`) gates the resend with
+   `if send_reasoning_content and self.reasoning_content:` -- a *truthy*
+   check. Several `ActionEvent`s in this session's history carry
+   `reasoning_content = ""` (empty string, not `None`) rather than the
+   substantial text most turns have; `_combine_action_events`
+   (`event/base.py`) takes `events[0].reasoning_content` when a response
+   produced parallel tool calls, so a turn whose first event happened to have
+   empty reasoning gets the field *omitted from the resend entirely* instead
+   of sent as an empty string -- a real, fixable defect regardless of whether
+   it is the exact trigger for this specific failure (the turn immediately
+   before the error in this session had non-empty reasoning_content, which
+   the truthy-check theory alone does not explain, so treat this as strong
+   circumstantial evidence, not a closed case). Fixed alongside this entry:
+   the condition is now `if send_reasoning_content and self.reasoning_content
+   is not None:`, so an empty-but-present reasoning turn is resent as `""`
+   rather than dropped.
    Transcript available via `transcript(session="2e1d9496")` as a fixture
    seed.
 2. **No completion signal (item 2).** The stdio MCP transport cannot push;

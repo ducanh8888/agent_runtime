@@ -436,7 +436,19 @@ def test_message_with_reasoning_content_none():
 
 
 def test_message_with_reasoning_content_empty_string():
-    """Test that reasoning_content is NOT included when it's an empty string."""
+    """An empty-but-present reasoning_content is sent as "", not omitted.
+
+    Inherited from the pristine vendor copy with the opposite assertion (omit
+    on empty), which is what produced a live production failure: DeepSeek's
+    API rejects a resend that drops reasoning_content on a thinking-mode turn
+    whose reasoning happened to be empty (a parallel-tool-call turn takes
+    events[0]'s reasoning in _combine_action_events, and that can legitimately
+    be ""). `send_reasoning_content=True` already scopes this to models that
+    declared they need the field threaded back; within that set, "" still
+    counts as "had reasoning content," only `None` means "no reasoning
+    happened here." See docs/plans/deepseek-hardening.md H8 item 1,
+    2026-09-17.
+    """
     from agentrt.sdk.llm.message import Message, TextContent
 
     message = Message(
@@ -450,7 +462,7 @@ def test_message_with_reasoning_content_empty_string():
     )
     assert result["role"] == "assistant"
     assert result["content"] == "Final answer"
-    assert "reasoning_content" not in result
+    assert result["reasoning_content"] == ""
 
 
 def test_message_with_reasoning_content_list_serializer():

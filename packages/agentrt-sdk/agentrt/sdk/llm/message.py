@@ -321,8 +321,16 @@ class Message(BaseModel):
             message_dict["tool_call_id"] = self.tool_call_id
             message_dict["name"] = self.name
 
-        # Required for model like kimi-k2-thinking
-        if send_reasoning_content and self.reasoning_content:
+        # Required for model like kimi-k2-thinking. `is not None` rather than
+        # a truthy check: a turn whose reasoning content is genuinely "" (a
+        # parallel-tool-call turn takes events[0]'s reasoning in
+        # _combine_action_events, and that can legitimately be empty) still
+        # had reasoning in thinking mode and the provider expects the key
+        # back -- dropping it because it happens to be empty is what produced
+        # "the reasoning_content in the thinking mode must be passed back to
+        # the API" on a resend. Measured against a live session,
+        # docs/plans/deepseek-hardening.md H8 item 1, 2026-09-17.
+        if send_reasoning_content and self.reasoning_content is not None:
             message_dict["reasoning_content"] = self.reasoning_content
 
         return message_dict
