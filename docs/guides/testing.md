@@ -49,16 +49,28 @@ excluded by default; they are not part of a normal gate.
 ```bash
 python3 tools/probe_cache.py          # prompt caching, per session
 python3 tools/probe_cache.py --days 4 # ...over a wider window
+python3 tools/reconcile_usage.py <export-dir>   # the daemon's records vs a bill
 ```
+
+`reconcile_usage.py` reads a provider billing export and compares it with the
+daemon's own records. Only the **miss** counts are comparable: the export is per
+account key and an orchestrator may share that key, so the prompt totals mix two
+populations. A daemon call is a subset of the key's calls, so its misses must fit
+inside the bill's -- a lower bound that already exceeds the bill is a
+contradiction, and that is what the tool fails on. An export from before the
+cache recording improved will legitimately fail; check the period before
+concluding the current build is at fault.
 
 Caching fails silently: the only symptom is the bill, and nothing in the suites
 notices. This reads the daemon's own usage records — it dispatches no work and
 costs nothing — and fails when a session with three or more provider calls
-reports a near-zero hit rate, which is the signature of the prompt prefix
-changing between calls. Its default window is half a day on purpose: it answers
-"is the current code caching", and older sessions in this deployment legitimately
-scored zero before H8 item 1 was fixed. A widened window reporting those is
-reporting history, not a regression. `docs/research/friction-log.md` has the
+reports a near-zero hit rate, which means either caching is not happening or the
+accounting of it is broken. The default window is half a day on purpose: it
+answers "is the current code recording correctly", and older sessions in this
+deployment scored zero for a reason that turned out to be the *recording*, not
+caching — the provider's bill showed 97.6% cached throughout. A widened window
+reporting those is reporting history, not a regression.
+`docs/research/friction-log.md` has the
 worked example, including a cause that measurement ruled out.
 
 ## Known environment-dependent failures

@@ -93,11 +93,20 @@ Named, so "done" is checkable:
 
 | # | Item | State |
 |---|---|---|
-| 1 | H8 item 12 -- start deadline for a run that never produces its first event | open |
+| 1 | H8 item 12 -- start deadline for a run that never produces its first event | **done** (`38a2faf`) |
 | 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | open |
-| 3 | H9 item 3 -- role-shaped profiles | decided: deferred (needs a third LLM profile to mean anything); re-affirm or close, do not build |
-| 4 | `_progress_summary`'s `JSONDecodeError` escape, the twin of the one fixed in `wait` | open, was deferred as off-item |
-| 5 | A `usage`-vs-provider-bill reconciliation check | new, from the 2026-09-17 investigation |
+| 3 | H9 item 3 -- role-shaped profiles | **closed as decided, not built** -- reason below |
+| 4 | `_progress_summary`'s `JSONDecodeError` escape, the twin of the one fixed in `wait` | **already done** (`06684f9`) -- listed as open here from memory rather than from the code; the widening and its test were in that commit |
+| 5 | A `usage`-vs-provider-bill reconciliation check | **done** (`<hash>`) -- `tools/reconcile_usage.py` |
+
+Row 3, closed without building: `AgentProfile`'s `extra="forbid"` plus
+`AGENT_PROFILE_SCHEMA_VERSION = 2` make a description field a persisted-schema
+migration, and "role selection" needs a new selection dimension rather than an
+additive field -- the earlier decision, re-affirmed. It also still cannot mean
+anything: role selection is a choice between roles, and this deployment has two
+LLM profiles. Building it now would be the over-engineering the run was told to
+avoid. The condition that changes this is written down in H9 item 3 itself: a
+third profile makes "which role" a real question.
 
 Standing instructions for this run, given by the user: **decide rather than
 ask**; record every decision and its rejected alternative in this document and
@@ -630,7 +639,7 @@ untested). Items are grouped by the consumer's own severity labels.
    need for it has been stated, and it is a different trust boundary (an
    outbound call from the daemon to somewhere).
 12. **0-iteration provider timeouts are not distinguished. Done, 2026-09-17
-    (`<hash>`); folded into item 4's design, surfaced through the vocabulary
+    (`38a2faf`); folded into item 4's design, surfaced through the vocabulary
     rather than a new status.** A start deadline: bounded time from
     dispatch/resume admission to the first persisted event (`ActionEvent` or
     `ObservationEvent`). Deliberately narrower than a stall watchdog -- H7
