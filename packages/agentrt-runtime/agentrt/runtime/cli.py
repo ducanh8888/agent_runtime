@@ -108,6 +108,28 @@ def _cmd_profiles(_args: argparse.Namespace) -> dict:
     return client_mod.Client().profiles()
 
 
+def _cmd_wait(args: argparse.Namespace) -> dict:
+    """Block until the named sessions settle, or the timeout elapses.
+
+    H8 item 2's answer to "no completion signal": the MCP transport cannot
+    push, so the substitute is a real process-exit signal for a caller
+    willing to background a process, rather than every orchestrator
+    hand-rolling its own poll loop -- caught live in this same
+    hardening pass, where the right interim pattern for `wait_*` turned out
+    to be "background a CLI poll loop," not "call it with a shorter
+    timeout." `main()` maps `timed_out` on this command's own output to a
+    distinct exit code (3) so the caller does not have to parse JSON just to
+    tell settled from timed-out.
+    """
+    client = client_mod.Client()
+    return client.wait(
+        args.session,
+        mode=args.mode,
+        timeout=args.timeout,
+        poll_interval=args.poll_interval,
+    )
+
+
 def _cmd_transcript(args: argparse.Namespace) -> dict:
     """Return a condensed transcript, one page at a time."""
     client = client_mod.Client()
@@ -300,6 +322,30 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     profiles_parser.set_defaults(func=_cmd_profiles)
 
+    wait_parser = _add_subparser(
+        subparsers,
+        "wait",
+        help="block until sessions settle, or the timeout elapses",
+    )
+    wait_parser.add_argument("session", nargs="+", help="one or more session ids")
+    wait_parser.add_argument(
+        "--mode",
+        choices=("all", "any"),
+        default="all",
+        help="wait for every id (default), or return on the first to settle",
+    )
+    wait_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+        help=(
+            "seconds to block (default 600); internally capped at "
+            "AGENTRT_WAIT_SAFE_CEILING_SECONDS regardless of what is passed"
+        ),
+    )
+    wait_parser.add_argument("--poll-interval", type=float, default=2.0)
+    wait_parser.set_defaults(func=_cmd_wait)
+
     transcript_parser = _add_subparser(
         subparsers, "transcript", help="show a condensed session transcript"
     )
@@ -441,6 +487,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     _emit(args, output)
+    # `wait`'s whole point as a backgroundable command is a real exit code a
+    # caller can check without parsing JSON: 3 means the deadline ended the
+    # wait, not completion -- distinct from 0 (every requested outcome
+    # settled) and from the 1/2 error codes above, which mean the call
+    # itself failed, not that it succeeded-but-timed-out.
+    if args.command == "wait" and isinstance(output, dict) and output.get("timed_out"):
+        return 3
     return 0
 
 
