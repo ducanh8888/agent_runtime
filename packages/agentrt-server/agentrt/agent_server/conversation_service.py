@@ -2669,6 +2669,20 @@ class ConversationService:
             "updated_at": utc_now(),
             "forked_from_conversation_id": source_id,
             "forked_from_event_id": from_event_id,
+            # Without this, model_copy carries the *source's own*
+            # parent_conversation_id forward unchanged -- a fork becomes a
+            # sibling of its source at the same level rather than the
+            # source's child, and _children_index()/_children_of() (which
+            # read exactly this field) report the wrong tree. Set here
+            # rather than left to the general create-path validation
+            # (conversation_service.py's parent_conversation_id checks,
+            # ~line 2055) because a fork is already a trusted internal
+            # construction, not a client-supplied field to re-validate --
+            # self-reference is impossible (fork_conv_id is freshly
+            # allocated) and same-workspace already holds by construction
+            # (fork_workspace derives from the source).
+            # docs/plans/deepseek-hardening.md H9 item 5, 2026-09-17.
+            "parent_conversation_id": source_id,
         }
         if reset_metrics:
             fork_overrides["metrics"] = None

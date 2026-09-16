@@ -3762,6 +3762,34 @@ class TestConversationTreeForkAndNavigate:
             assert len(src_events) == len(events)
 
     @pytest.mark.asyncio
+    async def test_fork_becomes_a_child_of_its_source(self, tmp_path):
+        """A fork's parent_conversation_id is the source, not inherited.
+
+        Regression: fork_overrides used to leave parent_conversation_id out
+        of the update dict, so model_copy carried the *source's own* parent
+        forward unchanged -- a fork was a sibling of its source, not a
+        child, and _children_index()/_children_of() (which read exactly this
+        field) reported the wrong tree. docs/plans/deepseek-hardening.md H9
+        item 5, 2026-09-17.
+        """
+        workspace_dir = tmp_path / "workspace"
+        workspace_dir.mkdir()
+        async with ConversationService(
+            conversations_dir=tmp_path / "conversations"
+        ) as svc:
+            info, _, _ = await self._start_with_events(
+                svc, workspace_dir, ["first"]
+            )
+
+            fork_info = await svc.fork_conversation(info.id)
+
+            assert fork_info is not None
+            fork_service = await svc.get_event_service(fork_info.id)
+            assert fork_service is not None
+            assert fork_service.stored.parent_conversation_id == info.id
+            assert fork_info.id in svc._children_of(info.id)
+
+    @pytest.mark.asyncio
     async def test_whole_conversation_fork_has_no_branch_point(self, tmp_path):
         """fork() without from_event_id copies everything; lineage event is None."""
         workspace_dir = tmp_path / "workspace"
