@@ -94,7 +94,7 @@ Named, so "done" is checkable:
 | # | Item | State |
 |---|---|---|
 | 1 | H8 item 12 -- start deadline for a run that never produces its first event | **done** (`38a2faf`) |
-| 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | **done** (`<hash>`) |
+| 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | **done** (`3cbeaa6`) |
 | 3 | H9 item 3 -- role-shaped profiles | **closed as decided, not built** -- reason below |
 | 4 | `_progress_summary`'s `JSONDecodeError` escape, the twin of the one fixed in `wait` | **already done** (`06684f9`) -- listed as open here from memory rather than from the code; the widening and its test were in that commit |
 | 5 | A `usage`-vs-provider-bill reconciliation check | **done** (`fe402de`) -- `tools/reconcile_usage.py` |
@@ -116,6 +116,17 @@ CLI and MCP. Verification: enough to prove the claim, by measurement rather
 than by mock where a real provider or daemon decides the outcome. Nothing that
 widens scope beyond the five rows above is in scope; anything discovered is
 recorded here, not built.
+
+**Closed 2026-09-17.** All five rows are settled: two built (`38a2faf`,
+`3cbeaa6`), one already done before the run started and mis-listed here from
+memory (`06684f9`), one built during it (`fe402de`), and one closed as a
+decision rather than code (row 3, above). Nothing in this section remains open.
+
+Two things this run learned about its own process, worth keeping: a row can be
+wrong about its own state -- row 4 was already done, and only checking the code
+said so -- and the one defect the finish_reason work turned up (a dict-shaped
+`incomplete_details` read as an attribute) was found by running against the real
+provider, not by the tests, which had been written to the same wrong assumption.
 
 ## 3. Phase specifications
 
@@ -706,7 +717,7 @@ untested). Items are grouped by the consumer's own severity labels.
    should learn that. `wait_*` items inherit `result_length` through `result()`
    and keep returning the text whole. Verified: all 12 new tests fail on the
    pre-fix source; 1016 tests pass.
-4. **Silent truncation (item 4). Done, 2026-09-17 (`<hash>`).** Persist and
+4. **Silent truncation (item 4). Done, 2026-09-17 (`3cbeaa6`).** Persist and
    report `finish_reason` (or an equivalent explicit `truncated: bool`) on the
    final message, and keep the untruncated text retrievable through the new
    paged `result` from item 3 rather than only through raw events. A
@@ -1129,7 +1140,7 @@ sources, corrected from an earlier draft:**
 **What can converge, and the H8 item or precedent each depends on:**
 
 1. **Named terminal reasons, not one `error`. Half done, 2026-09-17
-   (`<hash>`); the projection half.** Both references enumerate why an agent
+   (`1f620ba`); the projection half.** Both references enumerate why an agent
    stopped: Codex's `report_agent_job_result` contract names
    `status: error`/`last_error` for a worker that never reported; Claude
    Code's Agent view distinguishes a running/background session from a
