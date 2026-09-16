@@ -290,10 +290,19 @@ def status(session: str) -> dict:
 
 
 @mcp.tool()
-def result(session: str) -> dict:
+def result(
+    session: str, offset: int | None = None, max_chars: int | None = None
+) -> dict:
     """Return the answer for a session's current request.
 
     session is the short id or the full UUID.
+
+    `result_length` is always reported, so you can size an answer before moving
+    it. `offset` and `max_chars` return a window of it instead of all of it --
+    page a long answer with them rather than pulling a megabyte you will not
+    read. When a window is used, `result_sha256` covers the whole text, not the
+    window, so two pages of one answer can be told from two answers that start
+    alike. Pass neither and the text is returned whole, as before.
 
     `state` scopes the answer. `final` means the run answering the newest
     consumed input finished; `result` is its text, and an empty string is a
@@ -320,7 +329,7 @@ def result(session: str) -> dict:
     diff against what you expected. That is one tool call, and it is the
     difference between believing and knowing.
     """
-    return _guard(_get_client().result, session)
+    return _guard(_get_client().result, session, offset=offset, max_chars=max_chars)
 
 
 @mcp.tool()

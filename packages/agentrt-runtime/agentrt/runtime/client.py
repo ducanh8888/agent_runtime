@@ -8,6 +8,7 @@ callers from silently depending on different response shapes.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -217,6 +218,38 @@ def _response_payload(full_id: str, data: dict) -> dict:
         value = data.get(key)
         if value is not None:
             payload[key] = value
+    return payload
+
+
+def _apply_result_paging(
+    payload: dict, *, offset: int | None, max_chars: int | None
+) -> dict:
+    """Report the answer's size, and window the text when asked for one.
+
+    H8 item 3. The default is deliberately unchanged -- a caller who passes no
+    window still gets the whole text, and H9 item 2's whole point was that a
+    settled call should not force a second one. What is added here is the ability
+    to *not* receive a megabyte: ``result_length`` always (free, and enough to
+    decide whether to page at all), and ``result_sha256`` of the **whole** text
+    when a window is used, so two pages of a long answer can be told apart from
+    two answers that merely start alike.
+    """
+    text = payload.get("result")
+    if not isinstance(text, str):
+        return payload
+    payload["result_length"] = len(text)
+    if offset is None and max_chars is None:
+        return payload
+    if offset is not None and offset < 0:
+        raise ClientError(f"offset must not be negative, got {offset}")
+    if max_chars is not None and max_chars <= 0:
+        raise ClientError(f"max_chars must be positive, got {max_chars}")
+    start = offset or 0
+    end = len(text) if max_chars is None else start + max_chars
+    payload["result"] = text[start:end]
+    payload["result_offset"] = start
+    payload["result_truncated"] = (start, end) != (0, len(text))
+    payload["result_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return payload
 
 
@@ -1448,7 +1481,13 @@ class Client:
             result["workspace_resolved_sha"] = resolved_sha
         return result
 
-    def result(self, session: str) -> dict:
+    def result(
+        self,
+        session: str,
+        *,
+        offset: int | None = None,
+        max_chars: int | None = None,
+    ) -> dict:
         """Return the answer for the session's current request.
 
         ``result`` is the text, or ``None`` when ``state`` is ``pending`` --
@@ -1457,6 +1496,14 @@ class Client:
         answer. ``state``, ``error``, ``iterations_*``,
         ``last_completed_tool`` and ``last_progress_at`` describe provenance
         and progress.
+
+        ``result_length`` is always reported -- it costs nothing and lets a
+        caller size the payload before asking for it. ``offset`` and
+        ``max_chars`` window the text; used together they page a long answer,
+        and ``result_sha256`` then covers the **whole** text rather than the
+        window, so two pages of one answer are distinguishable from two answers
+        that merely start alike. Without a window the returned text is exactly
+        what it always was.
 
         ``progress_summary`` is added when the session's status is ``error``:
         a deterministic tool-call tally computed from the condensed
@@ -1495,6 +1542,7 @@ class Client:
 
         payload = _response_payload(full_id, data)
         payload["status"] = status
+        payload = _apply_result_paging(payload, offset=offset, max_chars=max_chars)
         if status == "error":
             try:
                 payload["progress_summary"] = self._progress_summary(resolved)

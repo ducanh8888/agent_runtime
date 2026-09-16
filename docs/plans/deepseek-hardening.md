@@ -619,11 +619,26 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Cao (high):*
 
-3. **Unpaged payloads (item 3).** `wait_all`/`wait_any` return status and
+3. **Unpaged payloads (item 3). Done 2026-09-17 (`<hash>`), with the default
+   kept rather than changed.** `wait_all`/`wait_any` return status and
    metadata (length, a content hash) by default instead of full result text;
    add offset/limit paging to `result`, matching the shape `read_evidence`
    already established for transcripts. This is consistent with H1's paging
    work, extended to the two call sites that currently skip it.
+   **The "by default instead of full result text" half was declined on the
+   user's decision, and the reason is worth keeping:** a settled call that
+   returns a summary *forces* the follow-up call that H9 item 2 had just
+   removed, so the two items would have been pulling against each other. What
+   shipped instead is `result_length` always -- free, and enough to decide
+   whether to page at all -- plus opt-in paging: `result(offset=, max_chars=)`
+   returns a window, and `result_sha256` then covers the **whole** text rather
+   than the window, which is what makes a paged read checkable: two pages of one
+   answer share a digest, two answers that merely start alike do not. An
+   impossible window (negative offset, non-positive `max_chars`) is refused
+   rather than clamped, since a caller that asked for a window it cannot have
+   should learn that. `wait_*` items inherit `result_length` through `result()`
+   and keep returning the text whole. Verified: all 12 new tests fail on the
+   pre-fix source; 1016 tests pass.
 4. **Silent truncation (item 4).** Persist and report `finish_reason` (or an
    equivalent explicit `truncated: bool`) on the final message, and keep the
    untruncated text retrievable through the new paged `result` from item 3
