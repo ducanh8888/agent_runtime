@@ -521,7 +521,15 @@ same day:
 
 The bill includes the sessions the API scored at **0.00** -- `2e1d9496` among
 them, which this plan had already cited for a different reason. Their tokens were
-served from cache and billed at the cheap rate. So nothing was "paid in full",
+served from cache and billed at the cheap rate.
+
+The decisive arithmetic does not depend on the two totals matching, which they
+cannot be made to (a store missing deleted sessions will always under-count).
+It is the miss count: those zero-scored sessions recorded ~17.8M prompt tokens,
+so if they had genuinely missed, the day's misses would be at least 17.8M. The
+bill says the day's misses were **1.9M**. Sessions missing from the store could
+only add more misses, not fewer, so the contradiction cannot be explained that
+way -- those tokens were cached. So nothing was "paid in full",
 and the causation above is wrong: what changed at that moment was **what the
 daemon recorded**, not what the provider did. H8 item 1 is a prompt-content fix;
 a content fix cannot explain a bill that shows caching throughout.
