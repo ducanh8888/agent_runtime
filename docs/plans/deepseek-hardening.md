@@ -1126,7 +1126,7 @@ sources, corrected from an earlier draft:**
    is stated instead. Also stated for callers: the branch point is *included*,
    so a fork's first LLM context is the source's turn at that point followed by
    the task, not the task alone.
-5. **A spawn-depth cap. Built, 2026-09-17 (`<hash>`), after the plan twice
+5. **A spawn-depth cap. Built, 2026-09-17 (`52a0e50`), after the plan twice
    recorded it as not-needed.** Codex bounds recursive spawning at
    `agent_max_depth` (default 3) and returns an error instructing the agent to
    solve the task itself past that. `dispatch_from` had no such cap. The reason
