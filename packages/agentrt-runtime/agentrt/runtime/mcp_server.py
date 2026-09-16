@@ -89,10 +89,15 @@ def dispatch(
     summarising, or answering a question about code. Both read-only presets
     omit the terminal and guard aliases to the runtime's credential files.
 
-    A `readonly` or `inspect` session cannot write its answer to a file. Ask it
-    to report in its final message and read that with `result`; telling it to
-    produce a report file gives it an instruction it cannot carry out.
-    `artifacts` on such a session correctly lists nothing.
+    A `readonly` or `inspect` session cannot write inside the workspace it was
+    dispatched into -- but it can write a report to a directory this daemon
+    creates for the session alone, outside the workspace, which `artifacts`
+    lists and reads back the same way it does for `workspace`/`broad`. The
+    session's own `file_editor` description names the exact path once the
+    session starts. For a short answer, its final message read with `result`
+    is still simpler than a file. Ask it to produce a report file only when
+    you actually want one back through `artifacts` -- a plain final message
+    is not carried over otherwise.
 
     Choose `inspect` for read-only repository audits that need structured
     search, narrow Git status/diff/log/show, version checks or sanitized
@@ -664,6 +669,14 @@ def artifacts(session: str, path: str | None = None) -> dict:
     to that workspace, returns that file's content.
 
     This is how you check a session's work instead of taking its word for it.
+
+    `reports` is a second, independent listing: files a `readonly`/`inspect`
+    session wrote to its report channel (see `dispatch`'s WORKSPACE_MODE and
+    permission sections), same shape as `files`, no time filter since the
+    directory is session-dedicated. `workspace`/`broad` sessions never get one,
+    so it is `[]` for them. A path is checked against the reports directory
+    before the workspace, so a session's report and a same-named workspace file
+    read as the report -- the one this channel exists to read back.
 
     Check `filtered`. It is true in normal use. False means the session's start
     time could not be read, so nothing was filtered and `files` is every file in

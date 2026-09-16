@@ -95,6 +95,49 @@ def _started_at(status: dict) -> float | None:
     return parsed.timestamp()
 
 
+def _reports_dir(resolved: str) -> str:
+    """Where a readonly/inspect session's report channel lives, if it has
+    one -- same convention `guarded_tools.py`'s `GuardedFileEditorTool.create`
+    uses server-side (a `reports/` sibling of the conversation's persistence
+    directory), computed here rather than asked of the daemon because the
+    daemon runs on this machine -- the same reasoning `artifacts` already
+    uses for the workspace scan itself. H8 item 7, 2026-09-17.
+    """
+    conversation_dir = config.state_dir() / "conversations" / uuid.UUID(resolved).hex
+    return str(conversation_dir / "reports")
+
+
+def _list_reports(resolved: str) -> list[dict]:
+    """A flat listing of a session's report directory, or `[]` if it has
+    none. No time filter, no truncation and no pruned-directory logic like
+    the workspace scan: this directory is created by AgentRT for one session
+    alone, small by construction, not a repository that could have a
+    dependency tree in it.
+    """
+    reports_dir = _reports_dir(resolved)
+    if not os.path.isdir(reports_dir):
+        return []
+    entries: list[dict] = []
+    for dirpath, _dirnames, filenames in os.walk(reports_dir):
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            try:
+                entry_stat = os.stat(full)
+            except OSError:
+                continue
+            entries.append(
+                {
+                    "path": os.path.relpath(full, reports_dir).replace(os.sep, "/"),
+                    "size": entry_stat.st_size,
+                    "modified": datetime.fromtimestamp(
+                        entry_stat.st_mtime, tz=UTC
+                    ).isoformat(),
+                }
+            )
+    entries.sort(key=lambda entry: entry["path"])
+    return entries
+
+
 class ClientError(Exception):
     """Base class for all errors raised by :class:`Client`."""
 
@@ -2138,12 +2181,38 @@ class Client:
         workspace = status.get("workspace")
 
         if path is not None:
+            if os.path.isabs(path):
+                raise ClientError(f"absolute paths are not allowed: {path!r}")
+            # Reports live outside the workspace and are checked first: a
+            # readonly/inspect session's report and a same-named workspace
+            # file are different files, and the report is the one this
+            # channel exists to read back. `check_path` with the reports
+            # root raises `PermissionDenied` for anything not under it
+            # (including when there is no reports directory at all), which
+            # falls through to the ordinary workspace read below.
+            reports_dir = _reports_dir(resolved)
+            if os.path.isdir(reports_dir):
+                try:
+                    approved = permissions.check_path(
+                        path, root=reports_dir, permission="workspace", writing=False
+                    )
+                except permissions.PermissionDenied:
+                    pass
+                else:
+                    try:
+                        content = approved.read_text()
+                    except OSError as exc:
+                        raise ClientError(f"could not read {path!r}: {exc}") from exc
+                    return {
+                        "id": resolved,
+                        "short_id": short_id(resolved),
+                        "path": path,
+                        "content": content,
+                    }
             if not workspace:
                 raise ClientError(
                     f"no workspace known for session {short_id(resolved)}"
                 )
-            if os.path.isabs(path):
-                raise ClientError(f"absolute paths are not allowed: {path!r}")
             # `check_path` rather than a containment test of our own. An
             # earlier version asked only "is it inside the workspace", which is
             # most of the guard's job and not all of it: a hard link inside the
@@ -2204,6 +2273,13 @@ class Client:
             # -- a session can run an hour and produce no file -- and it should
             # not look like a broken call.
             "pruned": sorted(PRUNED_DIRS),
+            # Populated for every outcome, workspace-available or not: a
+            # readonly/inspect session with no workspace to write into can
+            # still have written a report, and the two listings are scanned
+            # independently. `[]` for `workspace`/`broad` sessions, which
+            # never get a reports root, and for any session that wrote no
+            # report.
+            "reports": _list_reports(resolved),
         }
 
         # A workspace the daemon named but that is absent (or not a directory)

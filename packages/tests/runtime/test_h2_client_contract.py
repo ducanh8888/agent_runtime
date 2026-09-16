@@ -7,7 +7,9 @@ is deterministic and no daemon is started.
 from __future__ import annotations
 
 import types
+import uuid
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx
 
@@ -253,3 +255,89 @@ def test_transcript_strips_ansi_from_terminal_output() -> None:
     output = events[0]["output"]
     assert output == "ok\r\n"
     assert "\x1b" not in output
+
+
+def _reports_dir(tmp_path, monkeypatch) -> Path:
+    """Point `config.state_dir()` at a tmpdir and return this session's
+    reports directory, matching the convention `guarded_tools.py` uses
+    server-side: `<state_dir>/conversations/<uuid-hex>/reports`."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    conversation_dir = tmp_path / "conversations" / uuid.UUID(SESSION).hex
+    reports_dir = conversation_dir / "reports"
+    reports_dir.mkdir(parents=True)
+    return reports_dir
+
+
+def test_artifacts_lists_reports_alongside_workspace_files(
+    tmp_path, monkeypatch
+) -> None:
+    """H8 item 7: a readonly/inspect session's report channel is listed the
+    same way the workspace is, independently of it."""
+    reports_dir = _reports_dir(tmp_path, monkeypatch)
+    (reports_dir / "findings.md").write_text("# findings\n")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_conversation())
+
+    client = _mock_client(handler)
+    listing = client.artifacts(SESSION)
+    assert listing["reports"] == [
+        {
+            "path": "findings.md",
+            "size": len("# findings\n"),
+            "modified": listing["reports"][0]["modified"],
+        }
+    ]
+    # No workspace: the listing is unavailable, and `reports` is still there.
+    assert listing["outcome"] == client_mod.ARTIFACTS_UNAVAILABLE
+
+
+def test_artifacts_no_reports_directory_is_empty_list(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_conversation())
+
+    client = _mock_client(handler)
+    assert client.artifacts(SESSION)["reports"] == []
+
+
+def test_artifacts_path_reads_report_before_workspace(tmp_path, monkeypatch) -> None:
+    """A report and a same-named workspace file are different files; the
+    report is the one this channel exists to read back."""
+    reports_dir = _reports_dir(tmp_path, monkeypatch)
+    (reports_dir / "answer.txt").write_text("from the report channel")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "answer.txt").write_text("from the workspace")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_conversation(workspace={"working_dir": str(workspace)}),
+        )
+
+    client = _mock_client(handler)
+    result = client.artifacts(SESSION, path="answer.txt")
+    assert result["content"] == "from the report channel"
+
+
+def test_artifacts_path_falls_back_to_workspace_when_not_a_report(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "only_in_workspace.txt").write_text("workspace content")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/only_in_workspace.txt"):
+            return httpx.Response(200, text="workspace content")
+        return httpx.Response(
+            200,
+            json=_conversation(workspace={"working_dir": str(workspace)}),
+        )
+
+    client = _mock_client(handler)
+    result = client.artifacts(SESSION, path="only_in_workspace.txt")
+    assert result["content"] == "workspace content"

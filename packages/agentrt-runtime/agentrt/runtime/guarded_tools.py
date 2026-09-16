@@ -27,6 +27,7 @@ denied path into a crash.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from agentrt.runtime import (
@@ -54,10 +55,17 @@ class GuardedFileEditorExecutor(ToolExecutor):
         inner: ToolExecutor,
         workspace_root: str,
         permission: permissions.Permission,
+        reports_root: str | None = None,
     ) -> None:
         self._inner = inner
         self._root = workspace_root
         self._permission: permissions.Permission = permission
+        # H8 item 7: the one channel a readonly/inspect session has to write
+        # anything is its final message -- no report file, so a long report
+        # is exactly as fragile as items 3/4 already made that path. `None`
+        # for `broad`/`workspace`, which can already write inside the
+        # workspace and have no need of a second location.
+        self._reports_root = reports_root
 
     def __call__(
         self,
@@ -68,12 +76,7 @@ class GuardedFileEditorExecutor(ToolExecutor):
         # else -- create, str_replace, insert, undo_edit -- is a write.
         writing = action.command != "view"
         try:
-            approved = permissions.check_path(
-                action.path,
-                root=self._root,
-                permission=self._permission,
-                writing=writing,
-            )
+            approved = self._approve(action.path, writing=writing)
             # Hand the editor the path that was checked, not the string that
             # was asked for. They can differ -- a relative name, a trailing
             # separator, a component the OS normalises later -- and every
@@ -95,6 +98,37 @@ class GuardedFileEditorExecutor(ToolExecutor):
             )
         return self._inner(action, conversation)
 
+    def _approve(self, raw_path: str, *, writing: bool) -> Path:
+        """Check `raw_path` against the workspace; for an absolute path that
+        fails there, try the reports root before refusing.
+
+        A relative path always resolves inside whatever root it is joined
+        to (`permissions._real` anchors it there), so trying the reports
+        root first -- or at all, for a relative path -- would silently
+        redirect an ordinary relative write into the reports directory
+        instead of refusing it, which is not what a readonly/inspect write
+        refusal is supposed to look like. The tool's own description hands
+        the model `reports_root` as an absolute path, so only an absolute
+        path is eligible for the reports-root fallback; every relative
+        write for a read-only preset is refused exactly as before.
+        """
+        try:
+            return permissions.check_path(
+                raw_path,
+                root=self._root,
+                permission=self._permission,
+                writing=writing,
+            )
+        except permissions.PermissionDenied:
+            if self._reports_root is not None and Path(raw_path).is_absolute():
+                return permissions.check_path(
+                    raw_path,
+                    root=self._reports_root,
+                    permission="workspace",
+                    writing=writing,
+                )
+            raise
+
     def close(self) -> None:
         close = getattr(self._inner, "close", None)
         if callable(close):
@@ -113,6 +147,21 @@ class GuardedFileEditorTool(FileEditorTool):
         preset = permissions.normalise(permission)
         root = conv_state.workspace.working_dir
 
+        # H8 item 7: readonly/inspect otherwise has no channel to write a
+        # report except the final message, which items 3/4 already showed is
+        # fragile for anything long. A `reports/` sibling of this
+        # conversation's own persistence directory -- the same "subdirectory
+        # of persistence_dir" pattern env_observation_persistence_dir already
+        # uses, so this needs no new server-side state field, only a client-
+        # side path convention `artifacts` can compute the same way.
+        # workspace/broad already have full write access to their workspace
+        # and get no second root.
+        reports_root: str | None = None
+        if preset in permissions.READ_ONLY_PERMISSIONS and conv_state.persistence_dir:
+            reports_dir = Path(conv_state.persistence_dir) / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            reports_root = str(reports_dir)
+
         built = super().create(conv_state)
         guarded = []
         for tool in built:
@@ -122,11 +171,22 @@ class GuardedFileEditorTool(FileEditorTool):
                 f"\n\nThis session runs under the '{preset}' permission preset. "
                 + permissions.DESCRIPTIONS[preset]
             )
+            if reports_root is not None:
+                note += (
+                    f" It may also write reports to {reports_root!r} -- a "
+                    "directory outside the workspace, listed and read back "
+                    "through `artifacts` like the workspace itself, for a "
+                    "written report this preset otherwise has no way to "
+                    "produce. Use the absolute path given above (e.g. "
+                    f"{reports_root!r} + '/report.md') -- a relative path is "
+                    "still checked against the workspace only and refused "
+                    "like any other write under this preset."
+                )
             guarded.append(
                 tool.model_copy(
                     update={
                         "executor": GuardedFileEditorExecutor(
-                            tool.executor, root, preset
+                            tool.executor, root, preset, reports_root
                         ),
                         "description": (tool.description or "") + note,
                     }
