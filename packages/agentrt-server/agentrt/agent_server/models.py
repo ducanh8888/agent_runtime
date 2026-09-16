@@ -22,6 +22,7 @@ from agentrt.sdk.conversation.secret_registry import SecretRegistry
 from agentrt.sdk.conversation.state import ConversationExecutionStatus
 from agentrt.sdk.conversation.types import ConversationTags
 from agentrt.sdk.event.base import Event
+from agentrt.sdk.event.error_classification import ErrorClassification
 from agentrt.sdk.hooks import HookConfig
 from agentrt.sdk.llm.message import (  # re-export
     ImageContent as ImageContent,
@@ -720,6 +721,18 @@ class ConversationErrorInfo(BaseModel):
             "Bounded error detail. Never private reasoning, model output or "
             "credentials."
         )
+    )
+    classification: ErrorClassification | None = Field(
+        default=None,
+        description=(
+            "The closed failure vocabulary, from the event that carries it: "
+            "kind (auth/quota/rate_limit/config/transient/agent_action/"
+            "internal/unknown), whether it is retryable, and what the caller "
+            "could do about it. `code` names the failure; this says what sort "
+            "of thing it is, so a caller branches on a fixed set rather than "
+            "on provider-specific class names. Null when the event predates "
+            "the field."
+        ),
     )
 
 

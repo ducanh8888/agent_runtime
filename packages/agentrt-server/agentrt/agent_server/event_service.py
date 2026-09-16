@@ -2005,7 +2005,13 @@ class EventService:
                 last_tool = event.tool_name
             if error is None and isinstance(event, ConversationErrorEvent):
                 error = ConversationErrorInfo(
-                    code=str(event.code), detail=str(event.detail)[:500]
+                    code=str(event.code),
+                    detail=str(event.detail)[:500],
+                    # Carried through rather than dropped: the event has held
+                    # this since it was added, and every caller downstream was
+                    # reconstructing "is this retryable, is it a rate limit"
+                    # from the code string instead. H9 item 1.
+                    classification=event.classification,
                 )
             if (
                 last_tool is not None

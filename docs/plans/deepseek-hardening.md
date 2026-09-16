@@ -1017,17 +1017,36 @@ sources, corrected from an earlier draft:**
 
 **What can converge, and the H8 item or precedent each depends on:**
 
-1. **Named terminal reasons, not one `error`.** Both references enumerate why
-   an agent stopped: Codex's `report_agent_job_result` contract names
+1. **Named terminal reasons, not one `error`. Half done, 2026-09-17
+   (`<hash>`); the projection half.** Both references enumerate why an agent
+   stopped: Codex's `report_agent_job_result` contract names
    `status: error`/`last_error` for a worker that never reported; Claude
    Code's Agent view distinguishes a running/background session from a
-   settled one with a real outcome. AgentRT currently collapses "ran out of
+   settled one with a real outcome. AgentRT collapsed "ran out of
    iterations," "provider gave up," and "the agent code raised" into the same
-   `execution_status: error` with no reason field (`daemon-behavior.md`,
-   confirmed unchanged). H8 items 4 and 12 already commit to a start-deadline
-   status and a `finish_reason`/`truncated` field; this item asks for the same
-   enumeration to also cover iteration exhaustion and provider failure, so
-   every terminal state names a reason from a closed set.
+   `execution_status: error` with no reason field. H8 items 4 and 12 commit to
+   a start-deadline status and a `finish_reason`/`truncated` field; this item
+   asks for the same enumeration to cover iteration exhaustion and provider
+   failure, so every terminal state names a reason from a closed set.
+   **The audit was right that no new vocabulary was needed, and it was one
+   layer more true than it said.** `ConversationErrorEvent` has carried a
+   filled-in `ErrorClassification` since it was added -- a model validator
+   calls `classify_error(code, detail)` when the field is absent, so it is
+   *never* null, not even for events persisted before the field existed. The
+   projection dropped it: `ConversationErrorInfo` had only `code` and `detail`,
+   so every caller downstream reconstructed "is this retryable, is it a rate
+   limit" from a provider-specific class name. It now carries
+   `classification`, and because the client already forwards `error` verbatim,
+   no client change was needed. A caller can now branch on the closed set:
+   `MaxIterationsReached` is `agent_action`, a provider failure is `transient`
+   with `retryable: true`, an auth failure is `auth` with
+   `user_action: settings`. **Verified end to end against a real daemon** --
+   a session stopped by a provider error returns
+   `classification: {kind: transient, retryable: true, user_action: retry}` --
+   and both new tests fail on the pre-fix source. **Not done, and part of this
+   item's own text:** the `finish_reason`/`truncated` field, which is group C
+   below, and H8 item 12's start deadline, which is separate work in the same
+   group.
 2. **A genuinely blocking, single-result call for the common case. Done,
    2026-09-17 (`06684f9`).** `wait_any`/`wait_all` already blocked, but the
    orchestrator still holds a session id and calls a second tool (`result`,

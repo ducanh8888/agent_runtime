@@ -308,6 +308,87 @@ def test_projection_reports_a_terminal_error_as_partial() -> None:
     assert result.error.code == "MaxIterationsReached"
 
 
+def test_projection_carries_the_classification_the_event_holds() -> None:
+    """H9 item 1: the closed vocabulary reaches the caller.
+
+    The event has carried an `ErrorClassification` since it was added, and the
+    projection used to drop it -- so a caller had to reconstruct "is this
+    retryable, is it a rate limit" from the code string. `code` names the
+    failure; `kind` says what sort of thing it is.
+    """
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+    from agentrt.sdk.event.error_classification import (
+        ErrorClassification,
+        FailureKind,
+    )
+
+    service = _service(
+        [
+            _user("u1", "q"),
+            ConversationErrorEvent(
+                source="environment",
+                code="LLMRateLimitError",
+                detail="429 from provider",
+                classification=ErrorClassification(
+                    kind=FailureKind.RATE_LIMIT,
+                    retryable=True,
+                    user_action="retry",
+                ),
+            ),
+        ],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.ERROR,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.error is not None
+    assert result.error.code == "LLMRateLimitError"
+    assert result.error.classification is not None
+    assert result.error.classification.kind is FailureKind.RATE_LIMIT
+    assert result.error.classification.retryable is True
+    assert result.error.classification.user_action == "retry"
+
+
+def test_projection_classifies_an_event_persisted_before_the_field_existed() -> None:
+    """The field is never actually null, including for old sessions.
+
+    ``ConversationErrorEvent`` re-derives the classification from `code` and
+    `detail` in a model validator when it is absent, so an event written before
+    the field existed -- loaded from JSON with no `classification` key, which is
+    what this constructs -- comes back classified rather than null. That is why
+    the projection is backwards-compatible *and* useful on history: an old
+    session gets a real `kind`, not an empty one.
+    """
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+    from agentrt.sdk.event.error_classification import FailureKind
+
+    persisted_without_the_key = {
+        "id": "e-old",
+        "kind": "ConversationErrorEvent",
+        "source": "environment",
+        "code": "LLMRateLimitError",
+        "detail": "429 from provider",
+    }
+    event = ConversationErrorEvent.model_validate(persisted_without_the_key)
+    assert event.classification is not None  # the validator filled it in
+
+    service = _service(
+        [_user("u1", "q"), event],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.ERROR,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.error is not None
+    assert result.error.classification is not None
+    assert result.error.classification.kind is FailureKind.RATE_LIMIT
+    assert result.error.classification.retryable is True
+
+
 # --- legacy fixtures ------------------------------------------------------
 
 
