@@ -1023,7 +1023,7 @@ sources, corrected from an earlier draft:**
    same kind of limit for the same reason (runaway nesting, not a
    theoretical concern once fork depth is possible at all).
 6. **Interruption visible to the interrupted agent. Done, 2026-09-17
-   (`<hash>`).** Codex records a model-visible message on interrupt by default
+   (`cddc08f`).** Codex records a model-visible message on interrupt by default
    (`agents.interrupt_message`). AgentRT's `interrupt()`/`finalize()` stopped a
    session without the agent's own context ever reflecting that it happened --
    irrelevant to a session that is genuinely done, but relevant to one that
