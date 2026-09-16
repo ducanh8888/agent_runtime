@@ -2104,7 +2104,32 @@ class EventService:
         """
         if not self._conversation:
             raise ValueError("inactive_service")
+        # Read before pausing: whether a run was in flight is what decides if
+        # the agent has anything to be told about. An idle session finalized
+        # here has nothing to explain, and a notice would invent a stop.
+        run_was_in_flight = self._run_task is not None and not self._run_task.done()
         await self._pause_to_boundary()
+        # PAUSED afterwards, not merely "a run existed": a run that completed
+        # on its own during the pause window ends FINISHED, and telling the
+        # agent that finalize stopped it would be false. PAUSED is what the
+        # cooperative pause actually leaving behind looks like.
+        if (
+            run_was_in_flight
+            and self._conversation._state.execution_status
+            == ConversationExecutionStatus.PAUSED
+        ):
+            # `pause` is invisible to the agent (PauseEvent is not an
+            # LLMConvertibleEvent), so without this a session stopped by
+            # finalize and resumed later had no record of why its run ended.
+            # Same blind spot the interrupt notice closes, with a cause this
+            # caller actually knows.
+            conversation = self._conversation
+            with conversation._state:
+                conversation.note_external_stop(
+                    "The session was finalized, so the run stopped at a safe "
+                    "boundary. Work already completed stands; give new input "
+                    "to continue."
+                )
         state = self._conversation._state
         boundary = state.consumed_user_message_id
         claimed = False

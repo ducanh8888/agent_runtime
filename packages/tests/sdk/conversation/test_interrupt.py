@@ -777,3 +777,43 @@ def test_orphaned_action_errors_reports_whether_it_backfilled(tmp_path):
     # The backfill is itself LLM-visible, which is why no notice is added on
     # top of it in the real handler.
     assert any(isinstance(e, AgentErrorEvent) for e in conv.state.events)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_during_agent_init_settles_like_a_mid_step_cancel(
+    tmp_path,
+):
+    """The window above the run loop is now handled, not propagated.
+
+    Lazy init awaits before the loop's try block, so a cancel landing there used
+    to escape arun() entirely: status left unset, no InterruptEvent, nothing in
+    the agent's own history, and the run task never cleared. The window is not
+    short -- init loads plugins and, for ACP, resolves credentials through a
+    blocking lookup.
+    """
+    llm = RecordingLLM(sleep_first=0.0)
+    conv = _make_conversation(llm, tmp_path)
+
+    started = asyncio.Event()
+
+    def slow_ready() -> None:
+        import time as _time
+
+        started.set()
+        _time.sleep(5.0)
+
+    conv._ensure_agent_ready = slow_ready  # type: ignore[method-assign]
+
+    task = asyncio.create_task(conv.arun())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    await asyncio.wait_for(task, timeout=10.0)
+
+    assert conv.state.execution_status == ConversationExecutionStatus.PAUSED
+    assert conv._arun_task is None, "the run task must still be cleared"
+    events = list(conv.state.events)
+    assert sum(isinstance(e, InterruptEvent) for e in events) == 1
+    notices = _environment_notice_texts(conv)
+    assert len(notices) == 1, notices
+    assert "interrupted" in notices[0].lower()

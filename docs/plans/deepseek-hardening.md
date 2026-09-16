@@ -1178,11 +1178,12 @@ sources, corrected from an earlier draft:**
    gets resumed later and has no record of why its prior run ended abruptly.
    `_emit_interrupt_notice` now records it: an `environment`/`user`
    `MessageEvent` carrying `[Interrupted] ...`, emitted from the
-   `CancelledError` handler when nothing was orphaned. **Scoped to
-   `interrupt()`, not `finalize()`** -- `finalize` stops through `pause()`,
-   which emits a `PauseEvent` and never reaches this handler, so covering it
-   needs a second emission point on a public method called from several
-   places; left as a follow-up rather than sprayed on every ordinary pause.
+   `CancelledError` handler when nothing was orphaned. The first pass covered
+   `interrupt()` only; `finalize()`, and the lazy-init window, were closed
+   afterwards the same day -- see the end of this item, where both are
+   described, and the reasoning for keeping the notice off `pause()` itself
+   (which several callers use for ordinary pauses, where a notice would be
+   noise).
    **Measured, not assumed:** the gap reproduced first (a probe interrupting
    mid-`acompletion` and capturing the next call's messages found
    `'do something longcontinue please'` and no interruption word anywhere),
@@ -1217,16 +1218,34 @@ sources, corrected from an earlier draft:**
    a separate turn. `InterruptEvent` itself was left alone: it is a
    UI-facing event, and making it `LLMConvertibleEvent` would have injected
    the same notice on the supersede path unless line 2638 were gated anyway.
-   **Two gaps left open, stated so the "done" is not read as wider than it
-   is.** An interrupt landing during lazy init --
-   `await asyncio.to_thread(self._ensure_agent_ready)`, above the `try` that
-   contains this handler -- still records *nothing*: no `InterruptEvent`, no
-   notice, and `CancelledError` propagates to the caller (reproduced: status
-   left `IDLE`, zero interrupt events). That is pre-existing, not a
-   regression, and the window is not short (it loads plugins and, for ACP,
-   resolves credentials through the blocking lookup documented at 2170-2176) --
-   but it means "interrupt visibility done" is true for post-init interrupts
-   only. And `finalize()`, per above.
+   **Both gaps left open above are now closed, 2026-09-17 (`<hash>`), so
+   "interrupt visibility done" no longer needs a caveat.** (a) The lazy-init
+   window: the `arun()` cancellation handler was extracted into
+   `_handle_run_cancelled()` and the `await asyncio.to_thread(
+   _ensure_agent_ready)` moved *inside* the run loop's `try`, so a cancel
+   during initialisation is settled by the same code as one mid-step -- PAUSED,
+   an `InterruptEvent`, and the notice -- and the `finally` that clears the run
+   task still runs. Moving it inside is the part that matters: a `return` in a
+   handler placed above the `try` would have skipped that `finally` and left
+   `_arun_task` set, which is a worse bug than the one being fixed. Before the
+   change the same probe that found the gap reproduced it exactly -- status left
+   `IDLE`, zero interrupt events, `CancelledError` propagating. (b) `finalize()`:
+   it stops through `pause()`, whose `PauseEvent` is no more LLM-visible than
+   `InterruptEvent` was, so a finalized-then-resumed session had the same blind
+   spot. `BaseConversation.note_external_stop(reason)` is a concrete no-op
+   (not abstract -- `pause` is abstract, and forcing `RemoteConversation` to
+   implement this would be a cost for no benefit); `LocalConversation`
+   overrides it to emit a `[Stopped] ...` notice, and `EventService.finalize`
+   calls it -- **only** when a run was in flight *and* the status afterwards is
+   `PAUSED`. That second condition is the whole guard: a run that completed on
+   its own inside the pause window ends `FINISHED`, and telling the agent that
+   finalize stopped it would write a lie into its history. The notice can name
+   the cause here, unlike the interrupt one, because the caller is the thing
+   that knows it. Verified: the init-window test fails pre-fix with
+   `CancelledError` propagating, the positive finalize test fails pre-fix, and
+   the two negative ones (idle session, run finished during the pause) pass
+   either way by design -- they guard against a false claim rather than the
+   original absence.
 7. **Verb naming, where it is free.** `dispatch_from`/`dispatch_many`/
    `wait_any`/`wait_all`/`finalize` already read as verbs on an agent rather
    than REST-flavored CRUD, and should stay that way; nothing here proposes

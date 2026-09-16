@@ -270,6 +270,23 @@ class BaseConversation(ABC):
     @abstractmethod
     def pause(self) -> None: ...
 
+    def note_external_stop(self, reason: str) -> None:  # noqa: ARG002
+        """Record an externally-requested stop in the agent's own history.
+
+        Concrete and empty by default: ``pause`` is observable to a UI but not
+        to the agent, since ``PauseEvent`` is not an ``LLMConvertibleEvent``, so
+        a session stopped from outside and resumed later would otherwise have
+        no record of why its run ended. Only a conversation that owns the
+        agent's event log can write that down, so
+        :class:`LocalConversation` overrides this and the rest inherit the
+        no-op.
+
+        Callers pass a ``reason`` because they are the thing that knows the
+        cause, and should only call it when a run was actually in flight -- an
+        idle session has nothing to explain.
+        """
+        return None
+
     def interrupt(self) -> None:
         """Immediately cancel an in-flight ``arun()`` LLM call.
 

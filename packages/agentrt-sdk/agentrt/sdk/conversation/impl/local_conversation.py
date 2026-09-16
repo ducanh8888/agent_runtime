@@ -2175,7 +2175,12 @@ class LocalConversation(BaseConversation):
         # inline freezes the loop so the lookup can never be served — a
         # self-deadlock that ReadTimeouts after 30s (agent-canvas#1072).
         # _ensure_agent_ready is thread-safe and already runs off-loop in run().
-        await asyncio.to_thread(self._ensure_agent_ready)
+        # It runs inside the try below, not before it, so that a cancellation
+        # during initialisation is settled by the same handler as one mid-step
+        # -- PAUSED, an InterruptEvent, and the notice -- and so the finally
+        # that clears the run task still runs. Before that it propagated
+        # straight out of arun(): status left unset, nothing recorded anywhere,
+        # and no task cleanup.
 
         with self._state:
             if isinstance(self.agent, ACPAgent) and self._state.execution_status in (
@@ -2210,6 +2215,7 @@ class LocalConversation(BaseConversation):
         iteration = 0
         _run_start_event_count = len(self._state.events)
         try:
+            await asyncio.to_thread(self._ensure_agent_ready)
             while True:
                 logger.debug(f"Conversation arun iteration {iteration}")
                 acp_step_user_message_id: str | None = None
@@ -2601,57 +2607,7 @@ class LocalConversation(BaseConversation):
                         )
                         break
         except asyncio.CancelledError:
-            # CancelledError is intentionally NOT re-raised.  ``interrupt()``
-            # uses ``asyncio.Task.cancel()`` to break out of ``arun()`` and
-            # expects the task to terminate cleanly.  Re-raising would
-            # propagate the cancellation to EventService/caller which would
-            # surface it as an unexpected error.  Instead we transition to
-            # PAUSED so the conversation can be resumed later.
-            logger.info("arun() interrupted via task cancellation")
-            with self._state:
-                updated_agent_state = dict(self._state.agent_state)
-                inflight_prompt_user_message_id = updated_agent_state.pop(
-                    ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID, None
-                )
-                superseded_by_new_message = bool(
-                    updated_agent_state.pop(ACP_SUPERSEDE_INFLIGHT_PROMPT, False)
-                )
-                completed_cancelled_prompt = (
-                    self._state.execution_status == ConversationExecutionStatus.FINISHED
-                )
-                if (
-                    superseded_by_new_message or completed_cancelled_prompt
-                ) and inflight_prompt_user_message_id is not None:
-                    updated_agent_state[ACP_LAST_PROMPT_USER_MESSAGE_ID] = (
-                        inflight_prompt_user_message_id
-                    )
-                self._state.agent_state = updated_agent_state
-
-                # Emit synthetic error observations for any ActionEvents
-                # that were in-flight when the interrupt landed.  Without
-                # these the LLM history would contain tool-call requests
-                # with no tool-result, which causes provider errors on
-                # the next completion call.
-                orphans_backfilled = self._emit_orphaned_action_errors()
-
-                # With nothing in flight there is nothing to backfill and
-                # the backfilled AgentErrorEvent that would have told the
-                # agent what happened does not exist, so record the
-                # interruption itself.  Skipped when the run had already
-                # finished -- an interrupt landing that late did not cut
-                # anything short, and saying otherwise would be false --
-                # and when a new user message superseded the in-flight
-                # prompt, where that message is the context and the run
-                # resumes immediately off it.
-                if (
-                    not orphans_backfilled
-                    and not superseded_by_new_message
-                    and not completed_cancelled_prompt
-                ):
-                    self._emit_interrupt_notice()
-
-                self._state.execution_status = ConversationExecutionStatus.PAUSED
-                self._on_event(InterruptEvent())
+            self._handle_run_cancelled()
         except Exception as e:
             with self._state:
                 updated_agent_state = dict(self._state.agent_state)
@@ -2786,6 +2742,92 @@ class LocalConversation(BaseConversation):
             )
         return bool(orphans)
 
+    def _handle_run_cancelled(self) -> None:
+        """Settle a cancelled ``arun()``: PAUSED, resumable, and recorded.
+
+        CancelledError is intentionally NOT re-raised.  ``interrupt()`` uses
+        ``asyncio.Task.cancel()`` to break out of ``arun()`` and expects the
+        task to terminate cleanly.  Re-raising would propagate the cancellation
+        to EventService/caller which would surface it as an unexpected error.
+        Instead we transition to PAUSED so the conversation can be resumed
+        later.
+
+        Shared by both cancellation points rather than duplicated: the run
+        loop, and the lazy-init window above it.  The second was the gap -- a
+        cancel during ``_ensure_agent_ready`` used to leave PAUSED unset, no
+        ``InterruptEvent``, and nothing in the agent's own history, which is
+        the same defect one await earlier.  The window is not short: init loads
+        plugins and, for ACP, resolves credentials through a blocking lookup.
+        """
+        logger.info("arun() interrupted via task cancellation")
+        with self._state:
+            updated_agent_state = dict(self._state.agent_state)
+            inflight_prompt_user_message_id = updated_agent_state.pop(
+                ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID, None
+            )
+            superseded_by_new_message = bool(
+                updated_agent_state.pop(ACP_SUPERSEDE_INFLIGHT_PROMPT, False)
+            )
+            completed_cancelled_prompt = (
+                self._state.execution_status == ConversationExecutionStatus.FINISHED
+            )
+            if (
+                superseded_by_new_message or completed_cancelled_prompt
+            ) and inflight_prompt_user_message_id is not None:
+                updated_agent_state[ACP_LAST_PROMPT_USER_MESSAGE_ID] = (
+                    inflight_prompt_user_message_id
+                )
+            self._state.agent_state = updated_agent_state
+
+            # Emit synthetic error observations for any ActionEvents
+            # that were in-flight when the interrupt landed.  Without
+            # these the LLM history would contain tool-call requests
+            # with no tool-result, which causes provider errors on
+            # the next completion call.
+            orphans_backfilled = self._emit_orphaned_action_errors()
+
+            # With nothing in flight there is nothing to backfill and
+            # the backfilled AgentErrorEvent that would have told the
+            # agent what happened does not exist, so record the
+            # interruption itself.  Skipped when the run had already
+            # finished -- an interrupt landing that late did not cut
+            # anything short, and saying otherwise would be false --
+            # and when a new user message superseded the in-flight
+            # prompt, where that message is the context and the run
+            # resumes immediately off it.
+            if (
+                not orphans_backfilled
+                and not superseded_by_new_message
+                and not completed_cancelled_prompt
+            ):
+                self._emit_interrupt_notice()
+
+            self._state.execution_status = ConversationExecutionStatus.PAUSED
+            self._on_event(InterruptEvent())
+
+    def _emit_run_notice(self, text: str) -> None:
+        """Emit an environment message the agent's next completion will see.
+
+        Shaped like the stop-hook feedback above: an ``environment``
+        ``MessageEvent`` carrying a ``user``-role message, distinguished by a
+        bracketed prefix.  It shares that emission's exposure to
+        ``events_to_messages`` coalescing adjacent plain user turns into one
+        message -- verified against a real interrupt, where the notice, the
+        interrupted prompt and the next user message arrived as a single user
+        turn.  The blank-line padding the callers pass is for that case: without
+        it the notice runs into the neighbouring text, and the bracketed prefix
+        has to carry the whole meaning rather than relying on being its own
+        turn.
+
+        Must be called while holding ``self._state``.
+        """
+        self._on_event(
+            MessageEvent(
+                source="environment",
+                llm_message=Message(role="user", content=[TextContent(text=text)]),
+            )
+        )
+
     def _emit_interrupt_notice(self) -> None:
         """Record the interruption where the agent itself can read it.
 
@@ -2793,47 +2835,41 @@ class LocalConversation(BaseConversation):
         that lands between turns -- nothing in flight, nothing for
         :meth:`_emit_orphaned_action_errors` to backfill -- used to leave the
         agent's own history with no trace of it.  A session resumed later then
-        had no way to know why its previous run produced nothing.  Emit a
-        message the next completion call will see.
-
-        Shaped like the stop-hook feedback above: an ``environment``
-        ``MessageEvent`` carrying a ``user``-role message, distinguished by a
-        bracketed prefix.  It shares that emission's exposure to
-        ``events_to_messages`` coalescing adjacent plain user turns into one
-        message -- verified against a real interrupt, where this notice, the
-        interrupted prompt and the next user message arrived as a single user
-        turn.  The blank-line padding is for that case: without it the notice
-        runs into the neighbouring text, and the bracketed prefix has to carry
-        the whole meaning rather than relying on being its own turn.
+        had no way to know why its previous run produced nothing.
 
         The wording deliberately does not say *who* interrupted.  This handler
         is reached by more than one cancel path -- ``EventService.close()``
         pauses and then cancels the run task on server shutdown and on
-        conversation delete, and lands here with both gates below false -- so
-        naming the user would write a false account into the history of
-        exactly the resumable sessions this exists to help.
+        conversation delete, and lands here with both gates false -- so naming
+        the user would write a false account into the history of exactly the
+        resumable sessions this exists to help.
 
         Must be called while holding ``self._state``.
         """
-        self._on_event(
-            MessageEvent(
-                source="environment",
-                llm_message=Message(
-                    role="user",
-                    content=[
-                        TextContent(
-                            text=(
-                                "\n\n[Interrupted] The previous run was "
-                                "interrupted before it finished, so nothing "
-                                "after this point ran. No tool call was left "
-                                "without a result. Check the current state of "
-                                "the workspace before relying on it.\n\n"
-                            )
-                        )
-                    ],
-                ),
-            )
+        self._emit_run_notice(
+            "\n\n[Interrupted] The previous run was interrupted before it "
+            "finished, so nothing after this point ran. No tool call was left "
+            "without a result. Check the current state of the workspace before "
+            "relying on it.\n\n"
         )
+
+    def note_external_stop(self, reason: str) -> None:
+        """Record that something outside the run stopped it, for the agent.
+
+        ``pause()`` is not observable to the agent -- ``PauseEvent`` is not an
+        ``LLMConvertibleEvent`` either -- so a session stopped by ``finalize``
+        and resumed later had the same blind spot an interrupted one had: no
+        record of why its previous run ended. Unlike the interrupt notice this
+        one *can* name a cause, because the caller passing ``reason`` is the
+        thing that knows it.
+
+        Only call this when a run was actually in flight; a session that was
+        already idle has nothing to explain, and saying otherwise invents a
+        stop that did not happen. The caller on the server side checks that.
+
+        Must be called while holding ``self._state``.
+        """
+        self._emit_run_notice(f"\n\n[Stopped] {reason}\n\n")
 
     def pause(self) -> None:
         """Pause agent execution.
