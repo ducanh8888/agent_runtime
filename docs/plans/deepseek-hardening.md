@@ -700,14 +700,22 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Thấp (low):*
 
-10. **Transcript hygiene (item 10).** Populate `thought` on condensed
-    transcript entries where the source `ActionEvent` carries one (currently
-    always empty -- a condensation defect, not a data-availability one, since
-    `daemon-behavior.md` confirms `ActionEvent.thought` exists on the raw
-    event); strip ANSI escape sequences from terminal-tool output before it
-    reaches a transcript; add a deterministic progress summary field to an
-    errored session's payload (what ran before the failure), distinct from
-    the opt-in LLM-generated finalize summary.
+10. **Transcript hygiene (item 10). Two of three done, 2026-09-17
+    (`254a590`); the `thought` half is not a bug and was left alone.**
+    ANSI stripping and a deterministic `progress_summary` on an errored
+    `result()` shipped as scoped. The `thought`-population half was written
+    above as "a condensation defect, not a data-availability one" -- that
+    premise did not survive checking a real persisted event: session
+    `2e1d9496`'s `ActionEvent`s genuinely have `thought=[]` with
+    `reasoning_content` non-empty on the same event, so the condensation
+    code (which reads `thought` correctly) has nothing to populate from.
+    The actual deliberation lives in `reasoning_content`, which
+    `daemon-behavior.md` already excludes from transcripts on purpose ("the
+    model's private deliberation, routinely longer than the code it
+    produced"). Surfacing it now would be reopening that documented
+    exclusion, not fixing condensation -- treated the same way as the
+    `DeploymentLLMPolicy` and spawn-depth items: a decision to make, not a
+    task to execute quietly.
 11. **Tag key charset (item 11). Done, 2026-09-17 (`f64371d`).** Widened
     `TAG_KEY_PATTERN` to `^[a-z0-9]+(?:-[a-z0-9]+)*$`,
     matching the existing `PLUGIN_NAME_PATTERN`/`CANVAS_EXTENSION_NAME_PATTERN`
@@ -1233,7 +1241,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
 | Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
 | Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: skipped 2026-09-17 -- blocked by H0's single frozen `DeploymentLLMPolicy`, not a config gap; reopening it is an H0-policy decision, declined |
-| Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: condensation and stripping fixes, deterministic progress field |
+| Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: ANSI stripping and progress summary fixed 2026-09-17 (`254a590`); `thought` is genuinely empty at the source for this deployment, not a condensation bug -- left as a decision (reopen the deliberate reasoning_content exclusion, or not) |
 | Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
 | Consumer report 12. 0-iteration provider timeout not retried/surfaced | H8 item 12: start deadline distinct from H7's rejected stall watchdog |
 | Consumer report + live 2026-09-17 observation: hidden transport idle ceiling under the documented `wait_*` timeout | H8: mechanism traced (silent blocking loop, zero MCP-level signal for the full `timeout`); fix is self-imposed sub-timeouts under the real ceiling, paired with item 3's paging |
