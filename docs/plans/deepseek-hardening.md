@@ -676,13 +676,29 @@ untested). Items are grouped by the consumer's own severity labels.
    section already describes for hard links. Needs the same device/inode
    comparison the workspace guard already uses, applied to the new directory's
    boundary.
-8. **No workspace snapshot for readonly sessions (item 8).** A `snapshot=<git
-   ref>` workspace mode that creates a detached worktree, records the resolved
-   commit on `status`, and removes the worktree on session delete -- the
-   `snapshot` name and shape are already reserved in section 4's proposed
-   contract (`workspace_mode="snapshot"`) and H4's revision-pinning work; this
-   item is exposing that existing design to `readonly`/`inspect` callers who
+8. **No workspace snapshot for readonly sessions (item 8). Done, 2026-09-17
+   (`16693c0`).** A `snapshot=<git ref>` workspace mode that creates a
+   detached worktree, records the resolved commit on `status`, and removes
+   the worktree on session delete -- the `snapshot` name and shape are
+   already reserved in section 4's proposed contract
+   (`workspace_mode="snapshot"`) and H4's revision-pinning work; this item is
+   exposing that existing design to `readonly`/`inspect` callers who
    currently hand-roll worktree creation and cleanup themselves.
+
+   **What was found**: `_prepare_request_workspace`/`StoredConversation`
+   already had this fully built server-side (detached worktree pinned to
+   `HEAD`, `workspace_resolved_sha` tracking) -- it was reachable by no
+   client. Exposed at `dispatch`/CLI/MCP. Separately, "removes the worktree
+   on session delete" was **not** already true and needed a real fix:
+   `delete_conversation`'s "workspace is preserved" is correct for the
+   default `shared` mode (it is the caller's own directory) and was silently
+   wrong for `snapshot`, leaving every one behind in
+   `conversation-worktrees/`. Fixed alongside the exposure. Verified live
+   against this repository: dispatched with `--workspace-mode snapshot`,
+   `workspace_resolved_sha` matched `git rev-parse HEAD` exactly, the
+   session's reported `workspace` was the detached worktree (not the real
+   repo), and after `agentrt delete` both the worktree and `git worktree
+   list` in the real repo were clean.
 9. **Only one LLM profile (item 9). Decided 2026-09-17: skipped, not
    deferred -- structurally blocked by a decision H0 already made on
    purpose.** The plan as written assumed a second profile was a
@@ -1240,7 +1256,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: fixed 2026-09-17 (`49a55ad`) -- `_wait_bucket` trusted an upstream `state` field ahead of the text itself; text now decides |
 | Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: fixed 2026-09-17 (`31e8f14`) -- path:line and file scope; the "inconsistent counts" claim left unconfirmed, not independently investigated |
 | Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
-| Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
+| Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: shipped 2026-09-17 (`16693c0`) -- exposed the already-built server capability, and fixed a real leak found verifying it (delete never tore the worktree down) |
 | Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: skipped 2026-09-17 -- blocked by H0's single frozen `DeploymentLLMPolicy`, not a config gap; reopening it is an H0-policy decision, declined |
 | Consumer report 10. Transcript `thought` always empty, ANSI in output, no error progress summary | H8 item 10: ANSI stripping and progress summary fixed 2026-09-17 (`254a590`); `thought` is genuinely empty at the source for this deployment, not a condensation bug -- left as a decision (reopen the deliberate reasoning_content exclusion, or not) |
 | Consumer report 11. Tag key charset undocumented, rejects hyphens | H8 item 11: widen `TAG_KEY_PATTERN`, matching existing kebab-case precedent |
