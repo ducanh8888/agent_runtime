@@ -645,13 +645,28 @@ untested). Items are grouped by the consumer's own severity labels.
    layer up, in the bucket function, not the state's own meaning. Fixed by
    removing the early branch; the result text now decides every
    non-terminal-status case.
-6. **`inspect` search usability (item 6).** Return `path:line` per match
-   (bounded count, matching the existing truncation convention), accept a
-   single file as `scope` instead of only a directory (currently
-   `"Not a directory"`), and fix the inconsistent match counts between nested
-   scopes -- a parent directory and a file inside it disagreeing on whether a
-   pattern exists there is a correctness bug in the search implementation, not
-   a documentation gap.
+6. **`inspect` search usability (item 6). Fixed, 2026-09-17 (`31e8f14`) --
+   deeper than expected.** Return `path:line` per match (bounded count,
+   matching the existing truncation convention), accept a single file as
+   `scope` instead of only a directory (currently `"Not a directory"`), and
+   fix the inconsistent match counts between nested scopes -- a parent
+   directory and a file inside it disagreeing on whether a pattern exists
+   there is a correctness bug in the search implementation, not a
+   documentation gap.
+
+   **What was actually found**: `SearchMatch` (path, line, text) was already
+   structured correctly in `matches` -- the count-only symptom was one layer
+   up. `to_llm_content` (the SDK's default) only serializes `content` into
+   what the model reads in a normal conversation turn; `matches` never
+   reached it. Fixed by rendering path:line into `content` itself, halving
+   `SEARCH_MATCH_BUDGET` since the same data is now paid for twice in one
+   observation's size. File-scope rejection fixed by scanning a single file
+   when `path` resolves to one. The "inconsistent counts between nested
+   scopes" claim was *not* independently investigated -- it is very plausibly
+   the same file-scope bug (a worker passing a file as scope hit the old
+   error, not a genuine 0-match result), and extending the fix to it by
+   resemblance alone would not meet this project's own verification
+   standard, so it stays unconfirmed rather than claimed fixed.
 7. **No readonly output channel (item 7).** A write-only directory outside the
    dispatched workspace, listed through `artifacts` like the workspace itself,
    for a `readonly`/`inspect` session's report -- without granting write access
@@ -1214,7 +1229,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 3. `wait_*`/`result` payloads unpaged, overflow client limits | H8 item 3: status+metadata default, paged `result`, matching H1's paging shape |
 | Consumer report 4. Truncated final answer with no flag | H8 item 4: `finish_reason`/`truncated` on the final message and finalize summary |
 | Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: fixed 2026-09-17 (`49a55ad`) -- `_wait_bucket` trusted an upstream `state` field ahead of the text itself; text now decides |
-| Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: correctness fix in the search implementation |
+| Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: fixed 2026-09-17 (`31e8f14`) -- path:line and file scope; the "inconsistent counts" claim left unconfirmed, not independently investigated |
 | Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
 | Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
 | Consumer report 9. Only one LLM profile, cannot diversify or avoid a bad provider path | H8 item 9: skipped 2026-09-17 -- blocked by H0's single frozen `DeploymentLLMPolicy`, not a config gap; reopening it is an H0-policy decision, declined |
