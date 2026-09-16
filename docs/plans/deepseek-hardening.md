@@ -707,6 +707,20 @@ untested). Items are grouped by the consumer's own severity labels.
    to the exact absolute path from its own tool description, `artifacts`
    listed it under `reports` without the workspace listing changing, and
    `artifacts(session, path="findings.md")` read its content back.
+
+   **A second bug, found by advisor review after that smoke test looked
+   clean (`821891d`)**: `check_path` does not test existence -- `create`
+   needs to check a path before it exists -- so a workspace-only relative
+   path like `src/app.py` "resolved inside" the reports directory (which
+   every started readonly/inspect session has) and the resulting
+   `FileNotFoundError` became a raised `ClientError` instead of falling
+   through to the real workspace file. The smoke test only ever read an
+   actual report, and the unit test meant to cover the fallback never
+   created a reports directory, so both missed it. Fixed with an explicit
+   `is_file()` check, plus a `source` field (`"reports"`/`"workspace"`) on
+   the single-path response so a same-name collision is legible rather than
+   silent. Reran `tools/probe_artifacts.py` against the real daemon
+   afterward.
 8. **No workspace snapshot for readonly sessions (item 8). Done, 2026-09-17
    (`16693c0`).** A `snapshot=<git ref>` workspace mode that creates a
    detached worktree, records the resolved commit on `status`, and removes
