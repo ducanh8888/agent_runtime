@@ -71,8 +71,8 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H5 | Durable batch admission and bounded execution | REUSE + NEW | H2–H4, H0 usage hooks | Complete — [result](../results/h5.md) |
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
-| H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | Planned — not started |
-| H9 | Native sub-agent parity: close the experiential gap against Claude Code's `Task` tool and Codex's collaboration-mode sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | Planned — not started |
+| H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
+| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry) and the OpenHands-ceremony gate done, 2026-09-17; role-shaped profiles (item 3) deferred; rest open |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -541,16 +541,29 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Nghiêm trọng (critical):*
 
-1. **Reasoning-content resend (item 1).** Trace how `LocalConversation`
-   rebuilds message history for a resumed/continued turn and confirm whether
-   `reasoning_content` on prior assistant tool-call turns is included when the
-   provider is in thinking mode. If it is dropped, carry it through
-   serialization and resume, matching what the provider's own error names as
-   the requirement. Treat `LLMBadRequestError` naming this specific shape as
-   retryable-after-repair (fix the resend, then retry once) rather than
-   terminal. Do not build a generic non-thinking fallback profile as part of
-   this item -- that is H8 item 9, a separate, opt-in profile, not an implicit
-   silent-fallback (which H0 already excludes as a non-goal).
+1. **Reasoning-content resend (item 1). Root cause fixed, 2026-09-17
+   (`39b89ea`); the retry-after-repair half below is not done.** Trace how
+   `LocalConversation` rebuilds message history for a resumed/continued turn
+   and confirm whether `reasoning_content` on prior assistant tool-call
+   turns is included when the provider is in thinking mode. If it is
+   dropped, carry it through serialization and resume, matching what the
+   provider's own error names as the requirement. Treat `LLMBadRequestError`
+   naming this specific shape as retryable-after-repair (fix the resend,
+   then retry once) rather than terminal. Do not build a generic
+   non-thinking fallback profile as part of this item -- that is H8 item 9,
+   a separate, opt-in profile, not an implicit silent-fallback (which H0
+   already excludes as a non-goal).
+
+   **What shipped**: the truthy-check bug below (empty-but-present
+   `reasoning_content` silently omitted) is fixed, so the specific mechanism
+   this investigation found is closed. **What did not ship**: a session
+   that still hits `LLMBadRequestError` naming this shape for some other
+   reason is not treated as retryable-after-repair -- that requires wiring
+   this specific error into the retry classifier as a distinct, narrow case
+   (repair the *next* resend's history, then retry once), which was not
+   attempted. Worth a second live example before or instead of building it
+   blind, since the mechanism found here may already account for most or
+   all real occurrences.
 
    **Reproduced live, first-party, 2026-09-17**: session `2e1d9496` (one of
    this plan's own audit dispatches, `inspect` preset) hit exactly
@@ -664,18 +677,20 @@ untested). Items are grouped by the consumer's own severity labels.
     reaches a transcript; add a deterministic progress summary field to an
     errored session's payload (what ran before the failure), distinct from
     the opt-in LLM-generated finalize summary.
-11. **Tag key charset (item 11).** Widen `TAG_KEY_PATTERN` to
-    `^[a-z0-9]+(?:-[a-z0-9]+)*$` (`_`-permitting variant if underscores are
-    also wanted), matching the existing `PLUGIN_NAME_PATTERN`/
-    `CANVAS_EXTENSION_NAME_PATTERN` precedent, and state the constraint in the
-    tag-setting tool's own docstring rather than only in a validation error.
+11. **Tag key charset (item 11). Done, 2026-09-17 (`f64371d`).** Widened
+    `TAG_KEY_PATTERN` to `^[a-z0-9]+(?:-[a-z0-9]+)*$`,
+    matching the existing `PLUGIN_NAME_PATTERN`/`CANVAS_EXTENSION_NAME_PATTERN`
+    precedent; `control`'s docstring now states the constraint with a
+    compliant example. Verified against `test_conversation_tags.py`'s
+    existing invalid-key fixture, unaffected (it fails on uppercase, not the
+    hyphen).
 
 **Also raised, not part of a numbered item above:**
 
 - The MCP-transport stdout-corruption risk flagged during verification, above
   -- resolve by checking (not assuming) before H8 implementation starts.
-- **`wait_any`/`wait_all` hanging past a hidden transport ceiling -- mechanism
-  now understood, 2026-09-17.** Read directly: `Client.wait()`
+- **`wait_any`/`wait_all` hanging past a hidden transport ceiling -- fixed,
+  2026-09-17 (`f64371d`).** Read directly: `Client.wait()`
   (`agentrt/runtime/client.py`) is a plain synchronous `while True: ...
   time.sleep(...)` loop, and the MCP tool functions `wait_any`/`wait_all`
   (`mcp_server.py`) take no `Context` and never call `report_progress` --
@@ -961,16 +976,18 @@ written, one is harder, and the premise of two was only partly right:**
   defined first, since `fork` inherits the source's `parent_conversation_id`
   rather than setting one, making forks siblings of their source, not
   children of a chain.
-  **Decided 2026-09-17: fix the prerequisite, not the cap.** No depth cap
-  yet -- there is nothing live to cap. Fix `fork_conversation`
-  (`conversation_service.py:2664-2677`) to set the fork's
-  `parent_conversation_id` to its actual source instead of inheriting the
-  source's own parent, so forks become real children in a chain rather than
-  siblings at the same level. This is the correct ancestry regardless of
-  whether a depth cap is ever added on top of it -- `_children_index()`
-  already exists and reads whatever this field says, so today it reports the
-  wrong tree. A depth cap becomes a one-line addition once the chain is real;
-  do not build the cap before the chain it would walk is correct.
+  **Decided 2026-09-17: fix the prerequisite, not the cap. Prerequisite
+  done (`3c1fe76`); the cap itself is still not built.** `fork_conversation`
+  now sets the fork's `parent_conversation_id` to its actual source instead
+  of inheriting the source's own parent, so forks are real children in a
+  chain rather than siblings at the same level -- `_children_index()` reads
+  this field correctly now. No depth cap was added on top: there is still
+  nothing live to cap (no dispatched session can call `dispatch_from`), so
+  building one now would still be defending against a risk that does not
+  exist yet. Revisit if that reachability premise changes -- e.g. an
+  operator registers the AgentRT MCP server in a profile's
+  `mcp_server_refs`, which the H9 audit flagged as the one conditional path
+  to real recursion.
 
 **What cannot converge, and why not -- stated so nobody spends effort chasing
 it later:**
@@ -1064,18 +1081,21 @@ regardless of the builtin-agents gate) and `ToolPreloadService` under
 `AGENTRT_PRELOAD_TOOLS`, both untouched by gating `register_builtins_agents`
 alone.
 
-**Corrected scope, split into what each fix actually is:**
+**Corrected scope, split into what each fix actually is -- both done,
+2026-09-17 (`3258414`):**
 
 - **VSCode: genuinely one line, but not at the claimed seam.**
   `AGENTRT_ENABLE_VSCODE=0` already exists
   (`agent_server/config.py:364-367`, `env_parser.py`'s bool parser) and
   `get_vscode_service()` already returns `None` when it is set
-  (`vscode_service.py:229-255`). Add it to `daemon._daemon_env`
+  (`vscode_service.py:229-255`). Added to `daemon._daemon_env`
   (`agentrt/runtime/daemon.py:156-180`, the same dict that already sets
-  `AGENTRT_PERSISTENCE_DIR` and friends) -- no vendored edit, and the seam
-  that actually exists.
-- **`register_builtins_agents`: blocked on there being no seam at all**, not
-  merely more work than estimated. No config field, no env gate. The only
+  `AGENTRT_PERSISTENCE_DIR` and friends) via `setdefault` -- no vendored
+  edit, the seam that actually exists, and an operator's own explicit choice
+  is not overridden.
+- **`register_builtins_agents`: blocked on there being no seam at all** when
+  first found, not merely more work than estimated -- resolved by adding one.
+  No config field, no env gate existed. The only
   route that touches no vendored file is an import-time monkeypatch of
   `tool_router`'s bound name inside `server_launch.main()` before
   `runpy.run_module` runs -- fragile, not a real precedent, and not what was
