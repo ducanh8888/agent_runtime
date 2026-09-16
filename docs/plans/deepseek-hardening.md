@@ -763,7 +763,7 @@ untested). Items are grouped by the consumer's own severity labels.
 *Thấp (low):*
 
 10. **Transcript hygiene (item 10). Complete, 2026-09-17 (`254a590`, then
-    `<hash>` for the third part).**
+    `e075498` for the third part).**
     ANSI stripping and a deterministic `progress_summary` on an errored
     `result()` shipped as scoped. The `thought`-population half was written
     above as "a condensation defect, not a data-availability one" -- that
@@ -778,7 +778,7 @@ untested). Items are grouped by the consumer's own severity labels.
     exclusion, not fixing condensation -- treated the same way as the
     `DeploymentLLMPolicy` and spawn-depth items: a decision to make, not a
     task to execute quietly.
-    **Decided and done 2026-09-17 (`<hash>`): opt-in, so the exclusion is not
+    **Decided and done 2026-09-17 (`e075498`): opt-in, so the exclusion is not
     reopened.** `transcript(..., include_reasoning=True)` adds a capped
     `reasoning` field to the entries that have one; the default is unchanged, so
     a reader who does not ask still pays nothing. That is the narrow reading of
