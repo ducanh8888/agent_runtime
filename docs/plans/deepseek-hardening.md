@@ -85,6 +85,29 @@ observations and execution semantics. Agent server owns persistence, admission
 and authoritative run completion. Extend each existing owner rather than
 mirroring its state in the MCP process.
 
+## 2a. Current objective, set 2026-09-17
+
+**Close everything this document still lists as open, plus the two items the
+cache investigation of 2026-09-17 surfaced, and stop when the list is empty.**
+Named, so "done" is checkable:
+
+| # | Item | State |
+|---|---|---|
+| 1 | H8 item 12 -- start deadline for a run that never produces its first event | open |
+| 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | open |
+| 3 | H9 item 3 -- role-shaped profiles | decided: deferred (needs a third LLM profile to mean anything); re-affirm or close, do not build |
+| 4 | `_progress_summary`'s `JSONDecodeError` escape, the twin of the one fixed in `wait` | open, was deferred as off-item |
+| 5 | A `usage`-vs-provider-bill reconciliation check | new, from the 2026-09-17 investigation |
+
+Standing instructions for this run, given by the user: **decide rather than
+ask**; record every decision and its rejected alternative in this document and
+in the commit message; **do not over-engineer**; and hold to what AgentRT is
+for -- background sessions that outlive the orchestrator, addressable from the
+CLI and MCP. Verification: enough to prove the claim, by measurement rather
+than by mock where a real provider or daemon decides the outcome. Nothing that
+widens scope beyond the five rows above is in scope; anything discovered is
+recorded here, not built.
+
 ## 3. Phase specifications
 
 ### H0 — Direct provider and always-high contract
