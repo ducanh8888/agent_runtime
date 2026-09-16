@@ -504,15 +504,14 @@ untested). Items are grouped by the consumer's own severity labels.
   `interrupt()`'s log line) and not needing a new retry *path*, only visibility
   into the one that exists and a bound on how long "silently retrying" is
   allowed to look identical to "hung."
-- Item 5 (empty-result errors bucketed as `partial`) does not reproduce against
-  `_wait_bucket` (`agentrt/runtime/client.py`): read literally, an empty/blank
-  `result` string falls through to `return "failed"`, not `"partial"`. The
-  function only returns `"partial"` when the daemon's own payload already
-  carries `state == "partial"` -- a field `_response_payload` relays verbatim
-  from the daemon (`agent_server`), not one this package computes. The
-  consumer's session likely had `state: "partial"` set upstream on a
-  genuinely-empty-result error, which is a *different* bug one layer down,
-  not yet traced to its origin in `agent_server`.
+- **Correction, 2026-09-17: this bullet's own conclusion was wrong and stood
+  uncorrected for a day.** It said item 5 "does not reproduce against
+  `_wait_bucket`... read literally, an empty/blank result string falls
+  through to `return "failed"`." A regression test built on that exact claim
+  failed on first run: `_wait_bucket` returned `"partial"` for an errored,
+  empty-result session, because the `state == "partial"` check came *before*
+  the text was ever inspected -- the control flow was misread, not the text
+  handling. Fixed in `49a55ad`; see item 5 below for the corrected trace.
 - Item 11 (tag key charset) confirmed exactly: `TAG_KEY_PATTERN =
   re.compile(r"^[a-z0-9]+$")` (`agentrt/sdk/conversation/types.py`) rejects
   `superseded-by`. This codebase already has the fix's shape elsewhere --
@@ -632,12 +631,20 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Trung bình (medium):*
 
-5. **`partial` bucket misclassification (item 5).** Traced above to
-   `agent_server`'s own `state` field, not to `_wait_bucket`. Find where a
-   session with `execution_status: "error"` and an empty result gets
-   `state: "partial"` assigned, and correct the assignment so `state` and
-   `result_state` agree with `execution_status` -- `_wait_bucket` needs no
-   change once its input is honest.
+5. **`partial` bucket misclassification (item 5). Fixed, 2026-09-17
+   (`49a55ad`) -- correcting an earlier conclusion in this same document,
+   not just the code.** This document previously traced the bug to
+   `agent_server`'s `state` field and said `_wait_bucket` needed no change
+   "once its input is honest." That was wrong: `_wait_bucket` checked
+   `state == "partial"` and returned early, *before* ever looking at the
+   result text -- caught by writing the regression test the earlier
+   conclusion implied should already pass, and watching it fail. `state`
+   does come from `derive_result_state` (`run_scope.py`) naming every
+   non-`finished` terminal "partial" by design, which is a legitimate,
+   intentional choice at that layer -- the bug was trusting it alone one
+   layer up, in the bucket function, not the state's own meaning. Fixed by
+   removing the early branch; the result text now decides every
+   non-terminal-status case.
 6. **`inspect` search usability (item 6).** Return `path:line` per match
    (bounded count, matching the existing truncation convention), accept a
    single file as `scope` instead of only a directory (currently
@@ -1206,7 +1213,7 @@ carry input/run provenance and current result state independently.
 | Consumer report 2. No completion signal, orchestrator must poll or block | H8 item 2: blocking `agentrt wait` CLI; push remains impossible over stdio (H7.9) |
 | Consumer report 3. `wait_*`/`result` payloads unpaged, overflow client limits | H8 item 3: status+metadata default, paged `result`, matching H1's paging shape |
 | Consumer report 4. Truncated final answer with no flag | H8 item 4: `finish_reason`/`truncated` on the final message and finalize summary |
-| Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: relocated to `agent_server`'s `state` field, not `_wait_bucket` |
+| Consumer report 5. Empty-result error bucketed as `partial`, contradicting the wait contract | H8 item 5: fixed 2026-09-17 (`49a55ad`) -- `_wait_bucket` trusted an upstream `state` field ahead of the text itself; text now decides |
 | Consumer report 6. `inspect` search has no `path:line`, rejects file scope, inconsistent counts | H8 item 6: correctness fix in the search implementation |
 | Consumer report 7. Readonly/inspect has no report-writing channel | H8 item 7: write-only directory outside the workspace, guarded like it |
 | Consumer report 8. No workspace snapshot for readonly fan-out | H8 item 8: `workspace_mode="snapshot"`, already reserved in section 4 |
