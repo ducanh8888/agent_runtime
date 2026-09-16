@@ -523,13 +523,26 @@ The bill includes the sessions the API scored at **0.00** -- `2e1d9496` among
 them, which this plan had already cited for a different reason. Their tokens were
 served from cache and billed at the cheap rate.
 
-The decisive arithmetic does not depend on the two totals matching, which they
-cannot be made to (a store missing deleted sessions will always under-count).
-It is the miss count: those zero-scored sessions recorded ~17.8M prompt tokens,
-so if they had genuinely missed, the day's misses would be at least 17.8M. The
-bill says the day's misses were **1.9M**. Sessions missing from the store could
-only add more misses, not fewer, so the contradiction cannot be explained that
-way -- those tokens were cached. So nothing was "paid in full",
+**The two totals are not comparable, and saying so matters.** The billing export
+is per *account key*, and the orchestrator shares that key with the daemon: this
+session's own `ANTHROPIC_AUTH_TOKEN` is the same credential as the daemon's
+profile `api_key`. So most of the traffic billed under that key on 2026-09-17 --
+202.7M tokens, with **zero** daemon sessions created that day -- is the
+orchestrator, not AgentRT. The prompt-token columns above therefore measure two
+different populations, and the gap between them is not evidence of anything.
+
+**The evidence is the miss count, and it survives that.** The daemon's records
+for 2026-09-16 imply 39.8M − 13.1M = **26.7M misses** for its own sessions. A
+daemon call is a subset of the key's calls, so the key's misses must be at least
+the daemon's -- and the key's whole-day bill reports **1.9M misses**, with every
+other row on the account adding only ~0.3M more. 1.9M cannot contain 26.7M. So
+the daemon recorded misses the provider never billed as misses, whatever share
+of the key belongs to the orchestrator.
+
+The magnitude is the interesting part: a session with a stable, append-only
+prefix misses almost nothing -- the orchestrator's own traffic shows that, at
+99.6% cached on 09-17 -- so a recorded 26.7M misses is not a plausible reading
+of a workload that was being cached. So nothing was "paid in full",
 and the causation above is wrong: what changed at that moment was **what the
 daemon recorded**, not what the provider did. H8 item 1 is a prompt-content fix;
 a content fix cannot explain a bill that shows caching throughout.
