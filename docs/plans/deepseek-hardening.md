@@ -1218,7 +1218,7 @@ sources, corrected from an earlier draft:**
    a separate turn. `InterruptEvent` itself was left alone: it is a
    UI-facing event, and making it `LLMConvertibleEvent` would have injected
    the same notice on the supersede path unless line 2638 were gated anyway.
-   **Both gaps left open above are now closed, 2026-09-17 (`<hash>`), so
+   **Both gaps left open above are now closed, 2026-09-17 (`2ddaae6`), so
    "interrupt visibility done" no longer needs a caveat.** (a) The lazy-init
    window: the `arun()` cancellation handler was extracted into
    `_handle_run_cancelled()` and the `await asyncio.to_thread(
