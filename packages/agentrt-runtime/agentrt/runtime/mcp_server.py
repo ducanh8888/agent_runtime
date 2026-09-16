@@ -531,7 +531,12 @@ def finalize(session: str, summary: bool = False) -> dict:
 
 
 @mcp.tool()
-def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict:
+def transcript(
+    session: str,
+    limit: int = 30,
+    cursor: str | None = None,
+    include_reasoning: bool = False,
+) -> dict:
     """Read what a session actually did, condensed.
 
     Returns events oldest first: messages, each action with its tool, short
@@ -553,14 +558,24 @@ def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict
     Judge "is there more" by next_cursor, never by how few events came back. A
     non-null cursor means older events exist no matter how short the page.
 
-    The agent's private reasoning and its system prompt are excluded. They are
-    the bulk of the raw payload and would cost you far more context than they
-    are worth.
+    The agent's private reasoning and its system prompt are excluded by default.
+    They are the bulk of the raw payload and would cost you far more context than
+    they are worth. `include_reasoning=True` adds the deliberation as a capped
+    `reasoning` field on the entries that have it. Ask for it when a tool call
+    looks like it had no intent: on this deployment an action's `thought` is
+    often empty while the deliberation that produced the call is present and
+    non-empty, so the entry would otherwise show only what was done, not why.
 
     Use this to find out why a session failed, or what it is doing now, when
     result is empty or does not explain itself.
     """
-    return _guard(_get_client().transcript, session, limit=limit, cursor=cursor)
+    return _guard(
+        _get_client().transcript,
+        session,
+        limit=limit,
+        cursor=cursor,
+        include_reasoning=include_reasoning,
+    )
 
 
 @mcp.tool()

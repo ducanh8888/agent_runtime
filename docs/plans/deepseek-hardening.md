@@ -762,8 +762,8 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Thấp (low):*
 
-10. **Transcript hygiene (item 10). Two of three done, 2026-09-17
-    (`254a590`); the `thought` half is not a bug and was left alone.**
+10. **Transcript hygiene (item 10). Complete, 2026-09-17 (`254a590`, then
+    `<hash>` for the third part).**
     ANSI stripping and a deterministic `progress_summary` on an errored
     `result()` shipped as scoped. The `thought`-population half was written
     above as "a condensation defect, not a data-availability one" -- that
@@ -778,6 +778,19 @@ untested). Items are grouped by the consumer's own severity labels.
     exclusion, not fixing condensation -- treated the same way as the
     `DeploymentLLMPolicy` and spawn-depth items: a decision to make, not a
     task to execute quietly.
+    **Decided and done 2026-09-17 (`<hash>`): opt-in, so the exclusion is not
+    reopened.** `transcript(..., include_reasoning=True)` adds a capped
+    `reasoning` field to the entries that have one; the default is unchanged, so
+    a reader who does not ask still pays nothing. That is the narrow reading of
+    "surface it", and the case for access is concrete rather than theoretical: a
+    real persisted `ActionEvent` carries `reasoning_content` of 890 characters
+    with `thought=[]`, so that session's transcript shows a tool call with no
+    visible intent at all. The cap is 2000 characters -- generous next to the
+    400/600 used for `thought` and observation output because deliberation is
+    long by nature -- and marked when it cuts. `daemon-behavior.md`'s exclusion
+    note now records the request form and why an empty `thought` is the reason
+    it exists. Verified: five of six new tests fail on the pre-fix source; the
+    sixth asserts the default is unchanged.
 11. **Tag key charset (item 11). Done, 2026-09-17 (`f64371d`).** Widened
     `TAG_KEY_PATTERN` to `^[a-z0-9]+(?:-[a-z0-9]+)*$`,
     matching the existing `PLUGIN_NAME_PATTERN`/`CANVAS_EXTENSION_NAME_PATTERN`

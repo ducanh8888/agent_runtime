@@ -327,6 +327,12 @@ def _capped(text: str, limit: int) -> str:
     return text[:limit] + " ... [truncated]"
 
 
+#: Deliberation is long by nature, so this is generous next to the 400/600 used
+#: for ``thought`` and observation output -- but it is still a transcript view,
+#: not an archive, and one entry must not crowd out the events around it.
+_REASONING_CAP = 2000
+
+
 # CSI sequences (`\x1b[...` -- colors, cursor moves, private modes like the
 # reported `\x1b[?2004l` bracketed-paste toggle) and OSC sequences (`\x1b]...`
 # terminated by BEL or ST) from a real terminal session, plus a bare
@@ -1933,10 +1939,28 @@ class Client:
         }
 
     def transcript(
-        self, session: str, *, limit: int = 30, cursor: str | None = None
+        self,
+        session: str,
+        *,
+        limit: int = 30,
+        cursor: str | None = None,
+        include_reasoning: bool = False,
     ) -> dict:
         """Return conversation events oldest first; ``next_cursor`` pages
-        backwards into older events."""
+        backwards into older events.
+
+        ``include_reasoning`` adds the model's private deliberation to entries
+        that have it. Off by default: ``daemon-behavior.md`` documents that
+        exclusion, and it is a real cost -- deliberation is routinely longer
+        than the code it produced -- so a reader gets it by asking, not by
+        having it always. On an ``action`` or ``message`` entry the field is
+        ``reasoning``, capped, and present only when non-empty.
+
+        Why it exists at all: the ``thought`` field on an ``ActionEvent`` is
+        frequently empty on this deployment while ``reasoning_content`` on the
+        same event is not, so a transcript read without this could show a tool
+        call with no visible intent. H8 item 10, 2026-09-17.
+        """
         resolved = self._resolve_session(session)
 
         params: dict[str, object] = {
@@ -1960,20 +1984,22 @@ class Client:
             kind = item.get("kind")
             if kind == "MessageEvent":
                 message = item.get("llm_message") or {}
-                events.append(
-                    {
-                        "type": "message",
-                        # Carried for the same reason actions/observations do,
-                        # and one more: a message is the natural branch point
-                        # for `dispatch_from(from_event_id=...)`, and this is
-                        # the only tool that hands out event ids. Without it
-                        # the parameter could not be used at a conversation
-                        # boundary at all.
-                        "id": item.get("id"),
-                        "role": message.get("role"),
-                        "text": _join_text(message.get("content")),
-                    }
-                )
+                entry = {
+                    "type": "message",
+                    # Carried for the same reason actions/observations do, and
+                    # one more: a message is the natural branch point for
+                    # `dispatch_from(from_event_id=...)`, and this is the only
+                    # tool that hands out event ids. Without it the parameter
+                    # could not be used at a conversation boundary at all.
+                    "id": item.get("id"),
+                    "role": message.get("role"),
+                    "text": _join_text(message.get("content")),
+                }
+                if include_reasoning:
+                    reasoning = message.get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        entry["reasoning"] = _capped(reasoning, _REASONING_CAP)
+                events.append(entry)
             elif kind == "ActionEvent":
                 entry = {
                     "type": "action",
@@ -1982,6 +2008,10 @@ class Client:
                     "thought": _capped(_join_text(item.get("thought")), 400),
                 }
                 _add_action_location(entry, item.get("action"))
+                if include_reasoning:
+                    reasoning = item.get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        entry["reasoning"] = _capped(reasoning, _REASONING_CAP)
                 events.append(entry)
             elif kind == "ObservationEvent":
                 observation = item.get("observation") or {}

@@ -152,7 +152,14 @@ Two fields dominate the payload and neither helps the orchestrator:
 - `SystemPromptEvent.system_prompt.text` — kilobytes of fixed instructions,
   identical in every session.
 - `ActionEvent.reasoning_content` — the model's private deliberation, routinely
-  longer than the code it produced.
+  longer than the code it produced. **Dropped by default, available on request**
+  (`transcript(..., include_reasoning=True)`, H8 item 10, 2026-09-17). The
+  request form exists because the two fields differ in a way this section
+  originally missed: `thought` is frequently *empty* on this deployment while
+  `reasoning_content` on the same event is populated, so dropping the latter
+  could leave a tool call in the transcript with no visible intent at all. The
+  default is unchanged, so the cost this section describes is still not paid by
+  a reader who does not ask.
 
 `ConversationStateUpdateEvent` is internal bookkeeping — nearly half the events
 here — and carries nothing a reader wants.
