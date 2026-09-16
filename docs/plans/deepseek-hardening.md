@@ -991,7 +991,7 @@ sources, corrected from an earlier draft:**
    enumeration to also cover iteration exhaustion and provider failure, so
    every terminal state names a reason from a closed set.
 2. **A genuinely blocking, single-result call for the common case. Done,
-   2026-09-17 (`<hash>`).** `wait_any`/`wait_all` already blocked, but the
+   2026-09-17 (`06684f9`).** `wait_any`/`wait_all` already blocked, but the
    orchestrator still holds a session id and calls a second tool (`result`,
    `usage`, `artifacts`) to learn what happened. A `dispatch` variant (or a
    `wait_all(..., mode="collect")` addition) that returns the condensed final
