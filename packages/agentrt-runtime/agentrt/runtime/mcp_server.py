@@ -76,6 +76,11 @@ def dispatch(
     The session keeps running after this conversation ends. Returns a
     short_id -- how you refer to the session in every other tool here.
 
+    FIRST CALL ON A FRESH INSTALL. The daemon starts lazily, on the first
+    dispatch, and a cold start imports the whole model stack -- this can take
+    up to a couple of minutes before this call returns anything at all. That
+    is expected, not a hang; it only happens once per daemon process.
+
     PERMISSION. One of `readonly`, `inspect`, `workspace` (the default) or
     `broad`; call `profiles` for what each grants.
 
@@ -405,6 +410,16 @@ def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
     held across two samples, because `finished` is provisional while a run may
     continue for a stop hook or a message that arrived during its final step.
     Expect at least one poll interval (about two seconds) of latency.
+
+    Do not pass a large `timeout` expecting this call to hold open that long:
+    it is capped internally (900s by default) well under the idle ceiling
+    some transports between an orchestrator and this server impose on a call
+    that sends nothing back for too long -- a `timeout` above the cap is
+    truncated to it and returns `still_running` there, not held further. Call
+    again on `still_running` rather than raising `timeout` to work around
+    this. And prefer not holding your own turn on this call at all for
+    anything expected to run long: poll `status` between other work, or
+    background a poll loop, rather than blocking here.
     """
     return _guard(_get_client().wait, session_ids, mode="any", timeout=timeout)
 
@@ -413,7 +428,8 @@ def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
 def wait_all(session_ids: list[str], timeout: float = 600.0) -> dict:
     """Block until every one of these sessions settles, or the timeout elapses.
 
-    Same result shape as `wait_any`; see that description for the buckets. A
+    Same result shape as `wait_any`; see that description for the buckets and
+    for the internal safe-ceiling cap on `timeout` -- it applies here too. A
     timeout returns the unfinished ids under `still_running` with `timed_out`
     true -- never as failures, and never with partial output presented as a
     final answer.
@@ -557,9 +573,11 @@ def control(session: str, action: str, message: str | None = None) -> dict:
       tags first if you are deleting in bulk; nothing here stops you removing
       one you meant to keep.
     - tag -- attach notes to a session. Requires message, as `key=value` pairs
-      separated by commas: `keep=evidence for the guide, round=3`. A key with
-      an empty value removes it. Tags merge with what is already there, and
-      show up in `list` and `status`.
+      separated by commas: `keep=evidence for the guide, round=3,
+      superseded-by=a1b2c3d4`. A key with an empty value removes it. Keys are
+      lowercase alphanumeric, optionally hyphen-separated -- no leading,
+      trailing or double hyphens, no underscores or uppercase. Tags merge
+      with what is already there, and show up in `list` and `status`.
 
       This is the only durable place to record why a session matters. Sessions
       are kept until deleted and a title is auto-generated, so after fifty of

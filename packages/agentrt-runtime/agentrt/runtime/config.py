@@ -336,3 +336,32 @@ def max_running_sessions() -> int:
         return int(raw)
     except ValueError:
         return DEFAULT_MAX_RUNNING_SESSIONS
+
+
+# A consumer report measured a transport-level idle ceiling of roughly 1800s
+# between an orchestrator and a stdio MCP server -- unrelated to and below
+# `wait`'s own documented `timeout` parameter, so a large requested timeout
+# let that outer layer kill the connection with a generic error before
+# `wait`'s own graceful still_running/timed_out answer was ever reached.
+# Measured, not assumed, on 2026-09-17 (docs/plans/deepseek-hardening.md H8,
+# the wait_*/transport-timeout entry) -- kept well under the reported ~1800s
+# rather than at it, since that number is this one deployment's, not a spec.
+DEFAULT_WAIT_SAFE_CEILING_SECONDS = 900.0
+
+
+def wait_safe_ceiling_seconds() -> float:
+    """The most `wait` will block in one call, regardless of `timeout`.
+
+    A caller that wants to wait longer gets `still_running`/`timed_out` at
+    this boundary and calls again -- which is also the shape `agentrt wait`
+    (the CLI) or a backgrounded poll loop should use instead of holding the
+    orchestrator's own turn open. Zero or negative disables the cap, for an
+    operator confident their own transport has none.
+    """
+    raw = os.environ.get("AGENTRT_WAIT_SAFE_CEILING_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_WAIT_SAFE_CEILING_SECONDS
+    try:
+        return float(raw)
+    except ValueError:
+        return DEFAULT_WAIT_SAFE_CEILING_SECONDS

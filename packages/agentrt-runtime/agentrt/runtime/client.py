@@ -1592,11 +1592,32 @@ class Client:
         whether the deadline ended the wait. A ``wait_any`` that returns on its
         first outcome reports ``timed_out`` false even though other ids are
         still running: the deadline is not what ended it.
+
+        SAFE CEILING. A large ``timeout`` is capped internally at
+        ``AGENTRT_WAIT_SAFE_CEILING_SECONDS`` (900s by default) regardless of
+        what was requested, and returns ``still_running``/``timed_out`` at
+        that boundary rather than holding the call open indefinitely. This
+        exists because a transport between an orchestrator and this server
+        can have its own, undocumented idle-connection ceiling -- measured
+        once at roughly 1800s -- that fires first and kills the call with a
+        generic error before this method's own graceful answer is ever
+        reached. Call again on ``still_running``; do not raise the requested
+        ``timeout`` to work around this, since a larger request is
+        truncated to the same safe ceiling either way. For anything you
+        expect to run long, prefer polling `status` between other work, or a
+        backgrounded poll loop, over one held-open `wait` call.
         """
         if mode not in ("all", "any"):
             raise ValueError("mode must be 'all' or 'any'")
         interval = max(0.5, float(poll_interval))
-        deadline = time.monotonic() + max(0.0, float(timeout))
+        requested_timeout = max(0.0, float(timeout))
+        safe_ceiling = config.wait_safe_ceiling_seconds()
+        effective_timeout = (
+            min(requested_timeout, safe_ceiling)
+            if safe_ceiling > 0
+            else requested_timeout
+        )
+        deadline = time.monotonic() + effective_timeout
         ids = list(dict.fromkeys(str(session) for session in session_ids))
 
         started = time.monotonic()

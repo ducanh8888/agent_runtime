@@ -114,6 +114,36 @@ def test_wait_timeout_returns_still_running() -> None:
     assert "result" not in out["still_running"][0]
 
 
+def test_wait_caps_a_large_timeout_to_the_safe_ceiling(monkeypatch) -> None:
+    """A requested timeout above the safe ceiling is truncated, not honored.
+
+    Regression for the transport-idle-ceiling gap: a large ``timeout`` used
+    to hold the call open for its full requested span with zero interim
+    signal, which some transports between an orchestrator and this server
+    kill first with a generic error. docs/plans/deepseek-hardening.md H8.
+    """
+    monkeypatch.setenv("AGENTRT_WAIT_SAFE_CEILING_SECONDS", "1")
+    statuses = {E: {"execution_status": "running", "result_state": "pending"}}
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([E], mode="all", timeout=1000.0, poll_interval=0.3)
+
+    assert out["timed_out"] is True
+    assert [item["id"] for item in out["still_running"]] == [E]
+
+
+def test_wait_safe_ceiling_disabled_by_zero(monkeypatch) -> None:
+    """The safe ceiling itself is opt-out, matching AGENTRT_MAX_SESSIONS."""
+    monkeypatch.setenv("AGENTRT_WAIT_SAFE_CEILING_SECONDS", "0")
+    statuses = {A: {"execution_status": "finished", "result_state": "final"}}
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([A], mode="all", timeout=1.0, poll_interval=0.5)
+
+    assert out["timed_out"] is False
+    assert [item["id"] for item in out["completed"]] == [A]
+
+
 def test_wait_missing_id_does_not_wait_forever() -> None:
     statuses = {A: {"execution_status": "finished", "result_state": "final"}}
     client = _mock_client(_handler(statuses))

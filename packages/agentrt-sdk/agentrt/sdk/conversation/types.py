@@ -18,7 +18,13 @@ ConversationTokenCallbackType = TokenCallbackType
 ConversationID = uuid.UUID
 """Type alias for conversation IDs."""
 
-TAG_KEY_PATTERN = re.compile(r"^[a-z0-9]+$")
+# Hyphen-separated lowercase alphanumeric groups, matching the precedent
+# already set by PLUGIN_NAME_PATTERN (agent_server/plugins_router.py) and
+# CANVAS_EXTENSION_NAME_PATTERN (agent_server/canvas_extensions_router.py) --
+# `superseded-by` and similar kebab-case keys are natural, and the old
+# alphanumeric-only pattern rejected them with no warning in the tag tool's
+# own docstring. docs/plans/deepseek-hardening.md H8 item 11, 2026-09-17.
+TAG_KEY_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TAG_VALUE_MAX_LENGTH = 256
 
 
@@ -28,7 +34,9 @@ def _validate_tags(v: dict[str, str] | None) -> dict[str, str]:
     for key, value in v.items():
         if not TAG_KEY_PATTERN.match(key):
             raise ValueError(
-                f"Tag key '{key}' is invalid: keys must be lowercase alphanumeric only"
+                f"Tag key '{key}' is invalid: keys must be lowercase "
+                "alphanumeric, optionally hyphen-separated (e.g. "
+                "'superseded-by'); no leading, trailing or double hyphens"
             )
         if len(value) > TAG_VALUE_MAX_LENGTH:
             raise ValueError(
