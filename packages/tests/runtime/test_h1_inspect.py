@@ -143,6 +143,63 @@ def test_search_finds_a_match_with_context(state_dir: Path, workspace: Path) -> 
     assert match.context_before == ["import os"]
 
 
+def test_search_text_reaches_the_model_with_path_and_line(
+    state_dir: Path, workspace: Path
+) -> None:
+    """H8 item 6: the model-visible text names path:line, not only a count.
+
+    `matches` (structured: path, line, text) was always correct; it never
+    reached the model, because `to_llm_content` (the SDK default) only sends
+    `content`, and `content` used to be just a count summary. A caller
+    working from the normal tool-observation flow -- not a raw events or
+    artifacts read -- saw only "N match(es)... returning M from offset 0",
+    with no way to act on a specific hit. docs/plans/deepseek-hardening.md
+    H8 item 6, 2026-09-17.
+    """
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="hello", include="*.py")
+    )
+    assert obs.is_error is False
+    model_visible_text = "".join(
+        block.text for block in obs.to_llm_content if hasattr(block, "text")
+    )
+    assert "a.py:2:" in model_visible_text
+    assert "hello world" in model_visible_text
+
+
+def test_search_scope_accepts_a_single_file(
+    state_dir: Path, workspace: Path
+) -> None:
+    """H8 item 6: `path` naming a file searches that file, not an error.
+
+    Used to reject any non-directory scope with "Not a directory" -- a
+    caller narrowing a search to one already-identified file (the ordinary
+    reason to pass a file path at all) had to search its parent instead.
+    docs/plans/deepseek-hardening.md H8 item 6, 2026-09-17.
+    """
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="search", pattern="hello", path="a.py")
+    )
+    assert obs.is_error is False
+    assert obs.match_count == 1
+    assert obs.matches[0].path == "a.py"
+    assert obs.matches[0].line == 2
+
+
+def test_search_missing_path_is_still_refused(
+    state_dir: Path, workspace: Path
+) -> None:
+    """A scope that is neither a file nor a directory is still an error --
+    the file-scope fix narrows the old blanket rejection, it does not
+    remove it."""
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(
+            command="search", pattern="hello", path="does-not-exist.txt"
+        )
+    )
+    assert obs.is_error is True
+
+
 def test_search_refuses_a_symlink_that_leaves_the_workspace(
     state_dir: Path, workspace: Path, tmp_path: Path
 ) -> None:

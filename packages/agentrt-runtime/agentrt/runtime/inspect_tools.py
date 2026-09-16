@@ -78,7 +78,14 @@ MAX_CONTEXT_LINES = 5
 MAX_RESULTS = 500
 MAX_OUTPUT_CHARS = 200_000
 REGEX_TIMEOUT_SECONDS = 0.05
-SEARCH_MATCH_BUDGET = MAX_OUTPUT_CHARS - 20_000
+# Halved from the full remaining budget: the text summary now renders a
+# path:line line per match too (H8 item 6, 2026-09-17 -- `matches` used to be
+# structured data the model's own conversation flow never actually saw), so
+# the same match data is now paid for twice in one observation's total size --
+# once as `matches`' JSON, once as flat text. The flat rendering is smaller
+# per match than the JSON (no field-name overhead), so this split is
+# conservative, not exact.
+SEARCH_MATCH_BUDGET = (MAX_OUTPUT_CHARS - 20_000) // 2
 MAX_SEARCH_MATCHES_SCANNED = 10_000
 
 #: A revision may not begin with `-` (option injection) and is kept to the
@@ -478,14 +485,6 @@ class InspectExecutor(ToolExecutor):
     def _search(self, action: InspectAction) -> InspectObservation:
         assert action.pattern is not None
         start = self._approve(action.path) if action.path else self._root
-        if not start.is_dir():
-            return InspectObservation.from_text(
-                text=f"Not a directory: {self._relative(start)}",
-                is_error=True,
-                command="search",
-                search_root=self._relative(start),
-            )
-
         regex = timeout_regex.compile(action.pattern)
         matches: list[SearchMatch] = []
         total = 0
@@ -493,44 +492,71 @@ class InspectExecutor(ToolExecutor):
         files_scanned = 0
         clipped = False
 
-        for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
-            # Symlinked directories are pruned rather than followed: os.walk
-            # would not descend them with followlinks=False, and a link that
-            # pointed elsewhere inside the workspace would otherwise make the
-            # walk's semantics depend on a detail of os.walk.
-            dirnames[:] = sorted(
-                name
-                for name in dirnames
-                if name not in _SEARCH_SKIP_DIRS
-                and not (Path(dirpath) / name).is_symlink()
-                and self._approve_optional(Path(dirpath) / name) is not None
+        if start.is_file():
+            # A file scope used to be rejected outright ("Not a directory"),
+            # forcing a caller who wanted to search one known file to scan its
+            # parent instead -- correctness bug, not documentation: `path`
+            # naming a file is exactly what a caller narrowing a search to one
+            # already-identified file would reach for.
+            # docs/plans/deepseek-hardening.md H8 item 6, 2026-09-17.
+            found, count, was_clipped, _file_limit_hit = self._scan_file(
+                start,
+                regex,
+                action,
+                skip=action.offset,
+                take=action.max_results,
+                scan_limit=MAX_SEARCH_MATCHES_SCANNED,
             )
-            for name in sorted(filenames):
-                if action.include and not fnmatch.fnmatch(name, action.include):
-                    continue
-                candidate = self._approve_optional(Path(dirpath) / name)
-                if candidate is None or not candidate.is_file():
-                    continue
-                if total >= MAX_SEARCH_MATCHES_SCANNED:
-                    scan_limit_hit = True
-                    break
-                found, count, was_clipped, file_limit_hit = self._scan_file(
-                    candidate,
-                    regex,
-                    action,
-                    skip=max(0, action.offset - total),
-                    take=max(0, action.max_results - len(matches)),
-                    scan_limit=MAX_SEARCH_MATCHES_SCANNED - total,
+            files_scanned = 1
+            clipped = was_clipped
+            matches.extend(found)
+            total += count
+        elif start.is_dir():
+            for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
+                # Symlinked directories are pruned rather than followed: os.walk
+                # would not descend them with followlinks=False, and a link that
+                # pointed elsewhere inside the workspace would otherwise make the
+                # walk's semantics depend on a detail of os.walk.
+                dirnames[:] = sorted(
+                    name
+                    for name in dirnames
+                    if name not in _SEARCH_SKIP_DIRS
+                    and not (Path(dirpath) / name).is_symlink()
+                    and self._approve_optional(Path(dirpath) / name) is not None
                 )
-                files_scanned += 1
-                clipped = clipped or was_clipped
-                matches.extend(found)
-                total += count
-                if file_limit_hit:
-                    scan_limit_hit = True
+                for name in sorted(filenames):
+                    if action.include and not fnmatch.fnmatch(name, action.include):
+                        continue
+                    candidate = self._approve_optional(Path(dirpath) / name)
+                    if candidate is None or not candidate.is_file():
+                        continue
+                    if total >= MAX_SEARCH_MATCHES_SCANNED:
+                        scan_limit_hit = True
+                        break
+                    found, count, was_clipped, file_limit_hit = self._scan_file(
+                        candidate,
+                        regex,
+                        action,
+                        skip=max(0, action.offset - total),
+                        take=max(0, action.max_results - len(matches)),
+                        scan_limit=MAX_SEARCH_MATCHES_SCANNED - total,
+                    )
+                    files_scanned += 1
+                    clipped = clipped or was_clipped
+                    matches.extend(found)
+                    total += count
+                    if file_limit_hit:
+                        scan_limit_hit = True
+                        break
+                if scan_limit_hit:
                     break
-            if scan_limit_hit:
-                break
+        else:
+            return InspectObservation.from_text(
+                text=f"Not a file or directory: {self._relative(start)}",
+                is_error=True,
+                command="search",
+                search_root=self._relative(start),
+            )
 
         source_clipped = clipped
         page, budget_clipped = _fit_search_page(matches)
@@ -553,6 +579,27 @@ class InspectExecutor(ToolExecutor):
         )
         if clipped:
             text += " Some lines or files were clipped."
+        # `page` (SearchMatch: path, line, text, context) was already
+        # structured correctly and budget-bounded by _fit_search_page above
+        # -- it just never reached the model. `InspectObservation.content` is
+        # what `to_llm_content` (tool/schema.py's default) actually sends to
+        # the LLM; `matches` is a sibling field the base Observation does not
+        # serialize into conversation content, so a caller relying on the
+        # normal tool-observation flow (not a raw events/artifacts read) saw
+        # only this count summary and never the path:line data structured
+        # right next to it. docs/plans/deepseek-hardening.md H8 item 6,
+        # 2026-09-17.
+        if page:
+            lines = [text, ""]
+            for match in page:
+                lines.append(f"{match.path}:{match.line}: {match.text}")
+                for offset, context_line in enumerate(
+                    match.context_before, start=-len(match.context_before)
+                ):
+                    lines.append(f"{match.path}:{match.line + offset}-  {context_line}")
+                for offset, context_line in enumerate(match.context_after, start=1):
+                    lines.append(f"{match.path}:{match.line + offset}-  {context_line}")
+            text = "\n".join(lines)
         return InspectObservation(
             content=_text(text),
             command="search",
