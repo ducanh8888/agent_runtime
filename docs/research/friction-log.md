@@ -493,3 +493,65 @@ stall timeout.
 Also worth having independent of root cause: the daemon logs nothing at all
 about what an outbound LLM call is doing while it runs. That gap is what made
 this take log archaeology instead of a status field.
+
+## The cache-hit figure was real, and the cause had already been fixed
+
+A session's provider reported heavy prompt-cache misses, and `tools/spend.py`
+agreed: **4% hit** across the whole store, against a provider where the cached
+portion is roughly an order of magnitude cheaper. Two readings were possible —
+caching is broken now, or the number is dominated by history — and they call for
+opposite work, so the question was worth a measurement rather than a guess.
+
+**Per session, the answer is unambiguous.** Sorting sessions by creation time
+and reading each one's `cache_hit_rate`:
+
+| created | hit rate |
+|---|---|
+| 2026-09-13 → 2026-09-16 08:33 (hundreds) | **0.00** |
+| 2026-09-16 10:17 onward | **0.86 – 0.97** |
+
+The break is sharp and it lands where **H8 item 1** was fixed (`39b89ea`): prior
+assistant tool-call turns were being rebuilt *without* their
+`reasoning_content` — silently, because the check was truthiness on a field that
+was present-but-empty — so each call sent a prompt that differed from the
+previous one and the provider's prefix cache could never hit. The same bug is
+recorded in the plan as having produced `LLMBadRequestError` on session
+`2e1d9496`. Fixing it restored a stable prefix, and the sessions after it cache
+normally. The lifetime figure is a ledger: it keeps three days of breakage, and
+nothing about the current build.
+
+**The reporting path is not the problem**, which was worth ruling out rather
+than assuming. Two completions against the provider with an identical large
+prefix: the second reported `prompt_cache_hit_tokens: 1920/2144` (90%), and
+`prompt_tokens_details.cached_tokens` carried the same number. That is the field
+the SDK reads, so the 0.00 readings were real misses and not a field-name
+mismatch.
+
+**A plausible cause that measurement killed.** `<CURRENT_DATETIME>` is rendered
+from `datetime.now()` at prompt-build time, so every call in the same minute
+carries the same timestamp and consecutive calls minutes apart do not. That
+looked like the mechanism. It is not:
+
+- Measured — sending the same prompt twice with a *deliberately changing*
+  dynamic block still hit **~92%**, because the provider matches the longest
+  common prefix and the long static instruction block ahead of the dynamic one
+  is unchanged. Divergence late in the prompt costs the tail, not the whole.
+- Structurally impossible in these sessions besides: each has exactly **one**
+  `SystemPromptEvent` and **zero** condensation events, so the prompt is built
+  once per conversation, not once per call.
+
+Nothing should be changed to "fix" the datetime. It is per-conversation in
+practice, and the tier it renders into (`CacheTier.DYNAMIC`) is the
+deliberately-uncached second content block.
+
+**What shipped from this.** A cache failure has no symptom but the bill, so it
+now has a check: `tools/probe_cache.py` reads the daemon's own usage records
+(dispatching nothing) and fails when a session with three or more provider calls
+reports a near-zero hit rate. Its default window is deliberately short — half a
+day — because the guard's question is whether the *current* code caches, and
+this deployment's history answers a different one; `--days`/`--all` are there for
+studying that history and will report the old breakage by design.
+
+`tools/spend.py` also now prints a recent-window hit rate beside the lifetime
+one, for the same reason the entry above exists: a single lifetime number read as
+a statement about today.

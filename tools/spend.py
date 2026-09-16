@@ -21,10 +21,20 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from agentrt.runtime import daemon
+
+
+#: The lifetime cache-hit figure is dominated by whatever the store has
+#: accumulated, so it reads as "caching is broken" long after it was fixed: the
+#: reasoning-content resend bug (H8 item 1) left hundreds of sessions at a 0%
+#: hit rate, and they sit in the same total as healthy ones. The report
+#: therefore prints a second figure over sessions created in this window, which
+#: is the one that describes the code as it is now.
+RECENT_WINDOW_DAYS = 1
 
 
 #: Versioned rate cards, USD per million tokens. Each card records where the
@@ -152,6 +162,14 @@ def main() -> int:
     sessions = 0.0
     unpriced_grand: dict[str, int] = dict.fromkeys(TOKEN_FIELDS, 0)
     unpriced_models: set[str] = set()
+    recent = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cache_read_tokens": 0,
+        "reasoning_tokens": 0,
+        "sessions": 0,
+    }
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RECENT_WINDOW_DAYS)
 
     for item in listing.get("items", []):
         full = httpx.get(
@@ -178,6 +196,15 @@ def main() -> int:
         for field in TOKEN_FIELDS:
             unpriced_grand[field] += unpriced[field]
         marker = f" (unpriced: {','.join(sorted(models))})" if models else ""
+        if _created_within(item.get("created_at"), cutoff):
+            recent["sessions"] += 1
+            for field in (
+                "prompt_tokens",
+                "completion_tokens",
+                "cache_read_tokens",
+                "reasoning_tokens",
+            ):
+                recent[field] += session[field]
         fresh = max(session["prompt_tokens"] - session["cache_read_tokens"], 0)
         title = (item.get("title") or "")[:28]
         print(
@@ -197,6 +224,22 @@ def main() -> int:
         f"({hit_rate:.0f}% hit) out={grand['completion_tokens']} "
         f"reasoning={grand['reasoning_tokens']}"
     )
+    # Say which number describes the code as it is now. The lifetime figure is
+    # a ledger: it keeps sessions that ran before a caching fix, so it stays low
+    # long after the fix and is not evidence about the current build.
+    if recent["sessions"]:
+        recent_rate = (
+            recent["cache_read_tokens"] / recent["prompt_tokens"] * 100
+            if recent["prompt_tokens"]
+            else 0
+        )
+        recent_fresh = max(recent["prompt_tokens"] - recent["cache_read_tokens"], 0)
+        print(
+            f"        lifetime and predate any fix; the last "
+            f"{RECENT_WINDOW_DAYS}d ({recent['sessions']} sessions) is "
+            f"fresh={recent_fresh} cached={recent['cache_read_tokens']} "
+            f"({recent_rate:.0f}% hit)"
+        )
     print(f"daemon sessions ~${sessions:.4f}")
     if unpriced_models:
         print(
@@ -253,6 +296,24 @@ def main() -> int:
     )
     print("A model missing from the table is reported as a token count, not a price.")
     return 0
+
+
+def _created_within(value: object, cutoff: datetime) -> bool:
+    """Was this session created at or after ``cutoff``?
+
+    An unparsable or absent timestamp counts as *not* recent: the recent figure
+    is the one that claims to describe the current build, so it should not
+    absorb sessions whose age is unknown.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        created = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created >= cutoff
 
 
 if __name__ == "__main__":

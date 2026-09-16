@@ -44,6 +44,23 @@ Run from the repository root instead and the same command collects the `stress`
 suite as well and does not finish. The `acp_live` and `stress` markers are
 excluded by default; they are not part of a normal gate.
 
+## A check that is not a test
+
+```bash
+python3 tools/probe_cache.py          # prompt caching, per session
+python3 tools/probe_cache.py --days 4 # ...over a wider window
+```
+
+Caching fails silently: the only symptom is the bill, and nothing in the suites
+notices. This reads the daemon's own usage records — it dispatches no work and
+costs nothing — and fails when a session with three or more provider calls
+reports a near-zero hit rate, which is the signature of the prompt prefix
+changing between calls. Its default window is half a day on purpose: it answers
+"is the current code caching", and older sessions in this deployment legitimately
+scored zero before H8 item 1 was fixed. A widened window reporting those is
+reporting history, not a regression. `docs/research/friction-log.md` has the
+worked example, including a cause that measurement ruled out.
+
 ## Known environment-dependent failures
 
 - `tests/tools/file_editor/utils/test_shell_utils.py::test_check_tool_installed_python`
