@@ -60,6 +60,7 @@ from agentrt.sdk.conversation.impl.local_conversation import (
 )
 from agentrt.sdk.conversation.persistence_const import BASE_STATE
 from agentrt.sdk.conversation.response_utils import (
+    get_agent_final_answer,
     get_agent_final_response,
     index_of_event,
 )
@@ -2170,6 +2171,7 @@ class EventService:
             AgentResponseState.PARTIAL,
         )
         response: str | None = None
+        finish_reason: str | None = None
         if scoped or (
             result_state is AgentResponseState.UNAVAILABLE and boundary is None
         ):
@@ -2177,7 +2179,7 @@ class EventService:
             # boundary at all -- whose last answer is all there is. A pending
             # request gets null: extracting here would return the previous
             # request's answer across the boundary, the defect this removes.
-            response = get_agent_final_response(events, after_id=boundary)
+            response, finish_reason = get_agent_final_answer(events, after_id=boundary)
         if scoped:
             last_tool, last_progress_at, error = self._scan_request_tail(
                 events, boundary_index
@@ -2191,6 +2193,12 @@ class EventService:
         return AgentResponseResult(
             response=response,
             state=result_state,
+            # H8 item 4. Reported next to the answer because it is the only
+            # thing that says whether the answer is *whole*: `length` means the
+            # provider stopped at the token limit, and a caller that cannot see
+            # that has no way to know its partial text is partial.
+            finish_reason=finish_reason,
+            truncated=finish_reason in {"length", "max_output_tokens"},
             # The boundary describes an answer that exists. A pending request
             # has no answer, so naming the previous boundary here would claim
             # the wrong input.

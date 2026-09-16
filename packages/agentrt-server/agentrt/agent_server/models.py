@@ -758,6 +758,25 @@ class AgentResponseResult(BaseModel):
         default=AgentResponseState.UNAVAILABLE,
         description="One of pending, final, partial, unavailable.",
     )
+    finish_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why the provider stopped producing the final answer, as it "
+            "reported it: 'stop', 'tool_calls', 'length', ... Null when the "
+            "provider did not say, and also for an answer that came from a "
+            "finish tool call, where the reason is 'tool_calls' and says "
+            "nothing about completeness. H8 item 4."
+        ),
+    )
+    truncated: bool = Field(
+        default=False,
+        description=(
+            "Whether the answer was cut off by a token limit rather than "
+            "finished -- the derived form of finish_reason, so a caller does "
+            "not have to know that chat completions say 'length' while the "
+            "Responses API says 'max_output_tokens'."
+        ),
+    )
     request_message_id: str | None = Field(
         default=None,
         description=(

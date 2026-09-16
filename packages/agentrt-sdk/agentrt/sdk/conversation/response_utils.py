@@ -46,11 +46,30 @@ def get_agent_final_response(
     Returns:
         The final response message from the agent, or empty string if not found.
     """
+    return get_agent_final_answer(events, after_id=after_id)[0]
+
+
+def get_agent_final_answer(
+    events: Sequence[Event], *, after_id: EventID | None = None
+) -> tuple[str, str | None]:
+    """The final response, and why the provider stopped producing it.
+
+    Returns ``(text, finish_reason)``. The second element is only ever set for
+    the text-message case: a finish *tool* call is the agent choosing to stop,
+    and the provider's reason for that response is ``tool_calls``, which says
+    nothing about whether the answer was cut off. ``None`` therefore means
+    either "no answer" or "the provider did not report one", and callers that
+    need to tell those apart should read the text as well.
+
+    H8 item 4. Split out of :func:`get_agent_final_response` rather than
+    duplicated, so the boundary rule is stated once -- `get_agent_final_response`
+    is this function's first element.
+    """
     boundary = -1
     if after_id is not None:
         index = index_of_event(events, after_id)
         if index is None:
-            return ""
+            return "", None
         boundary = index
 
     # Find the last finish action or message event from the agent. Walk the log
@@ -68,11 +87,11 @@ def get_agent_final_response(
         ):
             # Extract message from finish tool call
             if event.action is not None and isinstance(event.action, FinishAction):
-                return event.action.message
+                return event.action.message, None
             else:
                 break
         # Case 2: text message with no tool calls (MessageEvent)
         elif isinstance(event, MessageEvent) and event.source == "agent":
             text_parts = content_to_str(event.llm_message.content)
-            return "".join(text_parts)
-    return ""
+            return "".join(text_parts), event.llm_message.finish_reason
+    return "", None

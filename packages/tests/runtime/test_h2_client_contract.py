@@ -150,9 +150,7 @@ def test_result_error_adds_a_deterministic_progress_summary() -> None:
 def test_result_non_error_has_no_progress_summary() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/agent_final_response"):
-            return httpx.Response(
-                200, json={"response": "done", "state": "final"}
-            )
+            return httpx.Response(200, json={"response": "done", "state": "final"})
         return httpx.Response(200, json=_conversation(execution_status="finished"))
 
     client = _mock_client(handler)
@@ -349,3 +347,73 @@ def test_artifacts_path_falls_back_to_workspace_when_not_a_report(
     result = client.artifacts(SESSION, path="only_in_workspace.txt")
     assert result["content"] == "workspace content"
     assert result["source"] == "workspace"
+
+
+def test_result_carries_finish_reason_and_truncated() -> None:
+    """H8 item 4 at the client boundary.
+
+    The server derives `truncated` so a caller does not have to know that chat
+    completions say `length` while the Responses API says `max_output_tokens`;
+    the client's job is not to drop either on the way past.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "1\n2\n3",
+                    "state": "final",
+                    "execution_status": "finished",
+                    "finish_reason": "length",
+                    "truncated": True,
+                },
+            )
+        return httpx.Response(200, json=_conversation())
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["finish_reason"] == "length"
+    assert payload["truncated"] is True
+
+
+def test_result_says_a_whole_answer_is_whole() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "ok",
+                    "state": "final",
+                    "execution_status": "finished",
+                    "finish_reason": "stop",
+                    "truncated": False,
+                },
+            )
+        return httpx.Response(200, json=_conversation())
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["finish_reason"] == "stop"
+    assert payload["truncated"] is False
+
+
+def test_a_daemon_that_does_not_report_the_reason_adds_no_key() -> None:
+    """An older daemon answers without the fields; the result must not invent them."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "ok",
+                    "state": "final",
+                    "execution_status": "finished",
+                },
+            )
+        return httpx.Response(200, json=_conversation())
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert "finish_reason" not in payload
+    assert "truncated" not in payload

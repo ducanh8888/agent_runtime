@@ -196,6 +196,8 @@ SETTLED_STATUSES = frozenset({"finished", "error", "stuck", "paused"})
 #: explicit empty value.
 _OPTIONAL_RESPONSE_KEYS = (
     "request_message_id",
+    "finish_reason",
+    "truncated",
     "iterations_used",
     "iterations_remaining",
     "last_completed_tool",

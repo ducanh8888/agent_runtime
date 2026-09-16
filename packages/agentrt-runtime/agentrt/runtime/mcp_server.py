@@ -297,6 +297,13 @@ def result(
 
     session is the short id or the full UUID.
 
+    `finish_reason` says why the provider stopped, and `truncated` is the
+    derived form of it: `truncated: true` means the answer was cut off at a
+    token limit rather than finished, so its text is real but incomplete. Read
+    it before treating an answer as whole -- a cut-off answer looks exactly like
+    a complete one otherwise. Both are absent from a daemon too old to report
+    them, which is not the same as `false`.
+
     `result_length` is always reported, so you can size an answer before moving
     it. `offset` and `max_chars` return a window of it instead of all of it --
     page a long answer with them rather than pulling a megabyte you will not
@@ -466,7 +473,9 @@ def wait_any(
     - `still_running` -- the timeout ended the wait. These are NOT failures and
       carry no partial output; wait again or read `status`.
 
-    A settled item also carries its `title`, at no extra cost. `include_usage`
+    A settled item also carries its `title` at no extra cost, and the same
+    `finish_reason` / `truncated` pair `result` reports -- so a fan-out can tell
+    a whole answer from one that was cut off without a second call. `include_usage`
     adds a `usage` block to each settled item and is the one field that costs a
     request per settled session -- worth setting for a single session, wasteful
     across a fan-out. Either way a settled item is the whole answer: this call

@@ -1101,6 +1101,14 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         """Convert a raw :class:`ModelResponse` into an :class:`LLMResponse`."""
         first_choice = resp["choices"][0]
         message = Message.from_llm_chat_message(first_choice["message"])
+        # H8 item 4: carry why the provider stopped, so a `length` answer (cut
+        # off at the token limit) is distinguishable from a finished one by the
+        # time it reaches a caller. Read defensively -- an older or unusual
+        # response may not carry the field, and "not reported" is a real answer
+        # that must not be turned into "stop".
+        finish_reason = getattr(first_choice, "finish_reason", None)
+        if finish_reason:
+            message = message.model_copy(update={"finish_reason": finish_reason})
         return LLMResponse(
             message=message,
             metrics=self.metrics.get_snapshot(),
@@ -1111,6 +1119,26 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         """Convert a raw :class:`ResponsesAPIResponse` into an :class:`LLMResponse`."""
         output_seq = cast(Sequence[Any], resp.output or [])
         message = Message.from_llm_responses_output(output_seq)
+        # The Responses API reports incompleteness rather than a stop reason:
+        # a response that hit `max_output_tokens` is `incomplete` with that
+        # detail. Mapped onto the same field so `Message.truncated` recognises
+        # both APIs, which is the whole reason the derivation lives in one
+        # place.
+        if getattr(resp, "status", None) == "incomplete":
+            # The detail arrives as a dict from litellm and as an object from
+            # some paths, so read both shapes: a `getattr`-only read silently
+            # loses `max_output_tokens` on the dict form, which reports a
+            # truncated answer as complete -- the one outcome this exists to
+            # prevent.
+            detail = getattr(resp, "incomplete_details", None)
+            reason = (
+                detail.get("reason")
+                if isinstance(detail, dict)
+                else getattr(detail, "reason", None)
+            )
+            message = message.model_copy(
+                update={"finish_reason": reason or "incomplete"}
+            )
         return LLMResponse(
             message=message,
             metrics=self.metrics.get_snapshot(),

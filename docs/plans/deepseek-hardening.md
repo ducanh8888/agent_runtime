@@ -94,10 +94,10 @@ Named, so "done" is checkable:
 | # | Item | State |
 |---|---|---|
 | 1 | H8 item 12 -- start deadline for a run that never produces its first event | **done** (`38a2faf`) |
-| 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | open |
+| 2 | H8 item 4 / group C -- persist and report `finish_reason` / `truncated` | **done** (`<hash>`) |
 | 3 | H9 item 3 -- role-shaped profiles | **closed as decided, not built** -- reason below |
 | 4 | `_progress_summary`'s `JSONDecodeError` escape, the twin of the one fixed in `wait` | **already done** (`06684f9`) -- listed as open here from memory rather than from the code; the widening and its test were in that commit |
-| 5 | A `usage`-vs-provider-bill reconciliation check | **done** (`<hash>`) -- `tools/reconcile_usage.py` |
+| 5 | A `usage`-vs-provider-bill reconciliation check | **done** (`fe402de`) -- `tools/reconcile_usage.py` |
 
 Row 3, closed without building: `AgentProfile`'s `extra="forbid"` plus
 `AGENT_PROFILE_SCHEMA_VERSION = 2` make a description field a persisted-schema
@@ -706,11 +706,55 @@ untested). Items are grouped by the consumer's own severity labels.
    should learn that. `wait_*` items inherit `result_length` through `result()`
    and keep returning the text whole. Verified: all 12 new tests fail on the
    pre-fix source; 1016 tests pass.
-4. **Silent truncation (item 4).** Persist and report `finish_reason` (or an
-   equivalent explicit `truncated: bool`) on the final message, and keep the
-   untruncated text retrievable through the new paged `result` from item 3
-   rather than only through raw events. A `final_summary` (H3's finalize
-   summary) needs the same field.
+4. **Silent truncation (item 4). Done, 2026-09-17 (`<hash>`).** Persist and
+   report `finish_reason` (or an equivalent explicit `truncated: bool`) on the
+   final message, and keep the untruncated text retrievable through the new
+   paged `result` from item 3 rather than only through raw events. A
+   `final_summary` (H3's finalize summary) needs the same field.
+
+   **Where it went, and why there.** Persisted on `Message` (`finish_reason:
+   str | None`), which is what rides inside the final `MessageEvent` -- so it is
+   durable through resume and a restart for free, rather than being recomputed
+   from a live response that no longer exists. `truncated` is derived from it as
+   a property on `Message`, because the two APIs say it differently: chat
+   completions report `length`, the Responses API reports an incomplete
+   response with `max_output_tokens`. Keeping both spellings in one place is
+   what lets the server and the client report a single boolean.
+   **Rejected:** carrying the reason only on `LLMResponse` (not persisted, gone
+   by the time anyone asks); and a per-call-site mapping (three spellings in
+   three layers).
+
+   **Populated at the two builders** -- `_build_completion_result` and
+   `_build_responses_result` -- which is every path: sync and async, chat and
+   Responses, streaming included, since all four funnel through them. A
+   response that does not carry the field leaves it `None`, which is reported as
+   `None` and never defaulted to `stop`: "the provider did not say" and "it
+   finished" are different answers and only one is safe to act on.
+
+   **Surfaced** on `AgentResponseResult` as `finish_reason` plus the derived
+   `truncated`, which the client already forwards verbatim, so `result()` and
+   settled `wait_*` items carry both -- the fan-out case in the item's own
+   words. `get_agent_final_answer` was split out of
+   `get_agent_final_response` so the boundary rule is stated once and the text
+   and its reason come from the same message.
+
+   **The `final_summary` half is not done, and the reason is that it cannot be
+   uniformly true:** a summary is a fresh tools-disabled completion of the
+   recorded answer, not the recorded answer, so its own `finish_reason` would
+   describe the summary call rather than the work. Recording the *answer's*
+   reason beside it is what `result` already does.
+
+   Verified end to end against the real provider, not only against mocks: a
+   request cut off at 16 tokens returns `finish_reason='length'` through the
+   production builder with `truncated=True`, and a request allowed to finish
+   returns `'stop'` with `truncated=False`. 16 tests at the LLM layer, 3 at the
+   server projection, 3 at the client boundary; the LLM ones fail behaviourally
+   when the propagation is removed. 1075 tests pass across the affected suites.
+   **One defect found by that measurement:** `incomplete_details` arrives as a
+   dict on some paths and an object on others, and an attribute-only read loses
+   `max_output_tokens` on the dict form -- reporting a truncated answer as
+   complete, which is the single outcome this item exists to prevent. Both
+   shapes are now covered by a parametrised test.
 
 *Trung bình (medium):*
 

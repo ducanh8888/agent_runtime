@@ -241,6 +241,31 @@ class Message(BaseModel):
         description="OpenAI Responses reasoning item from model output",
     )
 
+    #: Why the provider stopped generating. Kept as the provider's own word
+    #: rather than normalized, because the interesting distinction is between
+    #: "finished" and "was cut off", and translating losses information the
+    #: caller may want. ``None`` means the provider did not say -- not "stop".
+    finish_reason: str | None = Field(
+        default=None,
+        description=(
+            "Provider-reported stop reason for this message, e.g. 'stop', "
+            "'tool_calls', 'length'. None when the provider did not report one."
+        ),
+    )
+
+    @property
+    def truncated(self) -> bool:
+        """Was this message cut off by a token limit rather than finished?
+
+        The provider's word differs by API -- ``length`` for chat completions,
+        ``max_output_tokens`` for the Responses API -- so both are recognised
+        here instead of at every call site. Anything else, including a missing
+        ``finish_reason``, is not called truncated: reporting a cut-off answer
+        as complete is the failure this exists to prevent, and so is the
+        reverse.
+        """
+        return self.finish_reason in {"length", "max_output_tokens"}
+
     # Deprecated fields that were moved to to_chat_dict() parameters.
     # These are silently removed for backward compatibility when loading old events.
     # Kept permanently to ensure old conversations can always be loaded.

@@ -498,3 +498,83 @@ def test_a_pending_request_reports_no_progress_age() -> None:
     result = service._get_agent_response_result_sync()
 
     assert result.progress_age_seconds is None
+
+
+def test_projection_reports_a_truncated_answer_as_truncated() -> None:
+    """H8 item 4 at the surface: a cut-off answer must say so.
+
+    `finish_reason` is carried from the provider response onto the message and
+    persists with the event, so the projection reads it from the same place the
+    text comes from -- which is why the answer and the reason cannot disagree
+    about which message they describe.
+    """
+    from agentrt.sdk.event import MessageEvent
+    from agentrt.sdk.llm import Message, TextContent
+
+    service = _service(
+        [
+            _user("u1", "count to 400"),
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text="1\n2\n3")],
+                    finish_reason="length",
+                ),
+            ),
+        ],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.FINISHED,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.response == "1\n2\n3"
+    assert result.finish_reason == "length"
+    assert result.truncated is True
+
+
+def test_projection_reports_a_finished_answer_as_whole() -> None:
+    from agentrt.sdk.event import MessageEvent
+    from agentrt.sdk.llm import Message, TextContent
+
+    service = _service(
+        [
+            _user("u1", "say ok"),
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text="ok")],
+                    finish_reason="stop",
+                ),
+            ),
+        ],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.FINISHED,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.finish_reason == "stop"
+    assert result.truncated is False
+
+
+def test_projection_defaults_to_whole_when_no_reason_was_recorded() -> None:
+    """A session persisted before the field existed reports nothing, not a guess."""
+    service = _service(
+        [
+            _user("u1", "say ok"),
+            _agent("a1", "ok"),
+        ],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.FINISHED,
+    )
+
+    result = service._get_agent_response_result_sync()
+
+    assert result.finish_reason is None
+    assert result.truncated is False
