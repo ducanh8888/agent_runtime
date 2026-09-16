@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
+from agentrt.agent_server import config as server_config
 from agentrt.agent_server.config import finalize_summary_enabled
 from agentrt.agent_server.conversation_lease import (
     DEFAULT_LEASE_TTL_SECONDS,
@@ -74,13 +75,19 @@ from agentrt.sdk.credential import (
     VersionedCredentialBinding,
 )
 from agentrt.sdk.event import (
+    ActionEvent,
     AgentErrorEvent,
     ObservationBaseEvent,
+    ObservationEvent,
     StreamingDeltaEvent,
 )
 from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
-from agentrt.sdk.event.error_classification import ErrorClassification, FailureKind
+from agentrt.sdk.event.error_classification import (
+    ErrorClassification,
+    FailureKind,
+    classify_error,
+)
 from agentrt.sdk.event.llm_completion_log import LLMCompletionLogEvent
 from agentrt.sdk.git.exceptions import GitCommandError, GitRepositoryError
 from agentrt.sdk.git.utils import (
@@ -150,6 +157,19 @@ LEASE_RENEW_INTERVAL_SECONDS = 15.0
 # Bounds initial-state push so subscribe_to_events does not stall on a
 # subscriber whose __call__ blocks (e.g. WS with a full TCP send buffer).
 INITIAL_STATE_PUSH_TIMEOUT_SECONDS = 0.5
+
+#: H8 item 12. Every other terminal state is a bare `error`; a run that never
+#: started gets a code that says so, so an orchestrator can tell "the provider
+#: never answered" from "the agent failed" without reading the transcript.
+#: Deliberately *not* a new ConversationExecutionStatus value: the status enum
+#: is persisted and read by clients that would meet an unknown value, and the
+#: closed failure vocabulary already carries the distinction (see H9 item 1,
+#: which is what puts `classification` in front of the caller).
+START_DEADLINE_ERROR_CODE = "RunStartDeadlineExceeded"
+
+#: How often the watchdog re-checks. Coarse on purpose: the question is whether
+#: anything has happened in the last few minutes, not in the last second.
+_START_DEADLINE_POLL_SECONDS = 15.0
 
 
 logger = get_logger(__name__)
@@ -748,6 +768,97 @@ class EventService:
     async def _get_execution_status(self) -> ConversationExecutionStatus:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_execution_status_sync)
+
+    # -- H8 item 12: a run that never starts -------------------------------
+
+    def _record_start_deadline_sync(self, deadline: float) -> None:
+        """Explain a run that produced nothing, and stop calling it `error`.
+
+        Emits the same kind of event the run-loop backstop does, with a code
+        that names this outcome rather than leaving a bare `error`, and a
+        classification from the shared vocabulary. Best-effort: never raises.
+        """
+        if not self._conversation:
+            return
+        try:
+            event = ConversationErrorEvent(
+                source="environment",
+                code=START_DEADLINE_ERROR_CODE,
+                detail=(
+                    f"The run produced no action and no observation within "
+                    f"{deadline:.0f}s of starting, so it was stopped. This is "
+                    "the shape of a provider call that never returned rather "
+                    "than a slow answer: no step completed and no tool was "
+                    "called, so nothing was discarded. The provider's own "
+                    "retry counter is not visible from here, so the number of "
+                    "attempts it made is not reported."
+                ),
+                classification=classify_error(START_DEADLINE_ERROR_CODE),
+            )
+            with self._conversation._state:
+                self._conversation._on_event(event)
+            self._mark_error_status_sync()
+        except Exception:  # noqa: BLE001 -- an error handler must not raise
+            logger.warning("could not record the start-deadline outcome", exc_info=True)
+
+    def _run_has_started(self, baseline_events: int, baseline_iterations: int) -> bool:
+        """Has this run produced its first action, observation or step?
+
+        Deliberately *this* run: the baselines are taken when it starts, so a
+        resumed conversation whose earlier runs called tools does not look
+        started on arrival. The iteration counter is checked as well as the
+        events because a step can complete an LLM call without yet having an
+        action to show for it.
+        """
+        conversation = self._conversation
+        state = getattr(conversation, "_state", None) if conversation else None
+        if state is None:
+            return True  # nothing to watch
+        if getattr(state, "iterations_used", 0) > baseline_iterations:
+            return True
+        for event in state.events[baseline_events:]:
+            if isinstance(event, (ActionEvent, ObservationEvent)):
+                return True
+        return False
+
+    async def _watch_start_deadline(
+        self, baseline_events: int, baseline_iterations: int
+    ) -> None:
+        """Stop a run that has produced nothing by the deadline.
+
+        The deadline is derived from the provider's own retry budget (see
+        `agent_server.config.start_deadline_seconds`), not chosen: a legitimate
+        first call can still be running long after a round number, and killing
+        one would discard real work. What makes this safe where H7 rejected a
+        general stall watchdog is that a run with no step completed and no
+        action persisted has nothing to discard.
+
+        Ordering matters: the run is interrupted first, because the interrupt
+        leaves the conversation PAUSED, and the typed error is recorded after
+        it so ERROR is the status that stands.
+        """
+        deadline = server_config.start_deadline_seconds(self.conversations_dir)
+        if deadline <= 0:
+            return
+        loop = asyncio.get_running_loop()
+        deadline_at = loop.time() + deadline
+        while True:
+            remaining = deadline_at - loop.time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(_START_DEADLINE_POLL_SECONDS, remaining))
+            if self._closing or self._run_has_started(
+                baseline_events, baseline_iterations
+            ):
+                return
+        if self._closing or self._run_has_started(baseline_events, baseline_iterations):
+            return
+        logger.warning(
+            "run produced no action or observation within %.0fs; stopping it",
+            deadline,
+        )
+        await self.interrupt()
+        await loop.run_in_executor(None, self._record_start_deadline_sync, deadline)
 
     def _mark_error_status_sync(self) -> None:
         """Force the conversation into ERROR status (idempotent backstop).
@@ -1351,6 +1462,17 @@ class EventService:
             loop = asyncio.get_running_loop()
 
             async def _run_and_publish():
+                # H8 item 12. Baselines are taken before the run so the watchdog
+                # judges *this* run, not the history a resumed conversation
+                # already carries.
+                _state = getattr(conversation, "_state", None)
+                baseline_events = len(_state.events) if _state is not None else 0
+                baseline_iterations = (
+                    getattr(_state, "iterations_used", 0) if _state is not None else 0
+                )
+                deadline_watch = asyncio.create_task(
+                    self._watch_start_deadline(baseline_events, baseline_iterations)
+                )
                 try:
                     # Prefer the native async path when available so the event
                     # loop is free during LLM I/O.  Fall back to thread-pool
@@ -1396,6 +1518,12 @@ class EventService:
                         )
                     await loop.run_in_executor(None, self._mark_error_status_sync)
                 finally:
+                    # The run is over either way, so the watchdog has nothing
+                    # left to judge; leaving it running would fire against the
+                    # next run's baselines.
+                    deadline_watch.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await deadline_watch
                     # Wait for all pending events to be published via
                     # AsyncCallbackWrapper before publishing the final state update.
                     # This prevents a race condition where the conversation status

@@ -629,16 +629,51 @@ untested). Items are grouped by the consumer's own severity labels.
    Do not attempt a webhook/callback registry in this pass -- no deployment
    need for it has been stated, and it is a different trust boundary (an
    outbound call from the daemon to somewhere).
-12. **0-iteration provider timeouts are not distinguished (item 12, folded into
-    item 4's design).** Add a start deadline: bounded time from dispatch/resume
-    admission to the first persisted event (`ActionEvent` or
-    `ObservationEvent`). This is deliberately narrower than a stall watchdog --
-    H7 already measured and rejected a general one, because a session that
+12. **0-iteration provider timeouts are not distinguished. Done, 2026-09-17
+    (`<hash>`); folded into item 4's design, surfaced through the vocabulary
+    rather than a new status.** A start deadline: bounded time from
+    dispatch/resume admission to the first persisted event (`ActionEvent` or
+    `ObservationEvent`). Deliberately narrower than a stall watchdog -- H7
+    already measured and rejected a general one, because a session that
     produces nothing for minutes while composing one long answer is not
     stalled and killing it discards real work. `iterations_used == 0` with zero
-    events has nothing to discard. On the deadline, surface a distinct
-    execution status (not the existing undifferentiated `error`) naming the
-    provider exception class and attempt count, per item 4 below.
+    events has nothing to discard.
+
+    **The deadline is derived from the provider's own retry budget, not
+    chosen**, which is what keeps it on the safe side of H7's rejection: the
+    deployed profile sets `timeout` 300s and `num_retries` 5, so a legitimate
+    first call can still be running at 1500s and beyond with backoff. The
+    deadline is that budget times 1.5 (2700s here), and it is re-derived from
+    the profile rather than hard-coded, so raising the timeout raises the
+    deadline with it. `AGENTRT_START_DEADLINE_SECONDS` overrides it; zero
+    disables it.
+
+    **A bare `error` was the problem, not the status value.** The item asks for
+    "a distinct execution status (not the existing undifferentiated `error`)",
+    and the audit's own guidance was to reuse the failure vocabulary rather
+    than define a second enumeration. This run's decision, recorded with its
+    rejected alternative: the session ends `error` with a **distinct `code`**
+    (`RunStartDeadlineExceeded`) and a filled-in `classification`
+    (`transient`, `retryable`), which H9 item 1 is what puts in front of the
+    caller. Rejected: a new `ConversationExecutionStatus` member -- the enum is
+    persisted and read by clients that would meet an unknown value, for a
+    distinction the vocabulary already carries. `RunStartDeadlineExceeded` was
+    added to `classify_error`, since a product code that classifies as
+    `unknown` would have defeated the point.
+
+    **The attempt count the item asks for is not reported, and the detail says
+    so** rather than inventing one: the provider's retry counter lives inside
+    the LLM client and is not visible at the layer that owns runs. What the
+    detail does name is the deadline and the fact that no step completed and no
+    tool was called.
+
+    Verified: 11 tests covering what counts as started (an action, an
+    observation via the baselines, a completed step; *not* a bare message, and
+    *not* history from an earlier run), the watchdog firing and not firing,
+    zero disabling it, and the derivation including the unreadable-profile
+    fallback. The firing test fails with `Awaited 0 times` when the watchdog is
+    neutered -- a behavioural failure, not an import error. 177 tests pass
+    across the server suites that exercise the run path.
 
 *Cao (high):*
 

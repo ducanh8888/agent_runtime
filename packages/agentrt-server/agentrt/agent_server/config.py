@@ -55,6 +55,71 @@ def max_shared_writers() -> int:
 
 MAX_INFLIGHT_LLM_ENV = "AGENTRT_MAX_INFLIGHT_LLM"
 
+START_DEADLINE_ENV = "AGENTRT_START_DEADLINE_SECONDS"
+
+#: Slack on the provider's own retry budget when deriving the start deadline.
+START_DEADLINE_SLACK = 1.5
+
+#: Used when the profile cannot be read, so the deadline is still a number
+#: somebody chose rather than an accident of an unreadable file.
+FALLBACK_START_DEADLINE_SECONDS = 1800.0
+
+
+def start_deadline_seconds(conversations_path: Path | None = None) -> float:
+    """How long a run may produce nothing before it is stopped and explained.
+
+    H8 item 12. Measured from admission to the first persisted ``ActionEvent``
+    or ``ObservationEvent``; a run that reaches the deadline with neither has
+    not started, and an orchestrator could not tell that from a run that is
+    merely slow -- both reported ``running`` and then a bare ``error``.
+
+    **Derived from the provider's retry budget, not chosen.** The deployed
+    profile here sets ``timeout`` 300s and ``num_retries`` 5, so a legitimate
+    first call can still be running at 1500s and beyond with backoff between
+    attempts. That is exactly the trap H7 recorded when it rejected a general
+    stall watchdog: a session composing one long answer is not stalled, and
+    killing it discards real work. What makes this deadline safe is narrower --
+    a run with no step completed and no action or observation persisted has
+    nothing to discard.
+
+    ``AGENTRT_START_DEADLINE_SECONDS`` overrides it; zero or negative disables
+    it. The profile is read from beside the conversations directory, which is
+    where the AgentRT deployment puts it (``<state>/profiles/default.json``
+    next to ``<state>/conversations``).
+    """
+    raw = os.getenv(START_DEADLINE_ENV, "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            _logger.warning("%s is not a number; ignoring it", START_DEADLINE_ENV)
+    budget = _provider_retry_budget_seconds(conversations_path)
+    # The fallback is returned as it stands, not multiplied by the slack: it is
+    # a number somebody chose for "the profile is unreadable", and scaling it
+    # would make the constant disagree with the value it documents. (It did:
+    # 1800 * 1.5 = 2700, which is also what a 300s/5-retry profile derives to,
+    # so the two were indistinguishable until the arithmetic was checked.)
+    if budget is None:
+        return FALLBACK_START_DEADLINE_SECONDS
+    return budget * START_DEADLINE_SLACK
+
+
+def _provider_retry_budget_seconds(conversations_path: Path | None) -> float | None:
+    """The active profile's own worst case for one call, or None if unknown."""
+    if conversations_path is None:
+        return None
+    try:
+        profile = json.loads(
+            (conversations_path.parent / "profiles" / "default.json").read_text()
+        )
+        timeout = float(profile.get("timeout") or 0)
+        retries = int(profile.get("num_retries") or 0)
+    except (OSError, ValueError, TypeError):
+        return None
+    if timeout <= 0:
+        return None
+    return timeout * (retries + 1)
+
 
 def max_inflight_llm_requests() -> int:
     """Concurrent in-flight LLM requests this process will allow.

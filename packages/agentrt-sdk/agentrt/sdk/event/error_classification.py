@@ -171,6 +171,12 @@ def classify_error(code: str, detail: str = "") -> ErrorClassification:
 
     # ── fallback code-based classification (generic wrapper codes) ───────
     if code in {
+        # H8 item 12: the run never got past its first call. A product code
+        # rather than a provider exception class, because at that point the
+        # provider has not raised anything -- it simply has not answered. The
+        # kind is the vocabulary's word for that, and retrying is what the
+        # caller can do about it.
+        "RunStartDeadlineExceeded",
         "LLMServiceUnavailableError",
         "LLMTimeoutError",
         "ReadTimeout",
