@@ -785,7 +785,7 @@ untested). Items are grouped by the consumer's own severity labels.
     compliant example. Verified against `test_conversation_tags.py`'s
     existing invalid-key fixture, unaffected (it fails on uppercase, not the
     hyphen).
-    **That verification was incomplete, corrected 2026-09-17 (`<hash>`).** It
+    **That verification was incomplete, corrected 2026-09-17 (`284894b`).** It
     checked one fixture and left the suite red: `test_tags.py` had its own
     `test_validate_tags_invalid_key_with_hyphen` asserting `my-key` raises,
     which the widening deliberately made false -- so `main` carried a failing
