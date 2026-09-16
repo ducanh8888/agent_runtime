@@ -85,6 +85,56 @@ def test_result_pending_is_null_not_the_previous_answer() -> None:
     assert "request_message_id" not in payload
 
 
+def test_result_error_adds_a_deterministic_progress_summary() -> None:
+    """H8 item 10: an errored result carries a tool-call tally, not an LLM
+    summary -- available for free, even after the run already stopped."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "",
+                    "state": "partial",
+                    "request_message_id": "u1",
+                    "iterations_used": 3,
+                    "error": {"code": "MaxIterationsReached", "detail": "limit"},
+                },
+            )
+        if path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {"kind": "ActionEvent", "tool_name": "file_editor"},
+                        {"kind": "ActionEvent", "tool_name": "file_editor"},
+                        {"kind": "ActionEvent", "tool_name": "terminal"},
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    client = _mock_client(handler)
+    payload = client.result(SESSION)
+    assert payload["status"] == "error"
+    assert payload["progress_summary"] == "file_editor x2, terminal x1"
+
+
+def test_result_non_error_has_no_progress_summary() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200, json={"response": "done", "state": "final"}
+            )
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    client = _mock_client(handler)
+    payload = client.result(SESSION)
+    assert "progress_summary" not in payload
+
+
 def test_result_final_empty_is_kept() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/agent_final_response"):
@@ -155,3 +205,28 @@ def test_transcript_includes_errors_and_action_locations() -> None:
     error = by_type["error"]
     assert error["code"] == "MaxIterationsReached"
     assert "maximum iterations" in error["detail"]
+
+
+def test_transcript_strips_ansi_from_terminal_output() -> None:
+    """H8 item 10: raw escape sequences from a terminal-tool observation do
+    not reach a transcript reader as literal bytes."""
+    raw = "[?2004l[32mok[0m\r\n"
+    items = [
+        {
+            "kind": "ObservationEvent",
+            "id": "obs-ansi",
+            "tool_name": "terminal",
+            "observation": {"content": [{"type": "text", "text": raw}]},
+        },
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(200, json={"items": items, "next_page_id": None})
+        return httpx.Response(200, json=_conversation())
+
+    client = _mock_client(handler)
+    events = client.transcript(SESSION)["events"]
+    output = events[0]["output"]
+    assert output == "ok\r\n"
+    assert "\x1b" not in output

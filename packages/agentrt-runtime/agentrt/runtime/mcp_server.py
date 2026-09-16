@@ -285,7 +285,12 @@ def result(session: str) -> dict:
     Reported with it: `error` (sanitized code/detail for this request),
     `iterations_used` / `iterations_remaining`, `last_completed_tool`, and
     `last_progress_at` -- the timestamp of the last persisted event, which is
-    durable progress and does not move during a long model turn.
+    durable progress and does not move during a long model turn. When the
+    session's status is `error`, `progress_summary` also appears: a
+    deterministic tool-call tally from the transcript ("file_editor x4,
+    terminal x2"), not an LLM summary -- `finalize(summary=True)` is that,
+    and spends a model call; this is free and available even after the run
+    has already stopped.
 
     THIS IS THE AGENT'S OWN ACCOUNT OF WHAT IT DID, NOT EVIDENCE THAT IT DID
     IT. An agent that says it verified its output has sometimes only said so.

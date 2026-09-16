@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -280,6 +281,24 @@ def _capped(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + " ... [truncated]"
+
+
+# CSI sequences (`\x1b[...` -- colors, cursor moves, private modes like the
+# reported `\x1b[?2004l` bracketed-paste toggle) and OSC sequences (`\x1b]...`
+# terminated by BEL or ST) from a real terminal session, plus a bare
+# backslash-escaped form (`[32m`) that arrives already-escaped in some
+# JSON payloads rather than as the raw control byte. H8 item 10,
+# 2026-09-17: a terminal-tool observation carried these into the condensed
+# transcript verbatim, which is exactly the payload a *human* reading a
+# terminal renders correctly and a transcript reader does not.
+_ANSI_ESCAPE = re.compile(
+    r"(?:\x1b|\\u001[bB])(?:\[[0-9;?]*[a-zA-Z]|\][^\x07\x1b]*(?:\x07|\x1b\\))"
+)
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove terminal escape sequences from observation text."""
+    return _ANSI_ESCAPE.sub("", text)
 
 
 def _add_action_location(entry: dict, action: object) -> None:
@@ -1346,6 +1365,16 @@ class Client:
         answer. ``state``, ``error``, ``iterations_*``,
         ``last_completed_tool`` and ``last_progress_at`` describe provenance
         and progress.
+
+        ``progress_summary`` is added when the session's status is ``error``:
+        a deterministic tool-call tally computed from the condensed
+        transcript ("file_editor x4, terminal x2, inspect x1"), not an LLM
+        summary -- H3's opt-in `finalize(summary=True)` is that, spends a
+        model call, and is unavailable once a run has already stopped this
+        way. This exists because ``error`` on its own answers "did it fail,"
+        not "how far did it get" -- and the transcript is otherwise the only
+        way to find out. docs/plans/deepseek-hardening.md H8 item 10,
+        2026-09-17.
         """
         resolved = self._resolve_session(session)
         response = self._send(
@@ -1374,7 +1403,37 @@ class Client:
 
         payload = _response_payload(full_id, data)
         payload["status"] = status
+        if status == "error":
+            try:
+                payload["progress_summary"] = self._progress_summary(resolved)
+            except ClientError:
+                pass
         return payload
+
+    def _progress_summary(self, resolved: str) -> str:
+        """Tally tool calls from the transcript into one deterministic line.
+
+        Best-effort: a transcript read that fails (deleted mid-call, daemon
+        hiccup) leaves ``progress_summary`` off the response entirely rather
+        than raising, since this is an addition to ``result``, not its point.
+        """
+        tally: dict[str, int] = {}
+        cursor: str | None = None
+        pages = 0
+        while pages < 5:
+            page = self.transcript(resolved, limit=100, cursor=cursor)
+            for event in page.get("events", []):
+                if event.get("type") == "action":
+                    name = event.get("tool") or "unknown"
+                    tally[name] = tally.get(name, 0) + 1
+            cursor = page.get("next_cursor")
+            pages += 1
+            if not cursor:
+                break
+        if not tally:
+            return "no tool calls completed before the error"
+        parts = [f"{name} x{count}" for name, count in sorted(tally.items())]
+        return ", ".join(parts)
 
     def _attachment_blocks(
         self,
@@ -1773,7 +1832,9 @@ class Client:
                         "type": "observation",
                         "id": item.get("id"),
                         "tool": item.get("tool_name"),
-                        "output": _capped(_join_text(observation.get("content")), 600),
+                        "output": _capped(
+                            _strip_ansi(_join_text(observation.get("content"))), 600
+                        ),
                     }
                 )
             elif kind == "ConversationErrorEvent":
