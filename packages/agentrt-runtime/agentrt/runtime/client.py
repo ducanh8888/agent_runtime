@@ -1563,6 +1563,7 @@ class Client:
         *,
         title: str | None = None,
         tags: dict[str, str] | None = None,
+        from_event_id: str | None = None,
     ) -> dict:
         """Fork a session and give the fork the task.
 
@@ -1574,9 +1575,23 @@ class Client:
         of it.
 
         The fork inherits the source's agent, workspace and permission -- that
-        is what makes it useful -- so there is nothing to choose here except the
+        is what makes it useful -- so there is little to choose here beyond the
         task and its metadata. It runs in the same directory as the source, so
         two writers there are subject to the shared-writer cap.
+
+        ``from_event_id`` bounds *how much* of that history is inherited: the
+        fork copies only the branch up to and including that event -- that event
+        is *included*, so the fork's first LLM context is the source's own turn
+        at that point followed by the task -- instead of copying everything.
+        Useful when the source has run long past the point you want reviewed or
+        continued from: a fork of a finished session otherwise carries its whole
+        history, and its cost. Ids come from ``transcript``, which returns one
+        per entry it emits; note that it does not emit every event kind, so not
+        every event in a session can be named this way.
+
+        Two failure modes are refused rather than passed off as a plain fork: an
+        id the source does not have, and a daemon that does not report the bound
+        back -- so neither can quietly yield a fork of the whole history.
         """
         resolved = self._resolve_session(source)
         body: dict = {}
@@ -1584,6 +1599,8 @@ class Client:
             body["title"] = title
         if tags:
             body["tags"] = _clean_tags(tags)
+        if from_event_id is not None:
+            body["from_event_id"] = from_event_id
         forked = self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/fork",
@@ -1592,12 +1609,28 @@ class Client:
         new_id = forked.get("id")
         if not new_id:
             raise ClientError(f"fork of {source!r} returned no conversation id")
+        if from_event_id is not None:
+            # A daemon older than this parameter accepts the body, ignores the
+            # unknown key and copies the entire history -- answering exactly
+            # like a deliberate full fork. Nothing in the response alone tells
+            # the two apart, so compare against what was asked for. Checked
+            # before the task is sent, so an unbounded fork is never run (and
+            # never billed) on the strength of a bound that was dropped.
+            honored = forked.get("forked_from_event_id")
+            if honored != from_event_id:
+                raise ClientError(
+                    f"fork of {source!r} did not honour from_event_id="
+                    f"{from_event_id!r}: the daemon reported {honored!r}. It "
+                    "may predate this parameter. The fork was created and left "
+                    f"idle as {new_id}; delete it if you do not want it."
+                )
         self.send(new_id, task)
         return {
             "id": new_id,
             "short_id": short_id(new_id),
             "status": _status_of(forked) or self.status(new_id).get("status"),
             "forked_from": resolved,
+            "forked_from_event_id": forked.get("forked_from_event_id"),
             "title": forked.get("title"),
         }
 
@@ -1883,6 +1916,13 @@ class Client:
                 events.append(
                     {
                         "type": "message",
+                        # Carried for the same reason actions/observations do,
+                        # and one more: a message is the natural branch point
+                        # for `dispatch_from(from_event_id=...)`, and this is
+                        # the only tool that hands out event ids. Without it
+                        # the parameter could not be used at a conversation
+                        # boundary at all.
+                        "id": item.get("id"),
                         "role": message.get("role"),
                         "text": _join_text(message.get("content")),
                     }

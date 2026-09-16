@@ -329,6 +329,7 @@ def dispatch_from(
     task: str,
     title: str | None = None,
     tags: dict[str, str] | None = None,
+    from_event_id: str | None = None,
 ) -> dict:
     """Fork a session and give the fork the task.
 
@@ -342,8 +343,27 @@ def dispatch_from(
     read. The fork runs in the source's workspace, so two writers there are
     subject to the shared-writer cap; and a fork of a session that is still
     running copies the history as it stands, not the history it will have.
+
+    `from_event_id` bounds how much history is inherited: the fork copies only
+    the branch up to and including that event, instead of the whole
+    conversation. Reach for it when the source ran well past the point you want
+    continued from -- a fork of a long or finished session otherwise inherits
+    its entire history, and its cost. Get ids from `transcript`, which returns
+    an `id` per entry it emits; it does not emit every event kind, so not every
+    event can be named. The branch point itself is included, so the fork's first
+    LLM context is the source's turn at that point followed by your task, not
+    your task alone. An id the source does not have is refused, and so is a
+    daemon that does not report the bound back, so neither can quietly give you
+    a full-history fork.
     """
-    return _guard(_get_client().dispatch_from, session, task, title=title, tags=tags)
+    return _guard(
+        _get_client().dispatch_from,
+        session,
+        task,
+        title=title,
+        tags=tags,
+        from_event_id=from_event_id,
+    )
 
 
 @mcp.tool()
@@ -495,9 +515,13 @@ def transcript(session: str, limit: int = 30, cursor: str | None = None) -> dict
     Returns events oldest first: messages, each action with its tool, short
     intent, event id and -- for file actions -- the path and line range, each
     observation truncated with its event id, and each error with its sanitized
-    code and detail. Errors used to be dropped here, which made a session that
-    failed look like a clean stop. next_cursor pages backwards into older
-    events; pass it back as cursor.
+    code and detail. Every entry carries its `id`, which is what
+    `dispatch_from(from_event_id=...)` takes -- so this is how you name a branch
+    point. This tool does not emit every kind of event, though: unlisted kinds
+    are skipped rather than shown, so a session's events are a subset of what it
+    actually did and some events cannot be named as a branch point. Errors used
+    to be dropped here, which made a session that failed look like a clean stop.
+    next_cursor pages backwards into older events; pass it back as cursor.
 
     Expect fewer events than you asked for. limit counts raw events and about
     half of those are internal bookkeeping that gets dropped, so a long session

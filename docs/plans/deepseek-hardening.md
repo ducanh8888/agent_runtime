@@ -72,7 +72,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 | H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
-| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry) and the OpenHands-ceremony gate done, 2026-09-17; interrupt visibility (item 6) done for post-init `interrupt()` only (`finalize()`, and the `_ensure_agent_ready` window, still open); role-shaped profiles (item 3) deferred; rest open |
+| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry), the OpenHands-ceremony gate, interrupt visibility (item 6, post-init `interrupt()` only) and the partial-history fork (item 4, as an exact event bound) done, 2026-09-17; item 4's `fork_turns` skipped by decision; item 6's `finalize()` and `_ensure_agent_ready` window open; role-shaped profiles (item 3) deferred; rest open |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -1010,12 +1010,55 @@ sources, corrected from an earlier draft:**
    profiles to also carry a short task-shaped description turns profile
    selection into role selection -- additive to the existing
    `permission`/`llm_profile` fields, not a replacement for them.
-4. **Partial history fork, not only all-or-nothing.** Codex's `fork_turns`
-   accepts `"none"`, `"all"`, or a last-N-turns integer. `dispatch_from`
-   currently forks a source session's history as a single mode; adding an
-   equivalent bound (fork the last N turns, not the whole thing) is a small,
-   precedented extension once item 2's paged result work exists to bound the
-   response size of a long source history.
+4. **Partial history fork, not only all-or-nothing. Done as an exact event
+   bound, 2026-09-17 (`<hash>`); `fork_turns` deliberately not built.** Codex's
+   `fork_turns` accepts `"none"`, `"all"`, or a last-N-turns integer.
+   `dispatch_from` forked a source session's history as a single mode. The
+   server already did the hard part -- `POST /{id}/fork` takes `from_event_id`,
+   `fork_conversation` and `BaseConversation.fork` both honour it, and
+   `tests/agent_server/test_conversation_service.py` already owns its semantics
+   -- so the fix was exposing it: `Client.dispatch_from` and the MCP tool now
+   accept `from_event_id` and send it, and the result surfaces
+   `forked_from_event_id`. **`fork_turns` was the user's decision to skip**:
+   "fork the last N turns" needs a definition of *turn* (a user message plus
+   the agent turns after it? one LLM response?), and picking one wrong cuts
+   history somewhere the caller did not expect, while an exact event id has no
+   such ambiguity. Revisit only if callers ask for turn-shaped sugar.
+   **The part that made this worth more than a parameter pass-through: the
+   parameter was unusable and reading the code did not show it.** `from_event_id`
+   needs an event id, and `transcript` -- the only tool that hands them out --
+   kept `id` for `action`/`observation`/`error` entries but dropped it for
+   `message` entries, so the natural branch point (a conversation boundary)
+   could not be named at all. Found by running a smoke test against a real
+   daemon and asking where the id would come from, not by inspection. Message
+   entries now carry `id` too, which is additive to a shipped tool's output;
+   the tool docstring states it, since the docstrings are what an orchestrator
+   reads. **Verified end to end on the public surface only:** `transcript` gave
+   the id, `dispatch_from(from_event_id=...)` bounded the fork there, and the
+   source's events after the branch point did not leak into the fork (checked
+   against the daemon's own persisted event files, with the fork's lineage
+   stamped `forked_from_event_id` to the requested event). Every test fails on
+   the pre-fix source. **Two things review added, both refused rather
+   than merely reported.** (i) The client now verifies the daemon *honoured* the
+   bound: a daemon predating the parameter accepts the body, ignores the unknown
+   key, copies the whole history and answers exactly like a deliberate full
+   fork, with nothing in the response to tell them apart -- the one silent
+   full-history fork left, and the expensive outcome the parameter exists to
+   prevent. `dispatch_from` compares the reported `forked_from_event_id` against
+   the request and raises before sending the task, naming the created fork so it
+   can be deleted; two tests cover a daemon that omits the field and one that
+   reports a different bound. The cost, stated because it is new and not zero:
+   refusing *after* the fork exists means a skewed daemon leaves an idle fork
+   behind per attempt, recoverable only by the id in the message -- accepted
+   over the alternative of running an unbounded fork. (ii) The docstrings no
+   longer imply every event is
+   nameable: `transcript` silently skips kinds it has no branch for, so its
+   output is a subset of what a session did, and `SystemPromptEvent` -- the one
+   id that yields a zero-history fork -- is among the skipped. The missing
+   branches were deliberately *not* added (off this item's path); the limitation
+   is stated instead. Also stated for callers: the branch point is *included*,
+   so a fork's first LLM context is the source's turn at that point followed by
+   the task, not the task alone.
 5. **A spawn-depth cap.** Codex bounds recursive spawning at
    `agent_max_depth` (default 3) and returns an error instructing the agent to
    solve the task itself past that. `dispatch_from` has no such cap today --
@@ -1098,6 +1141,12 @@ written, one is harder, and the premise of two was only partly right:**
   `from_event_id`, `conversation_service.fork_conversation`, and
   `BaseConversation.fork` all support it -- only the client/MCP wrapper never
   exposes the parameter. Neither needs new server-side work.
+  **Half wrong on item 4, found later while doing it:** the wrapper was not the
+  only gap. Exposing the parameter still left it unusable, because nothing on
+  the MCP surface handed a caller an event id -- `transcript` dropped the `id`
+  on `message` entries. "Only the wrapper never exposes the parameter" was true
+  and insufficient; the audit checked whether the server supported the field,
+  not whether a caller could obtain a value for it. Both halves are done now.
 - **Item 1's premise was partly wrong**: a closed failure-reason vocabulary
   already exists (`ConversationErrorEvent.code` +
   `event/error_classification.py`'s `FailureKind`), and `MaxIterationsReached`
