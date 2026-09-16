@@ -551,6 +551,18 @@ untested). Items are grouped by the consumer's own severity labels.
    terminal. Do not build a generic non-thinking fallback profile as part of
    this item -- that is H8 item 9, a separate, opt-in profile, not an implicit
    silent-fallback (which H0 already excludes as a non-goal).
+
+   **Reproduced live, first-party, 2026-09-17**: session `2e1d9496` (one of
+   this plan's own audit dispatches, `inspect` preset) hit exactly
+   `LLMBadRequestError: litellm.BadRequestError: OpenAIException - The
+   reasoning_content in the thinking mode must be passed back to the API`
+   on its third tool-call turn -- two `file_editor` reads and one `inspect`
+   search in, not after dozens of steps. This raises the confirmed severity
+   above the original consumer report's 2/8 sessions: the failure surfaces
+   this early and this reliably, a short session doing ordinary multi-step
+   work is enough to hit it, not an edge case reached only by long runs.
+   Transcript available via `transcript(session="2e1d9496")` as a fixture
+   seed.
 2. **No completion signal (item 2).** The stdio MCP transport cannot push;
    H7.9 already recorded that limit rather than working around it with
    something fragile. Ship the CLI-side piece that is genuinely missing: a
@@ -887,6 +899,45 @@ sources, corrected from an earlier draft:**
    name it to match this existing convention rather than the REST paths
    underneath.
 
+**Audited against the actual code, 2026-09-17 -- three items were easier than
+written, one is harder, and the premise of two was only partly right:**
+
+- **Items 2 and 4 are cheaper than proposed**, not harder: `Client.wait()`
+  (`client.py:1649-1664`) already attaches `result()` to every settled item --
+  the "second round-trip" item 2 describes does not exist today, only
+  `title`/`usage` are missing from the payload. And `dispatch_from`'s partial
+  fork (item 4) already exists end-to-end -- `POST /{id}/fork`'s
+  `from_event_id`, `conversation_service.fork_conversation`, and
+  `BaseConversation.fork` all support it -- only the client/MCP wrapper never
+  exposes the parameter. Neither needs new server-side work.
+- **Item 1's premise was partly wrong**: a closed failure-reason vocabulary
+  already exists (`ConversationErrorEvent.code` +
+  `event/error_classification.py`'s `FailureKind`), and `MaxIterationsReached`
+  already classifies into it. The real gap is projecting that existing data
+  onto `status`/`result`, not inventing an enum -- H8 items 4/12 should reuse
+  `ErrorClassification`, not define a second one.
+- **Item 6 confirmed directly, unprompted**: one of this section's own audit
+  dispatches hit `LLMBadRequestError` naming exactly H8 item 1's failure
+  (recorded below) three tool calls in, and its `InterruptEvent` is real,
+  persisted (`local_conversation.py:2638`) and confirmed not
+  `LLMConvertibleEvent` -- invisible to the agent on resume, as claimed.
+- **Item 3 needs a real decision, not just implementation**:
+  `AgentProfile`'s `extra="forbid"` plus `AGENT_PROFILE_SCHEMA_VERSION = 2`
+  make adding a description field a persisted-schema migration, and today's
+  selection model is strictly one profile per permission preset with a
+  mismatched `llm_profile` refused outright (`client.py:1071-1106`) -- "role
+  selection" needs a new selection dimension, not an additive field on top of
+  `permission`/`llm_profile` as written here.
+- **Item 5's "check whether" is answered**: no dispatched or forked session
+  has any tool that could call `dispatch_from` -- no permission preset grants
+  `delegate`, the SDK task-tool set, or the AgentRT MCP server itself, and
+  `enable_sub_agents=False` on every AgentRT profile. Internal recursion is
+  structurally unreachable today; a depth cap would police the *orchestrator*
+  calling `dispatch_from` repeatedly, not live nesting -- and needs "depth"
+  defined first, since `fork` inherits the source's `parent_conversation_id`
+  rather than setting one, making forks siblings of their source, not
+  children of a chain.
+
 **What cannot converge, and why not -- stated so nobody spends effort chasing
 it later:**
 
@@ -958,14 +1009,52 @@ inferred:
   enough to call either way. Verify before deciding whether to gate it; do not
   extend the `delegate` finding to this one by resemblance alone.
 
-The fix this points to is narrow and reversible: skip
-`register_builtins_agents`/VSCode-service init from AgentRT's *own* startup
-wiring (`agentrt.runtime.server_launch`/`bootstrap`, which already customizes
-what the vendored server initializes -- the workspace-kind registration H7
-already added there is the same kind of seam), not edit the vendored
-`agentrt.tools`/`agentrt.sdk` files directly. Deleting vendored code trades
-away easy upstream sync for a saving this seam already gets more safely,
-which is why H9 proposes gating the call, not removing the files it calls.
+**Corrected by an audit dispatch, 2026-09-17 -- the seam claimed above does
+not exist, and one factual claim was wrong.** Read directly (`server_launch.py`
+in full, `bootstrap.py` in full, the actual import chain from
+`daemon.py`→`server_launch.py`→`agent_server.__main__`→`api.py`→
+`tool_router.py`): `server_launch.py` only *imports* workspace classes
+additively to register union members -- it suppresses nothing, so "the same
+kind of seam" H7 used there is not analogous to skipping a call. `bootstrap.py`
+runs **client-side**, invoked lazily by `Client._ensure_ready()` in the
+MCP/CLI process, and structurally cannot reach the daemon's own import-time
+registration at all. The real call site is
+`agentrt/agent_server/tool_router.py:15-18`, a module-level side effect
+(`register_default_tools`, `register_builtins_agents`, `register_gemini_tools`,
+`register_planning_tools`, all called at import) reached through
+`api.py`→`__main__.py`→`server_launch.py`→`daemon.py`. And the Chromium claim
+above is **wrong**: `discover_builtin_agents(enable_browser=True)` only filters
+a name set, it does not probe Chromium; the actual browser-tool cost is
+`register_default_tools(enable_browser=True)` (`tool_router.py:15`, called
+regardless of the builtin-agents gate) and `ToolPreloadService` under
+`AGENTRT_PRELOAD_TOOLS`, both untouched by gating `register_builtins_agents`
+alone.
+
+**Corrected scope, split into what each fix actually is:**
+
+- **VSCode: genuinely one line, but not at the claimed seam.**
+  `AGENTRT_ENABLE_VSCODE=0` already exists
+  (`agent_server/config.py:364-367`, `env_parser.py`'s bool parser) and
+  `get_vscode_service()` already returns `None` when it is set
+  (`vscode_service.py:229-255`). Add it to `daemon._daemon_env`
+  (`agentrt/runtime/daemon.py:156-180`, the same dict that already sets
+  `AGENTRT_PERSISTENCE_DIR` and friends) -- no vendored edit, and the seam
+  that actually exists.
+- **`register_builtins_agents`: blocked on there being no seam at all**, not
+  merely more work than estimated. No config field, no env gate. The only
+  route that touches no vendored file is an import-time monkeypatch of
+  `tool_router`'s bound name inside `server_launch.main()` before
+  `runpy.run_module` runs -- fragile, not a real precedent, and not what was
+  proposed. The honest options are: accept a small vendored edit (one
+  `AGENTRT_*`-gated `if` in `tool_router.py`, matching the style
+  `enable_vscode` already uses elsewhere in the same package), or accept the
+  monkeypatch and document why. Either is a real decision, not a
+  already-safe seam to execute against -- do not start this one without
+  picking.
+- **Chromium/browser preload is a separate item this section conflated with
+  builtin-agent registration.** If startup cost is the actual goal, it needs
+  its own line: `AGENTRT_PRELOAD_TOOLS=0` (or equivalent), independent of
+  whatever happens to `register_builtins_agents`.
 
 **Primary seams:** `mcp_server.py`/`client.py` (new `wait`/`dispatch` variant,
 terminal-reason enum, `dispatch_from`'s fork-depth and partial-history
