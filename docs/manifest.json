@@ -42,8 +42,22 @@
       "authority": "informative"
     },
     {
+      "id": "reference.architecture",
+      "path": "docs/reference/architecture.md",
+      "type": "reference",
+      "lifecycle": "current",
+      "authority": "reference"
+    },
+    {
       "id": "reference.daemon-behavior",
       "path": "docs/reference/daemon-behavior.md",
+      "type": "reference",
+      "lifecycle": "current",
+      "authority": "reference"
+    },
+    {
+      "id": "reference.security-permissions",
+      "path": "docs/reference/security-permissions.md",
       "type": "reference",
       "lifecycle": "current",
       "authority": "reference"

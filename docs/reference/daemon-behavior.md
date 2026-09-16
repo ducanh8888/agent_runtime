@@ -81,9 +81,14 @@ session that is a silent no-op: HTTP 200, message stored, nothing happens. Any
 - `sort_order` is an enum: `TIMESTAMP` (oldest first, the default) or
   `TIMESTAMP_DESC`. Lowercase `asc`/`desc` return 422.
 - `page_id` is the cursor; a page carries `next_page_id`, null on the last page.
-- Filters: `kind` (e.g. `ActionEvent`, `MessageEvent`), `source` (`agent`,
-  `user`, `environment`), `body` (case-insensitive substring),
-  `timestamp__gte` / `timestamp__lt`.
+- Filters: `kind`, `source` (`agent`, `user`, `environment`), `body`
+  (case-insensitive substring), `timestamp__gte` / `timestamp__lt`.
+  **`kind` is the fully-qualified class path**, not the short name: the server
+  compares `f"{cls.__module__}.{cls.__name__}"`, so
+  `?kind=agentrt.sdk.event.llm_convertible.action.ActionEvent` matches and
+  `?kind=ActionEvent` matches nothing. A wrong `kind` returns an empty page
+  rather than an error, so this fails silently -- measure it rather than
+  trusting a filter that looks right.
 - `GET .../events/count` returns a bare integer.
 - `GET .../events` (no `/search`) is a **batch fetch by id** and requires a
   request body; called bare it returns 422.
@@ -177,10 +182,15 @@ back off six sessions: the two dispatched with an explicit limit report it, the
 other four report 500.
 
 Running out lands the session in `execution_status: "error"` -- not `finished`
--- and the daemon carries **no message for it**. There is no counter and no
-error field in the payload, so a session that exhausted its steps and one that
-genuinely failed are indistinguishable from `status` alone. What separates them
-is the transcript: exhaustion ends mid-task after about that many steps.
+-- and the daemon carries **no message for it**: `ConversationInfo` has no
+`error` field, so the status alone does not say why. The *counter*, however, is
+in the payload, and `status` reports it: `iterations_used` and
+`iterations_remaining` (see `agentrt/runtime/client.py`). A session that
+exhausted a limit you set is therefore distinguishable from one that genuinely
+failed without reading the transcript -- compare `iterations_used` against the
+`max_iterations` you asked for. This section previously claimed the two were
+indistinguishable; that was wrong, and the MCP `status` docstring said the
+opposite all along.
 
 The agent is not warned before the cut, and the budget is **per run**. A `send`
 after exhaustion starts a fresh allowance of the same size, so a limit of 5 with
@@ -188,9 +198,15 @@ three follow-ups is up to twenty steps.
 
 ## Tags
 
-`tags` is a **`dict[str, str]`**, not a list. A list is a 500 from the daemon,
-and so is a non-string value -- both arrive as an opaque server error rather
-than as "that is not a tag", so a client should coerce.
+`tags` is a **`dict[str, str]`**, not a list. What happens when it is not
+depends on the shape, and neither is a clean "that is not a tag":
+
+- tags as a list, or a value that is a scalar with no length (`5`, `null`,
+  `true`), is a **500** -- the validation walks the mapping and calls `len()`.
+- a value that is itself a **list element** (`{"k": [1, 2]}`) is a sanitized
+  **422**, because the shape check catches it first.
+
+Either way a client should coerce rather than send a near-miss and hope.
 
 `PATCH /api/conversations/{id}` **replaces** the whole map rather than merging
 into it, so the obvious "add one tag" call silently drops every tag already
@@ -201,13 +217,19 @@ show them without a request per row.
 
 ## Workspace kinds are a union that has to be imported
 
-`BaseWorkspace` is a discriminated union keyed on `kind`, and a member of it
-exists only once the module defining it has been imported. The server imports
-the local and remote kinds and nothing else, so a request naming
-`kind: "DockerWorkspace"` is rejected during validation with an
-`assertion_error` whose message is **empty**, and the daemon log shows a
-validation error with no other trace. Importing the class anywhere in the server
-process is enough; `agentrt.runtime.server_launch` does it before handing over.
+`BaseWorkspace` is a discriminated union keyed on `kind`. A request naming
+`kind: "DockerWorkspace"` is rejected during validation with an `assertion_error`
+whose message is **empty**, and the daemon log shows a validation error with no
+other trace.
+
+The cause is not a missing import, which is what this section used to say.
+`StartConversationRequest.workspace` is typed as the **concrete**
+`LocalWorkspace` (`agentrt/sdk/conversation/request.py`), not as the union, so
+validation reaches `LocalWorkspace`'s own `kind` assertion rather than the
+union's member list. Validating the same payload against `BaseWorkspace`
+instead produces a *helpful* message naming the accepted kinds -- which is the
+tell. The next section, on the create path being narrower than the read path,
+is describing this same fact; the two are one thing, not two.
 
 ## The create path is narrower than the read path
 
@@ -222,13 +244,18 @@ So the daemon can describe a container workspace and cannot be asked for one.
 
 ## Workspace files
 
-`GET /api/conversations/{id}/workspace/{path}` serves one file, 200 with
-`text/plain; charset=utf-8` for text, 404 `{"detail": "File not found"}` when
-absent.
+`GET /api/conversations/{id}/workspace/{path}` serves one file, 200, 404
+`{"detail": "File not found"}` when absent. The content type is **guessed from
+the filename extension** (`FileResponse` via `open_guarded_file_response`,
+which passes no `media_type`): a `.md` file comes back `text/markdown;
+charset=utf-8`, and a file with an unknown extension comes back
+`application/octet-stream` rather than `text/plain`.
 
 `GET /api/conversations/{id}/workspace` — the root — **does not list the
 directory.** It is a static mount and answers 404 `{"detail": "No index.html in
-directory"}`. There is no listing endpoint anywhere on the daemon.
+directory"}`. No endpoint lists a workspace's *files*;
+`GET /api/file/search_subdirs` lists **immediate subdirectories** only, which is
+not the same thing and is not what `artifacts` needs.
 
 So `artifacts` cannot enumerate over HTTP. It reads the workspace path from the
 conversation record and walks that directory on the local filesystem, which is

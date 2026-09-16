@@ -255,3 +255,22 @@ workspace.
 - **Shared workspaces are not coordinated.** Two sessions in one directory can
   overwrite each other, and sequencing them is the orchestrator's job.
 - **Sessions are kept until deleted.** Nothing expires.
+
+## Wiring an orchestrator
+
+Both surfaces are stdio, so the client config names an executable:
+
+```bash
+codex  mcp add agentrt -- <absolute path to agentrt-mcp>
+claude mcp add agentrt -- <absolute path to agentrt-mcp>
+```
+
+**Use an absolute path.** `~/.local/bin` is not on the PATH a spawned MCP
+server inherits, so a bare `agentrt-mcp` resolves for your shell and not for the
+process that has to start it.
+
+Codex wiring was verified on 2026-09-09 with `codex-cli` 0.153.4: `codex mcp
+add` writes `[mcp_servers.agentrt]` to `~/.codex/config.toml`, and a session
+dispatched from Codex was confirmed by reading the file it produced rather than
+by its report. Note that `codex exec` behaves differently from an interactive
+session because of an approval gate; see `../research/friction-log.md`.

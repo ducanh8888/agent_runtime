@@ -1,146 +1,40 @@
-# agentrt
+# CLAUDE.md
 
-A local agent runtime driven through MCP: background agent sessions that
-survive the orchestrator exiting. A hard fork of OpenHands' software-agent-sdk
-(`f47083cc`) with `openhands.*` renamed to `agentrt.*`, plus `agentrt.runtime.*`
-which is the only code that is ours.
+[AGENTS.md](AGENTS.md) is the canonical instruction file for this repository:
+layout and ownership, invariants, workflow, test/lint commands, rules for the
+vendored trees, and the definition of done. Read it first. This file adds only
+what is specific to running Claude Code against this checkout.
 
-## Start here
+## Read order
 
-1. [`docs/README.md`](docs/README.md) — the documentation entrypoint.
-   [`docs/manifest.json`](docs/manifest.json) is the machine-readable registry
-   of document type, lifecycle and authority.
-2. `packages/agentrt-runtime/agentrt/runtime/mcp_server.py` — the tool
-   docstrings **are the product's documentation**. Nothing under `docs/` ever
-   reaches a session working in another repository, so operational guidance
-   lives there and is deliberately not duplicated.
-3. `docs/reference/daemon-behavior.md` — what the daemon does that its API does
-   not reveal. Hand this to a session you dispatch to work on agentrt itself.
-4. `docs/research/friction-log.md` — defects ordinary use found after the phases
-   closed. Read it before assuming a test passing means something works.
-5. [DeepSeek hardening plan](docs/plans/deepseek-hardening.md) — active follow-on
-   H0–H7 work, with
-   [self-audit/evidence](docs/research/deepseek-hardening-audit.md).
-   H0 and H1 are complete; H2 is next. The deployment targets direct DeepSeek,
-   thinking enabled and effort `high`; no Sol or cost-driven effort reduction.
-   This plan does not change existing profiles or authorize interrupting live
-   sessions. Read its compatibility and cutover gates before implementation.
+1. [AGENTS.md](AGENTS.md) — the rules.
+2. [docs/README.md](docs/README.md) and its machine-readable
+   [manifest.json](docs/manifest.json) — the documentation registry.
+3. The active plan named by `active_plan` in that manifest — what is being
+   worked on, what is done, and what was deliberately declined.
+4. `packages/AGENTS.md` and `packages/agentrt-server/AGENTS.md` before editing
+   anything under those trees. Those are **upstream** guidance carried along by
+   the fork, not this project's conventions.
 
-## Running it
+## Two things about this checkout that bite
 
-The workspace venv is `packages/.venv`. There is no activate step in use:
+- **A running daemon executes the installed snapshot, not the source tree.**
+  `uv tool install packages/agentrt-runtime` copies the code; a source edit is
+  not live until `--reinstall` *and* a daemon restart. Before concluding that a
+  fix did not work, check which copy the daemon is actually running. For a
+  smoke test against source, start a separate daemon with its own
+  `AGENTRT_STATE_DIR` rather than restarting the one in use.
+- **Pyright resolves imports from `packages/`**, not the repository root.
+  Running it from the root reports unresolved imports for code that is fine.
 
-    ./packages/.venv/Scripts/python.exe -m agentrt.runtime.cli --help   # Windows
-    ./packages/.venv/bin/python -m agentrt.runtime.cli --help           # POSIX
+## Where the rest lives
 
-Installed instead: `uv tool install packages/agentrt-runtime` gives `agentrt`
-and `agentrt-mcp`. The installed copy is a snapshot; source changes need
-`--reinstall`.
-
-Checks, in the order they are worth running:
-
-    tools/cli_loop.py         the full lifecycle through the client core
-    tools/adversarial.py      22 checks against the permission presets
-    tools/probe_artifacts.py  artifacts against a repo-shaped workspace
-    tools/probe_parallel.py   dispatch / collect, in two separate processes
-    tools/mcp_e2e.py          the MCP surface, in-process
-
-`tools/spend.py` reports cost per session, cache-aware. `tools/api_context.py`
-prints the daemon's live REST surface.
-
-## How this work is done
-
-These are not style preferences. Each one cost something to learn and the
-reasons are in `docs/research/friction-log.md` and the phase results.
-
-**Probe before you write a spec.** Endpoint and field names mislead here.
-`goal/*` is a different subsystem; `send` needs `run: true`; the workspace root
-serves `index.html` rather than a listing; `max_iterations` defaults to 500 and
-nothing says so. Every one of those was found by calling the thing, and would
-have been wrong if reasoned about.
-
-**A session's account of its work is a claim, not evidence.** Sessions have
-reported verifying output they never verified. `artifacts` reads what actually
-changed on disk; that is the check. The `result` tool description says this to
-the orchestrator, and it applies to reports written by review sessions too — the
-last one had nine findings, of which two did not survive testing.
-
-**Measure before shipping a fix, especially a security fix.** Refusing any file
-with `st_nlink > 1` closes a real credential leak and also refuses 30,656 of the
-31,402 files in this project's own virtualenv. Counting took one command. The
-instinct that a stricter guard is a safer one is what makes that question easy
-to skip.
-
-**A scratch directory is not a repository.** Two defects survived every test
-because the tests shared the conditions that hid them: `artifacts` listed files
-by path, correct for an empty directory and useless for a repo with a `.venv`;
-and the path guard resolved relative paths against the daemon's own cwd. Probes
-now seed a virtualenv and pre-existing sources before dispatching, on purpose.
-
-**Optimise the input, not the model's behaviour.** Telling a model to deliberate
-less makes it guess sooner. Giving it the interface it must call, and saying how
-far the reference goes — "this is complete for this task, do not verify it
-against the source" — changes what it does. Both sentences are needed; the
-second is the one that works.
-
-**Ask rather than guess.** When a decision is genuinely the user's — surface
-changes, scope, anything that spends their money or touches their machine — ask
-with a recommendation. Do not infer consent from a previous answer.
-
-**Commit and push continuously**, with messages that say what was measured and
-what was rejected, not just what changed.
-
-**Keep documentation machine-readable.** Follow
-[`docs/README.md`](docs/README.md), update `docs/manifest.json` with every
-document move/addition, use lowercase kebab-case paths, and run
-`python3 tools/check_docs.py` before committing documentation changes.
-
-## Constraints that were standing
-
-- A spend cap was agreed at **$2 total including testing**; `tools/spend.py`
-  reports against it. Roughly $0.85 had been spent when this was written.
-- Other work runs on the same machine — a RAG project and its containers.
-  Leave it alone.
-- Cleaning test residue from state directories, installing Python
-  dependencies, and starting or stopping the local daemon were all granted.
-
-## What is open
-
-**Docker.** The persist-path bug is fixed and shipped: `_create_conversation`
-was dumping the already-live `request.workspace` to JSON and letting
-`StoredConversation` re-validate it from that dict, which for `DockerWorkspace`
-meant building a second container that collided with the first and orphaned
-it, every single dispatch. Fixed by excluding `workspace` from the dump and
-reattaching the live object, which lets `DiscriminatedUnionMixin`'s existing
-`isinstance` short-circuit do what it was written for. Verified: one container
-per dispatch, not four; `cli_loop.py` and `adversarial.py` still pass in full
-since this touches the persist path every conversation goes through.
-
-The type stays `LocalWorkspace` on `ConversationConfig.workspace` -- widening
-it was tried again on top of the fix and reverted again, because it now fails
-one layer further in, at a real `assert isinstance(workspace, LocalWorkspace)`
-in `event_service.start()` that does `Path(workspace.working_dir).mkdir(...)`
-against a container path that doesn't exist on the host. `docs/research/docker-recon.md`
-has the full trace. If that gets threaded through -- `event_service.start()`
-and `artifacts` both need it -- `workspace` becomes a preset that genuinely
-contains a session, and a P4 criterion that was withdrawn becomes reachable.
-
-**The test baseline.** `docs/results/p1-baseline-windows.md` is the Windows
-measurement and the plan's rule that results must match it exactly does not
-transfer.
-`docs/results/baseline-linux.md` is the Linux reference: the five `tools/` checks all
-pass there, and it explains why the old numbers could not simply be re-read --
-four checks asserted Windows path syntax rather than containment, two of them
-passing while testing nothing. The vendored pytest suite is still unrecorded on
-Linux.
-
-**Codex is wired up** (codex-cli 0.153.4, 2026-09-09). `codex mcp add agentrt --
-<absolute path to agentrt-mcp>` writes `[mcp_servers.agentrt]` to
-`~/.codex/config.toml`. The absolute path is deliberate: `~/.local/bin` is not
-on the PATH a spawned server inherits. Verified by dispatching a session from
-Codex and checking the file it produced, not the report — see `docs/research/friction-log.md`
-for the approval gate that makes `codex exec` behave differently from an
-interactive session.
-
-`docs/guides/migration.md` covers moving to another machine: what is in git, what
-exists only in the state directory, and what changes on Linux.
+- Which checks to run, and the failures that are environmental rather than
+  yours: [docs/guides/testing.md](docs/guides/testing.md).
+- What the daemon does that its API does not reveal:
+  [docs/reference/daemon-behavior.md](docs/reference/daemon-behavior.md).
+- Defects that ordinary use found after a phase closed, and why each rule in
+  AGENTS.md exists: [docs/research/friction-log.md](docs/research/friction-log.md).
+  Read it before assuming a passing test means something works.
+- Container workspace work, which is open and has a recorded trace:
+  [docs/research/docker-recon.md](docs/research/docker-recon.md).
