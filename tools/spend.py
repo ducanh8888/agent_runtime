@@ -53,6 +53,12 @@ PRICE_TABLE: dict[str, dict] = {
         "off_peak": {"cache_miss": 0.15, "cache_hit": 0.003, "output": 0.60},
         "peak": {"cache_miss": 0.30, "cache_hit": 0.006, "output": 1.20},
     },
+    "deepseek-v4-pro": {
+        "version": "deepseek-2026-09",
+        "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+        "off_peak": {"cache_miss": 0.66, "cache_hit": 0.022, "output": 1.98},
+        "peak": {"cache_miss": 1.32, "cache_hit": 0.044, "output": 3.96},
+    },
 }
 
 #: Names the provider still accepts for a model it has retired, and the current

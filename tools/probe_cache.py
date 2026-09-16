@@ -3,23 +3,30 @@
 
 Costs nothing: it reads the daemon's own usage records and dispatches no work.
 
-Why this exists as a check rather than a note. Prompt caching failed silently
-for weeks and the failure was expensive: on this provider the cached portion is
-roughly an order of magnitude cheaper, and sessions across three days ran at a
-0% hit rate -- hundreds of millions of prompt tokens paid in full -- while every
-test passed and nothing in the product said so. The cause was the
-reasoning-content resend bug (H8 item 1, `39b89ea`): prior assistant tool-call
-turns were rebuilt without their `reasoning_content`, so the prompt differed
-from the one before it on every call and the provider's prefix cache could
-never hit. Fixed, the same sessions report 0.86-0.97.
+Why this exists. The API's own accounting said caching was not happening:
+sessions reported `cache_hit_rate` of 0.00 for a long stretch and 0.86-0.97
+after it, a break that lined up with a code change and was first read as that
+change having fixed caching. **The provider's bill says otherwise, and the bill
+wins.** For 2026-09-16, the same key and day, it reports 76.5M of 78.5M prompt
+tokens served from cache -- 97.6% -- including the very sessions the API scored
+at 0.00. So the tokens were not "paid in full", and the causation first
+recorded here was wrong: what changed at that point was what the *daemon
+recorded*, not what the provider did. The cause of the recording change is not
+established from the records available; it is not the reasoning-content fixed
+by H8 item 1, which is about prompt content and would have shown up in the
+bill.
 
-A cache fail has no symptom other than the bill, so the guard is here.
+What the guard is therefore for: the API's numbers agreeing with themselves. A
+session with many calls and a near-zero recorded hit rate means either caching
+is not happening or the accounting of it is broken, and both are worth knowing
+-- the second is what happened here, and it is why the report an orchestrator
+reads understated the cache hits it was getting. The bill is the arbiter when
+they disagree; check it before concluding which one is wrong.
 
-Thresholds, and why they are where they are: a healthy session on this
-deployment measures 0.86-0.97, and a broken one measures 0.00, so the gap is
-wide and the boundary can be generous. A session with fewer than three provider
-calls is skipped -- its first call cannot hit, and a two-call session is a cold
-start rather than a defect.
+Thresholds: healthy sessions measure 0.86-0.97 and the recorded-broken ones
+0.00, so the gap is wide and the boundary can be generous. A session with fewer
+than three provider calls is skipped -- its first call cannot hit, and a
+two-call session is a cold start rather than a defect.
 
 Usage:  python3 tools/probe_cache.py [--days N] [--all]
 Exit code 0 when nothing in the window looks broken, 1 when something does.
@@ -141,10 +148,11 @@ def main() -> int:
         for line in broken:
             print(line)
         print(
-            "\nA near-zero hit rate on a session with many calls means the "
-            "prompt prefix changes between calls. Check what is being rebuilt "
-            "into the history -- H8 item 1 in the hardening plan is the "
-            "worked example, including what the fix was."
+            "\nA near-zero rate on a session with many calls means either "
+            "caching is not happening or the accounting of it is broken. The "
+            "provider's own billing export settles which: for 2026-09-16 it "
+            "reported 97.6% cached on a day the API scored at 0.00, so the "
+            "accounting was the wrong one. Check the bill before concluding."
         )
         return 1
 

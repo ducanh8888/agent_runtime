@@ -494,95 +494,73 @@ Also worth having independent of root cause: the daemon logs nothing at all
 about what an outbound LLM call is doing while it runs. That gap is what made
 this take log archaeology instead of a status field.
 
-## The cache-hit figure was real, and the cause had already been fixed
+## The cache-hit figure was wrong, and the bill was what settled it
 
 A session's provider reported heavy prompt-cache misses, and `tools/spend.py`
-agreed: **4% hit** across the whole store, against a provider where the cached
-portion is roughly an order of magnitude cheaper. Two readings were possible —
-caching is broken now, or the number is dominated by history — and they call for
-opposite work, so the question was worth a measurement rather than a guess.
+agreed: 4% hit across the whole store, on a provider where the cached portion is
+much cheaper. Two readings were possible -- caching is broken now, or the number
+is dominated by history -- and they call for opposite work.
 
-**Per session, the answer is unambiguous.** Sorting sessions by creation time
-and reading each one's `cache_hit_rate`:
+**The first answer I reached was wrong, and this entry keeps it because the way
+it was wrong is the useful part.** Sorting sessions by creation time and reading
+each one's `cache_hit_rate` showed a sharp break: everything created before
+2026-09-16 10:17 UTC at **0.00**, everything after at **0.86-0.97**. That break
+lines up with H8 item 1 (`39b89ea`, the reasoning-content resend), whose bug
+rebuilt prior assistant tool-call turns without their `reasoning_content` -- so
+the prompt differed from the previous one on every call and a prefix cache could
+never hit. The story fitted: a silent, expensive defect, fixed, with the metric
+recovering at the fix.
 
-| created | hit rate |
-|---|---|
-| 2026-09-13 → 2026-09-16 08:33 (hundreds) | **0.00** |
-| 2026-09-16 10:17 onward | **0.86 – 0.97** |
+**The provider's own billing export falsifies it.** For 2026-09-16, same key and
+same day:
 
-The break is sharp and it lands where **H8 item 1** was fixed (`39b89ea`): prior
-assistant tool-call turns were being rebuilt *without* their
-`reasoning_content` — silently, because the check was truthiness on a field that
-was present-but-empty — so each call sent a prompt that differed from the
-previous one and the provider's prefix cache could never hit. The same bug is
-recorded in the plan as having produced `LLMBadRequestError` on session
-`2e1d9496`. Fixing it restored a stable prefix, and the sessions after it cache
-normally. The lifetime figure is a ledger: it keeps three days of breakage, and
-nothing about the current build.
+| source | prompt tokens | cached | hit rate |
+|---|---|---|---|
+| the daemon's records | 39.8M | 13.1M | 32.8% |
+| the provider's bill | 78.5M | 76.6M | **97.6%** |
 
-**The reporting path is not the problem**, which was worth ruling out rather
-than assuming. Two completions against the provider with an identical large
-prefix: the second reported `prompt_cache_hit_tokens: 1920/2144` (90%), and
-`prompt_tokens_details.cached_tokens` carried the same number. That is the field
-the SDK reads, so the 0.00 readings were real misses and not a field-name
-mismatch.
+The bill includes the sessions the API scored at **0.00** -- `2e1d9496` among
+them, which this plan had already cited for a different reason. Their tokens were
+served from cache and billed at the cheap rate. So nothing was "paid in full",
+and the causation above is wrong: what changed at that moment was **what the
+daemon recorded**, not what the provider did. H8 item 1 is a prompt-content fix;
+a content fix cannot explain a bill that shows caching throughout.
 
-**A plausible cause that measurement killed.** `<CURRENT_DATETIME>` is rendered
-from `datetime.now()` at prompt-build time, so every call in the same minute
-carries the same timestamp and consecutive calls minutes apart do not. That
-looked like the mechanism. It is not:
+Two further things the cross-check turned up, both worth knowing on their own:
 
-- Measured — sending the same prompt twice with a *deliberately changing*
-  dynamic block still hit **~92%**, because the provider matches the longest
-  common prefix and the long static instruction block ahead of the dynamic one
-  is unchanged. Divergence late in the prompt costs the tail, not the whole.
-- Structurally impossible in these sessions besides: each has exactly **one**
-  `SystemPromptEvent` and **zero** condensation events, so the prompt is built
-  once per conversation, not once per call.
+- **The API under-reports cache hits, and under-reports tokens.** For the same
+  day it accounts for 39.8M prompt tokens where the provider billed 78.5M, and
+  13.1M cached where the provider billed 76.6M. An orchestrator reading
+  `usage` therefore sees both a smaller bill and a worse cache rate than
+  reality. That is what misled me, and it is a defect in its own right.
+- The cause of the recording change is **not established** from the records
+  available. It is not a route or model-name change (the same model name is
+  recorded on both sides of the break) and not the reinstall that followed it
+  (that landed two hours later). Something between 08:33 and 10:17 UTC on
+  2026-09-16 changed what the daemon wrote down, and neither the daemon log nor
+  the store explains it.
 
-Nothing should be changed to "fix" the datetime. It is per-conversation in
-practice, and the tier it renders into (`CacheTier.DYNAMIC`) is the
-deliberately-uncached second content block.
+**What survives.** Caching works, verified twice and independently: the bill
+says 97.6%, and two completions sent against the provider with an identical
+prefix returned `prompt_cache_hit_tokens 1920/2144` on the second. The SDK reads
+the right field (`prompt_tokens_details.cached_tokens`), so a 0.00 reading is
+not a field-name mismatch. And a plausible cause was killed by measurement
+rather than by argument -- `<CURRENT_DATETIME>` renders `datetime.now()` per
+prompt build, but sending the same prompt with a *deliberately changing* dynamic
+block still hit ~92%, because the provider matches the longest common prefix and
+the long static block ahead of it is unchanged. Nothing should be changed to
+"fix" that.
 
-**What shipped from this.** A cache failure has no symptom but the bill, so it
-now has a check: `tools/probe_cache.py` reads the daemon's own usage records
-(dispatching nothing) and fails when a session with three or more provider calls
-reports a near-zero hit rate. Its default window is deliberately short — half a
-day — because the guard's question is whether the *current* code caches, and
-this deployment's history answers a different one; `--days`/`--all` are there for
-studying that history and will report the old breakage by design.
+**What shipped, revised.** `tools/probe_cache.py` still guards, but its subject
+is now honest: it checks whether the API's accounting is self-consistent, since
+a session with many calls and a near-zero recorded rate means caching is not
+happening *or* the accounting of it is broken -- and the second is what happened
+here. Its docstring carries the correction, including the instruction to check
+the bill before deciding which side is wrong. `tools/spend.py` prints a
+recent-window rate beside the lifetime one for the same reason a single lifetime
+number read as a statement about today.
 
-`tools/spend.py` also now prints a recent-window hit rate beside the lifetime
-one, for the same reason the entry above exists: a single lifetime number read as
-a statement about today.
-
-## The rate card was wrong, and the docs said so
-
-Same session, a second thing the bill exposed. `tools/spend.py` priced against
-a flat triple — cache miss 0.28, cache hit 0.028, output 0.42 USD/M — and the
-provider's own published pricing page disagrees with all three. The provider
-prices by a **peak/off-peak clock**: cache hit 0.006 / 0.003, cache miss 0.30 /
-0.15, output 1.20 / 0.60, with peak defined as 01:00-04:00 and 06:00-10:00 UTC
-Monday to Friday and off-peak at half. Two things follow that were not obvious
-from the card:
-
-- **A flat card cannot be right.** The windows are a factor of two apart, and
-  for anyone working UTC+7 the peak windows (08:00-11:00 and 13:00-17:00 local)
-  cover most of a working day. The card matched neither window, so the report
-  was wrong in *both* directions at once: it charged cache hits about four
-  times too much and output about half too little. On a cache-heavy workload
-  the first dominates, which is why the total was overstated — about $102 where
-  the same tokens price at about $66.
-- **The retired model name is a pricing lookup, not a guess.** Sessions recorded
-  as `openai/ds/deepseek-v4-flash` were reported as *unpriced*, 8.7M tokens at
-  an unknown rate. The pricing page states that the legacy names are still
-  accepted, that the models behind them were retired, and that their requests
-  are "served by the DeepSeek-V4.1-Flash model and billed at the Flash price".
-  So pricing them at the Flash rate is what the provider documents, and the
-  card now says so rather than leaving a hole.
-
-The card is now per-window, each session is priced in the window it actually
-started in, and an unknown start time is priced at peak — for a spend watch,
-over-stating is the safer error. A model the table does not cover is still
-reported as a token count rather than charged someone else's rate; the alias
-table is only for names the provider itself documents.
+The general lesson is the one this repository keeps relearning: a number the
+system reports about itself is a claim. The metric moved exactly where a code
+change landed, which is what made the wrong story persuasive; the bill was the
+independent instrument, and it disagreed.
