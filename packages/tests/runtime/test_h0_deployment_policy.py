@@ -38,3 +38,25 @@ def test_daemon_env_policy_is_secret_free() -> None:
     assert "key" not in payload.lower()
     assert "token" not in payload.lower()
     assert "test-token" not in payload
+
+
+def test_daemon_env_gates_openhands_ceremony_off_by_default(monkeypatch) -> None:
+    """No AgentRT permission preset can reach the builtin sub-agents or
+    VSCode, so the daemon's own environment defaults both off.
+    docs/plans/deepseek-hardening.md H9 (OpenHands ceremony), 2026-09-17.
+    """
+    monkeypatch.delenv("AGENTRT_REGISTER_BUILTIN_SUBAGENTS", raising=False)
+    monkeypatch.delenv("AGENTRT_ENABLE_VSCODE", raising=False)
+    env = daemon._daemon_env("test-token")
+    assert env["AGENTRT_REGISTER_BUILTIN_SUBAGENTS"] == "0"
+    assert env["AGENTRT_ENABLE_VSCODE"] == "0"
+
+
+def test_daemon_env_does_not_override_an_operator_s_own_choice(monkeypatch) -> None:
+    """An operator who explicitly restored either var is not silently
+    overridden by the daemon's own default."""
+    monkeypatch.setenv("AGENTRT_REGISTER_BUILTIN_SUBAGENTS", "1")
+    monkeypatch.setenv("AGENTRT_ENABLE_VSCODE", "1")
+    env = daemon._daemon_env("test-token")
+    assert env["AGENTRT_REGISTER_BUILTIN_SUBAGENTS"] == "1"
+    assert env["AGENTRT_ENABLE_VSCODE"] == "1"

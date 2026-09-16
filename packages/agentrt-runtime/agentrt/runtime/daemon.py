@@ -177,6 +177,16 @@ def _daemon_env(token: str) -> dict[str, str]:
     # Explicit deployment-only LLM policy. The server enforces it on new
     # conversations; an agent-server started any other way stays generic.
     env["AGENTRT_DEPLOYMENT_LLM_POLICY"] = json.dumps(DEPLOYMENT_LLM_POLICY)
+    # OpenHands ceremony this deployment never reaches, off by default here
+    # but `setdefault` rather than a hard assignment: an operator who already
+    # set either var in their own environment (e.g. to restore vendored
+    # defaults, or because a downstream feature starts depending on the
+    # builtin sub-agents) is not silently overridden. No AgentRT permission
+    # preset grants the `delegate` tool the builtin sub-agents need, and
+    # nothing about MCP/CLI-driven dispatch connects an editor to VSCode.
+    # docs/plans/deepseek-hardening.md H9 (OpenHands ceremony), 2026-09-17.
+    env.setdefault("AGENTRT_REGISTER_BUILTIN_SUBAGENTS", "0")
+    env.setdefault("AGENTRT_ENABLE_VSCODE", "0")
     return env
 
 
