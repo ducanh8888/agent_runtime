@@ -431,7 +431,9 @@ def capacity() -> dict:
 
 
 @mcp.tool()
-def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
+def wait_any(
+    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
+) -> dict:
     """Block until one of these sessions settles, or the timeout elapses.
 
     This is the blocking wait of a foreground launch: dispatch several sessions,
@@ -448,6 +450,12 @@ def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
       wait forever.
     - `still_running` -- the timeout ended the wait. These are NOT failures and
       carry no partial output; wait again or read `status`.
+
+    A settled item also carries its `title`, at no extra cost. `include_usage`
+    adds a `usage` block to each settled item and is the one field that costs a
+    request per settled session -- worth setting for a single session, wasteful
+    across a fan-out. Either way a settled item is the whole answer: this call
+    already returns what `result` would, so there is nothing to fetch after it.
 
     `timed_out` says whether the deadline, not completion, ended the wait. No
     outcome means "someone must approve this" -- the caller resolves every
@@ -468,20 +476,34 @@ def wait_any(session_ids: list[str], timeout: float = 600.0) -> dict:
     anything expected to run long: poll `status` between other work, or
     background a poll loop, rather than blocking here.
     """
-    return _guard(_get_client().wait, session_ids, mode="any", timeout=timeout)
+    return _guard(
+        _get_client().wait,
+        session_ids,
+        mode="any",
+        timeout=timeout,
+        include_usage=include_usage,
+    )
 
 
 @mcp.tool()
-def wait_all(session_ids: list[str], timeout: float = 600.0) -> dict:
+def wait_all(
+    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
+) -> dict:
     """Block until every one of these sessions settles, or the timeout elapses.
 
-    Same result shape as `wait_any`; see that description for the buckets and
-    for the internal safe-ceiling cap on `timeout` -- it applies here too. A
-    timeout returns the unfinished ids under `still_running` with `timed_out`
-    true -- never as failures, and never with partial output presented as a
-    final answer.
+    Same result shape as `wait_any`; see that description for the buckets, for
+    what a settled item carries, and for the internal safe-ceiling cap on
+    `timeout` -- it applies here too. A timeout returns the unfinished ids under
+    `still_running` with `timed_out` true -- never as failures, and never with
+    partial output presented as a final answer.
     """
-    return _guard(_get_client().wait, session_ids, mode="all", timeout=timeout)
+    return _guard(
+        _get_client().wait,
+        session_ids,
+        mode="all",
+        timeout=timeout,
+        include_usage=include_usage,
+    )
 
 
 @mcp.tool()

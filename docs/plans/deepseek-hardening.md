@@ -72,7 +72,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H6 | Guarded images and complete accounting | REUSE + PORT + NEW | H0–H2; H4 for snapshot attachments | Complete — [result](../results/h6.md) |
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 | H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
-| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry), the OpenHands-ceremony gate, interrupt visibility (item 6, post-init `interrupt()` only) and the partial-history fork (item 4, as an exact event bound) done, 2026-09-17; item 4's `fork_turns` skipped by decision; item 6's `finalize()` and `_ensure_agent_ready` window open; role-shaped profiles (item 3) deferred; rest open |
+| H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry), the OpenHands-ceremony gate, interrupt visibility (item 6, post-init `interrupt()` only), the partial-history fork (item 4, exact event bound) and the settled-wait payload (item 2, title free / usage opt-in) done, 2026-09-17; item 4's `fork_turns` and item 2's terminal reason + paged result skipped or blocked by decision/open H8 items; item 6's `finalize()` and `_ensure_agent_ready` window open; role-shaped profiles (item 3) deferred; rest open |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -990,17 +990,57 @@ sources, corrected from an earlier draft:**
    status and a `finish_reason`/`truncated` field; this item asks for the same
    enumeration to also cover iteration exhaustion and provider failure, so
    every terminal state names a reason from a closed set.
-2. **A genuinely blocking, single-result call for the common case.**
-   `wait_any`/`wait_all` already block, but the orchestrator still holds a
-   session id and calls a second tool (`result`, `usage`, `artifacts`) to
-   learn what happened. A `dispatch` variant (or a `wait_all(...,
-   mode="collect")` addition) that returns the condensed final answer *in the
-   same call* that settles -- title, result text (paged per H8 item 3),
-   terminal reason, token usage -- removes the second round-trip for a single
-   session, matching Subagents' shape even though AgentRT as a whole is closer
-   to Agent view. Multi-session fan-out keeps the current dispatch-then-wait
-   split; the convenience is for the common one-session case, not a
-   replacement for `dispatch_many`/`wait_all`.
+2. **A genuinely blocking, single-result call for the common case. Done,
+   2026-09-17 (`<hash>`).** `wait_any`/`wait_all` already blocked, but the
+   orchestrator still holds a session id and calls a second tool (`result`,
+   `usage`, `artifacts`) to learn what happened. A `dispatch` variant (or a
+   `wait_all(..., mode="collect")` addition) that returns the condensed final
+   answer *in the same call* that settles -- title, result text (paged per H8
+   item 3), terminal reason, token usage -- removes the second round-trip for a
+   single session, matching Subagents' shape even though AgentRT as a whole is
+   closer to Agent view. Multi-session fan-out keeps the current
+   dispatch-then-wait split; the convenience is for the common one-session case,
+   not a replacement for `dispatch_many`/`wait_all`.
+   **What was actually missing, measured rather than assumed:** the premise was
+   already half satisfied -- `wait()` attached `result()` to every settled item
+   -- so the answer's round-trip did not exist and a `mode="collect"` variant
+   would have been a second name for what the call already did. The real delta
+   was two fields. `title` now rides on the settled item **at no extra cost**,
+   because the settle decision already fetched the row holding it (the same row
+   `status` would have been asked for, which is the round-trip this item is
+   about); it is added to `still_running` items too, so a poller sees it while
+   waiting. `usage` is a separate endpoint and therefore opt-in
+   (`include_usage=`), the user's decision: on a fan-out it is one request per
+   settled session, which is exactly the shape this item says the convenience
+   is *not* for. A failing usage read leaves the item without `usage` rather
+   than costing the caller the result it waited for, mirroring
+   `progress_summary`'s best-effort handling. **Not done, and named so this is
+   not read as more than it is:** the item also lists a *terminal reason* and
+   *paged result text* (H8 item 3) in the payload; both depend on items still
+   open, and `error.code` remains the only reason a caller gets today. Verified
+   end to end against a real daemon: the settled item carried `title` with
+   `usage` absent by default, and `include_usage=True` returned a populated
+   `usage` block. Six of the seven new test functions fail on the pre-fix source
+   (seven of the eight cases); the one that passes by design asserts the default
+   is unchanged, so it guards the future rather than this change. **Review found
+   a defect this draft would have shipped, and the cause is worth keeping:** the
+   best-effort catch around the usage read caught `ClientError` only, but
+   `usage()` ends in `.json()` -- so a 200 or 204 with a non-JSON body raises
+   `json.JSONDecodeError` (a `ValueError`, converted by nothing) straight out of
+   `wait()`, losing *every* bucket rather than one key, and through MCP turning a
+   promised dict into a protocol error. The suite missed it because the failure
+   test used a 500, which never reaches that path; it is now parameterised over a
+   non-JSON 200 and an empty 204. Reachability is low -- the real route is
+   FastAPI and always serialises -- so this is an intermediary, not a daemon
+   trigger. **The same escape in `_progress_summary` was fixed after first being
+   deferred, on a fact that changed the call:** it fires to produce
+   `progress_summary` for *every* errored session with nothing to opt out of,
+   whereas the usage read is behind `include_usage=True` -- so the exposure is
+   strictly broader even though the trigger is equally unlikely, and `result()`
+   on a failed session is the main path an orchestrator reads outcomes by.
+   Deferring it was the wrong call for the user's own "drop it if it is off the
+   main path" rule, because on that rule the deciding question is exposure, and
+   this one is on the path.
 3. **A role, not a parameter tuple.** Claude Code's named subagent types
    bundle model + tools + prompt behind one identifier the orchestrator
    chooses instead of assembling; Codex's TOML agent definitions
@@ -1025,15 +1065,19 @@ sources, corrected from an earlier draft:**
    history somewhere the caller did not expect, while an exact event id has no
    such ambiguity. Revisit only if callers ask for turn-shaped sugar.
    **The part that made this worth more than a parameter pass-through: the
-   parameter was unusable and reading the code did not show it.** `from_event_id`
-   needs an event id, and `transcript` -- the only tool that hands them out --
-   kept `id` for `action`/`observation`/`error` entries but dropped it for
-   `message` entries, so the natural branch point (a conversation boundary)
-   could not be named at all. Found by running a smoke test against a real
-   daemon and asking where the id would come from, not by inspection. Message
-   entries now carry `id` too, which is additive to a shipped tool's output;
-   the tool docstring states it, since the docstrings are what an orchestrator
-   reads. **Verified end to end on the public surface only:** `transcript` gave
+   parameter was barely usable, and reading the code did not show it.**
+   `from_event_id` needs an event id, and the surface offered exactly one:
+   `result`/`wait` return `request_message_id`, the consumed user message an
+   answer belongs to -- so the *latest* conversation boundary was reachable and
+   nothing else. `transcript`, the only tool that lists events, kept `id` for
+   `action`/`observation`/`error` entries but dropped it for `message` entries,
+   so an earlier message, or any assistant turn, could not be named.
+   **Corrected while doing it:** the first pass of this paragraph claimed no
+   tool handed out an event id at all. The smoke test's own output disproved
+   that -- the settled payload carried `request_message_id` -- so the gap was
+   arbitrary branch points, not every branch point. Message entries now carry
+   `id` too, which is additive to a shipped tool's output; the tool docstring
+   states it, since the docstrings are what an orchestrator reads. **Verified end to end on the public surface only:** `transcript` gave
    the id, `dispatch_from(from_event_id=...)` bounded the fork there, and the
    source's events after the branch point did not leak into the fork (checked
    against the daemon's own persisted event files, with the fork's lineage
@@ -1136,17 +1180,22 @@ written, one is harder, and the premise of two was only partly right:**
 - **Items 2 and 4 are cheaper than proposed**, not harder: `Client.wait()`
   (`client.py:1649-1664`) already attaches `result()` to every settled item --
   the "second round-trip" item 2 describes does not exist today, only
-  `title`/`usage` are missing from the payload. And `dispatch_from`'s partial
+  `title`/`usage` are missing from the payload. **Confirmed while doing it:**
+  `title` turned out to be free (the settle sample already fetched it) and only
+  `usage` costs a request, so item 2's payload work came down to one free field
+  and one opt-in one. And `dispatch_from`'s partial
   fork (item 4) already exists end-to-end -- `POST /{id}/fork`'s
   `from_event_id`, `conversation_service.fork_conversation`, and
   `BaseConversation.fork` all support it -- only the client/MCP wrapper never
   exposes the parameter. Neither needs new server-side work.
   **Half wrong on item 4, found later while doing it:** the wrapper was not the
-  only gap. Exposing the parameter still left it unusable, because nothing on
-  the MCP surface handed a caller an event id -- `transcript` dropped the `id`
-  on `message` entries. "Only the wrapper never exposes the parameter" was true
-  and insufficient; the audit checked whether the server supported the field,
-  not whether a caller could obtain a value for it. Both halves are done now.
+  only gap. Exposing the parameter still left it usable at one point only,
+  because the sole event id the surface produced was `result`'s
+  `request_message_id` (the consumed boundary) and `transcript` dropped the `id`
+  on `message` entries, so no arbitrary branch point could be named. "Only the
+  wrapper never exposes the parameter" was true and insufficient; the audit
+  checked whether the server supported the field, not whether a caller could
+  obtain a value for it. Both halves are done now.
 - **Item 1's premise was partly wrong**: a closed failure-reason vocabulary
   already exists (`ConversationErrorEvent.code` +
   `event/error_classification.py`'s `FailureKind`), and `MaxIterationsReached`

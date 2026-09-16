@@ -11,6 +11,7 @@ import types
 from collections.abc import Callable
 
 import httpx
+import pytest
 
 from agentrt.runtime import client as client_mod
 
@@ -311,3 +312,223 @@ def test_still_running_items_carry_progress() -> None:
     assert item["iterations_remaining"] == 47
     assert item["admission_status"] == "admitted"
     assert "result" not in item  # no partial output as an answer
+
+
+# ── H9 item 2: what a settled item carries ────────────────────────────
+#
+# A wait already returned `result`, so the "second round-trip" item 2 was
+# written against did not exist for the answer. The real delta was the title
+# (free: the settle sample already fetched the row holding it) and usage (a
+# separate endpoint, so opt-in and counted below).
+
+
+def _tracking_handler(
+    statuses: dict[str, dict],
+    results: dict[str, dict] | None = None,
+    usage_status: int = 200,
+) -> tuple[Handler, list[str]]:
+    """The standard handler, recording every path it is asked for."""
+    base = _handler(statuses, results)
+    paths: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        paths.append(path)
+        if path.endswith("/usage"):
+            if usage_status != 200:
+                return httpx.Response(usage_status, json={"detail": "nope"})
+            conversation = path.split("/")[-2]
+            return httpx.Response(
+                200,
+                json={
+                    "session": conversation,
+                    "totals": {"prompt": 10, "completion": 2},
+                },
+            )
+        return base(request)
+
+    return handle, paths
+
+
+def test_settled_item_carries_its_title_at_no_extra_cost() -> None:
+    statuses = {
+        A: {
+            "execution_status": "finished",
+            "result_state": "final",
+            "title": "nightly audit",
+        }
+    }
+    # `execution_status` is included so `result()` does not re-read status to
+    # learn it: the count below is then the settle rule's own samples plus one
+    # result read, and does not move with the mock's payload shape.
+    results = {
+        A: {"response": "done", "state": "final", "execution_status": "finished"}
+    }
+    handle, paths = _tracking_handler(statuses, results)
+    client = _mock_client(handle)
+
+    out = client.wait([A], mode="all", timeout=5.0, poll_interval=0.5)
+
+    assert out["completed"][0]["title"] == "nightly audit"
+    # Teeth beyond "no /usage": two samples (the second-sample rule needs a
+    # previous terminal reading) plus the result read. A title fetched by its
+    # own call would make this 4. A differential form -- same scenario with and
+    # without a title, asserting equal counts -- was tried and rejected: an
+    # implementation that fetched the title in a separate call would do so in
+    # both runs, so the counts would agree and the assertion would pass.
+    assert len(paths) == 3, paths
+    assert not any(p.endswith("/usage") for p in paths), paths
+
+
+def test_usage_is_absent_unless_asked_for() -> None:
+    """The default must stay one request per session, not two."""
+    statuses = {A: {"execution_status": "finished", "result_state": "final"}}
+    results = {A: {"response": "done", "state": "final"}}
+    handle, paths = _tracking_handler(statuses, results)
+    client = _mock_client(handle)
+
+    out = client.wait([A], mode="all", timeout=5.0, poll_interval=0.5)
+
+    assert "usage" not in out["completed"][0]
+    assert not any(p.endswith("/usage") for p in paths), paths
+
+
+def test_include_usage_adds_usage_to_each_settled_item() -> None:
+    """One usage request per settled session -- the N a fan-out pays."""
+    statuses = {
+        A: {"execution_status": "finished", "result_state": "final"},
+        B: {"execution_status": "error", "result_state": "partial"},
+    }
+    results = {
+        A: {"response": "done", "state": "final"},
+        B: {"response": "half", "state": "partial"},
+    }
+    handle, paths = _tracking_handler(statuses, results)
+    client = _mock_client(handle)
+
+    out = client.wait(
+        [A, B], mode="all", timeout=5.0, poll_interval=0.5, include_usage=True
+    )
+
+    usage_paths = [p for p in paths if p.endswith("/usage")]
+    assert len(usage_paths) == 2, paths
+    assert out["completed"][0]["usage"]["totals"]["prompt"] == 10
+    assert out["partial"][0]["usage"]["totals"]["prompt"] == 10
+
+
+def test_a_failing_usage_read_does_not_cost_the_result() -> None:
+    """The result is what the caller waited for; usage is an addition."""
+    statuses = {A: {"execution_status": "finished", "result_state": "final"}}
+    results = {A: {"response": "done", "state": "final"}}
+    handle, _ = _tracking_handler(statuses, results, usage_status=500)
+    client = _mock_client(handle)
+
+    out = client.wait(
+        [A], mode="all", timeout=5.0, poll_interval=0.5, include_usage=True
+    )
+
+    item = out["completed"][0]
+    assert item["result"] == "done"
+    assert "usage" not in item
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # A 200 whose body is not JSON, and a 204 with no body at all: both
+        # make `.json()` raise past `except ClientError`, so before that catch
+        # was widened this lost every bucket rather than one key. A status-code
+        # test alone (the 500 above) never reaches that path.
+        httpx.Response(200, text="<html>not json</html>"),
+        httpx.Response(204),
+    ],
+    ids=["non-json-200", "empty-204"],
+)
+def test_an_undecodable_usage_response_does_not_cost_the_result(body) -> None:
+    statuses = {A: {"execution_status": "finished", "result_state": "final"}}
+    results = {A: {"response": "done", "state": "final"}}
+    base = _handler(statuses, results)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/usage"):
+            return body
+        return base(request)
+
+    client = _mock_client(handle)
+
+    out = client.wait(
+        [A], mode="all", timeout=5.0, poll_interval=0.5, include_usage=True
+    )
+
+    item = out["completed"][0]
+    assert item["result"] == "done"
+    assert "usage" not in item
+
+
+def test_an_undecodable_transcript_does_not_cost_an_errored_result() -> None:
+    """The same escape as the usage read, on a path nothing opts into.
+
+    `result()` adds `progress_summary` for an errored session by reading the
+    transcript, which ends in `.json()` -- so an undecodable body used to take
+    the whole result with it, for every failed session rather than only when a
+    caller asked for more.
+    """
+    statuses = {A: {"execution_status": "error", "result_state": "partial"}}
+    results = {
+        A: {
+            "response": "partial text",
+            "state": "partial",
+            "execution_status": "error",
+        }
+    }
+    base = _handler(statuses, results)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(200, text="<html>not json</html>")
+        return base(request)
+
+    payload = _mock_client(handle).result(A)
+
+    assert payload["result"] == "partial text"
+    assert "progress_summary" not in payload
+
+
+def test_still_running_items_carry_a_title() -> None:
+    statuses = {
+        E: {
+            "execution_status": "running",
+            "result_state": "pending",
+            "title": "long index build",
+        }
+    }
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([E], mode="all", timeout=1.0, poll_interval=0.5)
+
+    assert out["still_running"][0]["title"] == "long index build"
+
+
+def test_mcp_wait_tools_forward_include_usage(monkeypatch) -> None:
+    """The tool wrappers are the surface an orchestrator actually calls."""
+    from agentrt.runtime import mcp_server
+
+    captured: list[dict] = []
+
+    class FakeClient:
+        def wait(self, session_ids, **kwargs):
+            captured.append(kwargs)
+            return {"completed": []}
+
+    monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
+
+    mcp_server.wait_any([A], include_usage=True)
+    mcp_server.wait_all([A], include_usage=True)
+    mcp_server.wait_all([A])
+
+    assert captured[0]["mode"] == "any"
+    assert captured[0]["include_usage"] is True
+    assert captured[1]["mode"] == "all"
+    assert captured[1]["include_usage"] is True
+    # Omitted by default, so an older daemon path is unchanged.
+    assert captured[2]["include_usage"] is False

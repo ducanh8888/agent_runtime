@@ -8,6 +8,7 @@ callers from silently depending on different response shapes.
 from __future__ import annotations
 
 import base64
+import json
 import os
 import re
 import time
@@ -1099,6 +1100,11 @@ class Client:
         data = response.json()
         return {
             "id": data.get("id", resolved),
+            # Carried because this call has already fetched the row that holds
+            # it: a wait can attach a title to what it returns for free, and a
+            # caller that has to ask `status` for it afterwards is making the
+            # second round-trip a wait exists to avoid.
+            "title": data.get("title"),
             "status": _status_of(data),
             "admission_status": data.get("admission_status"),
             "result_state": data.get("result_state"),
@@ -1477,7 +1483,14 @@ class Client:
         if status == "error":
             try:
                 payload["progress_summary"] = self._progress_summary(resolved)
-            except ClientError:
+            except (ClientError, json.JSONDecodeError):
+                # Same tolerance as the usage read in ``wait``: this is an
+                # addition to ``result``, not its point, so a transcript that
+                # cannot be read must not cost the caller the answer. Widened
+                # past ClientError because ``transcript`` ends in ``.json()``,
+                # so a 2xx with an undecodable body would otherwise escape and
+                # take the whole result with it -- on every errored session,
+                # with nothing to opt out of.
                 pass
         return payload
 
@@ -1485,8 +1498,9 @@ class Client:
         """Tally tool calls from the transcript into one deterministic line.
 
         Best-effort: a transcript read that fails (deleted mid-call, daemon
-        hiccup) leaves ``progress_summary`` off the response entirely rather
-        than raising, since this is an addition to ``result``, not its point.
+        hiccup, an undecodable body) leaves ``progress_summary`` off the
+        response entirely rather than raising, since this is an addition to
+        ``result``, not its point.
         """
         tally: dict[str, int] = {}
         cursor: str | None = None
@@ -1739,6 +1753,7 @@ class Client:
         mode: str = "all",
         timeout: float = 600.0,
         poll_interval: float = 2.0,
+        include_usage: bool = False,
     ) -> dict:
         """Block until the sessions settle, or the timeout elapses.
 
@@ -1754,10 +1769,19 @@ class Client:
         or a message that arrived during the final step, and a wait that fired on
         the first ``finished`` would report an answer still being revised.
 
-        Items under ``still_running`` carry the last progress sample -- status,
-        admission, result state and iterations -- so a poller can see movement
-        without a second call. They carry no result: partial output is never
-        presented as an answer.
+        A settled item carries the same payload ``result`` returns plus its
+        ``bucket`` and its ``title`` -- the title costs nothing here, because
+        the settle decision already fetched the row holding it. ``include_usage``
+        adds a ``usage`` block to each settled item; it is off by default and is
+        the one field that costs a request per settled session, so a fan-out
+        pays N for something H9 item 2's second round-trip is a single-session
+        problem. A usage read that fails leaves the item without ``usage``
+        rather than costing the caller the result it waited for.
+
+        Items under ``still_running`` carry the last progress sample -- title,
+        status, admission, result state and iterations -- so a poller can see
+        movement without a second call. They carry no result: partial output is
+        never presented as an answer.
 
         mode ``all`` waits for every id (or the timeout); ``any`` returns as soon
         as one settles. The result groups ids by outcome -- ``completed``,
@@ -1856,6 +1880,28 @@ class Client:
                     continue
                 bucket = _wait_bucket(payload)
                 payload["bucket"] = bucket
+                # The title comes from the sample the settle decision already
+                # used, so this adds no request. `usage` is a separate endpoint
+                # and does, which is why it is opt-in: on a fan-out it would be
+                # one more request per settled session, and H9 item 2's second
+                # round-trip is a single-session problem.
+                seen = last_seen.get(session) or {}
+                if seen.get("title") is not None:
+                    payload["title"] = seen["title"]
+                if include_usage:
+                    try:
+                        payload["usage"] = self.usage(session)
+                    except (ClientError, json.JSONDecodeError):
+                        # Best-effort, like progress_summary: a usage read that
+                        # fails must not cost the caller the result it settled
+                        # for. ``ClientError`` covers the status and transport
+                        # failures ``_send`` converts; ``JSONDecodeError`` is
+                        # not converted by anything -- ``usage()`` ends in
+                        # ``.json()``, so a 200 or 204 carrying a non-JSON body
+                        # (an intermediary, not this daemon) would otherwise
+                        # escape here and lose every bucket, which is precisely
+                        # the outcome this catch exists to prevent.
+                        pass
                 buckets[bucket].append(payload)
             else:
                 # Progress as last sampled, so a poller can see movement
@@ -1868,6 +1914,7 @@ class Client:
                 }
                 seen = last_seen.get(session) or {}
                 for key in (
+                    "title",
                     "status",
                     "admission_status",
                     "result_state",
