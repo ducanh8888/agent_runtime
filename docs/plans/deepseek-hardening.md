@@ -668,7 +668,7 @@ untested). Items are grouped by the consumer's own severity labels.
    error, not a genuine 0-match result), and extending the fix to it by
    resemblance alone would not meet this project's own verification
    standard, so it stays unconfirmed rather than claimed fixed.
-7. **No readonly output channel (item 7). Done, 2026-09-17 (`<pending>`).** A
+7. **No readonly output channel (item 7). Done, 2026-09-17 (`9f5e515`).** A
    write-only directory outside the dispatched workspace, listed through
    `artifacts` like the workspace itself, for a `readonly`/`inspect` session's
    report -- without granting write access to anything the session can read,
