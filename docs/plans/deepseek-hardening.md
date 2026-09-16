@@ -1126,12 +1126,35 @@ sources, corrected from an earlier draft:**
    is stated instead. Also stated for callers: the branch point is *included*,
    so a fork's first LLM context is the source's turn at that point followed by
    the task, not the task alone.
-5. **A spawn-depth cap.** Codex bounds recursive spawning at
+5. **A spawn-depth cap. Built, 2026-09-17 (`<hash>`), after the plan twice
+   recorded it as not-needed.** Codex bounds recursive spawning at
    `agent_max_depth` (default 3) and returns an error instructing the agent to
-   solve the task itself past that. `dispatch_from` has no such cap today --
-   check whether a chain of forks can recurse unbounded, and if so, add the
-   same kind of limit for the same reason (runaway nesting, not a
-   theoretical concern once fork depth is possible at all).
+   solve the task itself past that. `dispatch_from` had no such cap. The reason
+   it went unbuilt was sound on its own terms -- no permission preset grants a
+   tool that can call `dispatch_from`, so no *live nesting* exists to cap -- but
+   the cap is not for live nesting: it is for the **orchestrator** calling
+   `dispatch_from` in a loop, each hop cheap, with the cost of the whole chain
+   landing at once later. The user's decision, and the plan's own earlier note
+   that the cap would "police the orchestrator calling `dispatch_from`
+   repeatedly" already said as much. **Implemented in `agentrt-runtime`, not the
+   server** -- that is the layer the orchestrator actually calls, which is what
+   the item is about, and it keeps the change out of the vendored tree.
+   `AGENTRT_MAX_FORK_DEPTH` defaults to 3 (Codex's number), 0 or negative
+   disables it, matching `AGENTRT_MAX_SESSIONS`. Depth counts ancestors: a
+   directly-dispatched session is 0, its fork 1. The refusal happens **before
+   the fork request**, so a runaway chain leaves nothing to clean up, and the
+   message tells the caller to do the work in place. Two supporting pieces were
+   needed: `status()` now reports `parent_conversation_id` (without it the chain
+   cannot be read at all), and the walk is tolerant -- a deleted ancestor ends
+   it rather than failing the dispatch, and a repeated id ends it so a malformed
+   chain cannot loop. **The cost, stated rather than hidden:** `dispatch_from`
+   now reads the chain before forking, so it costs one extra status request per
+   ancestor (1-3 at the default cap) on every call. This broke three existing
+   tests in item 4, whose mock handlers rejected any request that was not the
+   fork or the task -- a real consequence, so those handlers were taught to
+   serve the status read while still asserting the task was never sent. Verified:
+   9 of 10 new tests fail on the pre-fix source; the tenth asserts a fork still
+   happens, which was true before the cap too.
 6. **Interruption visible to the interrupted agent. Done, 2026-09-17
    (`cddc08f`).** Codex records a model-visible message on interrupt by default
    (`agents.interrupt_message`). AgentRT's `interrupt()`/`finalize()` stopped a
@@ -1250,8 +1273,10 @@ written, one is harder, and the premise of two was only partly right:**
   defined first, since `fork` inherits the source's `parent_conversation_id`
   rather than setting one, making forks siblings of their source, not
   children of a chain.
-  **Decided 2026-09-17: fix the prerequisite, not the cap. Prerequisite
-  done (`3c1fe76`); the cap itself is still not built.** `fork_conversation`
+  **Decided 2026-09-17: fix the prerequisite first. Prerequisite done
+  (`3c1fe76`); the cap itself was built later the same day, and the reasoning
+  above about *live* nesting still holds -- it is a cap on the orchestrator's
+  own chain, not on nesting, which is what item 5 now records.** `fork_conversation`
   now sets the fork's `parent_conversation_id` to its actual source instead
   of inheriting the source's own parent, so forks are real children in a
   chain rather than siblings at the same level -- `_children_index()` reads

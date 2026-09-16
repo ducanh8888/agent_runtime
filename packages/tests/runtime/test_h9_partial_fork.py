@@ -116,11 +116,17 @@ def test_unknown_event_id_is_refused_rather_than_forking_everything() -> None:
     """
 
     def handle(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/fork"):
+        path = request.url.path
+        if path.endswith("/fork"):
             return httpx.Response(
                 404, json={"detail": f"from_event_id {BRANCH_POINT} not found"}
             )
-        raise AssertionError(f"no second request expected, saw {request.url.path}")
+        if path.endswith("/events"):
+            raise AssertionError(f"the task must not be sent, saw {path}")
+        # The fork-chain read `dispatch_from` does before forking.
+        return httpx.Response(
+            200, json={"id": SOURCE, "execution_status": "idle", "tags": {}}
+        )
 
     client = _mock_client(handle)
 
@@ -136,28 +142,36 @@ def test_a_daemon_that_ignores_the_bound_is_refused() -> None:
     one. The guard therefore compares the reported lineage against the request,
     and must fire *before* the task is sent, so an unbounded fork is never run.
     """
-    attempted: list[str] = []
+    sent: list[str] = []
 
     def handle(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/fork"):
+        path = request.url.path
+        if path.endswith("/fork"):
             # What a daemon predating the parameter returns: no lineage field.
             return httpx.Response(201, json={"id": CREATED, "execution_status": "idle"})
-        attempted.append(request.url.path)
-        return httpx.Response(200, json={"success": True})
+        if path.endswith("/events"):
+            sent.append(path)
+            return httpx.Response(200, json={"success": True})
+        # dispatch_from reads the fork chain before forking, so a status read
+        # is expected here and must not be counted as the task being sent.
+        return httpx.Response(
+            200, json={"id": SOURCE, "execution_status": "idle", "tags": {}}
+        )
 
     client = _mock_client(handle)
 
     with pytest.raises(client_mod.ClientError, match="did not honour"):
         client.dispatch_from(SOURCE, "review", from_event_id=BRANCH_POINT)
 
-    assert attempted == [], f"the task must not be sent, saw {attempted}"
+    assert sent == [], f"the task must not be sent, saw {sent}"
 
 
 def test_a_daemon_reporting_a_different_bound_is_refused() -> None:
     """Lineage disagreeing with the request is refused, not reconciled."""
 
     def handle(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/fork"):
+        path = request.url.path
+        if path.endswith("/fork"):
             return httpx.Response(
                 201,
                 json={
@@ -166,7 +180,11 @@ def test_a_daemon_reporting_a_different_bound_is_refused() -> None:
                     "forked_from_event_id": "some-other-event",
                 },
             )
-        raise AssertionError("the task must not be sent")
+        if path.endswith("/events"):
+            raise AssertionError("the task must not be sent")
+        return httpx.Response(
+            200, json={"id": SOURCE, "execution_status": "idle", "tags": {}}
+        )
 
     client = _mock_client(handle)
 

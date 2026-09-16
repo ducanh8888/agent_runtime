@@ -355,6 +355,12 @@ def dispatch_from(
     your task alone. An id the source does not have is refused, and so is a
     daemon that does not report the bound back, so neither can quietly give you
     a full-history fork.
+
+    Fork chains are bounded to three generations by default: forking a fork of a
+    fork is refused, and the error tells you to do the work in the session you
+    are in. Each hop looks cheap on its own; the point is that the cost of a
+    chain lands all at once, later. An operator can raise or remove the bound
+    with AGENTRT_MAX_FORK_DEPTH.
     """
     return _guard(
         _get_client().dispatch_from,

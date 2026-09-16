@@ -338,6 +338,36 @@ def max_running_sessions() -> int:
         return DEFAULT_MAX_RUNNING_SESSIONS
 
 
+# Codex bounds recursive spawning at `agent_max_depth` (default 3) and tells the
+# agent to do the work itself past that. AgentRT had no equivalent, and the plan
+# recorded the reason to hold off: no permission preset grants any tool that can
+# call `dispatch_from`, so there was no live nesting to cap. What the cap is
+# actually for is the *orchestrator* calling `dispatch_from` in a loop -- a
+# chain a caller builds one hop at a time, each hop cheap, with the cost of the
+# whole chain landing later. Three matches Codex, and this is a runaway guard,
+# not a limit anyone hits while doing real work.
+DEFAULT_MAX_FORK_DEPTH = 3
+
+
+def max_fork_depth() -> int:
+    """How many fork generations deep a `dispatch_from` chain may go.
+
+    Depth counts ancestors: a session dispatched directly is depth 0, a fork of
+    it is depth 1, and so on. A `dispatch_from` that would create a session past
+    this many generations is refused before the fork is requested, so a runaway
+    chain costs nothing rather than forking first and reporting later.
+
+    Zero or negative means no limit, matching `AGENTRT_MAX_SESSIONS`.
+    """
+    raw = os.environ.get("AGENTRT_MAX_FORK_DEPTH", "").strip()
+    if not raw:
+        return DEFAULT_MAX_FORK_DEPTH
+    try:
+        return int(raw)
+    except ValueError:
+        return DEFAULT_MAX_FORK_DEPTH
+
+
 # A consumer report measured a transport-level idle ceiling of roughly 1800s
 # between an orchestrator and a stdio MCP server -- unrelated to and below
 # `wait`'s own documented `timeout` parameter, so a large requested timeout

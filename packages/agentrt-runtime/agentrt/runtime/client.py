@@ -332,6 +332,11 @@ def _capped(text: str, limit: int) -> str:
 #: not an archive, and one entry must not crowd out the events around it.
 _REASONING_CAP = 2000
 
+#: A backstop for `_fork_depth`'s walk, well above any `max_fork_depth` a
+#: deployment would set: the cap decides refusal, this only guarantees the walk
+#: terminates on a chain that is malformed rather than merely deep.
+_FORK_CHAIN_WALK_LIMIT = 64
+
 
 # CSI sequences (`\x1b[...` -- colors, cursor moves, private modes like the
 # reported `\x1b[?2004l` bracketed-paste toggle) and OSC sequences (`\x1b]...`
@@ -1409,6 +1414,10 @@ class Client:
             "created_at": data.get("created_at"),
             "updated_at": data.get("updated_at"),
             "workspace": workspace,
+            # The fork lineage: a fork's source. Reported so a caller can see
+            # where a session came from, and read by `dispatch_from` to bound a
+            # chain (`max_fork_depth`).
+            "parent_conversation_id": data.get("parent_conversation_id"),
         }
         if data.get("error") is not None:
             result["error"] = data.get("error")
@@ -1612,8 +1621,27 @@ class Client:
         Two failure modes are refused rather than passed off as a plain fork: an
         id the source does not have, and a daemon that does not report the bound
         back -- so neither can quietly yield a fork of the whole history.
+
+        Chains are bounded (``AGENTRT_MAX_FORK_DEPTH``, default 3 generations,
+        matching Codex's ``agent_max_depth``): a fork of a fork of a fork is
+        refused before the fork request is made, with the message telling the
+        caller to do the work here instead. Each hop is cheap and the cost of the
+        whole chain lands later, which is the shape worth guarding. Set the
+        variable to 0 to disable the bound.
         """
         resolved = self._resolve_session(source)
+        limit = config.max_fork_depth()
+        if limit > 0:
+            depth = self._fork_depth(resolved)
+            if depth + 1 > limit:
+                # Refused before the fork request, so a runaway chain leaves
+                # nothing behind to clean up.
+                raise ClientError(
+                    f"fork depth limit reached: {source!r} is already "
+                    f"{depth} fork(s) deep and AGENTRT_MAX_FORK_DEPTH is "
+                    f"{limit}. Solve the task in this session instead of "
+                    "delegating it onward, or raise the limit deliberately."
+                )
         body: dict = {}
         if title is not None:
             body["title"] = title
@@ -1653,6 +1681,34 @@ class Client:
             "forked_from_event_id": forked.get("forked_from_event_id"),
             "title": forked.get("title"),
         }
+
+    def _fork_depth(self, session: str) -> int:
+        """How many forks deep ``session`` is: 0 if nothing forked it.
+
+        Walks ``parent_conversation_id`` upward one hop per request. Two things
+        make the walk safe rather than merely short: an ancestor that is gone
+        (``status`` raises) ends it instead of propagating, and a repeated id
+        ends it too -- a malformed chain must not loop, and this runs before a
+        refusal decision, not after.
+        """
+        seen: set[str] = set()
+        depth = 0
+        current = session
+        while depth < _FORK_CHAIN_WALK_LIMIT:
+            if current in seen:
+                break
+            seen.add(current)
+            try:
+                parent = self.status(current).get("parent_conversation_id")
+            except ClientError:
+                # A deleted or unreadable ancestor: treat what we have so far
+                # as the depth rather than failing the dispatch.
+                break
+            if not parent:
+                break
+            depth += 1
+            current = str(parent)
+        return depth
 
     def dispatch_many(
         self,
