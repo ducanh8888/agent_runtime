@@ -100,6 +100,31 @@ def test_wait_all_groups_outcomes() -> None:
     assert out["completed"][0]["result"] == "done"
 
 
+def test_wait_buckets_an_error_with_no_usable_output_as_failed() -> None:
+    """H8 item 5: an errored run with an empty result is `failed`, not
+    `partial` -- the shape a consumer report said was misbucketed.
+
+    `derive_result_state` (run_scope.py) names every non-`finished`
+    terminal `PARTIAL` by design (a request-scope "was this answered"
+    state, not a verdict on the content) -- so `state == "partial"` alone
+    does not mean usable output exists. `_wait_bucket` already narrows it:
+    empty/blank `result` text demotes to `failed` regardless of `state`.
+    This closes item 5 with a regression rather than a code change --
+    read directly, `_wait_bucket` was already correct; nothing exercised
+    this exact combination (error execution_status, `state: "partial"`,
+    blank text) before. docs/plans/deepseek-hardening.md H8 item 5,
+    2026-09-17.
+    """
+    statuses = {E: {"execution_status": "error", "result_state": "partial"}}
+    results = {E: {"response": "", "state": "partial"}}
+    client = _mock_client(_handler(statuses, results))
+
+    out = client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)
+
+    assert [item["id"] for item in out["failed"]] == [E]
+    assert out["partial"] == []
+
+
 def test_wait_timeout_returns_still_running() -> None:
     statuses = {
         A: {"execution_status": "finished", "result_state": "final"},

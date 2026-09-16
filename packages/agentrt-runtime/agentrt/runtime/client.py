@@ -194,14 +194,25 @@ def _is_settled(status: dict) -> bool:
 
 
 def _wait_bucket(payload: dict) -> str:
-    """Map a settled session's result payload to its wait bucket."""
+    """Map a settled session's result payload to its wait bucket.
+
+    `state == "partial"` alone used to be enough to return "partial", ahead
+    of ever looking at the text -- so an errored run with a genuinely empty
+    result was bucketed "partial" ("stopped with usable output") instead of
+    "failed" ("terminal with no usable output"), contradicting the tool's
+    own definition. `state` comes from `derive_result_state`
+    (agent_server/run_scope.py), which names every non-`finished` terminal
+    "partial" by design -- a request-scope "was this answered" state, not a
+    verdict on whether the content is usable -- so it cannot be trusted
+    alone. The text itself decides now. Regression:
+    test_wait_buckets_an_error_with_no_usable_output_as_failed.
+    docs/plans/deepseek-hardening.md H8 item 5, 2026-09-17.
+    """
     status = (payload.get("status") or "").lower()
     if status == "paused":
         return "stopped"
     if status == "finished":
         return "completed"
-    if payload.get("state") == "partial":
-        return "partial"
     text = payload.get("result")
     if isinstance(text, str) and text.strip():
         return "partial"
