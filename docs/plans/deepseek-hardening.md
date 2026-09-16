@@ -619,7 +619,7 @@ untested). Items are grouped by the consumer's own severity labels.
 
 *Cao (high):*
 
-3. **Unpaged payloads (item 3). Done 2026-09-17 (`<hash>`), with the default
+3. **Unpaged payloads (item 3). Done 2026-09-17 (`ef2a264`), with the default
    kept rather than changed.** `wait_all`/`wait_any` return status and
    metadata (length, a content hash) by default instead of full result text;
    add offset/limit paging to `result`, matching the shape `read_evidence`
