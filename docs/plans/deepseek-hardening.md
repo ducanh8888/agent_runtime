@@ -661,14 +661,26 @@ untested). Items are grouped by the consumer's own severity labels.
   caller cannot see is a bound the caller will cross"
   (`../research/friction-log.md` already named this pattern for
   `list --limit`), now with the mechanism traced rather than only reported.
-  Interim guidance until fixed: do not pass a `timeout` anywhere near 1800s;
-  call `wait_*` with a short bound, treat `still_running` as "call again," or
-  poll `status` directly for a session expected to run long. The fix belongs
-  with item 3's paging work: `wait_*` should self-impose sub-timeouts safely
-  under the real ceiling (measure it, do not assume 1800s transfers to every
-  deployment) and return `still_running` at a safe interior boundary --
-  raising/removing the outer bound is not this package's to change, since it
-  sits at the transport the orchestrator supplies, not in AgentRT.
+  Interim guidance until fixed, corrected after a live example this same
+  session: a *short* `timeout` avoids the transport-ceiling risk, but the
+  orchestrator's own foreground is still blocked for that whole span with
+  zero interim signal -- caught live when a user watching the conversation
+  asked "wait_all nên là lệnh chạy background hoặc schedule/wakeup chứ?"
+  after a `wait_all(timeout=300)` was about to be called directly. The
+  correct interim pattern is not "call `wait_*` with a short bound," it is
+  "do not hold the orchestrator's own turn on `wait_*` at all" -- background
+  a CLI poll loop (`agentrt status` on a short interval, exiting once every
+  id settles) instead, or poll `status` directly between other work for a
+  session expected to run long. The fix belongs with item 3's paging work:
+  `wait_*` should self-impose sub-timeouts safely under the real ceiling
+  (measure it, do not assume 1800s transfers to every deployment) and return
+  `still_running` at a safe interior boundary -- raising/removing the outer
+  bound is not this package's to change, since it sits at the transport the
+  orchestrator supplies, not in AgentRT. Item 2's blocking `agentrt wait` CLI
+  (H9's convergence item 2 also depends on it) is exactly this backgroundable
+  poll loop, built in and named, rather than every orchestrator hand-rolling
+  one -- worth moving up in priority given it is also the correct answer to
+  today's live question, not only a nice-to-have.
 - No `transcript --tail N` for a running session's last few steps without
   reading the full JSONL. A thin wrapper over the existing transcript
   cursor/limit machinery, not a new storage format.
