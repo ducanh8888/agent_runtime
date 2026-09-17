@@ -73,7 +73,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 | H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
 | H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry), the OpenHands-ceremony gate, interrupt visibility (item 6, post-init `interrupt()` only), the partial-history fork (item 4, exact event bound) and the settled-wait payload (item 2, title free / usage opt-in) done, 2026-09-17; item 4's `fork_turns` and item 2's terminal reason + paged result skipped or blocked by decision/open H8 items; item 6's `finalize()` and `_ensure_agent_ready` window open; role-shaped profiles (item 3) deferred; rest open |
-| H10 | Second consumer-feedback round: fork diagnosability (misleading partial/progress on never-started forks), credential-failure and refused-path latency, throughput visibility, `dispatch_from` overrides | PORT + NEW | H8 item 5 (`_wait_bucket`), H9 item 4 (fork mechanics) | Planned, not started — diagnosis and fix plan recorded 2026-09-18; two items need a live repro before a fix is chosen, one needs a user decision (vendored fork/credential path) |
+| H10 | Second consumer-feedback round: fork diagnosability (misleading partial/progress on never-started forks), credential-failure and refused-path latency, throughput visibility, `dispatch_from` overrides | PORT + NEW | H8 item 5 (`_wait_bucket`), H9 item 4 (fork mechanics) | Complete, 2026-09-18 — all 8 bug/friction items done or documented; item 2's real root cause (fork's own constructor dropping the cipher) was found only by live repro, not the first hypothesis; item 8's permission override deliberately not built (needs the fork's tools rebuilt, not a field changed) |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -1637,9 +1637,15 @@ not capability" -- distinct in kind from the first (H8) report, which found
 things that were wrong; several items here are things that are correct by
 design but read as wrong from outside, or are genuinely slow rather than
 broken. Each item below was checked against the current source before being
-recorded, not accepted as reported; three of eight bug/friction items still
-need a live repro or a user decision before a fix is chosen, and that is
-stated rather than guessed past.
+recorded, not accepted as reported.
+
+**Closed 2026-09-18.** The user granted permission for every fix direction
+("cho phép làm mọi hướng xử lý, tránh over-engineer") rather than deciding
+each flagged item individually; all eight bug/friction items are done, three
+of them (2, 3, 5) only after a live repro that changed what was actually
+built, not just confirmed the report. Commits: `ea3104b` (item 1), `926f384`
+(item 2), `df714f6` (item 3), `6f80388` (item 4's tests -- its code landed
+inside `ea3104b`), `1556756` (item 8), `65fb667` (docstrings for 4/5/6/7/8).
 
 **Bugs, confirmed against source:**
 
@@ -1663,40 +1669,70 @@ stated rather than guessed past.
    4). A fork that ran zero iterations of its own still reports its parent's
    tool tally as if it were its own progress.
 
-   **Proposed fix, both parts inside `agentrt-runtime`, no vendored change:**
-   add a `bucket` field to `result()`'s own payload, computed with the same
-   `_wait_bucket` function `wait_all`/`wait_any` already use, so any caller of
-   `result()` gets the corrected verdict regardless of call path. Bound
-   `_progress_summary`'s transcript walk to the current request:
-   `request_message_id` is already in the payload it is called from; stop
-   tallying at that event id (nothing at or before it belongs to this
-   request), and short-circuit to "no tool calls completed before the error"
+   **Done, 2026-09-18 (`ea3104b`).** Both parts stayed inside
+   `agentrt-runtime`, no vendored change needed: `result()` now carries a
+   `bucket` field computed with the same `_wait_bucket` function
+   `wait_all`/`wait_any` already used, so any caller of `result()` gets the
+   corrected verdict regardless of call path. `_progress_summary`'s transcript
+   walk is bounded at `request_message_id` (already in the payload it is
+   called from -- nothing at or before that event belongs to the current
+   request) and short-circuits to "no tool calls completed before the error"
    when `iterations_used == 0` without walking the transcript at all.
+   **Verified live, and not staged -- it fell out of testing item 2's fix**:
+   forking a session that had genuinely completed real tool calls, then
+   hitting the (separately fixed) credential bug, produced `bucket: "failed"`
+   (not the misleading `"partial"`) and `progress_summary: "no tool calls
+   completed before the error"` (not the parent's inherited tally) on the
+   first real attempt, before either fix's own dedicated smoke test ran.
 
-2. **Credential failure surfaces ~2 minutes after dispatch, only on forks.**
-   `dispatch()` (and `dispatch_from()`) return immediately after `POST
-   /api/conversations`; nothing checks the resolved profile's credential
-   before accepting the request, confirmed by reading both call sites -- no
-   preflight of any kind exists today. The specific pattern reported (four
-   *forks*, not four fresh dispatches, all failing identically with
-   `litellm...Missing credentials...OPENAI_API_KEY`) is the sharper finding:
-   `fork_conversation`'s own comment states the fork's agent is **not**
-   resolved from `agent_profile_id` the way a fresh dispatch's is -- it is
-   deep-copied from the source's live agent object, persisted to the fork's
-   `base_state.json`, and reloaded from there. If a credential held only in
-   memory (e.g. excluded from serialization, a common and correct pattern for
-   secrets) does not survive that copy-and-reload round trip, a fork would
-   fail credential resolution even though its source ran real tool calls
-   successfully under the same profile -- which is consistent with what was
-   reported, but **not yet confirmed**: this needs a live repro (dispatch a
-   plain session, confirm it authenticates, `dispatch_from` it, see whether
-   the same failure reproduces) before touching the vendored fork/agent-reload
-   path, per AGENTS.md's rule that vendored changes are the user's decision.
-   Independently of that: a cheap, static, non-network check -- does the
-   resolved profile currently have a non-empty credential configured at
-   all -- is answerable at dispatch time without a provider round trip, and
-   would have caught this specific failure mode immediately rather than after
-   ~2 minutes. Worth building regardless of what the fork repro finds.
+2. **Credential failure surfaces ~2 minutes after dispatch, only on forks.
+   Done, 2026-09-18 (`926f384`).** Root cause found by live repro, and it was
+   not the first hypothesis. `dispatch_from` a session that had just
+   completed real tool calls under a working credential, and the fork itself
+   failed on its very first step: `iterations_used: 0`,
+   `LLMServiceUnavailableError`, `litellm...Missing credentials...
+   OPENAI_API_KEY`. Reading the fork's own persisted `base_state.json`
+   directly showed `api_key: null`, while the source's had it correctly
+   encrypted (`gAAAAA...`, a Fernet token) -- so the loss is real and
+   specific to the fork's own persistence, not a network/provider issue
+   (`OPENAI_API_KEY` in the message is litellm's generic template for "no key
+   at all" on an `openai/`-prefixed model string, unrelated to which provider
+   `base_url` actually points at).
+
+   **Two causes stacked, both fixed.** (a) `LocalConversation.fork()`
+   (`agentrt-sdk`) builds `fork_agent` with `model_dump(context=
+   {"expose_secrets": True})` specifically so the fork carries the source's
+   real credentials forward -- and then constructs the fork's own
+   `LocalConversation(...)` *without* passing `cipher=self._cipher`. That
+   constructor's first save of the fork's `base_state.json` therefore ran
+   with no cipher at all, independent of what the source conversation or the
+   daemon had configured, discarding the credential one step later,
+   unconditionally, on every fork. Two-line fix: pass `cipher=self._cipher`.
+   (b) That alone was not sufficient on this deployment: the daemon had never
+   had a cipher to pass in the first place, because `AGENTRT_SECRET_KEY` was
+   never set (confirmed in `daemon.log`, logged since this daemon's first
+   start on 2026-09-09). `agentrt-runtime` now provisions one itself --
+   `config.secret_key()` generates and persists a random key on first use
+   (`state_dir()/secret.key`, 0600), and `_daemon_env` sets
+   `AGENTRT_SECRET_KEY` from it unless an operator already set their own.
+   Unlike the per-start session auth token, this key must be **stable**
+   across restarts: it decrypts what earlier processes encrypted, so
+   rotating it on every start would make already-persisted secrets
+   unreadable rather than merely absent -- a worse failure than the one this
+   fixes.
+
+   **What was tried and correctly rejected first**: a dispatch-time
+   credential preflight (checking whether the resolved profile has a
+   non-empty credential before accepting the request) was the original
+   plan's proposed independent improvement. Once the real cause was found, a
+   preflight would have caught nothing here -- the profile *has* a working
+   credential; the fork's own copy of it was what went missing, after
+   dispatch, not before. Not built, since it would not have prevented or
+   even explained the actual failure.
+
+   **Verified end to end against a real daemon, after both fixes**:
+   dispatched a session, let it complete real tool calls, forked it -- the
+   fork ran cleanly instead of failing at `iterations_used: 0`.
 
 3. **A refused path doesn't stop the agent quickly.** Confirmed why: the
    guard's refusal (`guarded_tools.py`) is an ordinary `ObservationEvent`
@@ -1713,74 +1749,117 @@ stated rather than guessed past.
    be approved by retrying), where a general action-error loop might
    plausibly resolve on retry -- so waiting for the shared, generically-tuned
    threshold is slower than this specific, structurally-certain case needs.
-   **Proposed fix, inside `guarded_tools.py`, no vendored/StuckDetector
-   change:** `GuardedFileEditorExecutor` is already one instance per
-   conversation and can hold small in-memory state cheaply. Track consecutive
-   identical-path refusals; once one repeats (proposed threshold: 2, since
-   there is nothing to learn from a third identical attempt that a second did
-   not already show), strengthen the refusal text with an explicit "this path
-   will not become approved by retrying" line, ahead of and independent of
-   whatever the generic detector eventually does. The report's further ask --
-   "a blocked lifecycle state distinct from running" -- is a larger,
-   cross-cutting change (a new `execution_status`) and is named here as a
-   possible later item, not proposed for this pass.
+   **Done, 2026-09-18 (`df714f6`), inside `guarded_tools.py` and
+   `inspect_tools.py`, no vendored/StuckDetector change.**
+   `GuardedFileEditorExecutor` and `InspectExecutor` are each one instance
+   per conversation and now hold small in-memory state: the last refusal
+   text and a streak count. Once a refusal repeats (threshold 2 -- there is
+   nothing to learn from a third identical attempt that a second did not
+   already show), the refusal text gains an explicit "this is the same
+   refusal as last time -- retrying this exact path will not become
+   approved" line, ahead of and independent of whatever the generic detector
+   eventually does. **Verified live against a real daemon**: a session
+   instructed to retry a refused path three times got the plain refusal on
+   attempt 1 and the nudge verbatim on attempts 2 and 3 in its own
+   transcript, and its own final answer correctly explained why repeating
+   would never help. The report's further ask -- "a blocked lifecycle state
+   distinct from running" -- is a larger, cross-cutting change (a new
+   `execution_status`) and stays a possible later item, not built here.
 
 **Friction, confirmed against source, fix scope varies:**
 
-4. **No second read-only root for an A-vs-B survey.** Confirmed:
-   `dispatch()`, `permissions.check_path`, and `guarded_tools.py` all take
-   exactly one workspace root; there is no multi-root primitive anywhere in
-   this stack. A real `extra_read_roots` would touch `dispatch()`'s API,
-   `permissions.py`, `guarded_tools.py`, `inspect_tools.py`, and the vendored
-   server's `StartConversationRequest` schema -- a cross-cutting change to the
-   permission model's shape, and a decision for the user, not a step to take
-   unasked. The report's own cheaper alternative is buildable entirely inside
-   `agentrt-runtime`, no server/vendored change: at `dispatch()`, scan the
-   task text for absolute paths and warn (not block) when one falls outside
-   the workspace, so the failure mode this report hit -- a task that silently
-   assumed a second tree was reachable -- surfaces before ~15 minutes of
-   refused-path retries instead of after. Recommended as the v1 here; the
-   full multi-root primitive is a question for the user, flagged, not
-   answered.
-5. **`control(tag)` was seen blocking past 120s under load.** `client.tag()`
-   is two plain REST calls (`GET` status, `PATCH` tags) -- nothing in this
-   client-side code is slow. A plausible cause is event-loop or lock
-   contention with an in-flight session's `astep()` on the daemon side (the
-   SDK's own comments describe a per-conversation state lock held across the
-   awaited model call), but that is a hypothesis, not a finding: confirming
-   it needs a live repro (several long-running sessions concurrently, timing
-   a concurrent `tag` call against an idle vs. busy daemon) before any fix,
-   vendored or otherwise, is proposed. Recorded as needing diagnosis, not
-   fixed here.
-6. **Background-task notifications duplicate the full payload.** Confirmed:
-   AgentRT has no backgrounding mechanism of its own anywhere in `wait_all`,
-   `wait_any`, or `client.py` -- what the report describes is the calling MCP
-   client's own generic handling of a tool call that ran past its own
-   timeout, which is outside this codebase and cannot be fixed here. What is
-   in scope: `wait_all`/`wait_any`'s docstrings already tell a caller not to
-   hold its own turn on a long wait, but do not say what happens if that
-   advice is ignored and the host backgrounds the call anyway. Proposed:
-   extend the existing paragraph to name the concrete cost (the eventual
-   notification re-delivers the whole result verbatim) so the existing advice
-   has a stated reason, not just an instruction. Doc-only, no code change.
-7. **Throughput is opaque; `status` gives no per-iteration timing.**
-   Confirmed, and the fix is cheaper than it first looks: every persisted
-   event already carries a `timestamp` field
+4. **No second read-only root for an A-vs-B survey. v1 done, 2026-09-18
+   (`ea3104b`, tests in `6f80388`).** Confirmed: `dispatch()`,
+   `permissions.check_path`, and `guarded_tools.py` all take exactly one
+   workspace root; there is no multi-root primitive anywhere in this stack. A
+   real `extra_read_roots` would touch `dispatch()`'s API, `permissions.py`,
+   `guarded_tools.py`, `inspect_tools.py`, and the vendored server's
+   `StartConversationRequest` schema -- a cross-cutting change to the
+   permission model's shape, big enough that it stays unbuilt: nothing here
+   asked for it specifically, and the cheaper alternative closes the reported
+   failure mode. Built instead, entirely inside `agentrt-runtime`:
+   `dispatch()` scans the task text for absolute paths with a conservative
+   regex (excludes URL path segments, requires two path components) and
+   returns `outside_workspace_paths` when one resolves outside `workspace` --
+   advisory only, never blocks the dispatch, workspace confinement unchanged
+   regardless of what it finds or misses. **Verified live against a real
+   daemon**: a task mentioning a second path came back with
+   `outside_workspace_paths` set, and a follow-up session instructed to
+   retry that path anyway reproduced the exact refused-path pattern this
+   warning exists to catch earlier. The full multi-root primitive remains a
+   question for the user if the warn-only version proves insufficient.
+5. **`control(tag)` was seen blocking past 120s under load. Diagnosed,
+   documented, 2026-09-18 (`65fb667`) -- not a bug, a deliberate SDK design
+   constraint.** Confirmed live: tagging a session mid-way through a 45s
+   terminal command took 23.8s, while `status()` on the same busy session
+   stayed fast (0.39s) and `capacity()` stayed fast (5.3s) -- so this is not
+   a general daemon stall, only the write path to a busy conversation. Root
+   cause, read directly in `conversation_service.py`'s `update_conversation`:
+   a tag write calls `_update_state_tags_sync` via
+   `loop.run_in_executor(...)`, which acquires the conversation's own state
+   lock -- the same `FIFOLock` `astep()` holds across its *entire* awaited
+   model/tool call, by the SDK's own documented design ("any unrelated
+   state-mutating coroutine awaited on this event-loop thread would silently
+   re-enter the lock and corrupt history"). A tag write is exactly such a
+   mutator, dispatched to a worker thread specifically so it does not
+   deadlock the event loop -- but it still queues behind the lock until the
+   current step releases it. This is the concurrency primitive that keeps
+   autosave and a metadata write from observing an inconsistent
+   `ConversationState`; loosening it to make tagging faster would be
+   touching agent-loop concurrency for a UX nicety, exactly the kind of
+   vendored change this project's own rules warn hardest against ("a guard
+   that is subtly wrong is worse than none, because it is trusted" applies
+   doubly to a lock). **Fixed by documenting the real behavior** instead,
+   in `control`'s and `client.tag()`'s own text: writing a tag on a busy
+   session can take as long as whatever that session's current step is
+   doing, and that is not a hang.
+6. **Background-task notifications duplicate the full payload. Documented,
+   2026-09-18 (`65fb667`).** Confirmed: AgentRT has no backgrounding
+   mechanism of its own anywhere in `wait_all`, `wait_any`, or `client.py` --
+   what the report describes is the calling MCP client's own generic
+   handling of a tool call that ran past its own timeout, which is outside
+   this codebase and cannot be fixed here. `wait_all`/`wait_any`'s
+   docstrings already told a caller not to hold its own turn on a long wait;
+   they now also name the concrete cost of ignoring that advice -- the
+   eventual notification is likely to re-deliver the whole result verbatim --
+   so the existing advice has a stated reason, not just an instruction.
+7. **Throughput is opaque; `status` gives no per-iteration timing. Done,
+   2026-09-18 (`ea3104b`).** The fix was cheaper than it first looked: every
+   persisted event already carried a `timestamp` field
    (`agentrt/sdk/event/base.py:Event.timestamp`) -- `transcript()`'s
-   projection in `client.py` reads every other field off each event kind but
-   currently drops this one from all of them. No new instrumentation is
-   needed: add `timestamp` to each transcript entry, and a caller can compute
-   per-action wall-clock gaps itself from data the daemon already persists.
-8. **`dispatch_from` takes no `max_iterations`/`permission` override.**
-   Confirmed by the signature: `title`, `tags`, `from_event_id` only. Inheriting
-   is the right default and stays one; adding both as optional overrides is a
-   plain additive change, low risk. One decision worth surfacing rather than
-   deciding here: should a fork be allowed to request a *wider* permission
-   than its source, or only the same or narrower? Widening on fork is a
-   privilege-escalation shape (dispatch a tightly-scoped `readonly` session,
-   then fork it into `broad`) that a plain pass-through parameter would open
-   by accident; recommend restricting the override to same-or-narrower and
-   flagging it rather than silently allowing widening.
+   projection in `client.py` read every other field off each event kind but
+   dropped this one from all of them. No new instrumentation was needed:
+   `timestamp` is now on every transcript entry. **Verified live**: a real
+   session's transcript showed real timestamps a few seconds apart across
+   the refused-attempt-then-nudge sequence used to verify item 3, confirming
+   the field round-trips correctly end to end, not just in the mocked unit
+   test.
+8. **`dispatch_from` takes no `max_iterations`/`permission` override.
+   `max_iterations` done, 2026-09-18 (`1556756`); permission deliberately not
+   built.** The server genuinely had no support for this at all --
+   `ForkConversationRequest` had no field for it and neither did the PATCH
+   update path -- so this needed a small, real server-side addition:
+   `max_iterations` is a plain field override on the fork's stored record,
+   threaded through `models.py` / `conversation_router.py` /
+   `conversation_service.py`. Permission stays unbuilt, and not only because
+   of the privilege-escalation shape this document already flagged
+   (dispatch a tightly-scoped `readonly` session, then fork it into
+   `broad`): building item 2's fix surfaced the deeper reason first --
+   permission is not a field on the fork's stored record at all, it is baked
+   into the `file_editor` guard's own executor at the preset it was created
+   under (`GuardedFileEditorTool.create`), which the fork's agent carries
+   forward as an already-constructed object, not a reference to rebuild from.
+   An override would need those tools reconstructed for a new preset, not
+   one field changed -- a materially bigger and more security-sensitive
+   change than the field addition this item otherwise is. `dispatch_from`
+   verifies the daemon honoured the `max_iterations` request the same way it
+   already did for `from_event_id`: an older daemon would accept the body,
+   ignore the unknown key, and the fork would silently inherit the source's
+   whole budget instead of the tighter one asked for -- checked before the
+   task is sent, so the mistake is never run on. **Verified live against a
+   real daemon**: forked a session with `max_iterations=2`, and `status()`
+   on the fork reported `max_iterations: 2` -- a real `StoredConversation`
+   field, not merely an echo of the request.
 
 **Kept, no fix -- confirmed positive signal, recorded so it isn't lost:**
 
@@ -1796,15 +1875,17 @@ stated rather than guessed past.
     in one line. Held up as the bar other error messages in this codebase
     should meet, not only tag's.
 
-**Decisions this phase needs from the user before implementation, named so
-none is silently assumed:** item 2's fork/credential root cause (touches
-vendored fork/agent-reload code, only after the repro confirms it); item 4's
-full `extra_read_roots` primitive vs. the cheaper warn-only v1 recommended
-above; item 8's same-or-narrower restriction on a forked permission override.
-Everything else recorded here (items 1, 3, 6, 7, and item 4's v1, item 8's
-additive parameters themselves) is scoped inside `agentrt-runtime`, additive,
-and does not reopen a prior decision -- implementable without further sign-off
-once prioritized.
+**How the three flagged decisions actually resolved.** The user granted
+permission for every fix direction rather than deciding each individually
+("cho phép làm mọi hướng xử lý, tránh over-engineer"), and building each one
+turned up more than the diagnosis alone had: item 2's fork/credential root
+cause was not what the first hypothesis guessed (redaction under a missing
+daemon cipher was real but not sufficient -- `fork()`'s own constructor call
+was dropping the cipher independent of that); item 4's cheaper warn-only v1
+was sufficient and the full `extra_read_roots` primitive was not attempted;
+item 8's permission override turned out to need the fork's tools rebuilt, not
+a field changed, which settled "same-or-narrower vs. build it at all" toward
+not building it, for a sharper reason than the one originally flagged.
 
 ## 4. Proposed API contract
 
