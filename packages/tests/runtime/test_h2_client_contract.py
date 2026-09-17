@@ -158,6 +158,98 @@ def test_result_non_error_has_no_progress_summary() -> None:
     assert "progress_summary" not in payload
 
 
+def test_result_carries_the_bucket_wait_all_already_applies() -> None:
+    """H10 item 1a: `result()` called directly, not through `wait_all`/
+    `wait_any`, used to expose only the raw `state` field -- `"partial"` for
+    every non-`finished` terminal status by design, including a genuinely
+    empty answer. `_wait_bucket` already corrects this for the wait tools;
+    `result()` now carries the same correction."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={"response": "", "state": "partial", "iterations_used": 0},
+            )
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    client = _mock_client(handler)
+    payload = client.result(SESSION)
+    assert payload["state"] == "partial"
+    assert payload["bucket"] == "failed"
+
+
+def test_progress_summary_zero_iterations_skips_the_transcript_read() -> None:
+    """H10 item 1b: a fork that never ran has nothing of its own to tally,
+    and must not report its parent's inherited history. No `events/search`
+    call should even happen -- the mock only serves `agent_final_response`
+    and `status`; a walk would 500 on `events/search` here."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "",
+                    "state": "partial",
+                    "request_message_id": "u1",
+                    "iterations_used": 0,
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(500, json={"detail": "should not be called"})
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    client = _mock_client(handler)
+    payload = client.result(SESSION)
+    assert payload["progress_summary"] == "no tool calls completed before the error"
+
+
+def test_progress_summary_stops_at_the_request_boundary() -> None:
+    """A fork's transcript includes the parent's inherited events ahead of
+    `request_message_id`; the tally must stop there, not walk into them."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "",
+                    "state": "partial",
+                    "request_message_id": "u1",
+                    "iterations_used": 1,
+                    "error": {"code": "LLMServiceUnavailableError", "detail": "x"},
+                },
+            )
+        if path.endswith("/events/search"):
+            # The daemon's own order: TIMESTAMP_DESC, newest first.
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        # This request's own action, after the boundary.
+                        {
+                            "kind": "ActionEvent",
+                            "id": "a2",
+                            "tool_name": "file_editor",
+                        },
+                        {"kind": "MessageEvent", "id": "u1", "role": "user"},
+                        # Inherited from the parent, ahead of this request's
+                        # own boundary -- must not be tallied.
+                        {"kind": "ActionEvent", "id": "a1", "tool_name": "inspect"},
+                        {"kind": "ActionEvent", "id": "a0", "tool_name": "inspect"},
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    client = _mock_client(handler)
+    payload = client.result(SESSION)
+    assert payload["progress_summary"] == "file_editor x1"
+
+
 def test_result_final_empty_is_kept() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/agent_final_response"):
@@ -228,6 +320,39 @@ def test_transcript_includes_errors_and_action_locations() -> None:
     error = by_type["error"]
     assert error["code"] == "MaxIterationsReached"
     assert "maximum iterations" in error["detail"]
+
+
+def test_transcript_carries_the_persisted_timestamp() -> None:
+    """H10 item 7: every event already carries this; nothing computes it,
+    so a caller can measure per-step wall-clock gaps from the transcript
+    alone instead of only knowing a session is alive from `last_progress_at`.
+    """
+    items = [
+        {
+            "kind": "ActionEvent",
+            "id": "act-1",
+            "tool_name": "file_editor",
+            "timestamp": "2026-09-18T00:00:00Z",
+        },
+        {
+            "kind": "ObservationEvent",
+            "id": "obs-1",
+            "tool_name": "file_editor",
+            "timestamp": "2026-09-18T00:00:05Z",
+            "observation": {"content": [{"type": "text", "text": "done"}]},
+        },
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(200, json={"items": items, "next_page_id": None})
+        return httpx.Response(200, json=_conversation())
+
+    client = _mock_client(handler)
+    events = client.transcript(SESSION)["events"]
+    by_type = {event["type"]: event for event in events}
+    assert by_type["action"]["timestamp"] == "2026-09-18T00:00:00Z"
+    assert by_type["observation"]["timestamp"] == "2026-09-18T00:00:05Z"
 
 
 def test_transcript_strips_ansi_from_terminal_output() -> None:

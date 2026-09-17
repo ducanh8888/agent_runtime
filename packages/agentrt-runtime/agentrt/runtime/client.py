@@ -15,6 +15,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -95,6 +96,48 @@ def _started_at(status: dict) -> float | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.timestamp()
+
+
+#: A conservative absolute-path shape: at least two segments, so a bare `/`
+#: or a single-segment mention (unlikely to be a real path) does not match.
+#: POSIX and Windows-drive forms only -- this is a heuristic scan of free
+#: text, not a path parser, and stays conservative on purpose: a false
+#: negative costs nothing (the old, silent behavior), a false positive is a
+#: warning the caller reads and ignores. The leading lookbehind excludes a
+#: match that is really the tail of something else -- most commonly a URL
+#: path (`.../org/repo` after `github.com`), where the character right
+#: before the first `/` is a word character, dot, colon or another slash.
+_ABS_PATH_PATTERN = re.compile(
+    r"(?<![\w./:\\-])(?:/[\w.\-]+){2,}"
+    r"|(?<![\w.\-])[A-Za-z]:[\\/][\w.\-]+(?:[\\/][\w.\-]+)*"
+)
+
+
+def _task_paths_outside_workspace(task: str, workspace: str) -> list[str]:
+    """Absolute paths mentioned in `task` that resolve outside `workspace`.
+
+    H10 item 4's cheaper alternative to a second read-only root: "compare
+    repo A against repo B" is a common survey shape, and dispatching into A
+    while the task also names B is a silent setup for every read of B to be
+    refused. This cannot catch every phrasing and does not try to -- it is a
+    warning, not a guard, and `workspace` continues to be enforced the same
+    way regardless of what this finds or misses.
+    """
+    root = Path(workspace).resolve()
+    found: list[str] = []
+    seen: set[str] = set()
+    for match in _ABS_PATH_PATTERN.finditer(task):
+        candidate = match.group(0)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            resolved = Path(candidate).resolve()
+        except (OSError, ValueError):
+            continue
+        if not permissions.contains(root, resolved):
+            found.append(candidate)
+    return found
 
 
 def _reports_dir(resolved: str) -> str:
@@ -1282,9 +1325,19 @@ class Client:
         hand-rolling its own worktree setup and cleanup. Server-side support
         (`workspace_mode`, worktree creation, pinned-commit tracking) already
         existed; this is what exposes it here.
+
+        ``outside_workspace_paths``, when present, lists absolute paths found
+        in ``task`` that resolve outside ``workspace`` -- most commonly a
+        two-repository comparison ("compare A against B") dispatched into
+        only one of them, which otherwise surfaces as refused-path retries
+        deep into the run instead of here. This is a heuristic text scan, not
+        a guard: it never blocks the dispatch, can miss a path or flag one
+        that was never meant literally, and ``workspace`` is enforced exactly
+        as before regardless of what it finds. H10 item 4, 2026-09-18.
         """
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
+        outside = _task_paths_outside_workspace(task, workspace)
         preset = permissions.normalise(permission)
         profile_id = self._profile_id(preset, llm_profile)
         resolved_llm = (
@@ -1351,6 +1404,8 @@ class Client:
         if resolved_sha:
             result["workspace_mode"] = data.get("workspace_mode") or workspace_mode
             result["workspace_resolved_sha"] = resolved_sha
+        if outside:
+            result["outside_workspace_paths"] = outside
         return result
 
     def _all_sessions(self) -> list[dict]:
@@ -1544,10 +1599,23 @@ class Client:
 
         payload = _response_payload(full_id, data)
         payload["status"] = status
+        # H10 item 1a: `state` alone is the raw, unmodified
+        # `derive_result_state` value, which calls every non-`FINISHED`
+        # terminal status "partial" by design -- the same defect H8 item 5
+        # fixed, but only for the correction `wait_all`/`wait_any` apply on
+        # top of this same payload via `_wait_bucket`. A caller reading
+        # `result()` directly never saw that correction. Added here so it
+        # does regardless of call path; `_wait_bucket` only needs `status`
+        # and `result`, both already set above.
+        payload["bucket"] = _wait_bucket(payload)
         payload = _apply_result_paging(payload, offset=offset, max_chars=max_chars)
         if status == "error":
             try:
-                payload["progress_summary"] = self._progress_summary(resolved)
+                payload["progress_summary"] = self._progress_summary(
+                    resolved,
+                    request_message_id=payload.get("request_message_id"),
+                    iterations_used=payload.get("iterations_used"),
+                )
             except (ClientError, json.JSONDecodeError):
                 # Same tolerance as the usage read in ``wait``: this is an
                 # addition to ``result``, not its point, so a transcript that
@@ -1559,23 +1627,51 @@ class Client:
                 pass
         return payload
 
-    def _progress_summary(self, resolved: str) -> str:
-        """Tally tool calls from the transcript into one deterministic line.
+    def _progress_summary(
+        self,
+        resolved: str,
+        *,
+        request_message_id: object = None,
+        iterations_used: object = None,
+    ) -> str:
+        """Tally tool calls from the transcript into one deterministic line,
+        scoped to the current request.
+
+        H10 item 1b: an unscoped walk over a forked conversation's transcript
+        tallies the parent's inherited history as if it were this run's own
+        progress -- `fork_conversation` deep-copies the source's events up to
+        the fork point, and those events are indistinguishable from this
+        conversation's own once persisted. A run that made zero iterations of
+        its own has nothing to tally, so that case is answered without a
+        transcript read at all. Otherwise the walk stops as soon as it
+        reaches ``request_message_id`` (the boundary the current request
+        started from): nothing at or before it belongs to this request.
 
         Best-effort: a transcript read that fails (deleted mid-call, daemon
         hiccup, an undecodable body) leaves ``progress_summary`` off the
         response entirely rather than raising, since this is an addition to
         ``result``, not its point.
         """
+        if iterations_used == 0:
+            return "no tool calls completed before the error"
         tally: dict[str, int] = {}
         cursor: str | None = None
         pages = 0
         while pages < 5:
             page = self.transcript(resolved, limit=100, cursor=cursor)
-            for event in page.get("events", []):
+            reached_boundary = False
+            for event in reversed(page.get("events", [])):
+                if (
+                    request_message_id is not None
+                    and event.get("id") == request_message_id
+                ):
+                    reached_boundary = True
+                    break
                 if event.get("type") == "action":
                     name = event.get("tool") or "unknown"
                     tally[name] = tally.get(name, 0) + 1
+            if reached_boundary:
+                break
             cursor = page.get("next_cursor")
             pages += 1
             if not cursor:
@@ -1643,6 +1739,7 @@ class Client:
         title: str | None = None,
         tags: dict[str, str] | None = None,
         from_event_id: str | None = None,
+        max_iterations: int | None = None,
     ) -> dict:
         """Fork a session and give the fork the task.
 
@@ -1654,9 +1751,15 @@ class Client:
         of it.
 
         The fork inherits the source's agent, workspace and permission -- that
-        is what makes it useful -- so there is little to choose here beyond the
-        task and its metadata. It runs in the same directory as the source, so
-        two writers there are subject to the shared-writer cap.
+        is what makes it useful, and permission is not offered as an override
+        here: the source's tools, including the guard baked into `file_editor`
+        at the preset it was created under, are deep-copied as-is, so
+        widening or narrowing it on the fork would need those tools rebuilt,
+        not one field changed. `max_iterations` has no such problem -- it is
+        a plain counter checked at each step -- so it is: a fork usually
+        exists because the task got narrower, and inheriting the source's
+        whole budget with it is rarely what is wanted. `None` (default)
+        inherits the source's budget unchanged.
 
         ``from_event_id`` bounds *how much* of that history is inherited: the
         fork copies only the branch up to and including that event -- that event
@@ -1699,6 +1802,8 @@ class Client:
             body["tags"] = _clean_tags(tags)
         if from_event_id is not None:
             body["from_event_id"] = from_event_id
+        if max_iterations is not None:
+            body["max_iterations"] = max_iterations
         forked = self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/fork",
@@ -1707,6 +1812,20 @@ class Client:
         new_id = forked.get("id")
         if not new_id:
             raise ClientError(f"fork of {source!r} returned no conversation id")
+        if max_iterations is not None:
+            # Same reasoning as the from_event_id check below: a daemon that
+            # predates this parameter accepts the body, ignores the unknown
+            # key, and the fork silently inherits the source's whole budget
+            # instead of the tighter one asked for -- checked before the task
+            # is sent, so the mistake is never run (or billed) on.
+            honored = forked.get("max_iterations")
+            if honored != max_iterations:
+                raise ClientError(
+                    f"fork of {source!r} did not honour max_iterations="
+                    f"{max_iterations!r}: the daemon reported {honored!r}. It "
+                    "may predate this parameter. The fork was created and left "
+                    f"idle as {new_id}; delete it if you do not want it."
+                )
         if from_event_id is not None:
             # A daemon older than this parameter accepts the body, ignores the
             # unknown key and copies the entire history -- answering exactly
@@ -1723,7 +1842,7 @@ class Client:
                     f"idle as {new_id}; delete it if you do not want it."
                 )
         self.send(new_id, task)
-        return {
+        result: dict = {
             "id": new_id,
             "short_id": short_id(new_id),
             "status": _status_of(forked) or self.status(new_id).get("status"),
@@ -1731,6 +1850,9 @@ class Client:
             "forked_from_event_id": forked.get("forked_from_event_id"),
             "title": forked.get("title"),
         }
+        if max_iterations is not None:
+            result["max_iterations"] = forked.get("max_iterations")
+        return result
 
     def _fork_depth(self, session: str) -> int:
         """How many forks deep ``session`` is: 0 if nothing forked it.
@@ -2066,6 +2188,12 @@ class Client:
         frequently empty on this deployment while ``reasoning_content`` on the
         same event is not, so a transcript read without this could show a tool
         call with no visible intent. H8 item 10, 2026-09-17.
+
+        Every entry carries ``timestamp``, the event's own persisted time --
+        so throughput (time between one action and the next) is something a
+        caller can compute from this alone, rather than only knowing a
+        session is alive from `status`'s `last_progress_at`. H10 item 7,
+        2026-09-18.
         """
         resolved = self._resolve_session(session)
 
@@ -2098,6 +2226,12 @@ class Client:
                     # tool that hands out event ids. Without it the parameter
                     # could not be used at a conversation boundary at all.
                     "id": item.get("id"),
+                    # H10 item 7: every persisted event already carries this;
+                    # nothing here computed it, so it costs nothing to project.
+                    # Lets a caller measure per-step wall-clock time itself
+                    # instead of only knowing "it is alive" from
+                    # `last_progress_at`.
+                    "timestamp": item.get("timestamp"),
                     "role": message.get("role"),
                     "text": _join_text(message.get("content")),
                 }
@@ -2110,6 +2244,7 @@ class Client:
                 entry = {
                     "type": "action",
                     "id": item.get("id"),
+                    "timestamp": item.get("timestamp"),
                     "tool": item.get("tool_name"),
                     "thought": _capped(_join_text(item.get("thought")), 400),
                 }
@@ -2125,6 +2260,7 @@ class Client:
                     {
                         "type": "observation",
                         "id": item.get("id"),
+                        "timestamp": item.get("timestamp"),
                         "tool": item.get("tool_name"),
                         "output": _capped(
                             _strip_ansi(_join_text(observation.get("content"))), 600
@@ -2138,6 +2274,7 @@ class Client:
                     {
                         "type": "error",
                         "id": item.get("id"),
+                        "timestamp": item.get("timestamp"),
                         "code": item.get("code"),
                         "detail": _capped(str(item.get("detail") or ""), 400),
                     }
@@ -2355,6 +2492,12 @@ class Client:
 
         An empty string as a value removes that key, which is the only way to
         remove one when the write is a merge.
+
+        On a session that is actively running, this can be slow -- measured
+        at ~24s against a session mid-way through one 45s terminal command.
+        Not a hang: the PATCH shares the same per-conversation lock the
+        running step holds for its whole duration, by the SDK's own design,
+        and clears as soon as the step does. H10 item 5, 2026-09-18.
         """
         current = dict(self.status(session).get("tags") or {})
         for key, value in _clean_tags(tags).items():
