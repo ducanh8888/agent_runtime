@@ -687,12 +687,33 @@ untested). Items are grouped by the consumer's own severity labels.
     detail does name is the deadline and the fact that no step completed and no
     tool was called.
 
-    Verified: 11 tests covering what counts as started (an action, an
+    **A defect the unit tests could not see, found by running it for real.**
+    The end-to-end probe (a source daemon, the real provider, a deadline of 1s)
+    showed the deadline firing and the session then ending `paused` with **no
+    error at all** -- the silent outcome this item exists to remove, produced by
+    the item's own cleanup. The run's `finally` cancelled the watchdog while it
+    was inside `interrupt()`, which is waiting on that very run task, so the
+    watchdog died before it recorded anything. Every unit test still passed,
+    because none of them went through `run()`. Fixed by having the watchdog mark
+    itself fired before its first await and leaving it alone afterwards, and
+    guarded by a test that drives the real `run()` path -- which fails with
+    `assert 0 == 1` on the pre-fix code. Writing that test took two corrections
+    of its own, both worth recording: a stub that re-raises `CancelledError`
+    is not faithful to `LocalConversation`, which deliberately does not -- and
+    with the unfaithful stub the failure was the stub's, not the product's; and
+    the recording happens on an executor thread *after* the run task settles, so
+    the test has to wait for the recording rather than for the run to end.
+
+    Verified: 12 tests covering what counts as started (an action, an
     observation via the baselines, a completed step; *not* a bare message, and
     *not* history from an earlier run), the watchdog firing and not firing,
-    zero disabling it, and the derivation including the unreadable-profile
-    fallback. The firing test fails with `Awaited 0 times` when the watchdog is
-    neutered -- a behavioural failure, not an import error. 177 tests pass
+    zero disabling it, the derivation including the unreadable-profile fallback,
+    and the integration above. The firing test fails with `Awaited 0 times` when
+    the watchdog is neutered, and the integration test with `0 == 1` when the
+    cancellation fix is reverted. End-to-end against the real provider: a run
+    stopped by the deadline reports `error` with code
+    `RunStartDeadlineExceeded` and classification `transient`/`retryable`; a run
+    whose first call finishes inside the deadline is left alone. 148 tests pass
     across the server suites that exercise the run path.
 
 *Cao (high):*

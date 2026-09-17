@@ -823,7 +823,10 @@ class EventService:
         return False
 
     async def _watch_start_deadline(
-        self, baseline_events: int, baseline_iterations: int
+        self,
+        baseline_events: int,
+        baseline_iterations: int,
+        state: dict[str, bool] | None = None,
     ) -> None:
         """Stop a run that has produced nothing by the deadline.
 
@@ -837,6 +840,14 @@ class EventService:
         Ordering matters: the run is interrupted first, because the interrupt
         leaves the conversation PAUSED, and the typed error is recorded after
         it so ERROR is the status that stands.
+
+        ``state`` is set to ``{"fired": True}`` before that first await, and the
+        caller must not cancel this task once it has fired -- measured, not
+        theory: the run's own ``finally`` used to cancel the watchdog while it
+        was inside ``interrupt()``, which is waiting on the run task, so the
+        watchdog was killed mid-sequence and the session ended PAUSED with no
+        reason recorded at all. That is the silent outcome this item exists to
+        remove, produced by the item's own cleanup.
         """
         deadline = server_config.start_deadline_seconds(self.conversations_dir)
         if deadline <= 0:
@@ -858,6 +869,10 @@ class EventService:
             "run produced no action or observation within %.0fs; stopping it",
             deadline,
         )
+        if state is not None:
+            # Before the first await, so the run's finally can see it and leave
+            # this task alone.
+            state["fired"] = True
         await self.interrupt()
         await loop.run_in_executor(None, self._record_start_deadline_sync, deadline)
 
@@ -1471,8 +1486,11 @@ class EventService:
                 baseline_iterations = (
                     getattr(_state, "iterations_used", 0) if _state is not None else 0
                 )
+                deadline_fired: dict[str, bool] = {}
                 deadline_watch = asyncio.create_task(
-                    self._watch_start_deadline(baseline_events, baseline_iterations)
+                    self._watch_start_deadline(
+                        baseline_events, baseline_iterations, deadline_fired
+                    )
                 )
                 try:
                     # Prefer the native async path when available so the event
@@ -1519,12 +1537,19 @@ class EventService:
                         )
                     await loop.run_in_executor(None, self._mark_error_status_sync)
                 finally:
-                    # The run is over either way, so the watchdog has nothing
-                    # left to judge; leaving it running would fire against the
-                    # next run's baselines.
-                    deadline_watch.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await deadline_watch
+                    # The run is over, so a watchdog that has *not* fired has
+                    # nothing left to judge and is cancelled here.
+                    #
+                    # One that has fired is deliberately left alone: it is in
+                    # `interrupt()`, waiting on this very task, so cancelling it
+                    # would kill it before it records why -- measured, and the
+                    # result was a session that ended PAUSED with no reason at
+                    # all. It terminates on its own once it has recorded the
+                    # outcome, so nothing is leaked by not awaiting it here.
+                    if not deadline_fired.get("fired"):
+                        deadline_watch.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await deadline_watch
                     # Wait for all pending events to be published via
                     # AsyncCallbackWrapper before publishing the final state update.
                     # This prevents a race condition where the conversation status

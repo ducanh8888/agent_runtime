@@ -9,6 +9,7 @@ that would meet an unknown one.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -232,3 +233,88 @@ def test_the_environment_overrides_the_derivation(tmp_path, monkeypatch) -> None
     )
 
     assert server_config.start_deadline_seconds(state_dir / "conversations") == 42.0
+
+
+# --- the integration the unit tests could not see ------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_never_starts_is_recorded_through_run_itself(
+    tmp_path, monkeypatch
+) -> None:
+    """The whole path, not the watchdog called directly.
+
+    Written after the end-to-end probe found what these unit tests could not:
+    the run's own `finally` cancelled the watchdog while it was inside
+    `interrupt()` -- which is waiting on the run task -- so the watchdog died
+    before recording anything and the session ended PAUSED with no reason at
+    all. Every test above still passed, because none of them went through
+    `run()`.
+    """
+    monkeypatch.setenv(server_config.START_DEADLINE_ENV, "0.2")
+    # IDLE, as a dispatch leaves it: `run()` refuses to start on RUNNING.
+    state = _state(tmp_path, status=ConversationExecutionStatus.IDLE)
+    holder: dict = {}
+
+    class _Agent:
+        """`run()` inspects type(...).astep, so this has to be a real class."""
+
+        async def astep(self, *args, **kwargs) -> None:  # pragma: no cover
+            raise AssertionError("the run should never reach a step")
+
+    class _Conversation:
+        """Mirrors LocalConversation in the two ways this path inspects it."""
+
+        _state = state
+
+        def __init__(self) -> None:
+            self.agent = _Agent()
+
+        async def arun(self) -> None:
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                # LocalConversation settles PAUSED, records the interrupt, and
+                # deliberately does *not* re-raise -- the documented contract
+                # whose whole point is that the task ends cleanly. A stub that
+                # re-raised instead made this test fail for the wrong reason:
+                # `interrupt()` awaits this task, so the CancelledError
+                # travelled back up and cancelled the watchdog mid-sequence,
+                # and the recording never happened. Faithful here or the test
+                # measures the stub.
+                state.execution_status = ConversationExecutionStatus.PAUSED
+
+        def interrupt(self) -> None:
+            task = holder.get("task")
+            if task is not None and not task.done():
+                task.cancel()
+
+        def pause(self) -> None:
+            state.execution_status = ConversationExecutionStatus.PAUSED
+
+        def _on_event(self, event) -> None:
+            state.append_event(event)
+
+    service = EventService(
+        stored=SimpleNamespace(id=state.id), conversations_dir=tmp_path
+    )
+    service._conversation = _Conversation()
+
+    await service.run()
+    holder["task"] = service._run_task
+    assert holder["task"] is not None
+
+    # Wait for the *recording*, not just for the run to end: it happens on an
+    # executor thread after the run task has settled, so a check that stopped at
+    # "the run is done" would read PAUSED and miss it. With the bug this test
+    # was written for, this poll is what fails -- nothing ever appears.
+    errors: list[ConversationErrorEvent] = []
+    for _ in range(100):
+        errors = [e for e in state.events if isinstance(e, ConversationErrorEvent)]
+        if errors:
+            break
+        await asyncio.sleep(0.05)
+
+    assert len(errors) == 1, [type(e).__name__ for e in state.events]
+    assert errors[0].code == START_DEADLINE_ERROR_CODE
+    assert state.execution_status == ConversationExecutionStatus.ERROR
