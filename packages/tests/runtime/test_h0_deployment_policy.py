@@ -20,6 +20,16 @@ from agentrt.agent_server.deployment_policy import DeploymentLLMPolicy
 daemon = cast(Any, pytest.importorskip("agentrt.runtime.daemon"))
 
 
+@pytest.fixture(autouse=True)
+def _isolated_state_dir(tmp_path, monkeypatch):
+    """`_daemon_env` now also provisions `AGENTRT_SECRET_KEY` (H10 item 2),
+    generating and persisting one under `config.state_dir()` on first use.
+    Without this, every test below would read and write the real
+    `~/.agentrt/secret.key` instead of a throwaway one."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    monkeypatch.delenv("AGENTRT_SECRET_KEY", raising=False)
+
+
 def test_daemon_env_sets_explicit_deployment_policy() -> None:
     env = daemon._daemon_env("test-token")
     raw = env["AGENTRT_DEPLOYMENT_LLM_POLICY"]
@@ -60,3 +70,31 @@ def test_daemon_env_does_not_override_an_operator_s_own_choice(monkeypatch) -> N
     env = daemon._daemon_env("test-token")
     assert env["AGENTRT_REGISTER_BUILTIN_SUBAGENTS"] == "1"
     assert env["AGENTRT_ENABLE_VSCODE"] == "1"
+
+
+def test_daemon_env_provisions_a_stable_secret_key() -> None:
+    """H10 item 2: without a cipher key, the vendored server redacts a
+    conversation's persisted secrets (an LLM's API key among them) on save --
+    silently, with only a log line. A fresh dispatch never notices; a fork
+    always round-trips through exactly that save/reload before it can run,
+    so it always lost its credential this way. Reproduced live against a
+    real daemon before this fix: a fork of a session that had just run three
+    successful tool calls failed its first step with a provider credential
+    error, at iterations_used: 0.
+    """
+    first = daemon._daemon_env("test-token")["AGENTRT_SECRET_KEY"]
+    assert first
+    # Stable across restarts, unlike the per-start session token: it
+    # decrypts what earlier processes encrypted, so a new value on every
+    # start would make already-persisted secrets unreadable rather than
+    # merely absent.
+    second = daemon._daemon_env("other-token")["AGENTRT_SECRET_KEY"]
+    assert second == first
+
+
+def test_daemon_env_does_not_override_an_operators_own_secret_key(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AGENTRT_SECRET_KEY", "operator-chosen-key")
+    env = daemon._daemon_env("test-token")
+    assert env["AGENTRT_SECRET_KEY"] == "operator-chosen-key"

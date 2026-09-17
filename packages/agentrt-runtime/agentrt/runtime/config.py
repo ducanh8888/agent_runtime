@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
+import secrets
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +71,63 @@ def daemon_file() -> Path:
 def log_file() -> Path:
     """Path to the daemon's rotating log file."""
     return state_dir() / "daemon.log"
+
+
+def secret_key_file() -> Path:
+    """Path to the daemon's persistent secret-encryption key."""
+    return state_dir() / "secret.key"
+
+
+def secret_key() -> str:
+    """Return this installation's stable ``AGENTRT_SECRET_KEY``, generating
+    and persisting one on first use.
+
+    Without it, the vendored agent server has no cipher and redacts a
+    conversation's secrets (an LLM's API key among them) when it persists
+    state to disk -- silently, with only a log line, not an error. A fresh
+    session dispatched directly is unaffected (it never round-trips through
+    a save/reload before its first real work), but a *fork* always does: the
+    server writes the fork's agent to its own ``base_state.json`` and reloads
+    it from there before running, per ``fork_conversation``'s own comment
+    that "the agent is NOT stored in meta.json". Reproduced live: a fork of a
+    session that had just run three successful tool calls failed its very
+    first step with a provider credential error, at `iterations_used: 0`.
+
+    Unlike the per-start session auth token, this key must be *stable*
+    across restarts -- it decrypts what earlier processes encrypted, so
+    rotating it on every start would make already-persisted secrets
+    unreadable rather than merely absent, which is a worse failure than the
+    one this exists to fix. Generated once with the same
+    ``secrets.token_urlsafe`` the session token already uses, and written
+    with the same tighten-after-write pattern `daemon.py` uses for
+    ``daemon.json``, so a key this file did not create is never silently
+    overwritten. docs/plans/deepseek-hardening.md H10 item 2, 2026-09-18.
+    """
+    path = secret_key_file()
+    try:
+        existing = path.read_text().strip()
+    except FileNotFoundError:
+        existing = ""
+    if existing:
+        return existing
+
+    generated = secrets.token_urlsafe(32)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".secret-", suffix=".key")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(generated)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if os.name != "nt":
+            os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return path.read_text().strip()
 
 
 class ConfigConflictError(ValueError):

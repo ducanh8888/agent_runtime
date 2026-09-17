@@ -173,3 +173,35 @@ def test_cli_supports_conventional_version_flag(
     assert capsys.readouterr().out.strip() == (
         f"agentrt-runtime {config.runtime_version()}"
     )
+
+
+def test_secret_key_is_generated_once_and_persists(tmp_path, monkeypatch) -> None:
+    """H10 item 2: this key must survive a restart -- it decrypts what an
+    earlier process encrypted, unlike the per-start session auth token."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    first = config.secret_key()
+    assert first
+    assert config.secret_key_file().read_text().strip() == first
+
+    second = config.secret_key()
+    assert second == first
+
+
+def test_secret_key_file_is_owner_only(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    config.secret_key()
+
+    mode = config.secret_key_file().stat().st_mode & 0o777
+    assert mode == 0o600
+
+
+def test_secret_key_respects_an_existing_file(tmp_path, monkeypatch) -> None:
+    """A key already on disk (e.g. restored from a backup, per the migration
+    guide) is read back rather than replaced."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    config.state_dir()  # creates the directory
+    config.secret_key_file().write_text("restored-from-backup")
+
+    assert config.secret_key() == "restored-from-backup"

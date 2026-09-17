@@ -174,6 +174,18 @@ def _daemon_env(token: str) -> dict[str, str]:
     state = config.state_dir()
     env["AGENTRT_CONVERSATIONS_PATH"] = str(state / "conversations")
     env["AGENTRT_WORKSPACE_PATH"] = str(state / "workspace")
+    # Without this, the vendored server has no cipher and silently redacts a
+    # conversation's persisted secrets -- including an LLM's API key -- to
+    # `**********` whenever it saves state to disk. A fresh dispatch never
+    # notices (its first real work happens before any save/reload), but a
+    # fork always round-trips through exactly that save/reload before it can
+    # run, so every fork loses its credential the same way. `setdefault`
+    # rather than a hard assignment: an operator who already set this
+    # themselves (e.g. to share one key across machines on purpose) is not
+    # silently overridden. docs/plans/deepseek-hardening.md H10 item 2,
+    # 2026-09-18.
+    if "AGENTRT_SECRET_KEY" not in env:
+        env["AGENTRT_SECRET_KEY"] = config.secret_key()
     # Explicit deployment-only LLM policy. The server enforces it on new
     # conversations; an agent-server started any other way stays generic.
     env["AGENTRT_DEPLOYMENT_LLM_POLICY"] = json.dumps(DEPLOYMENT_LLM_POLICY)

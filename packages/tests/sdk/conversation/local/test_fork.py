@@ -316,6 +316,55 @@ def test_fork_persisted_events_survive_reload():
         assert evt_id_2 in resumed_ids
 
 
+def test_fork_persists_the_agents_credential_under_a_cipher():
+    """H10 item 2: fork()'s own LocalConversation(...) construction did not
+    pass cipher=self._cipher, so its first save of the fork's own
+    base_state.json (during construction) ran with no cipher regardless of
+    what the source conversation -- or the daemon it runs under -- had
+    configured. fork_agent is built with expose_secrets=True specifically so
+    the fork carries the source's real credentials forward; omitting the
+    cipher discarded them again one step later, unconditionally, on every
+    fork. Reproduced against a real daemon before this fix: a fork of a
+    session that had just completed real tool calls under a working
+    credential failed its own first step with a provider "missing
+    credentials" error, at iterations_used: 0, and its persisted
+    base_state.json had api_key: null while the source's own had it
+    correctly encrypted.
+    """
+    from agentrt.sdk.utils.cipher import Cipher
+
+    cipher = Cipher("test-secret-key-for-this-test-only")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = LocalConversation(
+            agent=_agent(), persistence_dir=tmpdir, workspace=tmpdir, cipher=cipher
+        )
+
+        fork = src.fork()
+        fork_id = fork.id
+        fork.close()
+
+        # Reload the fork exactly as a resumed/forked-and-restarted
+        # conversation would: from disk, with the same cipher a daemon would
+        # supply. Before the fix this reads back api_key=None regardless of
+        # the cipher, because the fork's own base_state.json was written
+        # without one in the first place.
+        # agent=None: this must be a genuine resume, reading the agent back
+        # from the fork's own base_state.json -- an explicit agent= here
+        # would use the object given instead of exercising the disk
+        # round-trip this test exists to check.
+        resumed = LocalConversation(
+            agent=None,
+            persistence_dir=tmpdir,
+            workspace=tmpdir,
+            conversation_id=fork_id,
+            cipher=cipher,
+        )
+        resumed_key = resumed.agent.llm.api_key
+        assert resumed_key is not None
+        assert resumed_key.get_secret_value() == "test-key"
+
+
 def test_fork_default_does_not_clobber_source_cache_key():
     """Default fork() must leave the source's prompt_cache_key intact (#2917)."""
     with tempfile.TemporaryDirectory() as tmpdir:

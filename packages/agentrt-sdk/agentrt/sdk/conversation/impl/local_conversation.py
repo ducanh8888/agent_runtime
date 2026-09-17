@@ -852,6 +852,22 @@ class LocalConversation(BaseConversation):
                 fork_persistence = str(source_path.parent)
 
             # Build the fork conversation (empty – no events yet)
+            #
+            # cipher=self._cipher: without it, this constructor's own first
+            # save of the fork's base_state.json (ConversationState.create ->
+            # _save_base_state) runs with no cipher at all, independent of
+            # whether the *source* conversation -- or the daemon it runs
+            # under -- has one configured. fork_agent above was built with
+            # expose_secrets=True specifically so the fork would carry the
+            # source's real credentials forward; omitting the cipher here
+            # discarded them again one step later, on every fork,
+            # unconditionally. Reproduced against a real daemon: a fork of a
+            # session that had just completed real tool calls under a working
+            # credential failed its own first step with a provider "missing
+            # credentials" error, at iterations_used: 0 -- and the fork's
+            # persisted base_state.json had api_key: null while the source's
+            # own had it correctly encrypted. docs/plans/deepseek-hardening.md
+            # H10 item 2, 2026-09-18.
             fork_conv = LocalConversation(
                 agent=fork_agent,
                 workspace=self.workspace,
@@ -863,6 +879,7 @@ class LocalConversation(BaseConversation):
                 visualizer=type(self._visualizer) if self._visualizer else None,
                 delete_on_close=self.delete_on_close,
                 tags=tags,
+                cipher=self._cipher,
             )
 
             # Branch slice copies path_to_root(event) (root-first, re-rootable);
