@@ -73,6 +73,7 @@ SDK/server/tool behavior, `NEW` only where the fork has no implementation.
 | H7 | Regression, staged scale verification and deployment | REUSE + NEW tests/docs | All released phases | Cutover and sub-agent items done — [result](../results/h7.md); scale verification outstanding |
 | H8 | Close the fifteen consumer-report defects (retry/reasoning, completion signaling, payload size, truncation, misclassification, `inspect` search, readonly output, snapshots, LLM profiles, transcript hygiene, tag charset) | PORT + NEW | H0–H3 (retry/wait/finalize), H1 (`inspect`) | In progress — items 1, 3 (wait_* safe ceiling), 11 done, 2026-09-17; rest open |
 | H9 | Native sub-agent parity: close the experiential gap against Claude Code's and Codex's native sub-agents | NEW design | H8 (several H9 items are H8 prerequisites) | In progress — spawn-depth prerequisite (fork ancestry), the OpenHands-ceremony gate, interrupt visibility (item 6, post-init `interrupt()` only), the partial-history fork (item 4, exact event bound) and the settled-wait payload (item 2, title free / usage opt-in) done, 2026-09-17; item 4's `fork_turns` and item 2's terminal reason + paged result skipped or blocked by decision/open H8 items; item 6's `finalize()` and `_ensure_agent_ready` window open; role-shaped profiles (item 3) deferred; rest open |
+| H10 | Second consumer-feedback round: fork diagnosability (misleading partial/progress on never-started forks), credential-failure and refused-path latency, throughput visibility, `dispatch_from` overrides | PORT + NEW | H8 item 5 (`_wait_bucket`), H9 item 4 (fork mechanics) | Planned, not started — diagnosis and fix plan recorded 2026-09-18; two items need a live repro before a fix is chosen, one needs a user decision (vendored fork/credential path) |
 
 H7 verification runs with each phase, not only at the end. First release scope
 is H0–H3. H4 precedes shared-repository multi-writer scale tests; H5 precedes a
@@ -1626,6 +1627,184 @@ on every terminal state) can drive a common single-task dispatch without ever
 calling `status` to disambiguate an `error`. The three "cannot converge" items
 are documented at the point a new contributor would otherwise propose closing
 them, with the reason recorded here rather than re-litigated.
+
+### H10 — Second consumer-feedback round
+
+Basis: a second orchestrator-session feedback report received 2026-09-18,
+after roughly six real sessions doing read-only surveys and an adversarial doc
+audit across two repo trees. Framed by its author as "about diagnosability,
+not capability" -- distinct in kind from the first (H8) report, which found
+things that were wrong; several items here are things that are correct by
+design but read as wrong from outside, or are genuinely slow rather than
+broken. Each item below was checked against the current source before being
+recorded, not accepted as reported; three of eight bug/friction items still
+need a live repro or a user decision before a fix is chosen, and that is
+stated rather than guessed past.
+
+**Bugs, confirmed against source:**
+
+1. **Never-started forks report `partial` with the parent's inherited
+   progress.** Two independent defects share one symptom.
+   (a) `result()`'s `state` field is the raw, unmodified
+   `derive_result_state` value (`agent_server/run_scope.py`), which calls
+   *every* non-`FINISHED` terminal status `"partial"` by design -- the exact
+   defect H8 item 5 already fixed, but only for `_wait_bucket`, the
+   correction `wait_all`/`wait_any` apply on top of `result()`'s payload.
+   A caller reading `result()` or `status()` directly, as this report's
+   author did on four forks that died with `iterations_used: 0`, never sees
+   that correction; `derive_result_state`'s own comment confirms the
+   design intent ("a request-scope 'was this answered' state, not a verdict
+   on whether the content is usable"). (b) `_progress_summary` (`client.py`)
+   tallies tool calls by walking `transcript()` with no scope boundary --
+   `transcript()`'s `events/search` call has no time or request filter, so
+   for a fork the walk includes events the fork *inherited* at creation
+   (`fork_conversation` deep-copies the source's history up to
+   `from_event_id`, which becomes the fork's own persisted log, per H9 item
+   4). A fork that ran zero iterations of its own still reports its parent's
+   tool tally as if it were its own progress.
+
+   **Proposed fix, both parts inside `agentrt-runtime`, no vendored change:**
+   add a `bucket` field to `result()`'s own payload, computed with the same
+   `_wait_bucket` function `wait_all`/`wait_any` already use, so any caller of
+   `result()` gets the corrected verdict regardless of call path. Bound
+   `_progress_summary`'s transcript walk to the current request:
+   `request_message_id` is already in the payload it is called from; stop
+   tallying at that event id (nothing at or before it belongs to this
+   request), and short-circuit to "no tool calls completed before the error"
+   when `iterations_used == 0` without walking the transcript at all.
+
+2. **Credential failure surfaces ~2 minutes after dispatch, only on forks.**
+   `dispatch()` (and `dispatch_from()`) return immediately after `POST
+   /api/conversations`; nothing checks the resolved profile's credential
+   before accepting the request, confirmed by reading both call sites -- no
+   preflight of any kind exists today. The specific pattern reported (four
+   *forks*, not four fresh dispatches, all failing identically with
+   `litellm...Missing credentials...OPENAI_API_KEY`) is the sharper finding:
+   `fork_conversation`'s own comment states the fork's agent is **not**
+   resolved from `agent_profile_id` the way a fresh dispatch's is -- it is
+   deep-copied from the source's live agent object, persisted to the fork's
+   `base_state.json`, and reloaded from there. If a credential held only in
+   memory (e.g. excluded from serialization, a common and correct pattern for
+   secrets) does not survive that copy-and-reload round trip, a fork would
+   fail credential resolution even though its source ran real tool calls
+   successfully under the same profile -- which is consistent with what was
+   reported, but **not yet confirmed**: this needs a live repro (dispatch a
+   plain session, confirm it authenticates, `dispatch_from` it, see whether
+   the same failure reproduces) before touching the vendored fork/agent-reload
+   path, per AGENTS.md's rule that vendored changes are the user's decision.
+   Independently of that: a cheap, static, non-network check -- does the
+   resolved profile currently have a non-empty credential configured at
+   all -- is answerable at dispatch time without a provider round trip, and
+   would have caught this specific failure mode immediately rather than after
+   ~2 minutes. Worth building regardless of what the fork repro finds.
+
+3. **A refused path doesn't stop the agent quickly.** Confirmed why: the
+   guard's refusal (`guarded_tools.py`) is an ordinary `ObservationEvent`
+   with `is_error=True`, not an `AgentErrorEvent` -- so the vendored
+   `StuckDetector`'s action-error scenario (which only matches
+   `AgentErrorEvent`) never applies to it; only the action-observation
+   scenario can, and its default threshold is `4` identical repeats
+   (`StuckDetectionThresholds.action_observation`). The report's own numbers
+   -- 3 iterations, ~15 minutes -- are one repeat short of that threshold at
+   the ~5 min/iteration this deployment is currently running at (same root
+   cause as item 7 below), not a broken detector. A permission refusal is
+   categorically different from the errors the generic detector was tuned
+   for, though: it is deterministic and permanent (the same path will never
+   be approved by retrying), where a general action-error loop might
+   plausibly resolve on retry -- so waiting for the shared, generically-tuned
+   threshold is slower than this specific, structurally-certain case needs.
+   **Proposed fix, inside `guarded_tools.py`, no vendored/StuckDetector
+   change:** `GuardedFileEditorExecutor` is already one instance per
+   conversation and can hold small in-memory state cheaply. Track consecutive
+   identical-path refusals; once one repeats (proposed threshold: 2, since
+   there is nothing to learn from a third identical attempt that a second did
+   not already show), strengthen the refusal text with an explicit "this path
+   will not become approved by retrying" line, ahead of and independent of
+   whatever the generic detector eventually does. The report's further ask --
+   "a blocked lifecycle state distinct from running" -- is a larger,
+   cross-cutting change (a new `execution_status`) and is named here as a
+   possible later item, not proposed for this pass.
+
+**Friction, confirmed against source, fix scope varies:**
+
+4. **No second read-only root for an A-vs-B survey.** Confirmed:
+   `dispatch()`, `permissions.check_path`, and `guarded_tools.py` all take
+   exactly one workspace root; there is no multi-root primitive anywhere in
+   this stack. A real `extra_read_roots` would touch `dispatch()`'s API,
+   `permissions.py`, `guarded_tools.py`, `inspect_tools.py`, and the vendored
+   server's `StartConversationRequest` schema -- a cross-cutting change to the
+   permission model's shape, and a decision for the user, not a step to take
+   unasked. The report's own cheaper alternative is buildable entirely inside
+   `agentrt-runtime`, no server/vendored change: at `dispatch()`, scan the
+   task text for absolute paths and warn (not block) when one falls outside
+   the workspace, so the failure mode this report hit -- a task that silently
+   assumed a second tree was reachable -- surfaces before ~15 minutes of
+   refused-path retries instead of after. Recommended as the v1 here; the
+   full multi-root primitive is a question for the user, flagged, not
+   answered.
+5. **`control(tag)` was seen blocking past 120s under load.** `client.tag()`
+   is two plain REST calls (`GET` status, `PATCH` tags) -- nothing in this
+   client-side code is slow. A plausible cause is event-loop or lock
+   contention with an in-flight session's `astep()` on the daemon side (the
+   SDK's own comments describe a per-conversation state lock held across the
+   awaited model call), but that is a hypothesis, not a finding: confirming
+   it needs a live repro (several long-running sessions concurrently, timing
+   a concurrent `tag` call against an idle vs. busy daemon) before any fix,
+   vendored or otherwise, is proposed. Recorded as needing diagnosis, not
+   fixed here.
+6. **Background-task notifications duplicate the full payload.** Confirmed:
+   AgentRT has no backgrounding mechanism of its own anywhere in `wait_all`,
+   `wait_any`, or `client.py` -- what the report describes is the calling MCP
+   client's own generic handling of a tool call that ran past its own
+   timeout, which is outside this codebase and cannot be fixed here. What is
+   in scope: `wait_all`/`wait_any`'s docstrings already tell a caller not to
+   hold its own turn on a long wait, but do not say what happens if that
+   advice is ignored and the host backgrounds the call anyway. Proposed:
+   extend the existing paragraph to name the concrete cost (the eventual
+   notification re-delivers the whole result verbatim) so the existing advice
+   has a stated reason, not just an instruction. Doc-only, no code change.
+7. **Throughput is opaque; `status` gives no per-iteration timing.**
+   Confirmed, and the fix is cheaper than it first looks: every persisted
+   event already carries a `timestamp` field
+   (`agentrt/sdk/event/base.py:Event.timestamp`) -- `transcript()`'s
+   projection in `client.py` reads every other field off each event kind but
+   currently drops this one from all of them. No new instrumentation is
+   needed: add `timestamp` to each transcript entry, and a caller can compute
+   per-action wall-clock gaps itself from data the daemon already persists.
+8. **`dispatch_from` takes no `max_iterations`/`permission` override.**
+   Confirmed by the signature: `title`, `tags`, `from_event_id` only. Inheriting
+   is the right default and stays one; adding both as optional overrides is a
+   plain additive change, low risk. One decision worth surfacing rather than
+   deciding here: should a fork be allowed to request a *wider* permission
+   than its source, or only the same or narrower? Widening on fork is a
+   privilege-escalation shape (dispatch a tightly-scoped `readonly` session,
+   then fork it into `broad`) that a plain pass-through parameter would open
+   by accident; recommend restricting the override to same-or-narrower and
+   flagging it rather than silently allowing widening.
+
+**Kept, no fix -- confirmed positive signal, recorded so it isn't lost:**
+
+9. `transcript` diagnosed the report author's own dispatch mistake (the
+   refused-path retry loop) in one call, deliberate reasoning-exclusion
+   intact.
+10. The "agent's account is not evidence" framing in tool docstrings changed
+    how the report's author used the product -- they verified file hashes
+    themselves rather than trusting a session's report. Exactly the
+    behavior H1/H8's own documentation practice was written to produce.
+11. The tag key-format validation error (`'... ' is not key=value; write
+    '...=yes' to set it`) was named as exemplary: states the rule and the fix
+    in one line. Held up as the bar other error messages in this codebase
+    should meet, not only tag's.
+
+**Decisions this phase needs from the user before implementation, named so
+none is silently assumed:** item 2's fork/credential root cause (touches
+vendored fork/agent-reload code, only after the repro confirms it); item 4's
+full `extra_read_roots` primitive vs. the cheaper warn-only v1 recommended
+above; item 8's same-or-narrower restriction on a forked permission override.
+Everything else recorded here (items 1, 3, 6, 7, and item 4's v1, item 8's
+additive parameters themselves) is scoped inside `agentrt-runtime`, additive,
+and does not reopen a prior decision -- implementable without further sign-off
+once prioritized.
 
 ## 4. Proposed API contract
 
