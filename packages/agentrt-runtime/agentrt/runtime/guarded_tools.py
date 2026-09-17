@@ -66,6 +66,30 @@ class GuardedFileEditorExecutor(ToolExecutor):
         # for `broad`/`workspace`, which can already write inside the
         # workspace and have no need of a second location.
         self._reports_root = reports_root
+        # H10 item 3: a path refusal is deterministic -- retrying the exact
+        # same path can never succeed, unlike a flaky tool error, which is
+        # what the SDK's own stuck-detector is tuned for (and does not even
+        # apply here: this refusal is an ObservationEvent, not the
+        # AgentErrorEvent its action-error scenario matches). Tracked here
+        # rather than by re-reading history because this executor already
+        # lives for the conversation's whole life.
+        self._last_denial: str | None = None
+        self._denial_streak = 0
+
+    def _denial_hint(self, denied: permissions.PermissionDenied) -> str:
+        text = str(denied)
+        if text == self._last_denial:
+            self._denial_streak += 1
+        else:
+            self._last_denial = text
+            self._denial_streak = 1
+        if self._denial_streak >= 2:
+            return (
+                " This is the same refusal as last time -- retrying this "
+                "exact path will not become approved. Use a different path, "
+                "or stop and say what you need instead."
+            )
+        return ""
 
     def __call__(
         self,
@@ -91,6 +115,7 @@ class GuardedFileEditorExecutor(ToolExecutor):
                 text=(
                     f"Refused: {denied}. This session runs under the "
                     f"'{self._permission}' permission preset."
+                    f"{self._denial_hint(denied)}"
                 ),
                 command=action.command,
                 path=str(action.path),

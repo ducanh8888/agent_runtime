@@ -429,6 +429,14 @@ class InspectExecutor(ToolExecutor):
             )
         self._root = Path(root).resolve()
         self._permission = permission
+        # H10 item 3: same reasoning as `GuardedFileEditorExecutor`'s own
+        # tracker -- a path refusal is deterministic, so a nudge that fires
+        # on the second identical refusal beats waiting on the SDK's generic
+        # stuck-detector, which does not even apply here (this refusal is an
+        # ObservationEvent, not the AgentErrorEvent its action-error scenario
+        # matches).
+        self._last_denial: str | None = None
+        self._denial_streak = 0
 
     # -- shared guards -------------------------------------------------
 
@@ -440,6 +448,21 @@ class InspectExecutor(ToolExecutor):
             permission=INSPECT_PERMISSION,
             writing=False,
         )
+
+    def _denial_hint(self, denied: permissions.PermissionDenied) -> str:
+        text = str(denied)
+        if text == self._last_denial:
+            self._denial_streak += 1
+        else:
+            self._last_denial = text
+            self._denial_streak = 1
+        if self._denial_streak >= 2:
+            return (
+                " This is the same refusal as last time -- retrying this "
+                "exact path will not become approved. Use a different path, "
+                "or stop and say what you need instead."
+            )
+        return ""
 
     def _approve_optional(self, raw: str | os.PathLike[str]) -> Path | None:
         try:
@@ -465,7 +488,7 @@ class InspectExecutor(ToolExecutor):
             return self._env(action)
         except permissions.PermissionDenied as denied:
             return InspectObservation.from_text(
-                text=f"Refused: {denied}",
+                text=f"Refused: {denied}.{self._denial_hint(denied)}",
                 is_error=True,
                 command=action.command,
             )
