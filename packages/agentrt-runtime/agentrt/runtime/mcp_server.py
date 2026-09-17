@@ -216,6 +216,14 @@ def dispatch(
     Read `capacity` for the backlog. `idempotency_key` makes a repeated
     submission return the conversation the first one created; the same key with
     a different submission is refused rather than silently replayed.
+
+    `outside_workspace_paths`, when present on the response, lists absolute
+    paths found in `task` that resolve outside `workspace` -- most often a
+    two-repository comparison ("compare A against B") dispatched into only
+    one of them, which otherwise surfaces as refused-path retries deep into
+    the run instead of here. A heuristic text scan, not a guard: it never
+    blocks the dispatch and can miss a path or flag one never meant
+    literally.
     """
     return _guard(
         _get_client().dispatch,
@@ -346,13 +354,22 @@ def dispatch_from(
     title: str | None = None,
     tags: dict[str, str] | None = None,
     from_event_id: str | None = None,
+    max_iterations: int | None = None,
 ) -> dict:
     """Fork a session and give the fork the task.
 
     `session` is the session to inherit from -- the fork gets its history, agent,
     workspace and permission, so a reviewer can start from the writer's
-    conversation instead of from a summary of it. Only the task and its metadata
-    are yours to choose.
+    conversation instead of from a summary of it. Permission is not something
+    you can override here: the source's tools, including the guard baked into
+    `file_editor` at the preset it was created under, are copied as-is, so
+    changing it on the fork would need those tools rebuilt, not one field
+    changed.
+
+    `max_iterations` has no such problem -- it is a plain counter -- and is
+    worth setting: a fork usually exists because the task got narrower, and
+    inheriting the source's whole budget with it is rarely what you want. Left
+    unset, the fork inherits the source's budget unchanged.
 
     This is context inheritance as far as it goes here: the fork inherits
     *another AgentRT session*, not this conversation, which the daemon cannot
@@ -385,6 +402,7 @@ def dispatch_from(
         title=title,
         tags=tags,
         from_event_id=from_event_id,
+        max_iterations=max_iterations,
     )
 
 
@@ -498,7 +516,12 @@ def wait_any(
     again on `still_running` rather than raising `timeout` to work around
     this. And prefer not holding your own turn on this call at all for
     anything expected to run long: poll `status` between other work, or
-    background a poll loop, rather than blocking here.
+    background a poll loop, rather than blocking here. If you ignore this and
+    your own client backgrounds the call anyway because it ran long, the
+    eventual notification is likely to re-deliver this whole result verbatim
+    -- a second copy of everything you could otherwise fetch once with
+    `result` -- which is the concrete cost of not heeding the advice above,
+    not a separate thing to work around. H10 item 6, 2026-09-18.
     """
     return _guard(
         _get_client().wait,
@@ -568,10 +591,13 @@ def transcript(
     observation truncated with its event id, and each error with its sanitized
     code and detail. Every entry carries its `id`, which is what
     `dispatch_from(from_event_id=...)` takes -- so this is how you name a branch
-    point. This tool does not emit every kind of event, though: unlisted kinds
-    are skipped rather than shown, so a session's events are a subset of what it
-    actually did and some events cannot be named as a branch point. Errors used
-    to be dropped here, which made a session that failed look like a clean stop.
+    point -- and its `timestamp`, so the wall-clock gap between one action and
+    the next is computable from this alone, rather than only knowing a session
+    is alive from `status`'s `last_progress_at`. This tool does not emit every
+    kind of event, though: unlisted kinds are skipped rather than shown, so a
+    session's events are a subset of what it actually did and some events
+    cannot be named as a branch point. Errors used to be dropped here, which
+    made a session that failed look like a clean stop.
     next_cursor pages backwards into older events; pass it back as cursor.
 
     Expect fewer events than you asked for. limit counts raw events and about
@@ -695,6 +721,18 @@ def control(session: str, action: str, message: str | None = None) -> dict:
       are kept until deleted and a title is auto-generated, so after fifty of
       them a listing is fifty similar titles; a tag is what tells you which one
       is evidence and which is a probe you can throw away.
+
+      Writing a tag on a session that is actively running can be slow --
+      measured at ~24s against a session mid-way through one 45s terminal
+      command, not the instant metadata write it looks like. This is not a
+      hang: the write shares the same per-conversation lock the running step
+      holds for its whole duration, by the SDK's own design (so an autosave
+      mid-step and a metadata write cannot observe or produce an inconsistent
+      state), and it clears as soon as the current step does. `status` on the
+      same busy session stays fast -- it is only the write path that waits.
+      Tag a session once it has settled if the timing matters, or expect the
+      call to take as long as whatever the session is doing right now. H10
+      item 5, 2026-09-18.
 
     Reach for interrupt when a session is going the wrong way: it is faster and
     cheaper than letting it finish, and its history survives, so you can
