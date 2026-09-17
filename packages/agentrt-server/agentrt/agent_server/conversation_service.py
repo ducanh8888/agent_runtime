@@ -2645,6 +2645,7 @@ class ConversationService:
         tags: dict[str, str] | None = None,
         reset_metrics: bool = True,
         from_event_id: str | None = None,
+        max_iterations: int | None = None,
     ) -> ConversationInfo | None:
         """Fork an existing conversation, deep-copying its event history.
 
@@ -2654,6 +2655,14 @@ class ConversationService:
         When *from_event_id* is set, only the branch up to and including that
         event is copied and the fork's HEAD is set there; otherwise the whole
         conversation is copied (today's behavior).
+
+        *max_iterations*, when set, replaces the source's own budget on the
+        fork's stored record -- a plain field override, unlike a permission
+        change: the source's tools are deep-copied as-is (see
+        ``LocalConversation.fork``), so a permission override would need
+        those tools rebuilt for a new preset rather than one field changed,
+        and is deliberately not offered here. docs/plans/deepseek-hardening.md
+        H10 item 8, 2026-09-18.
 
         Returns ``None`` when *source_id* does not exist.
 
@@ -2730,6 +2739,8 @@ class ConversationService:
             fork_overrides["metrics"] = None
         if tags is not None:
             fork_overrides["tags"] = tags
+        if max_iterations is not None:
+            fork_overrides["max_iterations"] = max_iterations
         fork_stored = source_service.stored.model_copy(update=fork_overrides)
         # If the service fails to start, clean up the orphaned persistence
         # directory so we don't leave stale state on disk.

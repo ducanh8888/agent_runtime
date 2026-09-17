@@ -828,6 +828,7 @@ async def fork_conversation(
             tags=request.tags if request.tags is not None else None,
             reset_metrics=request.reset_metrics,
             from_event_id=request.from_event_id,
+            max_iterations=request.max_iterations,
         )
     except ValueError as exc:
         if "already exists" in str(exc):

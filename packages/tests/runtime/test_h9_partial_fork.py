@@ -63,6 +63,7 @@ def _fork_client(seen: dict) -> client_mod.Client:
                     "execution_status": "idle",
                     "title": "forked",
                     "forked_from_event_id": seen["body"].get("from_event_id"),
+                    "max_iterations": seen["body"].get("max_iterations"),
                 },
             )
         if request.url.path.endswith("/events"):
@@ -162,6 +163,60 @@ def test_a_daemon_that_ignores_the_bound_is_refused() -> None:
 
     with pytest.raises(client_mod.ClientError, match="did not honour"):
         client.dispatch_from(SOURCE, "review", from_event_id=BRANCH_POINT)
+
+    assert sent == [], f"the task must not be sent, saw {sent}"
+
+
+def test_max_iterations_reaches_the_fork_body_and_back() -> None:
+    """H10 item 8: a fork usually exists because the task got narrower, and
+    inheriting the source's whole iteration budget with it is rarely what is
+    wanted."""
+    seen: dict = {}
+    client = _fork_client(seen)
+
+    out = client.dispatch_from(SOURCE, "review the change", max_iterations=6)
+
+    assert seen["body"]["max_iterations"] == 6
+    assert out["max_iterations"] == 6
+
+
+def test_omitting_max_iterations_sends_no_key() -> None:
+    seen: dict = {}
+    client = _fork_client(seen)
+
+    out = client.dispatch_from(SOURCE, "review the change")
+
+    assert "max_iterations" not in seen["body"]
+    assert "max_iterations" not in out
+
+
+def test_a_daemon_that_ignores_the_iteration_bound_is_refused() -> None:
+    """Same shape as the from_event_id guard: a daemon predating the
+    parameter accepts the body, ignores the unknown key, and the fork
+    silently inherits the source's whole budget -- checked before the task
+    is sent, so the mistake is never run on."""
+    sent: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/fork"):
+            # What a daemon predating the parameter returns: the source's
+            # own (larger) budget, not the one asked for.
+            return httpx.Response(
+                201,
+                json={"id": CREATED, "execution_status": "idle", "max_iterations": 500},
+            )
+        if path.endswith("/events"):
+            sent.append(path)
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(
+            200, json={"id": SOURCE, "execution_status": "idle", "tags": {}}
+        )
+
+    client = _mock_client(handle)
+
+    with pytest.raises(client_mod.ClientError, match="did not honour"):
+        client.dispatch_from(SOURCE, "review", max_iterations=6)
 
     assert sent == [], f"the task must not be sent, saw {sent}"
 

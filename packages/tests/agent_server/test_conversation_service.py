@@ -3922,6 +3922,53 @@ class TestConversationTreeForkAndNavigate:
             assert fork_info.id in svc._children_of(info.id)
 
     @pytest.mark.asyncio
+    async def test_fork_max_iterations_override_replaces_the_source_budget(
+        self, tmp_path
+    ):
+        """H10 item 8: a fork usually exists because the task got narrower;
+        max_iterations is a plain field override, unlike permission, which
+        would need the fork's tools rebuilt rather than one field changed.
+        docs/plans/deepseek-hardening.md H10 item 8, 2026-09-18.
+        """
+        workspace_dir = tmp_path / "workspace"
+        workspace_dir.mkdir()
+        async with ConversationService(
+            conversations_dir=tmp_path / "conversations"
+        ) as svc:
+            info, source_service, _ = await self._start_with_events(
+                svc, workspace_dir, ["first"]
+            )
+            assert source_service.stored.max_iterations != 6
+
+            fork_info = await svc.fork_conversation(info.id, max_iterations=6)
+
+            assert fork_info is not None
+            assert fork_info.max_iterations == 6
+            fork_service = await svc.get_event_service(fork_info.id)
+            assert fork_service is not None
+            assert fork_service.stored.max_iterations == 6
+            # The source is untouched.
+            assert source_service.stored.max_iterations != 6
+
+    @pytest.mark.asyncio
+    async def test_fork_without_max_iterations_inherits_the_source_budget(
+        self, tmp_path
+    ):
+        workspace_dir = tmp_path / "workspace"
+        workspace_dir.mkdir()
+        async with ConversationService(
+            conversations_dir=tmp_path / "conversations"
+        ) as svc:
+            info, source_service, _ = await self._start_with_events(
+                svc, workspace_dir, ["first"]
+            )
+
+            fork_info = await svc.fork_conversation(info.id)
+
+            assert fork_info is not None
+            assert fork_info.max_iterations == source_service.stored.max_iterations
+
+    @pytest.mark.asyncio
     async def test_whole_conversation_fork_has_no_branch_point(self, tmp_path):
         """fork() without from_event_id copies everything; lineage event is None."""
         workspace_dir = tmp_path / "workspace"

@@ -663,6 +663,14 @@ class ForkConversationRequest(BaseModel):
             "conversation."
         ),
     )
+    max_iterations: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "If set, the fork's own iteration budget for its next run. If "
+            "null (default), the fork inherits the source's max_iterations."
+        ),
+    )
 
 
 class NavigateConversationRequest(BaseModel):
