@@ -98,3 +98,23 @@ def test_daemon_env_does_not_override_an_operators_own_secret_key(
     monkeypatch.setenv("AGENTRT_SECRET_KEY", "operator-chosen-key")
     env = daemon._daemon_env("test-token")
     assert env["AGENTRT_SECRET_KEY"] == "operator-chosen-key"
+
+
+def test_daemon_env_raises_the_vendored_run_pool_cap(monkeypatch) -> None:
+    """The vendored server's own run-pool cap (AGENTRT_MAX_CONCURRENT_RUNS)
+    is a second, independent limit from AGENTRT_MAX_SESSIONS -- one is this
+    client refusing to dispatch, the other is the daemon refusing to *run* a
+    step on an already-created session. It defaults to 10 there; without
+    this, a fan-out beyond that queues on the daemon side even after
+    AGENTRT_MAX_SESSIONS is raised."""
+    monkeypatch.delenv("AGENTRT_MAX_CONCURRENT_RUNS", raising=False)
+    env = daemon._daemon_env("test-token")
+    assert int(env["AGENTRT_MAX_CONCURRENT_RUNS"]) > 1000
+
+
+def test_daemon_env_does_not_override_an_operators_own_run_pool_cap(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AGENTRT_MAX_CONCURRENT_RUNS", "3")
+    env = daemon._daemon_env("test-token")
+    assert env["AGENTRT_MAX_CONCURRENT_RUNS"] == "3"

@@ -397,6 +397,21 @@ def max_running_sessions() -> int:
         return DEFAULT_MAX_RUNNING_SESSIONS
 
 
+# The vendored server's own run-pool cap (`agentrt-server`'s Config.
+# max_concurrent_runs, env var AGENTRT_MAX_CONCURRENT_RUNS) is a second,
+# independent limit from AGENTRT_MAX_SESSIONS above -- one is this client
+# refusing to dispatch, the other is the daemon refusing to *run* a step on
+# an already-created session. It defaults to 10 there and cannot be set to
+# its own "0 means unbounded" value through that field (`ge=1` on the
+# pydantic Config -- 0 would fail Config construction and crash the daemon
+# at startup, even though the code that reads it already treats <= 0 as
+# unbounded for other callers). A very large number is the practical
+# equivalent within that constraint: no realistic dispatch volume reaches
+# it, and it costs nothing at rest -- the run pool is a ThreadPoolExecutor,
+# which does not pre-spawn threads up to max_workers.
+DEFAULT_MAX_CONCURRENT_RUNS = "100000"
+
+
 # Codex bounds recursive spawning at `agent_max_depth` (default 3) and tells the
 # agent to do the work itself past that. AgentRT had no equivalent, and the plan
 # recorded the reason to hold off: no permission preset grants any tool that can
