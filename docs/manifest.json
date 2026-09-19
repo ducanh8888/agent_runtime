@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "entrypoint": "docs/README.md",
-  "active_plan": "docs/plans/deepseek-hardening.md",
+  "active_plan": "docs/plans/omniroute-migration.md",
   "optional_link_roots": [
     "repos/"
   ],
@@ -31,7 +31,7 @@
       "id": "plan.deepseek-hardening",
       "path": "docs/plans/deepseek-hardening.md",
       "type": "plan",
-      "lifecycle": "active",
+      "lifecycle": "complete",
       "authority": "normative"
     },
     {
@@ -40,6 +40,13 @@
       "type": "plan",
       "lifecycle": "historical",
       "authority": "informative"
+    },
+    {
+      "id": "plan.omniroute-migration",
+      "path": "docs/plans/omniroute-migration.md",
+      "type": "plan",
+      "lifecycle": "active",
+      "authority": "normative"
     },
     {
       "id": "reference.architecture",

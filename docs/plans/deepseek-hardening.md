@@ -1,5 +1,13 @@
 # Agent Runtime — DeepSeek hardening plan
 
+**Superseded 2026-09-19 by the [OmniRoute migration](omniroute-migration.md)**,
+now the active plan. H0's single frozen `DeploymentLLMPolicy` ("always direct
+DeepSeek, thinking enabled, effort high") was a deliberate, correct contract
+for the deployment that existed when this document was written; it is no
+longer the deployment's contract. This record is not rewritten -- everything
+below remains accurate history of what H0–H10 built and why, under that
+earlier deployment.
+
 Date: 2026-09-11 (Asia/Bangkok).
 Basis: [self-audit and measured evidence](../research/deepseek-hardening-audit.md), the user's
 nine runtime feedback items, and the DeepSeek optimization proposal as narrowed
