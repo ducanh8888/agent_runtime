@@ -506,12 +506,17 @@ class Config(BaseModel):
         default=None,
         description=(
             "Optional deployment-only LLM contract. When set, every new "
-            "conversation's agent LLM (and any auxiliary LLM it holds) must be "
-            "direct DeepSeek Chat Completions, model deepseek-flash, thinking "
-            "enabled and reasoning_effort high; the switch_llm tool is refused. "
-            "None (the default) keeps generic agent-server behavior. Existing "
-            "persisted sessions are never rejected or retargeted on load. Set by "
-            "the AgentRT runtime when it starts the server."
+            "conversation's agent LLM (and any auxiliary LLM it holds) must use "
+            "exactly the configured model and base_url over Chat Completions; "
+            "the switch_llm tool is refused. thinking_mode/reasoning_effort are "
+            "enforced only when the policy itself sets them -- a router-neutral "
+            "deployment (one virtual model whose real backend is chosen "
+            "per-request by the router) leaves both unset, since it cannot "
+            "honestly assert a fixed reasoning contract for a backend it does "
+            "not choose. None (the default) keeps generic agent-server "
+            "behavior. Existing persisted sessions are never rejected or "
+            "retargeted on load. Set by the AgentRT runtime when it starts "
+            "the server."
         ),
     )
     lease_ttl_seconds: float = Field(

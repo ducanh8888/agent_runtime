@@ -1,10 +1,23 @@
-"""Deployment-only LLM policy enforcement (H0).
+"""Deployment-only LLM policy enforcement (H0; router-neutral since the
+OmniRoute migration).
 
 AgentRT starts the agent server with an explicit policy so that every
-conversation LLM is direct DeepSeek Chat Completions, model ``deepseek-flash``,
-thinking enabled and ``reasoning_effort`` ``high``. The policy is opt-in: when
+conversation LLM is the one configured model and endpoint -- originally direct
+DeepSeek Chat Completions with thinking forced on; now, behind a router such as
+OmniRoute, one opaque virtual model whose real backend/provider/reasoning
+support the router alone decides. The policy is opt-in: when
 ``Config.deployment_llm_policy`` is ``None`` the server keeps its generic
 behavior and callers may choose any LLM/profile.
+
+``model`` and ``base_url`` are still mandatory on every policy instance --
+the invariant that never changed is "no request goes anywhere but the one
+configured endpoint, silently." ``thinking_mode`` and ``reasoning_effort`` are
+now optional (``None`` means "not enforced"): a virtual model whose backend
+the router selects per-request cannot honestly be declared to always think, or
+to always support a specific effort level, so a router-neutral policy simply
+does not assert either. A deployment that still wants that exact contract
+(e.g. because it points straight at one reasoning-capable provider without a
+router in front) may still set both explicitly.
 
 Scope and boundaries:
 
@@ -34,19 +47,6 @@ from agentrt.sdk.agent.base import AgentBase
 from agentrt.sdk.llm import LLM
 
 
-#: The API model name the deployment requires. Provider-routing prefixes
-#: (``openai/``, ``deepseek/``, ``litellm_proxy/``, ...) are transport-internal,
-#: so validation compares the trailing path segment.
-DIRECT_MODEL = "deepseek-flash"
-#: The direct DeepSeek endpoint. Paths such as ``/v1`` are still the same host.
-DIRECT_BASE_URL = "https://api.deepseek.com"
-#: Requirements stated once so an error can point at the whole contract.
-_POLICY_SUMMARY = (
-    "this deployment requires direct DeepSeek Chat Completions, model "
-    f"{DIRECT_MODEL!r}, thinking enabled and reasoning_effort 'high'"
-)
-
-
 class DeploymentPolicyError(ValueError):
     """A conversation or auxiliary LLM violates the deployment LLM policy."""
 
@@ -54,18 +54,40 @@ class DeploymentPolicyError(ValueError):
 class DeploymentLLMPolicy(BaseModel):
     """Frozen deployment-only LLM contract.
 
-    Absent (``None`` on ``Config``) means generic behavior. Every field has a
-    default so the runtime can enable the contract with a single explicit value
-    and tests can construct partial policies.
+    Absent (``None`` on ``Config``) means generic behavior. ``model`` and
+    ``base_url`` have no default: there is no meaningful universal choice, so
+    every caller states explicitly which endpoint this deployment's one
+    contract points at (``agentrt.runtime.daemon`` derives both from the
+    runtime's own resolved router configuration, not a literal). Every other
+    field has a default so a caller enabling the contract can supply just the
+    two mandatory ones, and tests can construct partial policies.
     """
 
     model_config: ClassVar[ConfigDict] = {"frozen": True, "extra": "forbid"}
 
-    model: str = DIRECT_MODEL
-    base_url: str = DIRECT_BASE_URL
+    model: str
+    base_url: str
     api_mode: str = "chat"
-    thinking_mode: str = "enabled"
-    reasoning_effort: str = "high"
+    thinking_mode: str | None = None
+    reasoning_effort: str | None = None
+
+
+def _policy_summary(policy: DeploymentLLMPolicy) -> str:
+    """State one policy instance's requirements, for an error message.
+
+    Built per instance rather than once at import time: ``model``/``base_url``
+    are no longer a fixed literal, and ``thinking_mode``/``reasoning_effort``
+    may or may not be enforced at all.
+    """
+    parts = [
+        f"model {policy.model!r} at {policy.base_url!r}",
+        f"api_mode {policy.api_mode!r}",
+    ]
+    if policy.thinking_mode is not None:
+        parts.append(f"thinking {policy.thinking_mode!r}")
+    if policy.reasoning_effort is not None:
+        parts.append(f"reasoning_effort {policy.reasoning_effort!r}")
+    return "this deployment requires " + ", ".join(parts)
 
 
 def api_model_name(model: str) -> str:
@@ -116,6 +138,11 @@ def _extra_body_conflicts(llm: LLM, policy: DeploymentLLMPolicy) -> list[str]:
     """Conflicts in ``litellm_extra_body`` that override the model-derived
     reasoning controls at final serialization.
 
+    Only checked when the policy itself enforces ``reasoning_effort``/
+    ``thinking_mode`` -- a router-neutral policy with both ``None`` has no
+    reasoning contract for an explicit extra_body to override, so nothing
+    here is a conflict.
+
     The SDK emits ``thinking``/``reasoning_effort`` as extra-body defaults and
     lets an explicit user ``extra_body`` win, so a payload setting thinking
     disabled or ``reasoning_effort`` low would reach the provider even though
@@ -126,13 +153,15 @@ def _extra_body_conflicts(llm: LLM, policy: DeploymentLLMPolicy) -> list[str]:
     # Report the field and the requirement only: an explicit extra_body is
     # caller-supplied and could carry an arbitrary (possibly secret) value, so
     # its actual content must never reach a rejection message.
-    if "reasoning_effort" in extra and extra["reasoning_effort"] != (
-        policy.reasoning_effort
+    if (
+        policy.reasoning_effort is not None
+        and "reasoning_effort" in extra
+        and extra["reasoning_effort"] != policy.reasoning_effort
     ):
         conflicts.append(
             f"litellm_extra_body.reasoning_effort must be {policy.reasoning_effort!r}"
         )
-    if "thinking" in extra:
+    if policy.thinking_mode is not None and "thinking" in extra:
         thinking = extra["thinking"]
         enabled = isinstance(thinking, dict) and thinking.get("type") == "enabled"
         if not enabled:
@@ -156,11 +185,16 @@ def llm_policy_violations(llm: LLM | None, policy: DeploymentLLMPolicy) -> list[
 
     expected_endpoint = _normalized_endpoint(policy.base_url)
     actual_endpoint = _normalized_endpoint(llm.base_url)
+    # https is required only when the policy's own endpoint is https --
+    # not hardcoded, because a router that AgentRT talks to on this machine
+    # (e.g. OmniRoute at http://127.0.0.1:20128/v1) is a legitimate policy
+    # endpoint in its own right, not a downgrade of anything.
+    requires_https = expected_endpoint is not None and expected_endpoint[0] == "https"
     if actual_endpoint is None:
         violations.append(
             f"base_url must be {_display_endpoint(policy.base_url)} (got <unset>)"
         )
-    elif actual_endpoint[0] != "https":
+    elif requires_https and actual_endpoint[0] != "https":
         violations.append(
             f"base_url must use https (got {_display_endpoint(llm.base_url)})"
         )
@@ -173,18 +207,24 @@ def llm_policy_violations(llm: LLM | None, policy: DeploymentLLMPolicy) -> list[
     if llm.api_mode != policy.api_mode:
         violations.append(f"api_mode must be {policy.api_mode!r}")
 
-    try:
-        features = llm._model_features()
-    except Exception:  # pragma: no cover - capability lookup is defensive
-        violations.append("could not resolve model capabilities")
-        return violations
+    if policy.thinking_mode is not None or policy.reasoning_effort is not None:
+        try:
+            features = llm._model_features()
+        except Exception:  # pragma: no cover - capability lookup is defensive
+            violations.append("could not resolve model capabilities")
+            return violations
 
-    if features.thinking_mode != policy.thinking_mode:
-        violations.append(f"thinking must be {policy.thinking_mode!r}")
-    if not features.supports_reasoning_effort:
-        violations.append("model must support reasoning_effort")
-    if llm.reasoning_effort != policy.reasoning_effort:
-        violations.append(f"reasoning_effort must be {policy.reasoning_effort!r}")
+        if policy.thinking_mode is not None and features.thinking_mode != (
+            policy.thinking_mode
+        ):
+            violations.append(f"thinking must be {policy.thinking_mode!r}")
+        if policy.reasoning_effort is not None:
+            if not features.supports_reasoning_effort:
+                violations.append("model must support reasoning_effort")
+            if llm.reasoning_effort != policy.reasoning_effort:
+                violations.append(
+                    f"reasoning_effort must be {policy.reasoning_effort!r}"
+                )
     violations.extend(_extra_body_conflicts(llm, policy))
     return violations
 
@@ -251,5 +291,5 @@ def enforce_agent_policy(agent: AgentBase, policy: DeploymentLLMPolicy) -> None:
         raise DeploymentPolicyError(
             "Conversation rejected by the deployment LLM policy: "
             + "; ".join(problems)
-            + f". For reference, {_POLICY_SUMMARY}."
+            + f". For reference, {_policy_summary(policy)}."
         )

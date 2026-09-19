@@ -1,4 +1,6 @@
-"""Service-level wiring tests for the H0 deployment LLM policy.
+"""Service-level wiring tests for the deployment LLM policy (H0;
+router-neutral since the OmniRoute migration -- ``model``/``base_url`` are
+supplied per instance now, see ``_policy`` below).
 
 Covers the creation forms (explicit agent, ``agent_settings``, named profile),
 policy-off backward compatibility, and the follow-up/retry/restoration paths
@@ -51,6 +53,22 @@ _CAPABILITY_OVERRIDES: dict[str, Any] = {
 }
 
 
+def _policy(**overrides: object) -> DeploymentLLMPolicy:
+    """The exact DeepSeek-shaped contract these tests use as example data.
+
+    ``model``/``base_url`` have no class default any more (router-neutral
+    policy), so every call site states them explicitly.
+    """
+    values: dict[str, object] = {
+        "model": "deepseek-flash",
+        "base_url": "https://api.deepseek.com",
+        "thinking_mode": "enabled",
+        "reasoning_effort": "high",
+    }
+    values.update(overrides)
+    return DeploymentLLMPolicy(**values)  # type: ignore[arg-type]
+
+
 def _direct_llm(*, stream: bool = False) -> LLM:
     return LLM(
         model="openai/deepseek-flash",
@@ -92,7 +110,7 @@ def workspace_dir(tmp_path: Path) -> Path:
 def _service(tmp_path: Path, *, enforce: bool) -> ConversationService:
     return ConversationService(
         conversations_dir=tmp_path / "conversations",
-        deployment_llm_policy=DeploymentLLMPolicy() if enforce else None,
+        deployment_llm_policy=_policy() if enforce else None,
     )
 
 
@@ -304,7 +322,7 @@ def test_title_profile_weaker_than_policy_inherits_agent_llm(
 ) -> None:
     agent_llm = _direct_llm()
     service = _StubTitleService(agent_llm=agent_llm)
-    subscriber = _subscriber(service, DeploymentLLMPolicy())
+    subscriber = _subscriber(service, _policy())
     monkeypatch.setattr(subscriber, "_load_title_llm", lambda: _weak_llm())
     assert subscriber._select_title_llm(agent_llm) is agent_llm
 
@@ -312,7 +330,7 @@ def test_title_profile_weaker_than_policy_inherits_agent_llm(
 def test_title_profile_compliant_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
     agent_llm = _direct_llm()
     service = _StubTitleService(agent_llm=agent_llm)
-    subscriber = _subscriber(service, DeploymentLLMPolicy())
+    subscriber = _subscriber(service, _policy())
     profile_llm = _direct_llm()
     monkeypatch.setattr(subscriber, "_load_title_llm", lambda: profile_llm)
     assert subscriber._select_title_llm(agent_llm) is profile_llm
@@ -332,7 +350,7 @@ def test_title_no_policy_uses_configured_profile(
 def test_title_violating_agent_llm_disables_llm_titling() -> None:
     weak = _weak_llm()
     service = _StubTitleService(agent_llm=weak)
-    subscriber = _subscriber(service, DeploymentLLMPolicy())
+    subscriber = _subscriber(service, _policy())
     assert subscriber._select_title_llm(weak) is None
 
 
@@ -342,7 +360,7 @@ async def test_explicit_title_is_not_overwritten(
 ) -> None:
     """An explicit title set while auto-titling runs wins over the result."""
     service = _StubTitleService(agent_llm=_direct_llm())
-    subscriber = _subscriber(service, DeploymentLLMPolicy())
+    subscriber = _subscriber(service, _policy())
     event = MessageEvent(
         source="user",
         llm_message=Message(role="user", content=[TextContent(text="hello")]),
@@ -374,7 +392,7 @@ def test_router_rejection_never_echoes_hostile_extra_body() -> None:
         litellm_extra_body={"reasoning_effort": secret},
         capability_overrides=dict(_CAPABILITY_OVERRIDES),
     )
-    service = SimpleNamespace(deployment_llm_policy=DeploymentLLMPolicy())
+    service = SimpleNamespace(deployment_llm_policy=_policy())
     with pytest.raises(HTTPException) as excinfo:
         _reject_llm_off_policy(
             cast(ConversationService, service), llm, action="switch_llm"
@@ -393,7 +411,7 @@ def test_router_switch_profile_load_error_is_sanitized() -> None:
         static_files_path=None, session_api_keys=[], secret_key=None
     )
     service = AsyncMock(spec=ConversationService)
-    service.deployment_llm_policy = DeploymentLLMPolicy()
+    service.deployment_llm_policy = _policy()
     event_service = MagicMock()
     event_service.get_conversation.return_value = MagicMock()
     service.get_event_service.return_value = event_service
