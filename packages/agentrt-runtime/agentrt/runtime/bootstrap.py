@@ -28,22 +28,22 @@ from agentrt.runtime import config, permissions
 LLM_PROFILE_NAME = "default"
 AGENT_PROFILE_NAME = "default"
 
-#: Fixed direct-DeepSeek policy for every AgentRT LLM service. The deployment
-#: is DeepSeek-only with thinking enabled and effort "high"; there is no
-#: operator effort selector and no silent downgrade to a weaker request. These
-#: are written into the saved profile so the contract is inspectable, not just
-#: implied by the SDK's detection of the model name. See H0 in
-#: docs/plans/deepseek-hardening.md.
-DIRECT_LLM_USAGE_ID = "agent"
-DIRECT_LLM_API_MODE = "chat"
-DIRECT_LLM_REASONING_EFFORT = "high"
-DIRECT_LLM_CAPABILITY_OVERRIDES: dict[str, bool | str] = {
-    "supports_reasoning_effort": True,
-    "thinking_mode": "enabled",
-    # Chat Completions only. Responses mode has no contract tests in this pass.
-    "supports_responses_api": False,
-}
-DIRECT_LLM_EXTRA_BODY: dict[str, object] = {"thinking": {"type": "enabled"}}
+#: Router-neutral policy for every AgentRT LLM service (formerly a fixed
+#: direct-DeepSeek contract; see H0 in docs/plans/deepseek-hardening.md and
+#: the OmniRoute migration in docs/plans/omniroute-migration.md). AgentRT
+#: pins the transport (Chat Completions) and a usage tag; it deliberately
+#: does not pin a reasoning/thinking contract any more, because behind a
+#: router such as OmniRoute the real backend model -- and therefore whether
+#: it thinks at all -- is chosen per-request by the router, not by AgentRT.
+#: No capability_overrides and no litellm_extra_body are set here either: an
+#: opaque virtual model name (e.g. "agentrt-worker") will not match any known
+#: model pattern, so the SDK's own capability detection safely resolves
+#: supports_reasoning_effort=False / thinking_mode="none" for it, and
+#: reasoning_effort is simply never sent (see
+#: agentrt.sdk.llm.options.chat_options.select_chat_options) -- rather than
+#: this runtime falsely asserting a reasoning capability it cannot verify.
+LLM_USAGE_ID = "agent"
+LLM_API_MODE = "chat"
 
 
 class ProviderLinkedProfileError(RuntimeError):
@@ -85,13 +85,32 @@ def _use_state_dir() -> Path:
 
 
 def _build_llm(router: config.RouterConfig):
-    """Build the saved LLM profile with the fixed direct-DeepSeek policy.
+    """Build the saved LLM profile with the router-neutral policy.
 
     The model id is prefixed with ``openai/`` so LiteLLM routes it to the
     OpenAI-compatible Chat Completions path instead of trying to infer a
-    provider from a name it has never seen. ``api_mode`` and the capability
-    overrides pin that path and the thinking/effort policy explicitly, so the
-    profile does not depend on an alias being recognized by name detection.
+    provider from a name it has never seen -- this holds whether ``router.model``
+    is a real provider model name or an opaque virtual one such as
+    ``agentrt-worker``. ``api_mode`` pins that path explicitly.
+
+    No ``capability_overrides`` and no ``litellm_extra_body`` are set, and
+    ``reasoning_effort`` is left unset (the SDK's own class default, ``"high"``,
+    applies): a router-neutral deployment does not know, and must not claim,
+    what its virtual model can actually do, and dropping the overrides is what
+    actually prevents that claim from reaching the wire. An unrecognized model
+    name resolves conservatively (``supports_reasoning_effort=False``), which
+    silently drops ``reasoning_effort`` from the outgoing request regardless of
+    what value the field holds -- see
+    ``agentrt.sdk.llm.options.chat_options.select_chat_options``.
+
+    Deliberately not passed as ``reasoning_effort=None`` here, even though
+    that would read as more honest: ``LLM.to_persisted()`` serializes with
+    ``exclude_none=True``, so an explicit ``None`` never survives a save/load
+    round trip -- it is dropped from the JSON and the class default reapplies
+    on load, same as never having set it. Passing it anyway would make every
+    freshly built profile compare unequal to the one just reloaded from disk,
+    and `preview_llm_profile`/`apply_llm_profile` would report a change that
+    can never actually be applied away.
     """
     from agentrt.sdk.llm import LLM
 
@@ -99,11 +118,8 @@ def _build_llm(router: config.RouterConfig):
         model=f"openai/{router.model}",
         base_url=router.base_url,
         api_key=SecretStr(router.api_key),
-        usage_id=DIRECT_LLM_USAGE_ID,
-        api_mode=DIRECT_LLM_API_MODE,
-        reasoning_effort=DIRECT_LLM_REASONING_EFFORT,
-        capability_overrides=dict(DIRECT_LLM_CAPABILITY_OVERRIDES),
-        litellm_extra_body=dict(DIRECT_LLM_EXTRA_BODY),
+        usage_id=LLM_USAGE_ID,
+        api_mode=LLM_API_MODE,
     )
 
 

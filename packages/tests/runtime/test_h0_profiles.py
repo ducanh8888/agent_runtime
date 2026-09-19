@@ -32,8 +32,8 @@ def state(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
     monkeypatch.setenv("AGENTRT_PERSISTENCE_DIR", str(tmp_path))
     monkeypatch.setenv("AGENTRT_API_KEY", "test-key")
-    monkeypatch.setenv("AGENTRT_BASE_URL", "https://api.deepseek.com")
-    monkeypatch.setenv("AGENTRT_DEFAULT_MODEL", "deepseek-flash")
+    monkeypatch.setenv("AGENTRT_BASE_URL", "http://127.0.0.1:20128/v1")
+    monkeypatch.setenv("AGENTRT_DEFAULT_MODEL", "agentrt-worker")
     monkeypatch.setenv("AGENTRT_MAX_SESSIONS", "0")
     reset_stores()
     yield str(tmp_path)
@@ -57,24 +57,35 @@ def test_new_profiles_are_constrained_and_ids_reused(state) -> None:
         assert profile.enable_switch_llm_tool is False
 
 
-def test_saved_llm_profile_carries_exact_direct_high_contract(state) -> None:
+def test_saved_llm_profile_carries_the_router_neutral_contract(state) -> None:
+    """Since the OmniRoute migration: no capability_overrides and no
+    litellm_extra_body -- this runtime does not claim a reasoning capability
+    it cannot verify for an opaque virtual model resolved per-request by a
+    router. ``reasoning_effort`` stays at the SDK's own default ("high"):
+    inert on its own, since dropping the overrides above is what actually
+    stops it reaching the wire for an unrecognized model (get_features()
+    resolves supports_reasoning_effort=False, and select_chat_options only
+    sends reasoning_effort when that is True). docs/plans/omniroute-migration.md.
+    """
     bootstrap.ensure_profiles()
     llm = get_llm_profile_store().load("default")
 
     # Assert the serialized profile, so this holds even before the SDK's
-    # name-based detection understands the deepseek-flash alias.
+    # name-based detection understands the model alias.
     dumped = llm.model_dump()
-    assert dumped["model"] == "openai/deepseek-flash"
+    assert dumped["model"] == "openai/agentrt-worker"
     assert dumped["usage_id"] == "agent"
     assert dumped["api_mode"] == "chat"
     assert dumped["reasoning_effort"] == "high"
-    assert dumped["capability_overrides"]["supports_reasoning_effort"] is True
-    assert dumped["capability_overrides"]["thinking_mode"] == "enabled"
-    assert dumped["capability_overrides"]["supports_responses_api"] is False
-    assert dumped["litellm_extra_body"] == {"thinking": {"type": "enabled"}}
-    assert dumped["base_url"] == "https://api.deepseek.com"
+    assert dumped["capability_overrides"] == {}
+    assert dumped["litellm_extra_body"] == {}
+    assert dumped["base_url"] == "http://127.0.0.1:20128/v1"
     assert llm.api_key is not None
     assert "test-key" not in repr(dumped)
+    # And the deployment cannot actually send it: an opaque virtual model
+    # name matches no known pattern, so the SDK's own capability detection
+    # resolves conservatively.
+    assert llm._model_features().supports_reasoning_effort is False
 
 
 def test_fast_path_migrates_base_created_switch_llm_off(state) -> None:
@@ -144,14 +155,18 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
     llm_store = get_llm_profile_store()
     llm = llm_store.load("default")
     # A stale, inconsistent policy plus an unrelated field the operator set.
+    # Each policy field is set to something that actually differs from the
+    # router-neutral baseline (reasoning_effort="high" -- the SDK's own
+    # default, api_mode="chat", capability_overrides={}, litellm_extra_body={},
+    # usage_id="agent"), so apply has real drift to correct.
     llm_store.save(
         "default",
         llm.model_copy(
             update={
                 "reasoning_effort": "medium",
                 "api_mode": "auto",
-                "capability_overrides": {},
-                "litellm_extra_body": {},
+                "capability_overrides": {"supports_reasoning_effort": True},
+                "litellm_extra_body": {"thinking": {"type": "enabled"}},
                 "usage_id": "custom",
                 "temperature": 0.25,
             }
@@ -178,8 +193,8 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
     reloaded = llm_store.load("default")
     assert reloaded.model_dump()["reasoning_effort"] == "high"
     assert reloaded.api_mode == "chat"
-    assert reloaded.capability_overrides["thinking_mode"] == "enabled"
-    assert reloaded.litellm_extra_body == {"thinking": {"type": "enabled"}}
+    assert reloaded.capability_overrides == {}
+    assert reloaded.litellm_extra_body == {}
     assert reloaded.usage_id == "agent"
     assert reloaded.temperature == 0.25  # unrelated field preserved
     assert reloaded.api_key is not None

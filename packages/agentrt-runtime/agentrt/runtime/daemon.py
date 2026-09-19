@@ -23,20 +23,38 @@ import httpx
 from agentrt.runtime import config
 
 
-#: Explicit deployment-only LLM policy for any server this runtime starts.
-#: Mirrors the direct/high contract bootstrap writes into the saved profile, so
-#: every new conversation is direct DeepSeek Chat Completions, thinking enabled
-#: and effort high, and a weaker explicit agent/agent_settings payload or a
-#: switch_llm bypass is refused by the server. Kept literal rather than derived
-#: from the operator's router config: a deployment that points elsewhere should
-#: fail visibly here instead of silently running a weaker model.
-DEPLOYMENT_LLM_POLICY: dict[str, str] = {
-    "model": "deepseek-flash",
-    "base_url": "https://api.deepseek.com",
-    "api_mode": "chat",
-    "thinking_mode": "enabled",
-    "reasoning_effort": "high",
-}
+def _deployment_llm_policy() -> dict[str, str] | None:
+    """The deployment-only LLM policy for any server this runtime starts.
+
+    Router-neutral since the OmniRoute migration (see
+    docs/plans/omniroute-migration.md): derived from the operator's own
+    resolved router configuration (``AGENTRT_API_KEY``/``AGENTRT_BASE_URL``/
+    ``AGENTRT_DEFAULT_MODEL`` and their legacy ``AGENTRT_9ROUTER_*``
+    aliases) rather than a literal, so the one contract this policy pins is
+    always exactly the endpoint and model this deployment is actually
+    configured to call -- whether that is a direct provider or one virtual
+    model behind a router. No ``thinking_mode``/``reasoning_effort`` keys are
+    set: a router's virtual model resolves to a different real backend per
+    request, so this runtime cannot honestly assert a fixed reasoning
+    contract for it (see ``bootstrap._build_llm``, which the server-side
+    enforcement in ``agentrt.agent_server.deployment_policy`` must agree
+    with -- both read the same resolved router config).
+
+    Returns ``None`` when the router config cannot be resolved yet (e.g. a
+    bare ``agentrt daemon start`` before ``.env`` is written) -- matching
+    ``DeploymentLLMPolicy``'s own documented opt-in behavior: the server
+    simply runs generic until a provider is configured, rather than this
+    call failing and blocking a plain daemon start that used to succeed.
+    """
+    try:
+        router = config.load_router_config()
+    except ValueError:
+        return None
+    return {
+        "model": router.model,
+        "base_url": router.base_url,
+        "api_mode": "chat",
+    }
 
 
 @dataclass(frozen=True)
@@ -186,9 +204,16 @@ def _daemon_env(token: str) -> dict[str, str]:
     # 2026-09-18.
     if "AGENTRT_SECRET_KEY" not in env:
         env["AGENTRT_SECRET_KEY"] = config.secret_key()
-    # Explicit deployment-only LLM policy. The server enforces it on new
-    # conversations; an agent-server started any other way stays generic.
-    env["AGENTRT_DEPLOYMENT_LLM_POLICY"] = json.dumps(DEPLOYMENT_LLM_POLICY)
+    # Explicit deployment-only LLM policy, derived from the same resolved
+    # router config bootstrap.py uses to build the saved profile. The server
+    # enforces it on new conversations; an agent-server started any other way
+    # stays generic. Omitted (not merely empty) when the router config is not
+    # yet resolvable, so a bare `agentrt daemon start` before `.env` exists
+    # still starts -- the server's own policy field is optional for exactly
+    # this reason.
+    policy = _deployment_llm_policy()
+    if policy is not None:
+        env["AGENTRT_DEPLOYMENT_LLM_POLICY"] = json.dumps(policy)
     # OpenHands ceremony this deployment never reaches, off by default here
     # but `setdefault` rather than a hard assignment: an operator who already
     # set either var in their own environment (e.g. to restore vendored
