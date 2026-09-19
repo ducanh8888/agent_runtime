@@ -8,4 +8,5 @@ __pycache__/
 .env.*
 !.env.example
 _probe*.json
+tools/_omniroute_probe_results.json
 ticks.txt

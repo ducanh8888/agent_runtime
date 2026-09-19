@@ -195,39 +195,133 @@ requiring no custom alias to be configured. All 38 report
 window (self-reported by the router, not yet independently verified against
 AgentRT's real tool loop).
 
-**Current blocker, found by reading `/api/rate-limits`, not assumed from the
-503s alone:** every provider connection on this OmniRoute instance
-(`gemini` x4 keys, `groq`, `nvidia`, `kilocode`, `cohere`, `antigravity`,
-`vertex`) currently reports `"enabled": false, "active": false`. Circuit
-breakers are `CLOSED` (healthy) and there are no cooldowns (`items: []`) --
-so the `503 resource_pressure` / `"Maximum combo retry limit reached"`
-responses hit while probing `auto/coding`, `auto/coding:reliable`,
-`auto/coding:fast`, `auto/coding:cheap`, `auto/best-coding`, `auto/reasoning`
-and `auto/claude-sonnet` are not a model or AgentRT defect: no backend is
-enabled for any combo to route to right now. **Real compatibility testing
-(§7 of the original task -- basic function call through model fallback) is
-blocked on the owner enabling at least a few provider connections on the
-OmniRoute dashboard.** Nothing here should be read as "these models don't
-work" -- they were never reachable.
+**First diagnosis, corrected by reading further, not left standing:** the
+`enabled`/`active` fields on `GET /api/rate-limits` (read with the plain
+inference API key) initially read as "every provider connection is
+disabled" -- wrong. `GET /api/providers` (read with a separate
+*management*-scoped token the owner provided afterward,
+`OMNI_ROUTE_MANAGE_TOKEN`) showed all 10 connections `isActive: true,
+testStatus: "active"`; the rate-limits fields mean something narrower
+(live in-flight/rate-limit-protection state, not configuration). The real
+cause of the initial wall of `503`s, found by cross-referencing both
+endpoints plus `GET /api/monitoring/health`: the OmniRoute process itself
+was near its own Node.js heap ceiling (`heapUsed`/`heapTotal` ~92-94%) and
+gating outbound requests as self-protection (`resource_pressure`),
+independent of which provider or model was requested -- confirmed by five
+completely unrelated providers (kilocode, groq, nvidia, vertex, antigravity)
+all failing identically. Resolved on the owner's side (process restart);
+not an AgentRT or model defect, and not something fixable from this
+repository.
 
-## 7. Status and what remains
+## 7. Real compatibility testing, once unblocked
+
+**Harness**: `tools/omniroute_probe.py`, committed. Talks directly to
+`AGENTRT_BASE_URL`'s Chat Completions endpoint with the resolved router
+credential -- independent of the AgentRT daemon, because "does this real
+backend model behave correctly for AgentRT's tool loop" is a question about
+the router/model, not about this repository's own code. Five checks per
+model, matching AgentRT's actual request/response shape (tool_call.id,
+function name, JSON arguments, `role=tool`, `tool_call_id`, provider
+`finish_reason`): **A** basic function call, **B** tool-result continuation,
+**C** a two-tool multi-turn loop to a final answer, **D** recovery from an
+error tool result, **E** parallel tool calls in one turn. Conservative on
+purpose (small `max_tokens`, ~4-5 requests per model) since it runs against
+the owner's real, possibly metered accounts. Results are also written to
+`tools/_omniroute_probe_results.json` (gitignored -- one deployment's live
+measurements, not a repository claim).
+
+**First real round (5 of 6 candidates passed every check):**
+`antigravity/gemini-3.7-flash-high` (fastest: 2.5-5.5s per call, all pass),
+`antigravity/claude-sonnet-4-6` (all pass, more detailed answers, 3.5-7s),
+`codex/gpt-5.6-sol`, `codex/gpt-5.5` (both all pass, 2.5-5s), `vertex/gemini-2.5-pro`
+(all pass, but a slow first multi-turn step at 22s). `vertex/claude-sonnet-4-6`
+failed entirely: `501 "Operation is not implemented, or supported, or
+enabled"` plus `429 model_cooldown`.
+
+**Vertex explored further, at the owner's request, since it was the one
+mixed result.** The Claude-4-6-sonnet failure turned out to be
+**family-wide, not model-specific**: `vertex/claude-opus-4-6` and
+`vertex/claude-sonnet-4-5` failed identically (same `501`/`429` pair) --
+Anthropic-via-Vertex credential/routing is broken on this account, while the
+*same* Claude Sonnet 4.6 works perfectly via `antigravity`. Separately,
+`vertex/DeepSeek-V4-Flash` and `vertex/Qwen3.6-35B-A3B` both returned
+`400: Expected input to contain field: 'messages'` -- a real router-side
+request-translation bug for these specific third-party models hosted on
+Vertex, worth reporting to OmniRoute upstream. Testing the rest of
+`vertex/gemini*` found a further, reproducible pattern: `gemini-3.1-pro-preview`,
+`gemini-3.1-flash-lite`, `gemini-3-flash-preview`, `gemini-2.0-flash` and
+`gemini-2.5-flash` (tested twice, same result both times) all fail check
+**B** or **D** -- the model repeats the identical tool call instead of
+consuming the tool result and answering. `gemini-3.1-pro-preview` failed
+worst: it looped calling `read_file` four times and never reached a final
+answer (check **C**). **`vertex/gemini-2.5-pro` remains the only Vertex-hosted
+model, across every family tried, that passed all five checks cleanly** --
+likely a router-side request-shaping quirk specific to how the `tool`-role
+follow-up message gets translated for Gemini-on-Vertex, not a defect in the
+Gemini models themselves.
+
+**Final combo, built by the owner on OmniRoute** (`GET /api/combos`, name
+`default`, strategy `lkgp`): `antigravity/gemini-3.7-flash-high` (primary) →
+`codex/gpt-5.6-luna-high` → `antigravity/claude-sonnet-4-6` →
+`vertex/gemini-2.5-pro`, exposed as the model id `default`
+(`GET /v1/models` lists it, `owned_by: "combo"`). Matches this section's
+own findings: every member individually passed all five checks (`gpt-5.6-luna-high`
+specifically wasn't separately probed, but shares the `codex` connection and
+model family as the already-passing `gpt-5.6-sol`).
+
+**Stability run on the combo itself, 3 consecutive full passes**, each
+independently hitting model id `default`: all five checks passed every time,
+latency consistently 2-6s per call, response wording consistent. Not a
+single failure across 3 runs / 15 individual checks.
+
+## 8. Wired into AgentRT, verified end to end
+
+`~/.agentrt/.env`'s `AGENTRT_DEFAULT_MODEL` changed from `deepseek-flash` to
+`default`. Reinstalled (`uv tool install packages/agentrt-runtime --reinstall`)
+and restarted the daemon to run the router-neutral code from §3; confirmed
+its actual process environment carries
+`AGENTRT_DEPLOYMENT_LLM_POLICY={"model": "default", "base_url":
+"https://9router.ducanh.cloud", "api_mode": "chat"}` -- no
+`thinking_mode`/`reasoning_effort` keys, matching the design.
+
+**Found immediately, and it is the exact behavior `bootstrap.py`'s own
+`preview_llm_profile`/`apply_llm_profile` docstrings already warned about**:
+changing `.env` does not retarget the *saved* LLM profile, so the first
+dispatch attempt was correctly rejected by `DeploymentLLMPolicy` -- the
+profile still held `openai/deepseek-flash` / `https://api.deepseek.com`.
+`agentrt llm-profile` (preview) showed exactly the expected diff (`base_url`,
+`model`, `capability_overrides` and `litellm_extra_body` all reverting to the
+router-neutral baseline); `agentrt llm-profile --apply` wrote it; a second
+preview then reported `"changes": []` -- converged, confirming the H10-era
+`reasoning_effort` fix (§3, "not passed as `None`") holds under a real
+apply, not just the unit test.
+
+**Real dispatch, real tools, verified on disk, not from the session's own
+report**: a workspace session was asked to fix a one-line bug (`add()`
+returning `a-b`) using `file_editor`, then verify with `terminal`. Result:
+`bucket: "completed"`, 4 iterations, final answer claiming the fix and a
+printed `OK`. Checked independently -- `buggy.py` on disk now reads
+`return a + b`, and re-importing and calling `add(2, 3)` in a fresh
+interpreter returns `5`. Full stack (dispatch → saved profile → deployment
+policy → real OmniRoute combo → real backend model → `file_editor` and
+`terminal` tools → finish) confirmed working, not merely each piece in
+isolation.
+
+## 9. Status and what remains
 
 **Done**: architecture assessment (§2), implementation (§3), the one-combo
-configuration decision (§4), tests for all of it (`test_h0_profiles.py`,
-`test_h0_deployment_policy.py`, `test_deployment_llm_policy.py`,
-`test_deployment_llm_policy_wiring.py` -- all passing; full `agent_server`
-suite re-run clean, 2270 passed), real connectivity to the owner's live
-OmniRoute instance, and the router-failover/session semantics research (§5).
+configuration decision (§4), router failover/session semantics (§5), the
+resource-pressure root cause (§6), the compatibility harness and real
+multi-candidate testing including the Vertex-specific investigation (§7),
+and full wiring into AgentRT with a real, independently-verified end-to-end
+dispatch (§8). Tests: `test_h0_profiles.py`, `test_h0_deployment_policy.py`,
+`test_deployment_llm_policy.py`, `test_deployment_llm_policy_wiring.py` all
+passing; full `agent_server` suite re-run clean, 2270 passed.
 
-**Blocked, not skipped**: the real compatibility gate (function calling,
-tool-result continuation, multi-turn loop, invalid-tool recovery, parallel
-calls, long-context continuation, truncation, account failover, model
-fallback -- all against AgentRT's actual tool loop, not curl), the model
-evaluation and stability run across candidates, and the final small
-production model set. All need at least one enabled provider connection on
-the live router to produce real evidence rather than a guess. Resumes as
-soon as that is available.
-
-**Not started**: exposing route/provider/failure metadata without invasive
-SDK changes (§13 of the original task) -- deferred until the compatibility
-gate is unblocked, since there is no real route yet to observe.
+**Not done, and not currently planned further**: the full section 7/9/10
+matrix from the original task (long-context continuation, truncation
+behavior, account failover exercised deliberately, model-fallback-after-a-tool-call
+safety) beyond what the above already covers; exposing route/provider/failure
+metadata without invasive SDK changes (§13 of the original task). Neither is
+blocking the current combo's use -- both are follow-on hardening if the
+owner wants them, not required for what shipped.
