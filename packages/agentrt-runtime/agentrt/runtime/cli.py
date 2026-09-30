@@ -84,7 +84,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
 def _cmd_list(args: argparse.Namespace) -> list:
     """Return recent sessions in reverse chronological order."""
     client = client_mod.Client()
-    return client.list_sessions(limit=args.limit)
+    return client.list_sessions(limit=args.limit, offset=args.offset)
 
 
 def _cmd_status(args: argparse.Namespace) -> dict:
@@ -364,7 +364,18 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 
     list_parser = _add_subparser(subparsers, "list", help="list known sessions")
-    list_parser.add_argument("--limit", type=int, default=20)
+    list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="maximum sessions to return (default: 50)",
+    )
+    list_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="number of newest sessions to skip (default: 0)",
+    )
     list_parser.set_defaults(func=_cmd_list)
 
     status_parser = _add_subparser(subparsers, "status", help="show session status")

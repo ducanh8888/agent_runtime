@@ -1437,30 +1437,53 @@ class Client:
                 break
         return out
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
-        """Return the most recent sessions from the daemon."""
-        response = self._send(
-            "GET",
-            "/api/conversations/search",
-            params={"limit": limit},
-        )
-        data = response.json()
+    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        """Return the most recent sessions from the daemon, with page controls."""
+        if limit <= 0:
+            return []
+        offset = max(0, offset)
 
-        if isinstance(data, list):
-            sessions = data
-        elif isinstance(data, dict):
-            sessions = data.get("sessions")
-            if not isinstance(sessions, list):
-                sessions = data.get("items")
-            if not isinstance(sessions, list):
-                sessions = data.get("conversations")
-            if not isinstance(sessions, list):
-                sessions = []
-        else:
-            sessions = []
+        sessions: list[dict] = []
+        page: str | None = None
+        target_count = offset + limit
+
+        while len(sessions) < target_count:
+            req_limit = min(100, target_count - len(sessions) if offset == 0 else 100)
+            params: dict[str, object] = {"limit": req_limit}
+            if page:
+                params["page_id"] = page
+            data = self._send("GET", "/api/conversations/search", params=params).json()
+
+            if isinstance(data, list):
+                items = data
+                page = None
+            elif isinstance(data, dict):
+                items = data.get("sessions")
+                if not isinstance(items, list):
+                    items = data.get("items")
+                if not isinstance(items, list):
+                    items = data.get("conversations")
+                if not isinstance(items, list):
+                    items = []
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+            else:
+                items = []
+                page = None
+
+            if not items:
+                break
+
+            for item in items:
+                if isinstance(item, dict):
+                    sessions.append(item)
+
+            if not page:
+                break
+
+        paged_sessions = sessions[offset : offset + limit]
 
         result: list[dict] = []
-        for session in sessions:
+        for session in paged_sessions:
             full_id = session.get("id") if isinstance(session, dict) else None
             result.append(
                 {
