@@ -78,6 +78,8 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         tags=_parse_tags(args.tag),
         attachments=args.attachment or None,
         workspace_mode=args.workspace_mode,
+        context_files=args.context_file or None,
+        require=args.require,
     )
 
 
@@ -284,7 +286,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--max-iterations",
         type=int,
-        help="stop the run after this many agent steps (daemon default: 500)",
+        help="stop the run after this many agent steps (default: 100000)",
     )
     dispatch_parser.add_argument(
         "--workspace-mode",
@@ -296,6 +298,21 @@ def _build_parser() -> argparse.ArgumentParser:
             "there, isolated and reproducible against the pinned commit "
             "(reported as workspace_resolved_sha on `status`)."
         ),
+    )
+    dispatch_parser.add_argument(
+        "--context-file",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "prepend a UTF-8 text file to the task; repeatable "
+            "(200 KB each, 1 MB total)"
+        ),
+    )
+    dispatch_parser.add_argument(
+        "--require",
+        choices=("commit",),
+        help="require workspace HEAD to advance before the session finishes",
     )
     dispatch_parser.add_argument(
         "--attachment",

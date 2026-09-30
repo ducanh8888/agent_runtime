@@ -8,6 +8,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+DEFAULT_MAX_ITERATIONS = 100_000
+
+
+def default_max_iterations() -> int:
+    """Default agent run budget, overrideable by the dispatcher environment."""
+    raw = os.environ.get("AGENTRT_DEFAULT_MAX_ITERATIONS", "").strip()
+    if not raw:
+        return DEFAULT_MAX_ITERATIONS
+    try:
+        return int(raw)
+    except ValueError:
+        return DEFAULT_MAX_ITERATIONS
+
+
 @dataclass(frozen=True)
 class RouterConfig:
     """Immutable router settings.

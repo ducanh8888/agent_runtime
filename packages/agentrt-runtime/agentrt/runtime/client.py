@@ -12,6 +12,9 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import subprocess
+import sys
 import time
 import uuid
 from datetime import UTC, datetime
@@ -212,9 +215,66 @@ def _status_of(data: object) -> str | None:
     return data.get("execution_status") or data.get("status")
 
 
-#: Image formats an attachment may carry, and the size above which one is
-#: refused. The format is sniffed from the file's own bytes: an extension is
-#: the caller's claim, and the MIME type is what the provider acts on.
+CONTEXT_FILE_BYTES = 200 * 1024
+CONTEXT_TOTAL_BYTES = 1024 * 1024
+
+
+def _read_context_files(paths: list[str]) -> list[tuple[str, str]]:
+    blocks: list[tuple[str, str]] = []
+    total = 0
+    for raw in paths:
+        path = Path(raw).expanduser()
+        try:
+            if not path.exists():
+                raise ClientError(f"context file {raw!r} does not exist")
+            if not path.is_file():
+                raise ClientError(f"context file {raw!r} is not a regular file")
+            size = path.stat().st_size
+            if size > CONTEXT_FILE_BYTES:
+                raise ClientError(
+                    f"context file {raw!r} is {size} bytes, above the "
+                    f"{CONTEXT_FILE_BYTES} byte per-file cap"
+                )
+            total += size
+            if total > CONTEXT_TOTAL_BYTES:
+                raise ClientError(
+                    f"context files total {total} bytes, above the "
+                    f"{CONTEXT_TOTAL_BYTES} byte cap"
+                )
+            content = path.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise ClientError(f"context file {raw!r} does not exist") from exc
+        except UnicodeDecodeError as exc:
+            raise ClientError(f"context file {raw!r} is not UTF-8 text") from exc
+        blocks.append((raw, content))
+    return blocks
+
+
+def _with_context_files(task: str, paths: list[str] | None) -> str:
+    if not paths:
+        return task
+    parts = [
+        f"### Context file: {path}\n{content}"
+        for path, content in _read_context_files(paths)
+    ]
+    return "\n\n".join([*parts, task])
+
+
+def _git_head(workspace: str) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", workspace, "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ClientError(
+            f"require='commit' needs a git workspace with HEAD: {exc}"
+        ) from exc
+    return result.stdout.strip()
+
+
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 
 
@@ -1306,6 +1366,8 @@ class Client:
         idempotency_key: str | None = None,
         attachments: list[str] | None = None,
         workspace_mode: str | None = None,
+        context_files: list[str] | None = None,
+        require: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1338,6 +1400,10 @@ class Client:
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
         outside = _task_paths_outside_workspace(task, workspace)
+        task = _with_context_files(task, context_files)
+        if require not in (None, "commit"):
+            raise ClientError("require must be 'commit' when specified")
+        start_head = _git_head(workspace) if require == "commit" else None
         preset = permissions.normalise(permission)
         profile_id = self._profile_id(preset, llm_profile)
         resolved_llm = (
@@ -1373,10 +1439,28 @@ class Client:
                 "content": [{"type": "text", "text": task}],
             },
         }
+        body["max_iterations"] = (
+            max_iterations
+            if max_iterations is not None
+            else config.default_max_iterations()
+        )
+        if require == "commit":
+            command = " ".join(
+                shlex.quote(part)
+                for part in (
+                    sys.executable,
+                    "-m",
+                    "agentrt.runtime.commit_hook",
+                    start_head or "",
+                )
+            )
+            body["hook_config"] = {
+                "stop": [
+                    {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
+                ]
+            }
         if title is not None:
             body["title"] = title
-        if max_iterations is not None:
-            body["max_iterations"] = max_iterations
         if tags:
             body["tags"] = _clean_tags(tags)
         if idempotency_key:
@@ -1384,13 +1468,19 @@ class Client:
         if workspace_mode:
             body["workspace_mode"] = workspace_mode
         if attachments:
-            blocks = self._attachment_blocks(attachments, workspace=workspace)
-            body["initial_message"]["content"] = [
-                {"type": "text", "text": task},
-                *blocks,
-            ]
+            body["initial_message"]["content"].extend(
+                self._attachment_blocks(attachments, workspace=workspace)
+            )
 
         data = self._send("POST", "/api/conversations", json=body).json()
+        shared_with = []
+        if not workspace_mode or workspace_mode == "shared":
+            try:
+                shared_with = self._sessions_sharing_workspace(
+                    workspace, exclude_id=data.get("id")
+                )
+            except (ClientError, ValueError):
+                pass
         full_id = data.get("id")
         result: dict = {
             "id": full_id,
@@ -1406,7 +1496,31 @@ class Client:
             result["workspace_resolved_sha"] = resolved_sha
         if outside:
             result["outside_workspace_paths"] = outside
+        if shared_with:
+            result["shared_workspace_with"] = shared_with
+            result["warning"] = "Another running session uses this shared workspace."
         return result
+
+    def _sessions_sharing_workspace(
+        self, workspace: str, *, exclude_id: str | None = None
+    ) -> list[str]:
+        data = self._send(
+            "GET", "/api/conversations/search", params={"limit": 100}
+        ).json()
+        items = data.get("items", []) if isinstance(data, dict) else []
+        return [
+            short_id(session["id"])
+            for session in items
+            if isinstance(session, dict)
+            and _status_of(session) == "running"
+            and isinstance(session.get("workspace"), dict)
+            and os.path.abspath(
+                os.path.expanduser(session["workspace"].get("working_dir") or "")
+            )
+            == workspace
+            and session.get("id") != exclude_id
+            and session.get("id")
+        ]
 
     def _all_sessions(self) -> list[dict]:
         """Every session the daemon knows, paged.
