@@ -17,6 +17,8 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 
@@ -124,6 +126,68 @@ def _remove_daemon_file() -> None:
         pass
 
 
+def _atomic_json_write(path, data: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if os.name != "nt":
+            os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _history_file():
+    return config.state_dir() / "daemon_history.json"
+
+
+def _read_history() -> dict:
+    try:
+        data = json.loads(_history_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    starts = data.get("starts")
+    return {
+        "starts": starts[-50:] if isinstance(starts, list) else [],
+        "unexpected_exits": data.get("unexpected_exits", 0)
+        if isinstance(data.get("unexpected_exits", 0), int)
+        else 0,
+        "last_unexpected_exit_at": data.get("last_unexpected_exit_at"),
+    }
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _record_start() -> None:
+    history = _read_history()
+    history["starts"].append(_now_iso())
+    history["starts"] = history["starts"][-50:]
+    _atomic_json_write(_history_file(), history)
+
+
+def _record_unexpected_exit() -> None:
+    history = _read_history()
+    history["unexpected_exits"] += 1
+    history["last_unexpected_exit_at"] = _now_iso()
+    _atomic_json_write(_history_file(), history)
+
+
+def history() -> dict:
+    """Return the daemon start and unexpected-exit history."""
+    return _read_history()
+
+
 def _write_daemon_file(info: DaemonInfo) -> None:
     path = config.daemon_file()
     fd, tmp = tempfile.mkstemp(
@@ -153,7 +217,7 @@ def _write_daemon_file(info: DaemonInfo) -> None:
 def _terminate(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            ["taskkill", "/PID", str(pid), "/T"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -169,6 +233,64 @@ def _log_tail() -> str:
     except OSError:
         return ""
     return "\n".join(lines[-30:])
+
+
+def _process_alive(pid: int) -> bool:
+    if sys.platform.startswith("linux"):
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+            state = stat[stat.rfind(")") + 2 :].split()[0]
+            if state == "Z":
+                return False
+        except (OSError, IndexError):
+            return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _proc_daemons() -> list[DaemonInfo]:
+    if not sys.platform.startswith("linux"):
+        return []
+    found: list[DaemonInfo] = []
+    proc_root = Path("/proc")
+    state = str(config.state_dir().resolve())
+    try:
+        entries = list(proc_root.iterdir())
+    except OSError:
+        return []
+    for entry in entries:
+        if not entry.name.isdecimal() or not _process_alive(int(entry.name)):
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes().split(b"\0")
+            environ = (entry / "environ").read_bytes().split(b"\0")
+            env = dict(
+                item.decode(errors="replace").split("=", 1)
+                for item in environ
+                if b"=" in item
+            )
+            if (
+                not any(b"agentrt.runtime.server_launch" in arg for arg in cmdline)
+                or str(Path(env.get("AGENTRT_PERSISTENCE_DIR", "")).resolve()) != state
+            ):
+                continue
+            args = [arg.decode(errors="replace") for arg in cmdline]
+            port_index = args.index("--port") + 1
+            found.append(
+                DaemonInfo(
+                    port=int(args[port_index]),
+                    token=env["AGENTRT_SESSION_API_KEYS_0"],
+                    pid=int(entry.name),
+                )
+            )
+        except (OSError, ValueError, KeyError, IndexError):
+            continue
+    return found
 
 
 def _daemon_env(token: str) -> dict[str, str]:
@@ -230,6 +352,15 @@ def _daemon_env(token: str) -> dict[str, str]:
     # separate cap) is raised. setdefault: an operator who already set their
     # own ceiling here is not silently overridden.
     env.setdefault("AGENTRT_MAX_CONCURRENT_RUNS", config.DEFAULT_MAX_CONCURRENT_RUNS)
+    for name, value in {
+        "GIT_EDITOR": "true",
+        "EDITOR": "true",
+        "VISUAL": "true",
+        "GIT_PAGER": "cat",
+        "PAGER": "cat",
+        "GIT_TERMINAL_PROMPT": "0",
+    }.items():
+        env.setdefault(name, value)
     return env
 
 
@@ -255,7 +386,10 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
             except FileExistsError:
                 if time.monotonic() >= acquire_deadline:
                     raise RuntimeError(
-                        "Timed out waiting for daemon lock at " + str(lock_path)
+                        "Another agentrt CLI/MCP process is starting or holding "
+                        "the daemon lock. "
+                        "Concurrent CLI calls should be serialized or retried. "
+                        f"Lock path: {lock_path}"
                     ) from None
                 try:
                     if time.time() - lock_path.stat().st_mtime > 120.0:
@@ -266,8 +400,24 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                 time.sleep(0.1)
 
         info = read_info()
-        if info is not None and is_alive(info):
-            return info
+        if info is not None:
+            if is_alive(info):
+                return info
+            if not _process_alive(info.pid):
+                _record_unexpected_exit()
+        candidates = _proc_daemons()
+        if len(candidates) > 1:
+            details = ", ".join(
+                f"pid={item.pid} port={item.port}" for item in candidates
+            )
+            raise RuntimeError(
+                "Multiple AgentRT daemons serve this state directory: " + details
+            )
+        if candidates:
+            adopted = candidates[0]
+            _write_daemon_file(adopted)
+            _record_start()
+            return adopted
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.bind(("127.0.0.1", 0))
@@ -323,6 +473,7 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
         alive_deadline = time.monotonic() + startup_timeout
         while time.monotonic() < alive_deadline:
             if is_alive(info, timeout=0.5):
+                _record_start()
                 return info
             # A child that has exited is never going to answer, so stop waiting
             # on it. Separating "died" from "slow" is what lets the timeout be
@@ -357,23 +508,43 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
 
 
 def stop(timeout: float = 10.0) -> bool:
-    """Stop the daemon process and clear its state file."""
+    """Stop the daemon, escalating only after allowing graceful shutdown."""
     info = read_info()
-    if info is None or not is_alive(info):
+    if info is None or not _process_alive(info.pid):
         _remove_daemon_file()
         return False
 
     try:
         _terminate(info.pid)
-    except OSError:
+    except ProcessLookupError:
         pass
+    except OSError as exc:
+        raise RuntimeError(
+            f"Could not send SIGTERM to daemon pid {info.pid}: {exc}"
+        ) from exc
 
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not is_alive(info, timeout=0.3):
-            break
+    deadline = time.monotonic() + max(timeout, 60.0)
+    while _process_alive(info.pid) and time.monotonic() < deadline:
         time.sleep(0.1)
 
+    if _process_alive(info.pid):
+        try:
+            os.kill(info.pid, signal.SIGKILL) if os.name != "nt" else subprocess.run(
+                ["taskkill", "/PID", str(info.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            pass
+        kill_deadline = time.monotonic() + 5.0
+        while _process_alive(info.pid) and time.monotonic() < kill_deadline:
+            time.sleep(0.1)
+
+    if _process_alive(info.pid):
+        raise RuntimeError(
+            f"Could not stop daemon pid {info.pid}; daemon.json was retained."
+        )
     _remove_daemon_file()
     return True
 
