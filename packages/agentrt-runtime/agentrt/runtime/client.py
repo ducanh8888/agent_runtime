@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 import httpx
 
-from agentrt.runtime import bootstrap, config, daemon, permissions
+from agentrt.runtime import bootstrap, config, daemon, hostinfo, permissions
 
 
 #: Directories skipped when reporting what a session wrote.
@@ -51,6 +51,13 @@ PRUNED_DIRS = frozenset(
         ".tox",
     }
 )
+
+
+def _stall_seconds() -> float:
+    try:
+        return max(0.0, float(os.environ.get("AGENTRT_STALL_SECONDS", "900")))
+    except ValueError:
+        return 900.0
 
 
 def _clean_tags(tags: dict) -> dict[str, str]:
@@ -1949,14 +1956,99 @@ class Client:
         ).json()
 
     def capacity(self) -> dict:
-        """Report the daemon's admission surface.
+        """Report admission, host pressure, daemon history, and running sessions.
 
-        `limiting_dimension` names the cap that is binding, or null when the run
-        cap is disabled. `available` is null in that case: there is no ceiling
-        to subtract from, and a numeric remainder would read as a small one.
-        `queued` is accepted work waiting for a slot, in submission order.
+        The server's capacity fields are returned unchanged. On POSIX, `host`
+        adds total/available memory, daemon-tree RSS, and the ten largest
+        immediate child process trees (RSS and truncated command line); it is
+        null elsewhere. `daemon` reports pid, started_at (from /proc, falling
+        back to daemon_history.json), and unexpected-exit history fields; the
+        history fields are null when that optional file is absent.
+
+        `running_sessions` contains each running session's short id, title,
+        iterations_used, newest transcript event timestamp, seconds since that
+        event, and `stalled` when it exceeds AGENTRT_STALL_SECONDS (default 900).
+        Event timestamps without a timezone are interpreted as local time.
+
+        `in_flight_llm` counts provider transport calls currently holding a slot;
+        `llm_limit` is the configured AGENTRT_MAX_INFLIGHT_LLM concurrency cap.
+        It is zero and null respectively when provider slots are not configured;
+        retries sleeping after 429 do not hold a slot. The server's other
+        admission fields, including restart recovery fields, pass through.
         """
-        return self._send("GET", "/api/conversations/capacity").json()
+        result = self._send("GET", "/api/conversations/capacity").json()
+        if not isinstance(result, dict):
+            return result
+        info = daemon.read_info()
+        pid = info.pid if info is not None else None
+        host, proc_started = hostinfo.collect(pid) if pid is not None else (None, None)
+        history = {}
+        try:
+            with (config.state_dir() / "daemon_history.json").open(
+                encoding="utf-8"
+            ) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                history = loaded
+        except (OSError, ValueError):
+            pass
+        starts = history.get("starts")
+        history_started = (
+            starts[-1]
+            if isinstance(starts, list) and starts
+            else history.get("started_at")
+        )
+        started_at = proc_started or history_started
+        result["host"] = host
+        result["daemon"] = {
+            "pid": pid,
+            "started_at": started_at,
+            "unexpected_exits": history.get("unexpected_exits"),
+            "last_unexpected_exit_at": history.get("last_unexpected_exit_at"),
+        }
+        threshold = _stall_seconds()
+        running = []
+        now = datetime.now().astimezone()
+        for session in self.list_sessions(limit=1000):
+            if session.get("status") != "running":
+                continue
+            session_id = session.get("id")
+            newest = None
+            if isinstance(session_id, str):
+                try:
+                    status = self.status(session_id)
+                    events = self.transcript(session_id, limit=1).get("events", [])
+                    timestamps = [
+                        e.get("timestamp")
+                        for e in events
+                        if isinstance(e, dict) and isinstance(e.get("timestamp"), str)
+                    ]
+                    newest = timestamps[0] if timestamps else None
+                except (ClientError, ValueError, TypeError):
+                    status = {}
+            else:
+                status = {}
+            elapsed = None
+            if newest:
+                try:
+                    event_at = datetime.fromisoformat(newest)
+                    if event_at.tzinfo is None:
+                        event_at = event_at.astimezone()
+                    elapsed = max(0.0, (now - event_at).total_seconds())
+                except ValueError:
+                    pass
+            running.append(
+                {
+                    "id": session.get("short_id"),
+                    "title": session.get("title"),
+                    "iterations_used": status.get("iterations_used"),
+                    "last_event_at": newest,
+                    "seconds_since_last_event": elapsed,
+                    "stalled": elapsed is not None and elapsed > threshold,
+                }
+            )
+        result["running_sessions"] = running
+        return result
 
     def finalize(self, session: str, *, summary: bool = False) -> dict:
         """Stop a session at a safe boundary and return the outcome it has.
