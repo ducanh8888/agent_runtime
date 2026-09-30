@@ -370,13 +370,9 @@ def test_settled_item_carries_its_title_at_no_extra_cost() -> None:
     out = client.wait([A], mode="all", timeout=5.0, poll_interval=0.5)
 
     assert out["completed"][0]["title"] == "nightly audit"
-    # Teeth beyond "no /usage": two samples (the second-sample rule needs a
-    # previous terminal reading) plus the result read. A title fetched by its
-    # own call would make this 4. A differential form -- same scenario with and
-    # without a title, asserting equal counts -- was tried and rejected: an
-    # implementation that fetched the title in a separate call would do so in
-    # both runs, so the counts would agree and the assertion would pass.
-    assert len(paths) == 3, paths
+    # The request transcript read verifies completed_cleanly; a title fetched
+    # by its own call would add another request beyond these four.
+    assert len(paths) == 4, paths
     assert not any(p.endswith("/usage") for p in paths), paths
 
 
