@@ -103,9 +103,7 @@ async def test_running_record_held_by_live_lease_is_recovered_after_expiry(
         assert event_service is not None
         state = await event_service.get_state()
         assert state.execution_status == ConversationExecutionStatus.ERROR
-        codes = [
-            e.code for e in state.events if isinstance(e, ConversationErrorEvent)
-        ]
+        codes = [e.code for e in state.events if isinstance(e, ConversationErrorEvent)]
         assert "DaemonRestarted" in codes
 
 

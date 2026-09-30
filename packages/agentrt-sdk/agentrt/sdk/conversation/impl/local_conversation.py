@@ -132,6 +132,8 @@ ACP_LAST_PROMPT_USER_MESSAGE_ID = "acp_last_prompt_user_message_id"
 ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID = "acp_inflight_prompt_user_message_id"
 ACP_SUPERSEDE_INFLIGHT_PROMPT = "acp_supersede_inflight_prompt"
 _RUNTIME_MCP_TIMEOUT_SECS = 30
+#: Steps before the per-run cap at which the agent is told to wrap up.
+ITERATION_BUDGET_WARNING_STEPS = 3
 
 ACP_STOP_HOOK_FEEDBACK_PREFIX = "[Stop hook feedback]"
 
@@ -2003,6 +2005,13 @@ class LocalConversation(BaseConversation):
         self._cancel_token = CancellationToken()
 
         with self._state:
+            if (
+                self._state.execution_status == ConversationExecutionStatus.STUCK
+                and self._stuck_detector is not None
+            ):
+                # Without a fresh window the resumed run re-detects the same
+                # trailing loop before its first step and stops again.
+                self._stuck_detector.mark_resumed()
             if self._state.execution_status in [
                 ConversationExecutionStatus.IDLE,
                 ConversationExecutionStatus.PAUSED,
@@ -2088,6 +2097,7 @@ class LocalConversation(BaseConversation):
                         self._step_holds_state_lock = False
                     iteration += 1
                     self._state.iterations_used = iteration
+                    self._maybe_warn_iteration_budget(iteration)
 
                     # Check for non-finished terminal conditions
                     # Note: We intentionally do NOT check for FINISHED status here.
@@ -2215,6 +2225,13 @@ class LocalConversation(BaseConversation):
                     updated_agent_state.pop(ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID, None)
                     self._state.agent_state = updated_agent_state
 
+            if (
+                self._state.execution_status == ConversationExecutionStatus.STUCK
+                and self._stuck_detector is not None
+            ):
+                # Without a fresh window the resumed run re-detects the same
+                # trailing loop before its first step and stops again.
+                self._stuck_detector.mark_resumed()
             if self._state.execution_status in [
                 ConversationExecutionStatus.IDLE,
                 ConversationExecutionStatus.PAUSED,
@@ -2363,6 +2380,7 @@ class LocalConversation(BaseConversation):
                             self._step_holds_state_lock = False
                         iteration += 1
                         self._state.iterations_used = iteration
+                        self._maybe_warn_iteration_budget(iteration)
 
                         # astep releases the state lock for the LLM call, so a
                         # message can land mid-step with status still RUNNING and
@@ -2843,6 +2861,34 @@ class LocalConversation(BaseConversation):
                 source="environment",
                 llm_message=Message(role="user", content=[TextContent(text=text)]),
             )
+        )
+
+    def _maybe_warn_iteration_budget(self, iteration: int) -> None:
+        """Tell the agent once, a few steps early, that its step budget is
+        nearly spent.
+
+        The cap cuts a run between steps with no warning, so a session that
+        spent its budget investigating ended with its findings only in its
+        own head -- measured: a read-only review hit MaxIterationsReached
+        without writing the report it was dispatched for. One notice at a
+        fixed distance from the cap gives it the chance to write up and
+        finish; the cap itself is unchanged.
+
+        Must be called while holding ``self._state``.
+        """
+        if self._state.execution_status == ConversationExecutionStatus.FINISHED:
+            return
+        remaining = self.max_iteration_per_run - iteration
+        if remaining <= 0:
+            return
+        warn_at = min(ITERATION_BUDGET_WARNING_STEPS, self.max_iteration_per_run - 1)
+        if remaining != warn_at:
+            return
+        self._emit_run_notice(
+            f"\n\n[Step budget] Only {remaining} step(s) remain in this run "
+            "before it is stopped. Stop exploring now: write down what you "
+            "have found or changed (in your final answer, or the report file "
+            "if you were asked for one) and finish.\n\n"
         )
 
     def _emit_interrupt_notice(self) -> None:
