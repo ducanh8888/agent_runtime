@@ -1850,7 +1850,7 @@ class TestConversationServiceStartConversation:
 
         stored = captured["stored"]
         expected_worktree = worktree_root / str(conversation_id) / repo_dir.name
-        expected_branch = f"openhands/{conversation_id}"
+        expected_branch = f"agentrt/{conversation_id}"
 
         assert stored.worktree is True
         assert stored.workspace.working_dir == str(expected_worktree)

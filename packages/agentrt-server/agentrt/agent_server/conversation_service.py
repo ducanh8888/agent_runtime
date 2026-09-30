@@ -265,7 +265,7 @@ def _create_conversation_worktree(
     conversation_worktree_dir = conversation_worktree_root / str(conversation_id)
     worktree_root = conversation_worktree_dir / repo_root.name
     conversation_worktree_dir.mkdir(parents=True, exist_ok=True)
-    branch = None if detached else f"openhands/{conversation_id}"
+    branch = None if detached else f"agentrt/{conversation_id}"
 
     if worktree_root.exists():
         try:

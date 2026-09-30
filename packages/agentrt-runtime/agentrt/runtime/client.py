@@ -15,9 +15,11 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -227,6 +229,23 @@ def _status_of(data: object) -> str | None:
         return None
     return data.get("execution_status") or data.get("status")
 
+
+_DISPATCH_ARGUMENTS = frozenset(
+    {
+        "task",
+        "workspace",
+        "title",
+        "permission",
+        "llm_profile",
+        "max_iterations",
+        "tags",
+        "idempotency_key",
+        "attachments",
+        "workspace_mode",
+        "context_files",
+        "require",
+    }
+)
 
 CONTEXT_FILE_BYTES = 200 * 1024
 CONTEXT_TOTAL_BYTES = 1024 * 1024
@@ -2183,7 +2202,9 @@ class Client:
         self,
         tasks: list[dict],
         *,
-        max_batch: int = 25,
+        defaults: dict | None = None,
+        max_batch: int = 100,
+        parallel: int = 8,
     ) -> dict:
         """Submit several tasks once and return a per-item outcome.
 
@@ -2193,10 +2214,12 @@ class Client:
         backlog, so one submission is followed by one collection of outcomes
         rather than caller-managed re-dispatch.
 
-        An item is a dict of the same arguments `dispatch` takes (`task`,
-        `workspace`, plus optional `title`, `permission`, `tags`, `max_iterations`,
-        `idempotency_key`). Items that fail validation or creation are reported
-        individually; the rest are created.
+        An item is a dict of the same arguments `dispatch` takes. ``defaults``
+        supplies any of them for every item; an item's own value wins, and
+        ``tags`` are merged. Items are submitted ``parallel`` at a time, except
+        that items preparing a worktree from the same repository
+        (``snapshot``/``isolated_worktree``) go one after another. Outcomes
+        keep submission order.
         """
         if not tasks:
             raise ValueError("dispatch_many needs at least one task")
@@ -2205,24 +2228,67 @@ class Client:
                 f"{len(tasks)} tasks exceeds the batch size of {max_batch}; "
                 "submit in waves so a partial failure stays bounded"
             )
-        # Validate everything before creating anything.
+        base = dict(defaults or {})
+        merged: list[dict] = []
         for index, item in enumerate(tasks):
-            if not isinstance(item, dict) or not item.get("task"):
+            if not isinstance(item, dict):
+                raise ValueError(f"item {index} is not an object")
+            combined = {**base, **item}
+            if isinstance(base.get("tags"), dict) and isinstance(
+                item.get("tags"), dict
+            ):
+                combined["tags"] = {**base["tags"], **item["tags"]}
+            unknown = set(combined) - _DISPATCH_ARGUMENTS
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(f"item {index} has unknown argument(s): {names}")
+            if not combined.get("task"):
                 raise ValueError(f"item {index} has no task")
-            if not item.get("workspace"):
+            if not combined.get("workspace"):
                 raise ValueError(f"item {index} has no workspace")
+            merged.append(combined)
+
+        self._ensure_ready()
+        worktree_locks: dict[str, threading.Lock] = {}
+        for combined in merged:
+            if combined.get("workspace_mode") not in (None, "shared"):
+                key = os.path.abspath(os.path.expanduser(str(combined["workspace"])))
+                worktree_locks.setdefault(key, threading.Lock())
+
+        def submit(combined: dict) -> dict:
+            key = os.path.abspath(os.path.expanduser(str(combined["workspace"])))
+            lock = (
+                worktree_locks.get(key)
+                if combined.get("workspace_mode") not in (None, "shared")
+                else None
+            )
+            if lock is None:
+                return self.dispatch(**combined)
+            with lock:
+                return self.dispatch(**combined)
+
+        outcomes: list[dict | ClientError] = []
+        with ThreadPoolExecutor(max_workers=max(1, min(parallel, len(merged)))) as pool:
+            futures = [pool.submit(submit, combined) for combined in merged]
+            for future in futures:
+                try:
+                    outcomes.append(future.result())
+                except ClientError as exc:
+                    outcomes.append(exc)
 
         accepted: list[dict] = []
         failed: list[dict] = []
-        for index, item in enumerate(tasks):
-            try:
-                created = self.dispatch(**item)
-            except ClientError as exc:
+        for index, outcome in enumerate(outcomes):
+            if isinstance(outcome, ClientError):
                 failed.append(
-                    {"index": index, "error": type(exc).__name__, "message": str(exc)}
+                    {
+                        "index": index,
+                        "error": type(outcome).__name__,
+                        "message": str(outcome),
+                    }
                 )
-                continue
-            accepted.append({"index": index, **created})
+            else:
+                accepted.append({"index": index, **outcome})
         return {
             "accepted": accepted,
             "failed": failed,

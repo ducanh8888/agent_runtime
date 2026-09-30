@@ -16,20 +16,56 @@ from mcp.server.fastmcp import FastMCP
 from agentrt.runtime import client as client_mod, config
 
 
-INSTRUCTIONS = """agentrt runs coding agents in background sessions on this
-machine. A session survives this conversation ending: dispatch work, close the
-orchestrator, come back later and collect the result.
+INSTRUCTIONS = """AgentRT gives you background sub-agents that run on the
+user's own model keys, in a daemon on this machine. You are the orchestrator:
+plan, split, dispatch, verify. Sessions do the long work and outlive this
+conversation.
 
-Two things are worth knowing before the first call. A session is not cheaper
-than doing the work yourself -- it costs roughly ten seconds of startup and its
-own model spend, so it pays off on work that is long, separable, or worth
-detaching from. And whatever a session reports about its own work is a claim,
-not evidence; check the files it produced.
+WHEN. A session costs ~10 s of startup plus its own model spend. Send it work
+that is long, parallel, or should outlive this turn. Keep quick lookups and
+anything needing this conversation's context for yourself.
 
-How to wait for sessions:
-- One notification when done -> run `agentrt wait <ids>` as a background shell command.
-- Live stream of state changes -> run `agentrt watch <ids>` under a monitor.
-- Quick check -> call `status` or `result` directly."""
+THE LOOP.
+1. Split into independent pieces, one session each. There is no concurrency
+   cap: dispatch all of them now; `capacity` shows the host's memory if you
+   are unsure it can take them.
+2. Isolate. Each writer needs its own tree. `workspace_mode="isolated_worktree"`
+   gives a session a writable git worktree whose commits land on branch
+   `agentrt/<full id>` of the source repository, ready to merge.
+   `"snapshot"` gives a detached worktree pinned to HEAD, for reviewers. Or
+   pre-create a worktree and pass it as `workspace`. Never ask a session to
+   make its own worktree: its file editor only writes inside `workspace`.
+3. Dispatch with `dispatch_many`: shared arguments go in `defaults` (permission,
+   workspace_mode, context_files, require, tags such as batch=<name>); items
+   carry only what differs. Each task must stand alone -- the session sees
+   nothing of this conversation. State the finished condition, name files and
+   line ranges, and say how to check. Shared background goes in
+   `context_files`, not pasted into every task. Use `require="commit"` when
+   done means committed: the session cannot finish before it commits.
+4. Wait without holding your turn. Run `agentrt wait <id> <id> ...` as a
+   BACKGROUND shell command: it exits once every id settles (unbounded by
+   default) and prints one compact line per session -- one notification. For
+   a live feed, run `agentrt watch <ids>` under a monitor: one line per state
+   change. Do not loop over `status`.
+5. Verify. A session's report is a claim. `result.completed_cleanly` says
+   whether the final answer is intact; `artifacts` lists the files it really
+   changed; `transcript` shows what it really did; `git log` on its branch
+   shows what it committed.
+6. Recover by status:
+   - `finished` but the work is missing -> `control send` with the correction.
+   - `stuck`, or going the wrong way -> `control interrupt`, then `send`.
+   - `error` with code `DaemonRestarted` -> the daemon restarted mid-run;
+     history is intact, `send` "continue" to carry on.
+   - `error` otherwise -> read `result.error` and `transcript`, then `send`.
+   - running but `stalled` in `capacity.running_sessions` -> read `transcript`;
+     a command waiting on input or a hung process needs `interrupt` + `send`.
+   - `paused` -> `control resume`, or `send` to redirect.
+   - Want a second opinion with full history -> `dispatch_from` (fork).
+7. Clean up: merge or discard branches, tag what to keep, `control delete`
+   the rest.
+
+Ids can be shortened to an unambiguous prefix. Errors come back as
+{"error", "message"} data -- read the message, it names the fix."""
 
 mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
 # FastMCP takes no version argument, so the low-level server falls back to the
@@ -130,10 +166,10 @@ def dispatch(
     policy.
 
     MAX_ITERATIONS is 100000 by default (override with
-    AGENTRT_DEFAULT_MAX_ITERATIONS). Pass an explicit value to set a smaller
-    run budget. The agent loop's stuck detection is the normal guard against
-    unproductive loops; a separate lane adds a wrap-up notice near an explicit
-    cap, but the cap itself remains a hard stop.
+    AGENTRT_DEFAULT_MAX_ITERATIONS), so in practice a run ends when the work
+    does. Stuck detection guards against unproductive loops. Pass a smaller
+    value only when you want a hard budget; three steps before it the agent is
+    told to write up and finish, so its findings are not lost.
 
     WHEN THIS IS WORTH IT. Dispatching costs about ten seconds of startup plus
     the session's own model spend. It pays off when the work is long, when
@@ -178,15 +214,18 @@ def dispatch(
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
 
-    WORKSPACE_MODE. `"shared"` (default) is the above. `"snapshot"` needs
-    `workspace` to be a git repository: the daemon creates a detached
-    worktree pinned to its current HEAD and the session works there instead,
-    isolated from anything else touching the real directory and reproducible
-    against the exact commit it saw -- the pinned SHA comes back as
-    `workspace_resolved_sha` on this response and on `status`. Use it to
-    fan out several read-only reviewers into one repository without hand-
-    rolling worktree setup and cleanup yourself; not needed for a single
-    session or one you already gave its own directory.
+    WORKSPACE_MODE. `"shared"` (default) is the above. The other two need
+    `workspace` to be a git repository, and the daemon creates a worktree from
+    its current HEAD for the session alone -- the pinned SHA comes back as
+    `workspace_resolved_sha` here and on `status`:
+
+    - `"isolated_worktree"`: writable, on a new branch `agentrt/<full id>` in
+      the source repository. The way to fan out several writers into one
+      repository: each commits on its own branch, and you merge the branches.
+    - `"snapshot"`: detached at HEAD. For reviewers and reproducible reads.
+
+    The worktree is removed when the session is deleted; commits on an
+    `isolated_worktree` branch stay reachable from that branch.
 
     `workspace` and `broad` include a terminal and therefore run with the same
     user authority you do. Do not dispatch work you would not run yourself.
@@ -427,24 +466,32 @@ def dispatch_from(
 
 
 @mcp.tool()
-def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
-    """Submit several tasks once and get a per-item outcome.
+def dispatch_many(
+    tasks: list[dict], defaults: dict | None = None, max_batch: int = 100
+) -> dict:
+    """Start many sessions in one call -- the normal way to fan out.
 
-    Each item is a dict of the arguments `dispatch` takes: `task` and
-    `workspace` are required; `title`, `permission`, `llm_profile`,
-    `max_iterations`, `tags`, `idempotency_key`, `context_files`, and `require`
-    are optional. `context_files` is a shared preamble per item, not copied into
-    any common outer task.
+    Each item is a dict of `dispatch`'s arguments (`task` and `workspace`
+    required, the rest optional). `defaults` holds arguments shared by every
+    item -- typically `workspace`, `permission`, `workspace_mode`,
+    `context_files`, `require` and `tags` -- and an item's own value wins;
+    `tags` are merged, so `defaults={"tags": {"batch": "b1"}}` plus a per-item
+    `{"lane": "api"}` gives both.
 
-    Every item is validated before the first is created, so a malformed item
-    cannot leave half a batch behind; the result separates `accepted` from
-    `failed` with the reason for each failure. A full run pool is not a
-    failure: accepted work is persisted and queued, and `capacity` reports the
-    backlog. Submit once, then collect with `result` when done -- do not
-    re-dispatch what the daemon has already accepted. For completion
-    notification, run `agentrt wait <ids>` as a background shell command.
+    Every item is validated (including unknown argument names) before the
+    first is created, so a malformed item cannot leave half a batch behind.
+    Items are then created in parallel; outcomes keep submission order, split
+    into `accepted` (with each `short_id`) and `failed` (with the reason).
+    There is no run cap, so everything accepted starts now.
+
+    Submit once, then run `agentrt wait <ids>` as a background shell command
+    for one notification when all have settled. Do not re-dispatch what was
+    accepted; a timed-out call is safe to repeat with the same
+    `idempotency_key` per item.
     """
-    return _guard(_get_client().dispatch_many, tasks, max_batch=max_batch)
+    return _guard(
+        _get_client().dispatch_many, tasks, defaults=defaults, max_batch=max_batch
+    )
 
 
 @mcp.tool()

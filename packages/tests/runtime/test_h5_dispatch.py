@@ -191,6 +191,60 @@ def test_dispatch_many_reports_per_item_outcomes() -> None:
     assert result["failed"][0]["error"]
 
 
+def test_dispatch_many_applies_defaults_and_rejects_unknown_arguments() -> None:
+    bodies: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+
+    with pytest.raises(ValueError, match="unknown argument"):
+        client.dispatch_many([{"task": "t", "workspace": "/tmp/w", "wrokspace": 1}])
+    assert bodies == []
+
+    result = client.dispatch_many(
+        [
+            {"task": "one", "tags": {"lane": "a"}},
+            {"task": "two", "workspace": "/tmp/other", "tags": {"lane": "b"}},
+        ],
+        defaults={"workspace": "/tmp/w", "tags": {"batch": "x"}},
+    )
+
+    assert result["count"] == 2
+    tags = sorted((body["tags"]["batch"], body["tags"]["lane"]) for body in bodies)
+    assert tags == [("x", "a"), ("x", "b")]
+    workspaces = sorted(body["workspace"]["working_dir"] for body in bodies)
+    assert workspaces == ["/tmp/other", "/tmp/w"]
+
+
+def test_dispatch_many_submits_items_concurrently() -> None:
+    import threading
+
+    active = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+    barrier = threading.Barrier(3, timeout=5)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        with lock:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+        barrier.wait()
+        with lock:
+            active["now"] -= 1
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    result = client.dispatch_many(
+        [{"task": f"t{i}", "workspace": f"/tmp/w{i}"} for i in range(3)]
+    )
+
+    assert result["count"] == 3
+    assert [item["index"] for item in result["accepted"]] == [0, 1, 2]
+    assert active["peak"] == 3
+
+
 def test_dispatch_generates_a_key_and_retries_timeout_with_same_key() -> None:
     seen: list[str] = []
 
