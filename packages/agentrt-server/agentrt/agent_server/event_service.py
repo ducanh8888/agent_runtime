@@ -134,7 +134,11 @@ def _progress_age_seconds(last_progress_at: str | None) -> float | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
+        # Event.timestamp is written as naive *local* time
+        # (``datetime.now().isoformat()``), not UTC. Reading it as UTC put
+        # every event hours in the future on a non-UTC host, and the clamp
+        # below then reported 0.0 for every session, idle or not.
+        parsed = parsed.astimezone()
     return max(0.0, (datetime.now(UTC) - parsed).total_seconds())
 
 
