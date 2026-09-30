@@ -41,6 +41,15 @@ a tool that never works.
 The real verbs are `pause` to suspend, `run` to continue, `interrupt` to cancel
 what is executing right now.
 
+### File-editor root is not the terminal's current directory
+
+The guarded `file_editor` resolves writes against the dispatched workspace root;
+changing directory in a terminal does not move that root. Never ask a session to
+create its own sibling worktree and then work there through `file_editor`.
+Pre-create the worktree and dispatch with `workspace` set to its path. An incident
+on 2026-09-21 asked three sessions to create sibling worktrees from one shared
+checkout; their changes instead mixed in that shared checkout.
+
 ### interrupt and pause are genuinely different verbs
 
 Measured against an identical fixed script appending one line per second, so
@@ -173,6 +182,12 @@ Returning events raw would put all of that into the context of whoever asked
 for a transcript, which is the opposite of the point. Condensation keeps: user
 and agent messages, each action as its tool name plus its short `thought`, and
 each observation truncated.
+
+One iteration is one call to `agent.step()` in the conversation run loop: one
+agent step, normally one LLM response. Tool calls returned together in that
+response are executed within the same step and do not each consume another
+iteration. Each `run()` resets `iterations_used` to zero before looping, so a
+`send` that starts a run gets a fresh per-run allowance.
 
 ## Iteration limits
 

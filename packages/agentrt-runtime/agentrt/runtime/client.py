@@ -12,8 +12,14 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import subprocess
+import sys
+import threading
 import time
 import uuid
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +27,7 @@ from urllib.parse import quote
 
 import httpx
 
-from agentrt.runtime import bootstrap, config, daemon, permissions
+from agentrt.runtime import bootstrap, config, daemon, hostinfo, permissions
 
 
 #: Directories skipped when reporting what a session wrote.
@@ -51,6 +57,13 @@ PRUNED_DIRS = frozenset(
         ".tox",
     }
 )
+
+
+def _stall_seconds() -> float:
+    try:
+        return max(0.0, float(os.environ.get("AGENTRT_STALL_SECONDS", "900")))
+    except ValueError:
+        return 900.0
 
 
 def _clean_tags(tags: dict) -> dict[str, str]:
@@ -127,12 +140,17 @@ def _task_paths_outside_workspace(task: str, workspace: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for match in _ABS_PATH_PATTERN.finditer(task):
-        candidate = match.group(0)
+        if re.search(r"https?://[^\s]*$", task[: match.start()], re.IGNORECASE):
+            continue
+        candidate = match.group(0).rstrip(".,;:)]}'\"")
         if candidate in seen:
             continue
         seen.add(candidate)
+        path = Path(candidate)
+        if not path.exists() and not (path.suffix and path.parent.is_dir()):
+            continue
         try:
-            resolved = Path(candidate).resolve()
+            resolved = path.resolve()
         except (OSError, ValueError):
             continue
         if not permissions.contains(root, resolved):
@@ -212,9 +230,83 @@ def _status_of(data: object) -> str | None:
     return data.get("execution_status") or data.get("status")
 
 
-#: Image formats an attachment may carry, and the size above which one is
-#: refused. The format is sniffed from the file's own bytes: an extension is
-#: the caller's claim, and the MIME type is what the provider acts on.
+_DISPATCH_ARGUMENTS = frozenset(
+    {
+        "task",
+        "workspace",
+        "title",
+        "permission",
+        "llm_profile",
+        "max_iterations",
+        "tags",
+        "idempotency_key",
+        "attachments",
+        "workspace_mode",
+        "context_files",
+        "require",
+    }
+)
+
+CONTEXT_FILE_BYTES = 200 * 1024
+CONTEXT_TOTAL_BYTES = 1024 * 1024
+
+
+def _read_context_files(paths: list[str]) -> list[tuple[str, str]]:
+    blocks: list[tuple[str, str]] = []
+    total = 0
+    for raw in paths:
+        path = Path(raw).expanduser()
+        try:
+            if not path.exists():
+                raise ClientError(f"context file {raw!r} does not exist")
+            if not path.is_file():
+                raise ClientError(f"context file {raw!r} is not a regular file")
+            size = path.stat().st_size
+            if size > CONTEXT_FILE_BYTES:
+                raise ClientError(
+                    f"context file {raw!r} is {size} bytes, above the "
+                    f"{CONTEXT_FILE_BYTES} byte per-file cap"
+                )
+            total += size
+            if total > CONTEXT_TOTAL_BYTES:
+                raise ClientError(
+                    f"context files total {total} bytes, above the "
+                    f"{CONTEXT_TOTAL_BYTES} byte cap"
+                )
+            content = path.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise ClientError(f"context file {raw!r} does not exist") from exc
+        except UnicodeDecodeError as exc:
+            raise ClientError(f"context file {raw!r} is not UTF-8 text") from exc
+        blocks.append((raw, content))
+    return blocks
+
+
+def _with_context_files(task: str, paths: list[str] | None) -> str:
+    if not paths:
+        return task
+    parts = [
+        f"### Context file: {path}\n{content}"
+        for path, content in _read_context_files(paths)
+    ]
+    return "\n\n".join([*parts, task])
+
+
+def _git_head(workspace: str) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", workspace, "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ClientError(
+            f"require='commit' needs a git workspace with HEAD: {exc}"
+        ) from exc
+    return result.stdout.strip()
+
+
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 
 
@@ -1143,6 +1235,11 @@ class Client:
 
         try:
             response = attempt()
+        except httpx.TimeoutException as exc:
+            raise ClientError(
+                f"daemon busy or not responding within {self._timeout:g} s "
+                f"during {method.upper()} {path}"
+            ) from exc
         except httpx.TransportError:
             # The cached port and token come from daemon.json as it read at
             # first use. A daemon that restarts picks a new ephemeral port, so
@@ -1158,6 +1255,11 @@ class Client:
             try:
                 self._ensure_ready()
                 response = attempt()
+            except httpx.TimeoutException as retry_exc:
+                raise ClientError(
+                    f"daemon busy or not responding within {self._timeout:g} s "
+                    f"during {method.upper()} {path}"
+                ) from retry_exc
             except httpx.HTTPError as retry_exc:
                 raise ClientError(str(retry_exc)) from retry_exc
         except httpx.HTTPError as exc:
@@ -1166,6 +1268,9 @@ class Client:
         if response.status_code >= 400:
             if not (tolerate_404 and response.status_code == 404):
                 raise ClientError(response.text)
+        elif method.upper() == "DELETE" and path.startswith("/api/conversations/"):
+            deleted_id = path.removeprefix("/api/conversations/")
+            getattr(self, "_session_index", {}).pop(deleted_id, None)
 
         return response
 
@@ -1209,31 +1314,19 @@ class Client:
             pass
         else:
             return session
-
         prefix = str(session).casefold()
-        matches: list[str] = []
-        # Every page, not the default one. This used `list_sessions()` with its
-        # default limit of 50, so a session older than the fifty most recent
-        # could not be addressed by short id at all -- and the message said "no
-        # session matches", which reads exactly like "it was deleted". Hit for
-        # real: a session the docs name as evidence not to delete was reported
-        # missing, and it was sitting at row 53 of 58. Nothing expires here, so
-        # every runtime crosses that line eventually and then quietly loses
-        # its own history.
-        for item in self._all_sessions():
-            full = item.get("id")
-            if full is None:
-                continue
-            if str(full).casefold().startswith(prefix):
-                matches.append(str(full))
-
+        sessions = self._all_sessions()
+        matches = [
+            str(full)
+            for item in sessions
+            if (full := item.get("id")) is not None
+            and str(full).casefold().startswith(prefix)
+        ]
         if not matches:
             raise SessionNotFound(f"no session matches {session!r}")
-
         if len(matches) > 1:
             listed = ", ".join(short_id(full) for full in matches)
             raise AmbiguousSession(f"session prefix {session!r} is ambiguous: {listed}")
-
         return matches[0]
 
     def _profile_id(
@@ -1306,6 +1399,8 @@ class Client:
         idempotency_key: str | None = None,
         attachments: list[str] | None = None,
         workspace_mode: str | None = None,
+        context_files: list[str] | None = None,
+        require: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1338,6 +1433,10 @@ class Client:
         workspace = os.path.abspath(os.path.expanduser(workspace))
         os.makedirs(workspace, exist_ok=True)
         outside = _task_paths_outside_workspace(task, workspace)
+        task = _with_context_files(task, context_files)
+        if require not in (None, "commit"):
+            raise ClientError("require must be 'commit' when specified")
+        start_head = _git_head(workspace) if require == "commit" else None
         preset = permissions.normalise(permission)
         profile_id = self._profile_id(preset, llm_profile)
         resolved_llm = (
@@ -1364,33 +1463,67 @@ class Client:
             "workspace": {"working_dir": workspace},
             "agent_profile_id": profile_id,
             # The daemon imports these modules "to trigger tool auto
-            # registration". Naming the guard module is what installs the
-            # permission-aware file editor inside the daemon process, which is
-            # a different process from this one.
-            "tool_module_qualnames": {"file_editor": bootstrap.GUARD_MODULE},
+            # registration". Naming the guard modules installs the guarded
+            # executors inside the daemon process, which is separate from this
+            # client.
+            "tool_module_qualnames": {
+                "file_editor": bootstrap.GUARD_MODULE,
+                "terminal": bootstrap.TERMINAL_GUARD_MODULE,
+            },
             "initial_message": {
                 "role": "user",
                 "content": [{"type": "text", "text": task}],
             },
         }
+        body["max_iterations"] = (
+            max_iterations
+            if max_iterations is not None
+            else config.default_max_iterations()
+        )
+        if require == "commit":
+            command = " ".join(
+                shlex.quote(part)
+                for part in (
+                    sys.executable,
+                    "-m",
+                    "agentrt.runtime.commit_hook",
+                    start_head or "",
+                )
+            )
+            body["hook_config"] = {
+                "stop": [
+                    {"matcher": "*", "hooks": [{"type": "command", "command": command}]}
+                ]
+            }
         if title is not None:
             body["title"] = title
-        if max_iterations is not None:
-            body["max_iterations"] = max_iterations
         if tags:
             body["tags"] = _clean_tags(tags)
-        if idempotency_key:
-            body["idempotency_key"] = idempotency_key
+        body["idempotency_key"] = idempotency_key or str(uuid.uuid4())
         if workspace_mode:
             body["workspace_mode"] = workspace_mode
         if attachments:
-            blocks = self._attachment_blocks(attachments, workspace=workspace)
-            body["initial_message"]["content"] = [
-                {"type": "text", "text": task},
-                *blocks,
-            ]
+            body["initial_message"]["content"].extend(
+                self._attachment_blocks(attachments, workspace=workspace)
+            )
 
-        data = self._send("POST", "/api/conversations", json=body).json()
+        try:
+            response = self._send("POST", "/api/conversations", json=body)
+        except ClientError as exc:
+            if not isinstance(
+                exc.__cause__, (httpx.TimeoutException, httpx.TransportError)
+            ):
+                raise
+            response = self._send("POST", "/api/conversations", json=body)
+        data = response.json()
+        shared_with = []
+        if not workspace_mode or workspace_mode == "shared":
+            try:
+                shared_with = self._sessions_sharing_workspace(
+                    workspace, exclude_id=data.get("id")
+                )
+            except (ClientError, ValueError):
+                pass
         full_id = data.get("id")
         result: dict = {
             "id": full_id,
@@ -1406,60 +1539,145 @@ class Client:
             result["workspace_resolved_sha"] = resolved_sha
         if outside:
             result["outside_workspace_paths"] = outside
+        if shared_with:
+            result["shared_workspace_with"] = shared_with
+            result["warning"] = "Another running session uses this shared workspace."
         return result
 
+    def _sessions_sharing_workspace(
+        self, workspace: str, *, exclude_id: str | None = None
+    ) -> list[str]:
+        data = self._send(
+            "GET", "/api/conversations/search", params={"limit": 100}
+        ).json()
+        items = data.get("items", []) if isinstance(data, dict) else []
+        return [
+            short_id(session["id"])
+            for session in items
+            if isinstance(session, dict)
+            and _status_of(session) == "running"
+            and isinstance(session.get("workspace"), dict)
+            and os.path.abspath(
+                os.path.expanduser(session["workspace"].get("working_dir") or "")
+            )
+            == workspace
+            and session.get("id") != exclude_id
+            and session.get("id")
+        ]
+
     def _all_sessions(self) -> list[dict]:
-        """Every session the daemon knows, paged.
-
-        Resolving a prefix has to see all of them: a partial view turns a real
-        session into a "not found", and would also miss the case where a prefix
-        is ambiguous because the second match is on a later page -- which would
-        pick one of two sessions silently, the worse of the two failures.
-
-        Bounded at 50 pages so a runtime with a pathological number of sessions
-        degrades into a wrong answer rather than an unbounded loop; a caller
-        that far out should be using full ids.
-        """
+        """Refresh and return the incremental index of all known sessions."""
+        index: dict[str, dict] = getattr(self, "_session_index", {})
+        indexed = hasattr(self, "_session_index")
         out: list[dict] = []
         page: str | None = None
-        for _ in range(50):
-            params: dict[str, object] = {"limit": 100}
+        hit_known = False
+        try:
+            for _ in range(50):
+                params: dict[str, object] = {
+                    "limit": 100,
+                    "sort_order": "CREATED_AT_DESC",
+                }
+                if page:
+                    params["page_id"] = page
+                data = self._send(
+                    "GET", "/api/conversations/search", params=params
+                ).json()
+                items = data.get("items") if isinstance(data, dict) else None
+                if not isinstance(items, list) or not items:
+                    break
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    full = item.get("id")
+                    if full is not None and str(full) in index:
+                        hit_known = True
+                    else:
+                        out.append(item)
+                        if full is not None:
+                            index[str(full)] = item
+                if hit_known:
+                    break
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+                if not page:
+                    break
+        except ClientError as exc:
+            if "sort_order" not in str(exc):
+                raise
+            refresh_at = getattr(self, "_session_index_refresh_at", 0.0)
+            if indexed and time.monotonic() - refresh_at < 2.0:
+                return list(index.values())
+            index.clear()
+            out = []
+            page = None
+            for _ in range(50):
+                params = {"limit": 100}
+                if page:
+                    params["page_id"] = page
+                data = self._send(
+                    "GET", "/api/conversations/search", params=params
+                ).json()
+                items = data.get("items") if isinstance(data, dict) else None
+                if not isinstance(items, list) or not items:
+                    break
+                out.extend(item for item in items if isinstance(item, dict))
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+                if not page:
+                    break
+            index.update(
+                {str(item["id"]): item for item in out if item.get("id") is not None}
+            )
+        self._session_index = index
+        self._session_index_refresh_at = time.monotonic()
+        return list(index.values())
+
+    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        """Return the most recent sessions from the daemon, with page controls."""
+        if limit <= 0:
+            return []
+        offset = max(0, offset)
+
+        sessions: list[dict] = []
+        page: str | None = None
+        target_count = offset + limit
+
+        while len(sessions) < target_count:
+            req_limit = min(100, target_count - len(sessions) if offset == 0 else 100)
+            params: dict[str, object] = {"limit": req_limit}
             if page:
                 params["page_id"] = page
             data = self._send("GET", "/api/conversations/search", params=params).json()
-            items = data.get("items") if isinstance(data, dict) else None
-            if not isinstance(items, list) or not items:
+
+            if isinstance(data, list):
+                items = data
+                page = None
+            elif isinstance(data, dict):
+                items = data.get("sessions")
+                if not isinstance(items, list):
+                    items = data.get("items")
+                if not isinstance(items, list):
+                    items = data.get("conversations")
+                if not isinstance(items, list):
+                    items = []
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+            else:
+                items = []
+                page = None
+
+            if not items:
                 break
-            out.extend(item for item in items if isinstance(item, dict))
-            page = data.get("next_page_id") if isinstance(data, dict) else None
+
+            for item in items:
+                if isinstance(item, dict):
+                    sessions.append(item)
+
             if not page:
                 break
-        return out
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
-        """Return the most recent sessions from the daemon."""
-        response = self._send(
-            "GET",
-            "/api/conversations/search",
-            params={"limit": limit},
-        )
-        data = response.json()
-
-        if isinstance(data, list):
-            sessions = data
-        elif isinstance(data, dict):
-            sessions = data.get("sessions")
-            if not isinstance(sessions, list):
-                sessions = data.get("items")
-            if not isinstance(sessions, list):
-                sessions = data.get("conversations")
-            if not isinstance(sessions, list):
-                sessions = []
-        else:
-            sessions = []
+        paged_sessions = sessions[offset : offset + limit]
 
         result: list[dict] = []
-        for session in sessions:
+        for session in paged_sessions:
             full_id = session.get("id") if isinstance(session, dict) else None
             result.append(
                 {
@@ -1607,9 +1825,39 @@ class Client:
         # `result()` directly never saw that correction. Added here so it
         # does regardless of call path; `_wait_bucket` only needs `status`
         # and `result`, both already set above.
-        payload["bucket"] = _wait_bucket(payload)
+        payload["bucket"] = (
+            _wait_bucket(payload)
+            if (status or "").lower() in SETTLED_STATUSES
+            else "still_running"
+        )
         payload = _apply_result_paging(payload, offset=offset, max_chars=max_chars)
+        if status == "finished":
+            try:
+                completed_cleanly, reason = self._completion_quality(
+                    resolved,
+                    request_message_id=payload.get("request_message_id"),
+                    finish_reason=payload.get("finish_reason"),
+                    result=payload.get("result"),
+                )
+                payload["completed_cleanly"] = completed_cleanly
+                if reason:
+                    payload["completed_cleanly_reason"] = reason
+            except (ClientError, json.JSONDecodeError):
+                payload["completed_cleanly"] = False
+                payload["completed_cleanly_reason"] = "transcript_unavailable"
+        else:
+            payload["completed_cleanly"] = False
+            payload["completed_cleanly_reason"] = "session_not_finished"
         if status == "error":
+            if not payload.get("result") and not payload.get("error"):
+                try:
+                    error = self._latest_transcript_error(
+                        resolved, request_message_id=payload.get("request_message_id")
+                    )
+                    if error:
+                        payload["error"] = error
+                except (ClientError, json.JSONDecodeError):
+                    pass
             try:
                 payload["progress_summary"] = self._progress_summary(
                     resolved,
@@ -1680,6 +1928,76 @@ class Client:
             return "no tool calls completed before the error"
         parts = [f"{name} x{count}" for name, count in sorted(tally.items())]
         return ", ".join(parts)
+
+    def _latest_transcript_error(
+        self, resolved: str, *, request_message_id: object
+    ) -> dict | None:
+        cursor: str | None = None
+        pages = 0
+        while pages < 5:
+            page = self.transcript(resolved, limit=100, cursor=cursor)
+            for event in reversed(page.get("events", [])):
+                if (
+                    request_message_id is not None
+                    and event.get("id") == request_message_id
+                ):
+                    return None
+                if event.get("type") == "error":
+                    return {"code": event.get("code"), "detail": event.get("detail")}
+            cursor = page.get("next_cursor")
+            pages += 1
+            if not cursor:
+                break
+        return None
+
+    def _completion_quality(
+        self,
+        resolved: str,
+        *,
+        request_message_id: object,
+        finish_reason: object,
+        result: object,
+    ) -> tuple[bool, str | None]:
+        latest_error: dict | None = None
+        final_answer = False
+        boundary_reached = False
+        cursor: str | None = None
+        pages = 0
+        while pages < 5:
+            page = self.transcript(resolved, limit=100, cursor=cursor)
+            reached_boundary = False
+            for event in reversed(page.get("events", [])):
+                if (
+                    request_message_id is not None
+                    and event.get("id") == request_message_id
+                ):
+                    reached_boundary = True
+                    break
+                if event.get("type") == "error" and latest_error is None:
+                    latest_error = event
+                if event.get("type") == "message" and event.get("role") == "assistant":
+                    final_answer = True
+                if event.get("type") == "action" and event.get("is_finish"):
+                    final_answer = True
+            if reached_boundary:
+                boundary_reached = True
+                break
+            cursor = page.get("next_cursor")
+            pages += 1
+            if not cursor:
+                break
+
+        if not boundary_reached:
+            return False, "request_boundary_not_found"
+        if not final_answer:
+            return False, "final_agent_answer_missing"
+        if finish_reason in {"error", "length", "max_output_tokens"}:
+            return False, f"finish_reason_{finish_reason}"
+        if latest_error:
+            return False, "conversation_error_after_request"
+        if not isinstance(result, str):
+            return False, "final_result_missing"
+        return True, None
 
     def _attachment_blocks(
         self,
@@ -1886,7 +2204,9 @@ class Client:
         self,
         tasks: list[dict],
         *,
-        max_batch: int = 25,
+        defaults: dict | None = None,
+        max_batch: int = 100,
+        parallel: int = 8,
     ) -> dict:
         """Submit several tasks once and return a per-item outcome.
 
@@ -1896,10 +2216,12 @@ class Client:
         backlog, so one submission is followed by one collection of outcomes
         rather than caller-managed re-dispatch.
 
-        An item is a dict of the same arguments `dispatch` takes (`task`,
-        `workspace`, plus optional `title`, `permission`, `tags`, `max_iterations`,
-        `idempotency_key`). Items that fail validation or creation are reported
-        individually; the rest are created.
+        An item is a dict of the same arguments `dispatch` takes. ``defaults``
+        supplies any of them for every item; an item's own value wins, and
+        ``tags`` are merged. Items are submitted ``parallel`` at a time, except
+        that items preparing a worktree from the same repository
+        (``snapshot``/``isolated_worktree``) go one after another. Outcomes
+        keep submission order.
         """
         if not tasks:
             raise ValueError("dispatch_many needs at least one task")
@@ -1908,24 +2230,67 @@ class Client:
                 f"{len(tasks)} tasks exceeds the batch size of {max_batch}; "
                 "submit in waves so a partial failure stays bounded"
             )
-        # Validate everything before creating anything.
+        base = dict(defaults or {})
+        merged: list[dict] = []
         for index, item in enumerate(tasks):
-            if not isinstance(item, dict) or not item.get("task"):
+            if not isinstance(item, dict):
+                raise ValueError(f"item {index} is not an object")
+            combined = {**base, **item}
+            if isinstance(base.get("tags"), dict) and isinstance(
+                item.get("tags"), dict
+            ):
+                combined["tags"] = {**base["tags"], **item["tags"]}
+            unknown = set(combined) - _DISPATCH_ARGUMENTS
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(f"item {index} has unknown argument(s): {names}")
+            if not combined.get("task"):
                 raise ValueError(f"item {index} has no task")
-            if not item.get("workspace"):
+            if not combined.get("workspace"):
                 raise ValueError(f"item {index} has no workspace")
+            merged.append(combined)
+
+        self._ensure_ready()
+        worktree_locks: dict[str, threading.Lock] = {}
+        for combined in merged:
+            if combined.get("workspace_mode") not in (None, "shared"):
+                key = os.path.abspath(os.path.expanduser(str(combined["workspace"])))
+                worktree_locks.setdefault(key, threading.Lock())
+
+        def submit(combined: dict) -> dict:
+            key = os.path.abspath(os.path.expanduser(str(combined["workspace"])))
+            lock = (
+                worktree_locks.get(key)
+                if combined.get("workspace_mode") not in (None, "shared")
+                else None
+            )
+            if lock is None:
+                return self.dispatch(**combined)
+            with lock:
+                return self.dispatch(**combined)
+
+        outcomes: list[dict | ClientError] = []
+        with ThreadPoolExecutor(max_workers=max(1, min(parallel, len(merged)))) as pool:
+            futures = [pool.submit(submit, combined) for combined in merged]
+            for future in futures:
+                try:
+                    outcomes.append(future.result())
+                except ClientError as exc:
+                    outcomes.append(exc)
 
         accepted: list[dict] = []
         failed: list[dict] = []
-        for index, item in enumerate(tasks):
-            try:
-                created = self.dispatch(**item)
-            except ClientError as exc:
+        for index, outcome in enumerate(outcomes):
+            if isinstance(outcome, ClientError):
                 failed.append(
-                    {"index": index, "error": type(exc).__name__, "message": str(exc)}
+                    {
+                        "index": index,
+                        "error": type(outcome).__name__,
+                        "message": str(outcome),
+                    }
                 )
-                continue
-            accepted.append({"index": index, **created})
+            else:
+                accepted.append({"index": index, **outcome})
         return {
             "accepted": accepted,
             "failed": failed,
@@ -1949,14 +2314,99 @@ class Client:
         ).json()
 
     def capacity(self) -> dict:
-        """Report the daemon's admission surface.
+        """Report admission, host pressure, daemon history, and running sessions.
 
-        `limiting_dimension` names the cap that is binding, or null when the run
-        cap is disabled. `available` is null in that case: there is no ceiling
-        to subtract from, and a numeric remainder would read as a small one.
-        `queued` is accepted work waiting for a slot, in submission order.
+        The server's capacity fields are returned unchanged. On POSIX, `host`
+        adds total/available memory, daemon-tree RSS, and the ten largest
+        immediate child process trees (RSS and truncated command line); it is
+        null elsewhere. `daemon` reports pid, started_at (from /proc, falling
+        back to daemon_history.json), and unexpected-exit history fields; the
+        history fields are null when that optional file is absent.
+
+        `running_sessions` contains each running session's short id, title,
+        iterations_used, newest transcript event timestamp, seconds since that
+        event, and `stalled` when it exceeds AGENTRT_STALL_SECONDS (default 900).
+        Event timestamps without a timezone are interpreted as local time.
+
+        `in_flight_llm` counts provider transport calls currently holding a slot;
+        `llm_limit` is the configured AGENTRT_MAX_INFLIGHT_LLM concurrency cap.
+        It is zero and null respectively when provider slots are not configured;
+        retries sleeping after 429 do not hold a slot. The server's other
+        admission fields, including restart recovery fields, pass through.
         """
-        return self._send("GET", "/api/conversations/capacity").json()
+        result = self._send("GET", "/api/conversations/capacity").json()
+        if not isinstance(result, dict):
+            return result
+        info = daemon.read_info()
+        pid = info.pid if info is not None else None
+        host, proc_started = hostinfo.collect(pid) if pid is not None else (None, None)
+        history = {}
+        try:
+            with (config.state_dir() / "daemon_history.json").open(
+                encoding="utf-8"
+            ) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                history = loaded
+        except (OSError, ValueError):
+            pass
+        starts = history.get("starts")
+        history_started = (
+            starts[-1]
+            if isinstance(starts, list) and starts
+            else history.get("started_at")
+        )
+        started_at = proc_started or history_started
+        result["host"] = host
+        result["daemon"] = {
+            "pid": pid,
+            "started_at": started_at,
+            "unexpected_exits": history.get("unexpected_exits"),
+            "last_unexpected_exit_at": history.get("last_unexpected_exit_at"),
+        }
+        threshold = _stall_seconds()
+        running = []
+        now = datetime.now().astimezone()
+        for session in self.list_sessions(limit=1000):
+            if session.get("status") != "running":
+                continue
+            session_id = session.get("id")
+            newest = None
+            if isinstance(session_id, str):
+                try:
+                    status = self.status(session_id)
+                    events = self.transcript(session_id, limit=1).get("events", [])
+                    timestamps = [
+                        e.get("timestamp")
+                        for e in events
+                        if isinstance(e, dict) and isinstance(e.get("timestamp"), str)
+                    ]
+                    newest = timestamps[0] if timestamps else None
+                except (ClientError, ValueError, TypeError):
+                    status = {}
+            else:
+                status = {}
+            elapsed = None
+            if newest:
+                try:
+                    event_at = datetime.fromisoformat(newest)
+                    if event_at.tzinfo is None:
+                        event_at = event_at.astimezone()
+                    elapsed = max(0.0, (now - event_at).total_seconds())
+                except ValueError:
+                    pass
+            running.append(
+                {
+                    "id": session.get("short_id"),
+                    "title": session.get("title"),
+                    "iterations_used": status.get("iterations_used"),
+                    "last_event_at": newest,
+                    "seconds_since_last_event": elapsed,
+                    "stalled": elapsed is not None and elapsed > threshold,
+                }
+            )
+        result["running_sessions"] = running
+        return result
 
     def finalize(self, session: str, *, summary: bool = False) -> dict:
         """Stop a session at a safe boundary and return the outcome it has.
@@ -2042,14 +2492,17 @@ class Client:
         if mode not in ("all", "any"):
             raise ValueError("mode must be 'all' or 'any'")
         interval = max(0.5, float(poll_interval))
-        requested_timeout = max(0.0, float(timeout))
-        safe_ceiling = config.wait_safe_ceiling_seconds()
-        effective_timeout = (
-            min(requested_timeout, safe_ceiling)
-            if safe_ceiling > 0
-            else requested_timeout
-        )
-        deadline = time.monotonic() + effective_timeout
+        requested_timeout = float(timeout)
+        if requested_timeout <= 0:
+            deadline = None
+        else:
+            safe_ceiling = config.wait_safe_ceiling_seconds()
+            effective_timeout = (
+                min(requested_timeout, safe_ceiling)
+                if safe_ceiling > 0
+                else requested_timeout
+            )
+            deadline = time.monotonic() + effective_timeout
         ids = list(dict.fromkeys(str(session) for session in session_ids))
 
         started = time.monotonic()
@@ -2078,13 +2531,16 @@ class Client:
                 break
             if not pending:
                 break
-            remaining_time = deadline - time.monotonic()
-            if remaining_time <= 0:
-                timed_out = True
-                break
-            # Never sleep past the deadline: a sweep plus the interval would
-            # otherwise overshoot the timeout the caller asked for.
-            time.sleep(min(interval, remaining_time))
+            if deadline is not None:
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    timed_out = True
+                    break
+                # Never sleep past the deadline: a sweep plus the interval would
+                # otherwise overshoot the timeout the caller asked for.
+                time.sleep(min(interval, remaining_time))
+            else:
+                time.sleep(interval)
 
         buckets: dict[str, list] = {
             "completed": [],
@@ -2165,6 +2621,152 @@ class Client:
             "timed_out": timed_out,
             "waited": round(time.monotonic() - started, 3),
         }
+
+    def watch(
+        self,
+        session_ids: list[str],
+        *,
+        until: str = "all",
+        interval: float = 2.0,
+    ) -> Iterator[dict]:
+        """Stream state changes for the named sessions until they settle.
+
+        Yields one dict per state change (status change, new tool action, error
+        event, settled) with short_id, local time, and summary (<=120 chars).
+        Silent when nothing changes.
+        """
+        if until not in ("all", "any"):
+            raise ValueError("until must be 'all' or 'any'")
+        poll_interval = max(0.01, float(interval))
+        ids = list(dict.fromkeys(str(session) for session in session_ids))
+        pending = set(ids)
+        settled: set[str] = set()
+        terminal_prev: dict[str, bool] = {}
+        last_status: dict[str, str | None] = {}
+        seen_event_ids: dict[str, set[str]] = {s: set() for s in ids}
+
+        while True:
+            for session in list(pending):
+                status_info = self._wait_status(session)
+                if status_info is None:
+                    sid = short_id(session)
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "status",
+                        "summary": "status: missing",
+                    }
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "settled",
+                        "summary": "settled: missing",
+                    }
+                    pending.discard(session)
+                    settled.add(session)
+                    continue
+
+                sid = short_id(status_info.get("id") or session)
+                curr_status = status_info.get("status")
+                if curr_status != last_status.get(session):
+                    last_status[session] = curr_status
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    summary = f"status: {curr_status or 'unknown'}"
+                    if len(summary) > 120:
+                        summary = summary[:117] + "..."
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "status",
+                        "summary": summary,
+                    }
+
+                try:
+                    page = self.transcript(session, limit=50)
+                    events = page.get("events") or []
+                    for ev in events:
+                        ev_id = ev.get("id")
+                        if ev_id and ev_id in seen_event_ids[session]:
+                            continue
+                        if ev_id:
+                            seen_event_ids[session].add(ev_id)
+                        ev_type = ev.get("type")
+                        if ev_type == "action":
+                            tool = ev.get("tool") or "tool"
+                            loc = ev.get("path")
+                            thought = ev.get("thought")
+                            detail = loc or thought or ""
+                            summary = f"tool: {tool} {detail}".strip()
+                            if len(summary) > 120:
+                                summary = summary[:117] + "..."
+                            t_str = datetime.now().strftime("%H:%M:%S")
+                            yield {
+                                "id": session,
+                                "short_id": sid,
+                                "time": t_str,
+                                "kind": "tool",
+                                "summary": summary,
+                            }
+                        elif ev_type == "error":
+                            code = ev.get("code")
+                            detail = ev.get("detail")
+                            if code and detail:
+                                summary = f"error: {code}: {detail}"
+                            elif code:
+                                summary = f"error: {code}"
+                            elif detail:
+                                summary = f"error: {detail}"
+                            else:
+                                summary = "error"
+                            if len(summary) > 120:
+                                summary = summary[:117] + "..."
+                            t_str = datetime.now().strftime("%H:%M:%S")
+                            yield {
+                                "id": session,
+                                "short_id": sid,
+                                "time": t_str,
+                                "kind": "error",
+                                "summary": summary,
+                            }
+                except (ClientError, json.JSONDecodeError):
+                    pass
+
+                terminal = _is_settled(status_info)
+                if terminal and terminal_prev.get(session):
+                    settled.add(session)
+                    pending.discard(session)
+                    try:
+                        res = self.result(session)
+                        bucket = _wait_bucket(res)
+                    except (ClientError, json.JSONDecodeError):
+                        bucket = (
+                            "completed"
+                            if curr_status == "finished"
+                            else (curr_status or "settled")
+                        )
+                    summary = f"settled: {bucket}"
+                    if len(summary) > 120:
+                        summary = summary[:117] + "..."
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "settled",
+                        "summary": summary,
+                    }
+                else:
+                    terminal_prev[session] = terminal
+
+            if settled and until == "any":
+                break
+            if not pending:
+                break
+            time.sleep(poll_interval)
 
     def transcript(
         self,
@@ -2249,6 +2851,15 @@ class Client:
                     "thought": _capped(_join_text(item.get("thought")), 400),
                 }
                 _add_action_location(entry, item.get("action"))
+                action = item.get("action")
+                if (
+                    item.get("source") == "agent"
+                    and item.get("tool_name") == "finish"
+                    and isinstance(action, dict)
+                    and action.get("kind") == "FinishAction"
+                    and isinstance(action.get("message"), str)
+                ):
+                    entry["is_finish"] = True
                 if include_reasoning:
                     reasoning = item.get("reasoning_content")
                     if isinstance(reasoning, str) and reasoning:
@@ -2425,8 +3036,9 @@ class Client:
         }
 
     def send(self, session: str, message: str) -> dict:
-        """Post a user message and start a run (``run=True`` is required)."""
+        """Post a user message, start a run, and report before/after state."""
         resolved = self._resolve_session(session)
+        before = self.status(resolved)
         self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/events",
@@ -2439,6 +3051,8 @@ class Client:
         return {
             "id": resolved,
             "short_id": short_id(resolved),
+            "iterations_used_before": before.get("iterations_used"),
+            "status_before": before.get("status"),
             "status": self.status(resolved).get("status"),
         }
 
@@ -2636,6 +3250,8 @@ class Client:
             # correct answer. A caller reading `files` alone cannot tell.
             "filtered": since is not None,
             "files": [],
+            "large_files": [],
+            "symlinks": [],
             "truncated": False,
             "total_scanned": 0,
             # Files seen outside the pruned directories, which is not the
@@ -2668,6 +3284,8 @@ class Client:
             }
 
         found: list[tuple[float, dict]] = []
+        large_files: list[dict] = []
+        symlinks: list[dict] = []
         total = 0
         scan_errors = 0
 
@@ -2680,30 +3298,50 @@ class Client:
                 workspace, onerror=_on_walk_error
             ):
                 dirnames[:] = sorted(d for d in dirnames if d not in PRUNED_DIRS)
+                for name in dirnames:
+                    full = os.path.join(dirpath, name)
+                    if os.path.islink(full):
+                        try:
+                            link_stat = os.lstat(full)
+                        except OSError:
+                            scan_errors += 1
+                            continue
+                        if since is None or link_stat.st_mtime >= since:
+                            symlinks.append(
+                                {
+                                    "path": os.path.relpath(full, workspace).replace(
+                                        os.sep, "/"
+                                    ),
+                                    "size": link_stat.st_size,
+                                    "modified": datetime.fromtimestamp(
+                                        link_stat.st_mtime, tz=UTC
+                                    ).isoformat(),
+                                }
+                            )
                 for name in filenames:
                     full = os.path.join(dirpath, name)
                     try:
-                        entry_stat = os.stat(full)
+                        is_symlink = os.path.islink(full)
+                        entry_stat = os.lstat(full) if is_symlink else os.stat(full)
                     except OSError:
                         scan_errors += 1
                         continue
                     total += 1
                     if since is not None and entry_stat.st_mtime < since:
                         continue
-                    found.append(
-                        (
-                            entry_stat.st_mtime,
-                            {
-                                "path": os.path.relpath(full, workspace).replace(
-                                    os.sep, "/"
-                                ),
-                                "size": entry_stat.st_size,
-                                "modified": datetime.fromtimestamp(
-                                    entry_stat.st_mtime, tz=UTC
-                                ).isoformat(),
-                            },
-                        )
-                    )
+                    entry = {
+                        "path": os.path.relpath(full, workspace).replace(os.sep, "/"),
+                        "size": entry_stat.st_size,
+                        "modified": datetime.fromtimestamp(
+                            entry_stat.st_mtime, tz=UTC
+                        ).isoformat(),
+                    }
+                    if is_symlink:
+                        symlinks.append(entry)
+                    else:
+                        if entry_stat.st_size > 5 * 1024 * 1024:
+                            large_files.append(entry)
+                        found.append((entry_stat.st_mtime, entry))
         except OSError:
             # The walk itself failed, so the listing is unknown rather than
             # empty. The underlying message can carry a host path, so only the
@@ -2735,6 +3373,8 @@ class Client:
         return {
             **base,
             "files": files[:_ARTIFACTS_LIMIT],
+            "large_files": large_files,
+            "symlinks": symlinks,
             "truncated": listing_truncated,
             "total_scanned": total,
             # Typed outcome: `empty` after a successful filtered scan is a

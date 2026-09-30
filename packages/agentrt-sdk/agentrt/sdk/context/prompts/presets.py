@@ -5,7 +5,7 @@
 ``agent/prompts/system_prompt.j2`` emitted them, so ``registry.build(ctx).static``
 reproduces ``AgentBase.static_system_message``. The ``"planning"`` preset is a
 distinct standalone composition (ported from ``system_prompt_planning.j2``) that
-omits the default OpenHands sections. The dynamic-tier sections are **shared** --
+omits the default SDK sections. The dynamic-tier sections are **shared** --
 repo/skills/suffix/secrets/datetime are preset-independent -- so a planning agent
 with an ``agent_context`` still gets its dynamic block.
 """
@@ -39,7 +39,6 @@ from agentrt.sdk.context.prompts.sections.static import (
     RoleSection,
     SecurityRiskAssessmentSection,
     SecuritySection,
-    SelfDocumentationSection,
     SoulSection,
     TroubleshootingSection,
     VersionControlSection,
@@ -66,7 +65,6 @@ _DEFAULT_STATIC_SECTIONS: Final[tuple[PromptSection, ...]] = (
     VersionControlSection(),
     PullRequestsSection(),
     ProblemSolvingSection(),
-    SelfDocumentationSection(),
     SecuritySection(),  # guard: security_policy_filename set
     SecurityRiskAssessmentSection(),  # guard: llm_security_analyzer
     BrowserSection(),  # guard: ctx.enable_browser
@@ -94,7 +92,7 @@ _DYNAMIC_SECTIONS: Final[tuple[PromptSection, ...]] = (
 def create_registry(preset: PromptPreset = PromptPreset.DEFAULT) -> PromptRegistry:
     """Build the section registry for ``preset``.
 
-    ``DEFAULT`` is the standard OpenHands composition; ``PLANNING`` is the read-only
+    ``DEFAULT`` is the standard SDK composition; ``PLANNING`` is the read-only
     analysis composition (no ``<SECURITY>``/``<SOUL>``/``<MEMORY>`` ...). Both share
     the dynamic tier. Sections are stateless, so the per-preset sequences are reused
     across calls.

@@ -1850,7 +1850,7 @@ class TestConversationServiceStartConversation:
 
         stored = captured["stored"]
         expected_worktree = worktree_root / str(conversation_id) / repo_dir.name
-        expected_branch = f"openhands/{conversation_id}"
+        expected_branch = f"agentrt/{conversation_id}"
 
         assert stored.worktree is True
         assert stored.workspace.working_dir == str(expected_worktree)
@@ -1877,6 +1877,8 @@ class TestConversationServiceStartConversation:
         assert str(expected_worktree) in suffix
         assert expected_branch in suffix
         assert "Do all file and git work inside this worktree" in suffix
+        assert "Do not create or switch branches" in suffix
+        assert "new, appropriately-named branch" not in suffix
 
     @pytest.mark.asyncio
     async def test_start_conversation_with_worktree_preserves_relative_workspace(

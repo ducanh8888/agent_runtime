@@ -65,7 +65,7 @@ logger = get_logger(__name__)
 
 _SOUL_PATH = get_user_persistence_dir() / "SOUL.md"
 _DEFAULT_SOUL = (
-    "You are OpenHands agent, a helpful AI assistant that can interact"
+    "You are an AgentRT agent, a helpful AI assistant that can interact"
     " with a computer to solve tasks."
 )
 

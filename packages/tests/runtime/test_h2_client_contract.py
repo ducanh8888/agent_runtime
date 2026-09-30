@@ -46,6 +46,29 @@ def _conversation(**overrides) -> dict:
     return payload
 
 
+def test_send_reports_pre_send_status_and_iterations() -> None:
+    samples = iter(
+        [
+            _conversation(execution_status="finished", iterations_used=3),
+            _conversation(execution_status="running", iterations_used=0),
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            assert request.url.path.endswith("/events")
+            assert request.read()
+            return httpx.Response(200, json={})
+        return httpx.Response(200, json=next(samples))
+
+    client = _mock_client(handler)
+    result = client.send(SESSION, "continue")
+
+    assert result["iterations_used_before"] == 3
+    assert result["status_before"] == "finished"
+    assert result["status"] == "running"
+
+
 def test_status_surfaces_request_scope() -> None:
     client = _mock_client(
         lambda request: httpx.Response(
@@ -158,6 +181,15 @@ def test_result_non_error_has_no_progress_summary() -> None:
     assert "progress_summary" not in payload
 
 
+def test_running_result_bucket_is_still_running() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(200, json={"response": "", "state": "pending"})
+        return httpx.Response(200, json=_conversation(execution_status="running"))
+
+    assert _mock_client(handler).result(SESSION)["bucket"] == "still_running"
+
+
 def test_result_carries_the_bucket_wait_all_already_applies() -> None:
     """H10 item 1a: `result()` called directly, not through `wait_all`/
     `wait_any`, used to expose only the raw `state` field -- `"partial"` for
@@ -248,6 +280,64 @@ def test_progress_summary_stops_at_the_request_boundary() -> None:
     client = _mock_client(handler)
     payload = client.result(SESSION)
     assert payload["progress_summary"] == "file_editor x1"
+
+
+def test_error_without_result_surfaces_error_payload() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "",
+                    "state": "partial",
+                    "request_message_id": "u1",
+                    "iterations_used": 0,
+                    "error": {"code": "ProviderError", "detail": "upstream failed"},
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["error"] == {"code": "ProviderError", "detail": "upstream failed"}
+
+
+def test_error_without_payload_error_uses_latest_transcript_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "",
+                    "state": "partial",
+                    "request_message_id": "u1",
+                    "iterations_used": 0,
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "kind": "ConversationErrorEvent",
+                            "code": "ProviderError",
+                            "detail": "last",
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "u1",
+                            "llm_message": {"role": "user"},
+                        },
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="error"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["error"] == {"code": "ProviderError", "detail": "last"}
 
 
 def test_result_final_empty_is_kept() -> None:
@@ -391,6 +481,31 @@ def _reports_dir(tmp_path, monkeypatch) -> Path:
     return reports_dir
 
 
+def test_artifacts_reports_large_files_and_new_symlinks(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    large = workspace / "large.bin"
+    large.write_bytes(b"x" * (5 * 1024 * 1024 + 1))
+    target = workspace / "target.txt"
+    target.write_text("target")
+    link = workspace / "link.txt"
+    link.symlink_to(target)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_conversation(
+                workspace={"working_dir": str(workspace)},
+                created_at="2000-01-01T00:00:00Z",
+            ),
+        )
+
+    listing = _mock_client(handler).artifacts(SESSION)
+
+    assert [entry["path"] for entry in listing["large_files"]] == ["large.bin"]
+    assert [entry["path"] for entry in listing["symlinks"]] == ["link.txt"]
+
+
 def test_artifacts_lists_reports_alongside_workspace_files(
     tmp_path, monkeypatch
 ) -> None:
@@ -472,6 +587,183 @@ def test_artifacts_path_falls_back_to_workspace_when_not_a_report(
     result = client.artifacts(SESSION, path="only_in_workspace.txt")
     assert result["content"] == "workspace content"
     assert result["source"] == "workspace"
+
+
+def test_finished_result_reports_clean_completion_from_bounded_transcript() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "Thank you.",
+                    "state": "final",
+                    "request_message_id": "u1",
+                    "finish_reason": "stop",
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "kind": "MessageEvent",
+                            "id": "a2",
+                            "llm_message": {
+                                "role": "assistant",
+                                "content": "Thank you.",
+                            },
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "u1",
+                            "llm_message": {"role": "user", "content": "task"},
+                        },
+                        {
+                            "kind": "ConversationErrorEvent",
+                            "code": "OldError",
+                            "detail": "before request",
+                        },
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["completed_cleanly"] is True
+    assert "completed_cleanly_reason" not in payload
+
+
+def test_finished_result_with_finish_action_is_clean() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "Done.",
+                    "state": "final",
+                    "request_message_id": "u1",
+                    "finish_reason": None,
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "kind": "ActionEvent",
+                            "id": "a2",
+                            "source": "agent",
+                            "tool_name": "finish",
+                            "action": {"kind": "FinishAction", "message": "Done."},
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "u1",
+                            "llm_message": {"role": "user", "content": "task"},
+                        },
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["completed_cleanly"] is True
+    assert "completed_cleanly_reason" not in payload
+
+
+def test_finish_action_with_error_after_request_is_not_clean() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "Done.",
+                    "state": "final",
+                    "request_message_id": "u1",
+                    "finish_reason": None,
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {"kind": "ConversationErrorEvent", "code": "ProviderError"},
+                        {
+                            "kind": "ActionEvent",
+                            "id": "a2",
+                            "source": "agent",
+                            "tool_name": "finish",
+                            "action": {"kind": "FinishAction", "message": "Done."},
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "u1",
+                            "llm_message": {"role": "user"},
+                        },
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["completed_cleanly"] is False
+    assert payload["completed_cleanly_reason"] == "conversation_error_after_request"
+
+
+def test_finished_result_with_error_after_request_is_not_clean() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(
+                200,
+                json={
+                    "response": "Thank you.",
+                    "state": "final",
+                    "request_message_id": "u1",
+                    "finish_reason": None,
+                },
+            )
+        if request.url.path.endswith("/events/search"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "kind": "ConversationErrorEvent",
+                            "code": "ProviderError",
+                            "detail": "cut off",
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "a2",
+                            "llm_message": {
+                                "role": "assistant",
+                                "content": "Thank you.",
+                            },
+                        },
+                        {
+                            "kind": "MessageEvent",
+                            "id": "u1",
+                            "llm_message": {"role": "user", "content": "task"},
+                        },
+                    ],
+                    "next_page_id": None,
+                },
+            )
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    payload = _mock_client(handler).result(SESSION)
+
+    assert payload["completed_cleanly"] is False
+    assert payload["completed_cleanly_reason"]
 
 
 def test_result_carries_finish_reason_and_truncated() -> None:

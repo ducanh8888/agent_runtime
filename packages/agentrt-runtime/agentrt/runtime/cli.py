@@ -78,13 +78,15 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         tags=_parse_tags(args.tag),
         attachments=args.attachment or None,
         workspace_mode=args.workspace_mode,
+        context_files=args.context_file or None,
+        require=args.require,
     )
 
 
 def _cmd_list(args: argparse.Namespace) -> list:
     """Return recent sessions in reverse chronological order."""
     client = client_mod.Client()
-    return client.list_sessions(limit=args.limit)
+    return client.list_sessions(limit=args.limit, offset=args.offset)
 
 
 def _cmd_status(args: argparse.Namespace) -> dict:
@@ -109,6 +111,27 @@ def _cmd_profiles(_args: argparse.Namespace) -> dict:
     return client_mod.Client().profiles()
 
 
+def _compact_wait_item(item: dict, default_bucket: str | None = None) -> dict:
+    bucket = item.get("bucket") or default_bucket
+    sid = item.get("short_id")
+    if not sid and item.get("id"):
+        sid = client_mod.short_id(item["id"])
+    result_len = item.get("result_length")
+    if result_len is None:
+        text = item.get("result")
+        result_len = len(text) if isinstance(text, str) else 0
+    compact: dict[str, object] = {
+        "short_id": sid,
+        "bucket": bucket,
+        "status": item.get("status"),
+        "title": item.get("title"),
+        "result_length": result_len,
+    }
+    if "completed_cleanly" in item and item["completed_cleanly"] is not None:
+        compact["completed_cleanly"] = item["completed_cleanly"]
+    return compact
+
+
 def _cmd_wait(args: argparse.Namespace) -> dict:
     """Block until the named sessions settle, or the timeout elapses.
 
@@ -123,12 +146,41 @@ def _cmd_wait(args: argparse.Namespace) -> dict:
     tell settled from timed-out.
     """
     client = client_mod.Client()
-    return client.wait(
+    raw = client.wait(
         args.session,
         mode=args.mode,
         timeout=args.timeout,
         poll_interval=args.poll_interval,
     )
+    sessions: list[dict] = []
+    for bucket_name in (
+        "completed",
+        "partial",
+        "failed",
+        "stopped",
+        "missing",
+        "still_running",
+    ):
+        for item in raw.get(bucket_name, []):
+            if isinstance(item, dict):
+                sessions.append(_compact_wait_item(item, default_bucket=bucket_name))
+    return {
+        "sessions": sessions,
+        "timed_out": bool(raw.get("timed_out", False)),
+    }
+
+
+def _cmd_watch(args: argparse.Namespace) -> None:
+    """Stream one line per state change until sessions settle."""
+    client = client_mod.Client()
+    for change in client.watch(
+        args.session,
+        until=args.until,
+        interval=args.interval,
+    ):
+        line = f"{change['short_id']} {change['time']} {change['summary']}"
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
 
 
 def _cmd_transcript(args: argparse.Namespace) -> dict:
@@ -284,7 +336,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--max-iterations",
         type=int,
-        help="stop the run after this many agent steps (daemon default: 500)",
+        help="stop the run after this many agent steps (default: 100000)",
     )
     dispatch_parser.add_argument(
         "--workspace-mode",
@@ -296,6 +348,21 @@ def _build_parser() -> argparse.ArgumentParser:
             "there, isolated and reproducible against the pinned commit "
             "(reported as workspace_resolved_sha on `status`)."
         ),
+    )
+    dispatch_parser.add_argument(
+        "--context-file",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "prepend a UTF-8 text file to the task; repeatable "
+            "(200 KB each, 1 MB total)"
+        ),
+    )
+    dispatch_parser.add_argument(
+        "--require",
+        choices=("commit",),
+        help="require workspace HEAD to advance before the session finishes",
     )
     dispatch_parser.add_argument(
         "--attachment",
@@ -314,7 +381,18 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 
     list_parser = _add_subparser(subparsers, "list", help="list known sessions")
-    list_parser.add_argument("--limit", type=int, default=20)
+    list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="maximum sessions to return (default: 50)",
+    )
+    list_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="number of newest sessions to skip (default: 0)",
+    )
     list_parser.set_defaults(func=_cmd_list)
 
     status_parser = _add_subparser(subparsers, "status", help="show session status")
@@ -349,14 +427,31 @@ def _build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument(
         "--timeout",
         type=float,
-        default=600.0,
-        help=(
-            "seconds to block (default 600); internally capped at "
-            "AGENTRT_WAIT_SAFE_CEILING_SECONDS regardless of what is passed"
-        ),
+        default=0.0,
+        help="seconds to block (default 0 = unbounded)",
     )
     wait_parser.add_argument("--poll-interval", type=float, default=2.0)
     wait_parser.set_defaults(func=_cmd_wait)
+
+    watch_parser = _add_subparser(
+        subparsers,
+        "watch",
+        help="stream state changes for sessions until they settle",
+    )
+    watch_parser.add_argument("session", nargs="+", help="one or more session ids")
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="seconds between poll sweeps (default: 2.0)",
+    )
+    watch_parser.add_argument(
+        "--until",
+        choices=("all", "any"),
+        default="all",
+        help="watch until every session settles (default), or return on first",
+    )
+    watch_parser.set_defaults(func=_cmd_watch)
 
     transcript_parser = _add_subparser(
         subparsers, "transcript", help="show a condensed session transcript"

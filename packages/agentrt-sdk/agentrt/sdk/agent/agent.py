@@ -1493,6 +1493,5 @@ class Agent(CriticMixin, ResponseDispatchMixin, AgentBase):
             "  )\n"
             "\n"
             "For more information, see: "
-            "https://docs.openhands.dev/sdk/guides/context-condenser\n"
             "=" * 80
         )

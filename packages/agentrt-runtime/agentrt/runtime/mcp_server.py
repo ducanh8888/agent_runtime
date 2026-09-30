@@ -16,15 +16,58 @@ from mcp.server.fastmcp import FastMCP
 from agentrt.runtime import client as client_mod, config
 
 
-INSTRUCTIONS = """agentrt runs coding agents in background sessions on this
-machine. A session survives this conversation ending: dispatch work, close the
-orchestrator, come back later and collect the result.
+INSTRUCTIONS = """AgentRT gives you background sub-agents that run on the
+user's own model keys, in a daemon on this machine. You are the orchestrator:
+plan, split, dispatch, verify. Sessions do the long work and outlive this
+conversation.
 
-Two things are worth knowing before the first call. A session is not cheaper
-than doing the work yourself -- it costs roughly ten seconds of startup and its
-own model spend, so it pays off on work that is long, separable, or worth
-detaching from. And whatever a session reports about its own work is a claim,
-not evidence; check the files it produced."""
+WHEN. A session costs ~10 s of startup plus its own model spend. Send it work
+that is long, parallel, or should outlive this turn. Keep quick lookups and
+anything needing this conversation's context for yourself.
+
+THE LOOP.
+1. Split into independent pieces, one session each. There is no concurrency
+   cap: dispatch all of them now; `capacity` shows the host's memory if you
+   are unsure it can take them.
+2. Isolate. Each writer needs its own tree. `workspace_mode="isolated_worktree"`
+   gives a session a writable git worktree on branch `agentrt/<full id>`
+   of the source repository. Tell it to stay on that branch; verify the ref
+   actually advanced before merging.
+   `"snapshot"` gives a detached worktree pinned to HEAD, for reviewers. Or
+   pre-create a worktree and pass it as `workspace`. Never ask a session to
+   make its own worktree: its file editor only writes inside `workspace`.
+3. Dispatch with `dispatch_many`: shared arguments go in `defaults` (permission,
+   workspace_mode, context_files, require, tags such as batch=<name>); items
+   carry only what differs. Each task must stand alone -- the session sees
+   nothing of this conversation. State the finished condition, name files and
+   line ranges, and say how to check. Shared background goes in
+   `context_files`, not pasted into every task. Use `require="commit"` when
+   done means committed: the session cannot finish before it commits.
+4. Wait without holding your turn. Run `agentrt wait <id> <id> ...` as a
+   BACKGROUND shell command: it exits once every id settles (unbounded by
+   default) and prints one compact line per session -- one notification. For
+   a live feed, run `agentrt watch <ids>` under a monitor: one line per state
+   change. Do not loop over `status`.
+5. Verify. A session's report is a claim. `result.completed_cleanly` says
+   whether the final answer is intact; `artifacts` lists the files it really
+   changed; `transcript` shows what it really did. In the source repository,
+   check `git log agentrt/<full id>` and verify the ref advanced from the
+   pinned SHA; an agent can switch branches despite the instruction.
+6. Recover by status:
+   - `finished` but the work is missing -> `control send` with the correction.
+   - `stuck`, or going the wrong way -> `control interrupt`, then `send`.
+   - `error` with code `DaemonRestarted` -> the daemon restarted mid-run;
+     history is intact, `send` "continue" to carry on.
+   - `error` otherwise -> read `result.error` and `transcript`, then `send`.
+   - running but `stalled` in `capacity.running_sessions` -> read `transcript`;
+     a command waiting on input or a hung process needs `interrupt` + `send`.
+   - `paused` -> `control resume`, or `send` to redirect.
+   - Want a second opinion with full history -> `dispatch_from` (fork).
+7. Clean up: merge or discard branches, tag what to keep, `control delete`
+   the rest.
+
+Ids can be shortened to an unambiguous prefix. Errors come back as
+{"error", "message"} data -- read the message, it names the fix."""
 
 mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
 # FastMCP takes no version argument, so the low-level server falls back to the
@@ -71,6 +114,8 @@ def dispatch(
     idempotency_key: str | None = None,
     attachments: list[str] | None = None,
     workspace_mode: str | None = None,
+    context_files: list[str] | None = None,
+    require: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -101,11 +146,20 @@ def dispatch(
 
     Choose `inspect` for read-only repository audits that need structured
     search, narrow Git status/diff/log/show, version checks or sanitized
-    environment metadata. It has no shell and cannot mutate files.
+    environment metadata. Its tools are `file_editor`, `inspect`, and
+    `task_tracker`; it has no terminal and cannot mutate files. The `readonly`
+    preset has only `file_editor` and `task_tracker`, also with no terminal.
 
-    `workspace` confines the file editor to the workspace but still grants a
-    terminal, and a terminal can open any file you can. Treat it as constraining
-    ordinary behaviour, not as containment.
+    `workspace` grants `terminal`, `file_editor`, and `task_tracker`; `broad`
+    has that same tool set without the file-editor path confinement. Workspace
+    confinement affects file_editor writes only. If a terminal changes directory,
+    file_editor still writes only inside the workspace root. Do not ask a session
+    to create a sibling worktree and work there: pre-create the worktree and
+    dispatch with `workspace` set to that path.
+
+    To run read-only shell commands such as tests or SQL `SELECT` queries, use
+    `workspace` and explicitly instruct the session to run only the read-only
+    commands you intend. The read-only presets have no terminal.
 
     LLM_PROFILE. Optional name of the allowed LLM profile to run under, from
     `profiles`. It is a reference, not a credential -- the key never leaves the
@@ -113,28 +167,11 @@ def dispatch(
     unbound name is refused rather than silently falling back to a weaker
     policy.
 
-    MAX_ITERATIONS bounds one run of the agent. Left unset, the daemon applies
-    its own default of 500 -- there is no such thing as an unlimited session
-    here, only one whose ceiling you did not choose. Setting it lowers that.
-
-    Measured, so you know what you are buying:
-
-    - Running out puts the session in `error`, not `finished`, and nothing says
-      why. There is no counter and no message: a session that exhausted its
-      steps and one that genuinely failed report the same state. `status` shows
-      the ceiling, and the transcript ending mid-task after about that many
-      steps is what distinguishes them.
-    - The agent is not warned. It is cut between steps, mid-task, with no chance
-      to summarise -- so a session that stops this way has done part of the work
-      and told you nothing about which part. Check `artifacts`.
-    - The budget is per run, not per session. `control` with `send` starts a
-      fresh allowance of the same size, so a limit of 5 and three follow-ups is
-      up to twenty steps, not five.
-
-    It is a circuit breaker, not a cost control: it stops a session that would
-    otherwise run unattended, at the price of cutting it off mid-thought. For
-    work you are watching, `interrupt` is better -- it keeps the history and
-    lets you redirect. Reach for this when nobody will be watching.
+    MAX_ITERATIONS is 100000 by default (override with
+    AGENTRT_DEFAULT_MAX_ITERATIONS), so in practice a run ends when the work
+    does. Stuck detection guards against unproductive loops. Pass a smaller
+    value only when you want a hard budget; three steps before it the agent is
+    told to write up and finish, so its findings are not lost.
 
     WHEN THIS IS WORTH IT. Dispatching costs about ten seconds of startup plus
     the session's own model spend. It pays off when the work is long, when
@@ -179,15 +216,20 @@ def dispatch(
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
 
-    WORKSPACE_MODE. `"shared"` (default) is the above. `"snapshot"` needs
-    `workspace` to be a git repository: the daemon creates a detached
-    worktree pinned to its current HEAD and the session works there instead,
-    isolated from anything else touching the real directory and reproducible
-    against the exact commit it saw -- the pinned SHA comes back as
-    `workspace_resolved_sha` on this response and on `status`. Use it to
-    fan out several read-only reviewers into one repository without hand-
-    rolling worktree setup and cleanup yourself; not needed for a single
-    session or one you already gave its own directory.
+    WORKSPACE_MODE. `"shared"` (default) is the above. The other two need
+    `workspace` to be a git repository, and the daemon creates a worktree from
+    its current HEAD for the session alone -- the pinned SHA comes back as
+    `workspace_resolved_sha` here and on `status`:
+
+    - `"isolated_worktree"`: writable, on a new branch `agentrt/<full id>` in
+      the source repository. The way to fan out several writers into one
+      repository: each commits on its assigned branch, and you verify that
+      branch advanced before merging. `require="commit"` only checks worktree
+      HEAD, not which branch it points to; agents can still switch branches.
+    - `"snapshot"`: detached at HEAD. For reviewers and reproducible reads.
+
+    The worktree is removed when the session is deleted; commits on an
+    `isolated_worktree` branch stay reachable from that branch.
 
     `workspace` and `broad` include a terminal and therefore run with the same
     user authority you do. Do not dispatch work you would not run yourself.
@@ -202,6 +244,14 @@ def dispatch(
     `result_state` on the returned session is `pending` until a run consumes
     the input; `admission_status` is `queued` until then, so a freshly
     dispatched session is never reported as merely `idle`.
+
+    CONTEXT_FILES. `context_files` is a list of local UTF-8 text paths read by
+    this client and prepended once as `### Context file: <path>` blocks. Each
+    file is limited to 200 KB and their combined size to 1 MB.
+
+    REQUIRE. Set `require="commit"` to keep the agent running until it
+    advances workspace HEAD from the commit present at dispatch. A native Stop
+    hook checks this and returns the reason to the model when it blocks.
 
     ATTACHMENTS. `attachments` is a list of image paths to put on the first
     message. Each must be readable from the workspace, must sniff as PNG, JPEG,
@@ -237,14 +287,16 @@ def dispatch(
         idempotency_key=idempotency_key,
         attachments=attachments,
         workspace_mode=workspace_mode,
+        context_files=context_files,
+        require=require,
     )
 
 
 # Named `list` for the orchestrator but not defined as `list` here: a
 # module-level rebinding of the builtin is a trap for anything added later.
 @mcp.tool(name="list")
-def list_sessions(limit: int = 20) -> dict:
-    """List recent sessions, newest first.
+def list_sessions(limit: int = 50, offset: int = 0) -> dict:
+    """List sessions newest first, with page controls.
 
     Returns id, short_id, title, status, timestamps and tags for each. Use it
     to find a session whose short_id you no longer have, or to see what is
@@ -254,12 +306,11 @@ def list_sessions(limit: int = 20) -> dict:
     they stop telling them apart. `tags` is what does -- set them with
     `control` and read them here. Check them before deleting anything in bulk.
 
-    `limit` is how many of the most recent to return, not a search. Sessions
-    are kept until deleted and nothing expires, so an old one falls off the end
-    of any listing you ask for; addressing it by short id still works, because
-    that looks through all of them.
+    `limit` is the page size (default 50); `offset` skips that many newest
+    sessions so older pages remain addressable. Sessions are kept until deleted
+    and nothing expires.
     """
-    return {"sessions": _guard(_get_client().list_sessions, limit)}
+    return {"sessions": _guard(_get_client().list_sessions, limit, offset)}
 
 
 @mcp.tool()
@@ -268,9 +319,17 @@ def status(session: str) -> dict:
 
     session is the short id or the full UUID.
 
-    The execution states you will see: running means the agent is working;
-    paused means it was interrupted or stopped and can be resumed; finished
-    means it stopped on its own; error means it stopped without finishing.
+    `execution_status` is the SDK lifecycle value: `idle` (created/ready, no
+    run currently active), `running` (working), `paused` (suspended; resume or
+    send), `waiting_for_confirmation` (awaiting confirmation), `finished` (the
+    run stopped; check `result.truncated` to see whether its answer was cut off),
+    `error` (failed or hit its iteration limit;
+    inspect `result` and `transcript`, then interrupt and resume or send a
+    correction),
+    `stuck` (the detector found repeated failing tool calls or unproductive
+    empty responses; interrupt, then send a corrective instruction), and
+    `deleting` (deletion in progress). A missing status field can also normalize
+    to `null`; `_status_of` does not validate unexpected server strings.
 
     REQUEST SCOPE, separate from whether the session is running:
 
@@ -318,6 +377,10 @@ def result(
     read. When a window is used, `result_sha256` covers the whole text, not the
     window, so two pages of one answer can be told from two answers that start
     alike. Pass neither and the text is returned whole, as before.
+
+    To wait: one notification when done -> run `agentrt wait <ids>` as a
+    background shell command; live stream -> run `agentrt watch <ids>` under a
+    monitor; quick check -> call `status` or `result` directly.
 
     `state` scopes the answer. `final` means the run answering the newest
     consumed input finished; `result` is its text, and an empty string is a
@@ -407,21 +470,32 @@ def dispatch_from(
 
 
 @mcp.tool()
-def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
-    """Submit several tasks once and get a per-item outcome.
+def dispatch_many(
+    tasks: list[dict], defaults: dict | None = None, max_batch: int = 100
+) -> dict:
+    """Start many sessions in one call -- the normal way to fan out.
 
-    Each item is a dict of the arguments `dispatch` takes: `task` and
-    `workspace` are required; `title`, `permission`, `llm_profile`,
-    `max_iterations`, `tags` and `idempotency_key` are optional.
+    Each item is a dict of `dispatch`'s arguments (`task` and `workspace`
+    required, the rest optional). `defaults` holds arguments shared by every
+    item -- typically `workspace`, `permission`, `workspace_mode`,
+    `context_files`, `require` and `tags` -- and an item's own value wins;
+    `tags` are merged, so `defaults={"tags": {"batch": "b1"}}` plus a per-item
+    `{"lane": "api"}` gives both.
 
-    Every item is validated before the first is created, so a malformed item
-    cannot leave half a batch behind; the result separates `accepted` from
-    `failed` with the reason for each failure. A full run pool is not a
-    failure: accepted work is persisted and queued, and `capacity` reports the
-    backlog. Submit once, then collect with `wait_all` -- do not re-dispatch
-    what the daemon has already accepted.
+    Every item is validated (including unknown argument names) before the
+    first is created, so a malformed item cannot leave half a batch behind.
+    Items are then created in parallel; outcomes keep submission order, split
+    into `accepted` (with each `short_id`) and `failed` (with the reason).
+    There is no run cap, so everything accepted starts now.
+
+    Submit once, then run `agentrt wait <ids>` as a background shell command
+    for one notification when all have settled. Do not re-dispatch what was
+    accepted; a timed-out call is safe to repeat with the same
+    `idempotency_key` per item.
     """
-    return _guard(_get_client().dispatch_many, tasks, max_batch=max_batch)
+    return _guard(
+        _get_client().dispatch_many, tasks, defaults=defaults, max_batch=max_batch
+    )
 
 
 @mcp.tool()
@@ -449,9 +523,11 @@ def capacity() -> dict:
     """Report how much work the daemon will admit right now.
 
     `running`, `limit` and `available` describe run slots; `queued` is accepted
-    work waiting for one, in submission order. `in_flight_llm` and `llm_limit`
-    describe concurrent provider requests when the deployment caps them
-    (`AGENTRT_MAX_INFLIGHT_LLM`; null when it does not).
+    work waiting for one, in submission order. `in_flight_llm` counts provider
+    transport calls currently holding a slot; `llm_limit` is the configured
+    `AGENTRT_MAX_INFLIGHT_LLM` concurrency cap. They are zero and null
+    respectively when provider slots are not configured; retries sleeping
+    after 429 do not hold a slot.
     `shared_writer_limit` / `busiest_workspace_writers` describe the cap on
     sessions writing in one shared directory (`AGENTRT_MAX_SHARED_WRITERS`; null
     when unbounded). Only AgentRT-managed writers are counted: editors and
@@ -464,93 +540,23 @@ def capacity() -> dict:
     sleep: a request waiting to retry a 429 should not be occupying the capacity
     it is waiting to use.
 
+    `host` (POSIX only) reports total/available memory, daemon process-tree RSS,
+    and the ten largest immediate child process trees with truncated command
+    lines; it is null elsewhere. `daemon` reports pid, start time (from `/proc`,
+    falling back to `daemon_history.json`), unexpected-exit count, and last
+    unexpected-exit time. Missing history values are null. Server-provided
+    restart recovery fields such as `recovered_after_restart` and
+    `server_started_at` pass through unchanged.
+
+    `running_sessions` lists each running session's short id, title,
+    `iterations_used`, newest transcript event timestamp, seconds since it, and
+    `stalled`. A session is stalled when it has an event timestamp older than
+    `AGENTRT_STALL_SECONDS` (default 900); naive event timestamps are local time.
+
     A full pool does not refuse a dispatch: the input is persisted and queued.
     This call is how you see that backlog instead of inferring it from refusals.
     """
     return _guard(_get_client().capacity)
-
-
-@mcp.tool()
-def wait_any(
-    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
-) -> dict:
-    """Block until one of these sessions settles, or the timeout elapses.
-
-    This is the blocking wait of a foreground launch: dispatch several sessions,
-    then wait once instead of polling `status`. `wait_all` is the same call that
-    requires every id.
-
-    The result groups ids by outcome:
-
-    - `completed` -- finished; the item carries the same fields `result` does.
-    - `partial` -- stopped with usable output (an error or limit after work).
-    - `failed` -- terminal with no usable output.
-    - `stopped` -- paused, so it can be resumed or finalized.
-    - `missing` -- unknown or deleted; a wait for a deleted session does not
-      wait forever.
-    - `still_running` -- the timeout ended the wait. These are NOT failures and
-      carry no partial output; wait again or read `status`.
-
-    A settled item also carries its `title` at no extra cost, and the same
-    `finish_reason` / `truncated` pair `result` reports -- so a fan-out can tell
-    a whole answer from one that was cut off without a second call. `include_usage`
-    adds a `usage` block to each settled item and is the one field that costs a
-    request per settled session -- worth setting for a single session, wasteful
-    across a fan-out. Either way a settled item is the whole answer: this call
-    already returns what `result` would, so there is nothing to fetch after it.
-
-    `timed_out` says whether the deadline, not completion, ended the wait. No
-    outcome means "someone must approve this" -- the caller resolves every
-    case.
-
-    A session is reported settled only after the same terminal condition has
-    held across two samples, because `finished` is provisional while a run may
-    continue for a stop hook or a message that arrived during its final step.
-    Expect at least one poll interval (about two seconds) of latency.
-
-    Do not pass a large `timeout` expecting this call to hold open that long:
-    it is capped internally (900s by default) well under the idle ceiling
-    some transports between an orchestrator and this server impose on a call
-    that sends nothing back for too long -- a `timeout` above the cap is
-    truncated to it and returns `still_running` there, not held further. Call
-    again on `still_running` rather than raising `timeout` to work around
-    this. And prefer not holding your own turn on this call at all for
-    anything expected to run long: poll `status` between other work, or
-    background a poll loop, rather than blocking here. If you ignore this and
-    your own client backgrounds the call anyway because it ran long, the
-    eventual notification is likely to re-deliver this whole result verbatim
-    -- a second copy of everything you could otherwise fetch once with
-    `result` -- which is the concrete cost of not heeding the advice above,
-    not a separate thing to work around. H10 item 6, 2026-09-18.
-    """
-    return _guard(
-        _get_client().wait,
-        session_ids,
-        mode="any",
-        timeout=timeout,
-        include_usage=include_usage,
-    )
-
-
-@mcp.tool()
-def wait_all(
-    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
-) -> dict:
-    """Block until every one of these sessions settles, or the timeout elapses.
-
-    Same result shape as `wait_any`; see that description for the buckets, for
-    what a settled item carries, and for the internal safe-ceiling cap on
-    `timeout` -- it applies here too. A timeout returns the unfinished ids under
-    `still_running` with `timed_out` true -- never as failures, and never with
-    partial output presented as a final answer.
-    """
-    return _guard(
-        _get_client().wait,
-        session_ids,
-        mode="all",
-        timeout=timeout,
-        include_usage=include_usage,
-    )
 
 
 @mcp.tool()
@@ -606,7 +612,9 @@ def transcript(
     may be two or three. It is capped at 100.
 
     Judge "is there more" by next_cursor, never by how few events came back. A
-    non-null cursor means older events exist no matter how short the page.
+    non-null cursor means older events exist no matter how short the page. This
+    event history is the ground truth when `result` looks wrong: use it to see
+    what the agent received, attempted and observed.
 
     The agent's private reasoning and its system prompt are excluded by default.
     They are the bulk of the raw payload and would cost you far more context than
@@ -692,7 +700,13 @@ def control(session: str, action: str, message: str | None = None) -> dict:
 
     - send -- give the agent a further instruction and let it act on it.
       Requires message. Works whether the session is running, paused or
-      finished; a finished session starts working again.
+      finished; a finished session starts working again. Its response includes
+      `iterations_used_before` and `status_before`, sampled before the send, as
+      well as the resulting `status`. Compare these to detect a no-op send: a
+      session may reply once without resuming, leaving both old values unchanged.
+      The run loop resets `iterations_used` at each run, so a send starts a fresh
+      per-run iteration allowance; one iteration is one agent step/LLM response,
+      regardless of how many parallel tool calls that response makes.
     - interrupt -- cancel what the agent is doing right now. Any command it is
       running is killed. The session becomes paused with its history intact, so
       you can send a correction and then resume.
@@ -837,6 +851,18 @@ def artifacts(session: str, path: str | None = None) -> dict:
 @mcp.tool()
 def profiles() -> dict:
     """List the permission presets and the LLM references dispatch accepts.
+
+    Tool sets are exact: `readonly` has `file_editor` and `task_tracker`;
+    `inspect` adds `inspect` to those; `workspace` has `terminal`,
+    `file_editor`, and `task_tracker`; `broad` has that same tool set. Only
+    `workspace` and `broad` have a terminal. Use `workspace` with an explicit
+    instruction when you need read-only shell commands (for example tests or
+    SQL `SELECT`); the named read-only presets cannot run commands.
+
+    File-editor writes are always confined to the dispatched workspace root,
+    even if the terminal changes directory. Never ask a session to create its
+    own sibling worktree and work there: pre-create the worktree and dispatch
+    with `workspace` set to it.
 
     Call this before dispatching work whose authority matters, rather than
     guessing a preset name -- an unknown name is refused, not quietly widened.

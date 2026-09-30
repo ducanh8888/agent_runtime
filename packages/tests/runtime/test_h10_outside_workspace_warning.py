@@ -62,6 +62,7 @@ def test_flags_a_path_outside_the_workspace(tmp_path) -> None:
     workspace = tmp_path / "a"
     workspace.mkdir()
     other = tmp_path / "b"
+    other.mkdir()
 
     out = client.dispatch(f"compare this against {other}", str(workspace))
 
@@ -104,13 +105,35 @@ def test_does_not_flag_a_url_path(tmp_path) -> None:
     assert "outside_workspace_paths" not in out
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "mention /home/b2c",
+        "mention /api/files",
+        "mention /team/allocation",
+        "mention /does-not-exist-agentrt/COMMON.md.",
+        "mention https://example.test/home/b2c",
+    ],
+)
+def test_ignores_nonexistent_paths_and_url_routes(task: str, tmp_path) -> None:
+    client = _mock_client(_handler)
+    workspace = tmp_path / "a"
+    workspace.mkdir()
+
+    out = client.dispatch(task, str(workspace))
+
+    assert "outside_workspace_paths" not in out
+
+
 def test_dispatch_never_blocks_on_the_warning(tmp_path) -> None:
     """The scan is advisory only -- the dispatch still goes through."""
     client = _mock_client(_handler)
     workspace = tmp_path / "a"
     workspace.mkdir()
 
-    out = client.dispatch("compare against /some/other/repo", str(workspace))
+    other = tmp_path / "other" / "repo"
+    other.mkdir(parents=True)
+    out = client.dispatch(f"compare against {other}", str(workspace))
 
     assert out["id"] == CREATED
-    assert out["outside_workspace_paths"] == ["/some/other/repo"]
+    assert out["outside_workspace_paths"] == [str(other)]
