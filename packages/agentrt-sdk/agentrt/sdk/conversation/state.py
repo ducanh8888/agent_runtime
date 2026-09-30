@@ -262,8 +262,7 @@ class ConversationState(OpenHandsModel):
         description="Dictionary for agent-specific runtime state that persists across "
         "iterations. Agents can store feature-specific state using string keys. "
         "To trigger autosave, always reassign: "
-        "state.agent_state = {**state.agent_state, key: value}. "
-        "See https://docs.openhands.dev/sdk/guides/convo-persistence#how-state-persistence-works",
+        "state.agent_state = {**state.agent_state, key: value}. ",
     )
 
     # Hook configuration for the conversation

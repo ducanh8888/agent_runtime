@@ -27,7 +27,9 @@ LEVEL_MAP = (
 )
 
 DEBUG = os.environ.get("DEBUG", "false").lower() in {"1", "true", "yes"}
-ENV_LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
+ENV_LOG_LEVEL_STR = os.getenv(
+    "AGENTRT_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO")
+).upper()
 ENV_LOG_LEVEL = LEVEL_MAP.get(ENV_LOG_LEVEL_STR, logging.INFO)
 if DEBUG:
     ENV_LOG_LEVEL = logging.DEBUG
