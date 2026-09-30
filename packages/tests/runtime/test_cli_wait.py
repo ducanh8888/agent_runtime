@@ -18,7 +18,7 @@ from agentrt.runtime.cli import main
 def _patch_wait(monkeypatch: pytest.MonkeyPatch, result: dict) -> list[tuple]:
     calls: list[tuple] = []
 
-    def fake_wait(self, session_ids, *, mode="all", timeout=600.0, poll_interval=2.0):
+    def fake_wait(self, session_ids, *, mode="all", timeout=0.0, poll_interval=2.0):
         calls.append((session_ids, mode, timeout, poll_interval))
         return result
 
@@ -37,7 +37,7 @@ def test_wait_exits_zero_when_settled(
     code = main(["wait", "a"])
 
     assert code == 0
-    assert calls == [(["a"], "all", 600.0, 2.0)]
+    assert calls == [(["a"], "all", 0.0, 2.0)]
 
 
 def test_wait_exits_three_on_timeout(
@@ -67,7 +67,7 @@ def test_wait_accepts_multiple_sessions_and_mode(
     code = main(["wait", "a", "b", "c", "--mode", "any", "--poll-interval", "0.5"])
 
     assert code == 0
-    assert calls == [(["a", "b", "c"], "any", 600.0, 0.5)]
+    assert calls == [(["a", "b", "c"], "any", 0.0, 0.5)]
 
 
 def test_wait_prints_the_result_as_json(
@@ -82,3 +82,45 @@ def test_wait_prints_the_result_as_json(
 
     out = capsys.readouterr().out
     assert '"timed_out": false' in out
+
+
+def test_wait_prints_compact_json_without_full_result_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Compact final JSON must carry short_id, bucket, status, title,
+    result_length, and completed_cleanly (if present), but NOT full result."""
+    import json
+
+    _patch_wait(
+        monkeypatch,
+        {
+            "completed": [
+                {
+                    "id": "11111111-2222-3333-4444-555555555555",
+                    "short_id": "11111111",
+                    "status": "finished",
+                    "title": "fix the bug",
+                    "result": "very long output text that must not be in notification",
+                    "result_length": 53,
+                    "completed_cleanly": True,
+                }
+            ],
+            "still_running": [],
+            "timed_out": False,
+        },
+    )
+
+    code = main(["wait", "11111111"])
+    assert code == 0
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["timed_out"] is False
+    assert len(out["sessions"]) == 1
+    session = out["sessions"][0]
+    assert session["short_id"] == "11111111"
+    assert session["bucket"] == "completed"
+    assert session["status"] == "finished"
+    assert session["title"] == "fix the bug"
+    assert session["result_length"] == 53
+    assert session["completed_cleanly"] is True
+    assert "result" not in session

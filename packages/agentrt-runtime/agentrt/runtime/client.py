@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -1611,30 +1612,53 @@ class Client:
         self._session_index_refresh_at = time.monotonic()
         return list(index.values())
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
-        """Return the most recent sessions from the daemon."""
-        response = self._send(
-            "GET",
-            "/api/conversations/search",
-            params={"limit": limit},
-        )
-        data = response.json()
+    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        """Return the most recent sessions from the daemon, with page controls."""
+        if limit <= 0:
+            return []
+        offset = max(0, offset)
 
-        if isinstance(data, list):
-            sessions = data
-        elif isinstance(data, dict):
-            sessions = data.get("sessions")
-            if not isinstance(sessions, list):
-                sessions = data.get("items")
-            if not isinstance(sessions, list):
-                sessions = data.get("conversations")
-            if not isinstance(sessions, list):
-                sessions = []
-        else:
-            sessions = []
+        sessions: list[dict] = []
+        page: str | None = None
+        target_count = offset + limit
+
+        while len(sessions) < target_count:
+            req_limit = min(100, target_count - len(sessions) if offset == 0 else 100)
+            params: dict[str, object] = {"limit": req_limit}
+            if page:
+                params["page_id"] = page
+            data = self._send("GET", "/api/conversations/search", params=params).json()
+
+            if isinstance(data, list):
+                items = data
+                page = None
+            elif isinstance(data, dict):
+                items = data.get("sessions")
+                if not isinstance(items, list):
+                    items = data.get("items")
+                if not isinstance(items, list):
+                    items = data.get("conversations")
+                if not isinstance(items, list):
+                    items = []
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+            else:
+                items = []
+                page = None
+
+            if not items:
+                break
+
+            for item in items:
+                if isinstance(item, dict):
+                    sessions.append(item)
+
+            if not page:
+                break
+
+        paged_sessions = sessions[offset : offset + limit]
 
         result: list[dict] = []
-        for session in sessions:
+        for session in paged_sessions:
             full_id = session.get("id") if isinstance(session, dict) else None
             result.append(
                 {
@@ -2400,14 +2424,17 @@ class Client:
         if mode not in ("all", "any"):
             raise ValueError("mode must be 'all' or 'any'")
         interval = max(0.5, float(poll_interval))
-        requested_timeout = max(0.0, float(timeout))
-        safe_ceiling = config.wait_safe_ceiling_seconds()
-        effective_timeout = (
-            min(requested_timeout, safe_ceiling)
-            if safe_ceiling > 0
-            else requested_timeout
-        )
-        deadline = time.monotonic() + effective_timeout
+        requested_timeout = float(timeout)
+        if requested_timeout <= 0:
+            deadline = None
+        else:
+            safe_ceiling = config.wait_safe_ceiling_seconds()
+            effective_timeout = (
+                min(requested_timeout, safe_ceiling)
+                if safe_ceiling > 0
+                else requested_timeout
+            )
+            deadline = time.monotonic() + effective_timeout
         ids = list(dict.fromkeys(str(session) for session in session_ids))
 
         started = time.monotonic()
@@ -2436,13 +2463,16 @@ class Client:
                 break
             if not pending:
                 break
-            remaining_time = deadline - time.monotonic()
-            if remaining_time <= 0:
-                timed_out = True
-                break
-            # Never sleep past the deadline: a sweep plus the interval would
-            # otherwise overshoot the timeout the caller asked for.
-            time.sleep(min(interval, remaining_time))
+            if deadline is not None:
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    timed_out = True
+                    break
+                # Never sleep past the deadline: a sweep plus the interval would
+                # otherwise overshoot the timeout the caller asked for.
+                time.sleep(min(interval, remaining_time))
+            else:
+                time.sleep(interval)
 
         buckets: dict[str, list] = {
             "completed": [],
@@ -2523,6 +2553,152 @@ class Client:
             "timed_out": timed_out,
             "waited": round(time.monotonic() - started, 3),
         }
+
+    def watch(
+        self,
+        session_ids: list[str],
+        *,
+        until: str = "all",
+        interval: float = 2.0,
+    ) -> Iterator[dict]:
+        """Stream state changes for the named sessions until they settle.
+
+        Yields one dict per state change (status change, new tool action, error
+        event, settled) with short_id, local time, and summary (<=120 chars).
+        Silent when nothing changes.
+        """
+        if until not in ("all", "any"):
+            raise ValueError("until must be 'all' or 'any'")
+        poll_interval = max(0.01, float(interval))
+        ids = list(dict.fromkeys(str(session) for session in session_ids))
+        pending = set(ids)
+        settled: set[str] = set()
+        terminal_prev: dict[str, bool] = {}
+        last_status: dict[str, str | None] = {}
+        seen_event_ids: dict[str, set[str]] = {s: set() for s in ids}
+
+        while True:
+            for session in list(pending):
+                status_info = self._wait_status(session)
+                if status_info is None:
+                    sid = short_id(session)
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "status",
+                        "summary": "status: missing",
+                    }
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "settled",
+                        "summary": "settled: missing",
+                    }
+                    pending.discard(session)
+                    settled.add(session)
+                    continue
+
+                sid = short_id(status_info.get("id") or session)
+                curr_status = status_info.get("status")
+                if curr_status != last_status.get(session):
+                    last_status[session] = curr_status
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    summary = f"status: {curr_status or 'unknown'}"
+                    if len(summary) > 120:
+                        summary = summary[:117] + "..."
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "status",
+                        "summary": summary,
+                    }
+
+                try:
+                    page = self.transcript(session, limit=50)
+                    events = page.get("events") or []
+                    for ev in events:
+                        ev_id = ev.get("id")
+                        if ev_id and ev_id in seen_event_ids[session]:
+                            continue
+                        if ev_id:
+                            seen_event_ids[session].add(ev_id)
+                        ev_type = ev.get("type")
+                        if ev_type == "action":
+                            tool = ev.get("tool") or "tool"
+                            loc = ev.get("path")
+                            thought = ev.get("thought")
+                            detail = loc or thought or ""
+                            summary = f"tool: {tool} {detail}".strip()
+                            if len(summary) > 120:
+                                summary = summary[:117] + "..."
+                            t_str = datetime.now().strftime("%H:%M:%S")
+                            yield {
+                                "id": session,
+                                "short_id": sid,
+                                "time": t_str,
+                                "kind": "tool",
+                                "summary": summary,
+                            }
+                        elif ev_type == "error":
+                            code = ev.get("code")
+                            detail = ev.get("detail")
+                            if code and detail:
+                                summary = f"error: {code}: {detail}"
+                            elif code:
+                                summary = f"error: {code}"
+                            elif detail:
+                                summary = f"error: {detail}"
+                            else:
+                                summary = "error"
+                            if len(summary) > 120:
+                                summary = summary[:117] + "..."
+                            t_str = datetime.now().strftime("%H:%M:%S")
+                            yield {
+                                "id": session,
+                                "short_id": sid,
+                                "time": t_str,
+                                "kind": "error",
+                                "summary": summary,
+                            }
+                except (ClientError, json.JSONDecodeError):
+                    pass
+
+                terminal = _is_settled(status_info)
+                if terminal and terminal_prev.get(session):
+                    settled.add(session)
+                    pending.discard(session)
+                    try:
+                        res = self.result(session)
+                        bucket = _wait_bucket(res)
+                    except (ClientError, json.JSONDecodeError):
+                        bucket = (
+                            "completed"
+                            if curr_status == "finished"
+                            else (curr_status or "settled")
+                        )
+                    summary = f"settled: {bucket}"
+                    if len(summary) > 120:
+                        summary = summary[:117] + "..."
+                    t_str = datetime.now().strftime("%H:%M:%S")
+                    yield {
+                        "id": session,
+                        "short_id": sid,
+                        "time": t_str,
+                        "kind": "settled",
+                        "summary": summary,
+                    }
+                else:
+                    terminal_prev[session] = terminal
+
+            if settled and until == "any":
+                break
+            if not pending:
+                break
+            time.sleep(poll_interval)
 
     def transcript(
         self,
