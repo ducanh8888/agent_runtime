@@ -71,7 +71,7 @@ class LabelProbMap(BaseModel):
 # ============================================================
 
 
-DEFAULT_CRITIC_SERVER_URL = "https://llm-proxy.app.all-hands.dev/vllm"
+DEFAULT_CRITIC_SERVER_URL = "http://127.0.0.1:8000/vllm"
 DEFAULT_CRITIC_MODEL_NAME = "critic"
 
 

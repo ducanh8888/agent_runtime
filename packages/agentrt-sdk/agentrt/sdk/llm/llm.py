@@ -160,7 +160,7 @@ LLM_RETRY_EXCEPTIONS: Final[tuple[type[Exception], ...]] = (
     LLMNoResponseError,
 )
 
-# Minimum context window size required for OpenHands to function properly.
+# Minimum context window size required for the agent to function properly.
 # Based on typical usage: system prompt (~2k) + conversation history (~4k)
 # + tool definitions (~2k) + working memory (~8k) = ~16k minimum.
 MIN_CONTEXT_WINDOW_TOKENS: Final[int] = 16384
@@ -341,14 +341,13 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         json_schema_extra=field_meta(),
     )
 
-    # OpenRouter uses HTTP-Referer as the app identity for rankings.
-    # Keep this stable unless the OpenRouter app attribution is migrated.
-    openrouter_site_url: str = Field(
-        default="https://docs.all-hands.dev/",
+    # Optional OpenRouter attribution headers.
+    openrouter_site_url: str | None = Field(
+        default=None,
         json_schema_extra=field_meta(),
     )
-    openrouter_app_name: str = Field(
-        default="OpenHands",
+    openrouter_app_name: str | None = Field(
+        default=None,
         json_schema_extra=field_meta(),
     )
 
@@ -414,7 +413,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         default=None,
         description=(
             "Optional canonical model name for feature registry lookups. "
-            "The OpenHands SDK maintains a model feature registry that "
+            "The AgentRT SDK maintains a model feature registry that "
             "maps model names to capabilities (e.g., vision support, "
             "prompt caching, responses API support). When using proxied or "
             "aliased model identifiers, set this field to the canonical "
@@ -721,6 +720,11 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                 ),
                 stacklevel=3,
             )
+
+        if d.get("openrouter_site_url") == "https://docs.all-hands.dev/":
+            d["openrouter_site_url"] = None
+        if d.get("openrouter_app_name") == "OpenHands":
+            d["openrouter_app_name"] = None
 
         model_val = d.get("model")
         if not model_val:
@@ -2627,7 +2631,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         self._effective_max_output_tokens = effective_max_output_tokens
 
     def _validate_context_window_size(self) -> None:
-        """Validate that the context window is large enough for OpenHands."""
+        """Validate that the context window is large enough for the agent."""
         # Allow override via environment variable
         if os.environ.get(ENV_ALLOW_SHORT_CONTEXT_WINDOWS, "").lower() in (
             "true",

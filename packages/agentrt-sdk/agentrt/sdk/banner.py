@@ -1,43 +1,26 @@
-"""Startup banner for OpenHands SDK.
-
-Prints a welcome message with helpful links when the SDK is first imported.
-Can be suppressed by setting the AGENTRT_SUPPRESS_BANNER environment variable.
-"""
+"""Optional AgentRT startup banner."""
 
 import os
 import sys
 
 
-# Not guarded by a lock; worst case in a race is the banner prints twice.
 _BANNER_PRINTED = False
 
 
 def _print_banner(version: str) -> None:
-    """Print the OpenHands SDK startup banner to stderr."""
+    """Print the AgentRT startup banner when explicitly enabled."""
     global _BANNER_PRINTED
 
-    # Check if banner should be suppressed (check this first, before setting flag)
-    suppress = os.environ.get("AGENTRT_SUPPRESS_BANNER", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    if suppress:
-        return
-
-    if _BANNER_PRINTED:
+    if os.environ.get("AGENTRT_SHOW_BANNER") != "1" or _BANNER_PRINTED:
         return
     _BANNER_PRINTED = True
 
     banner = f"""\
 +----------------------------------------------------------------------+
-|  OpenHands SDK v{version:<53}|
+|  AgentRT SDK v{version:<54}|
 |                                                                      |
-|  Report a bug: github.com/OpenHands/software-agent-sdk/issues        |
-|  Get help: openhands.dev/joinslack                                   |
-|  Scale up: openhands.dev/product/sdk                                 |
-|                                                                      |
-|  Set AGENTRT_SUPPRESS_BANNER=1 to hide this message                |
+|  Background coding-agent sessions                                   |
+|  Set AGENTRT_SHOW_BANNER=1 to show this message                      |
 +----------------------------------------------------------------------+
 """
     print(banner, file=sys.stderr)
