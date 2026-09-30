@@ -466,9 +466,11 @@ def capacity() -> dict:
     """Report how much work the daemon will admit right now.
 
     `running`, `limit` and `available` describe run slots; `queued` is accepted
-    work waiting for one, in submission order. `in_flight_llm` and `llm_limit`
-    describe concurrent provider requests when the deployment caps them
-    (`AGENTRT_MAX_INFLIGHT_LLM`; null when it does not).
+    work waiting for one, in submission order. `in_flight_llm` counts provider
+    transport calls currently holding a slot; `llm_limit` is the configured
+    `AGENTRT_MAX_INFLIGHT_LLM` concurrency cap. They are zero and null
+    respectively when provider slots are not configured; retries sleeping
+    after 429 do not hold a slot.
     `shared_writer_limit` / `busiest_workspace_writers` describe the cap on
     sessions writing in one shared directory (`AGENTRT_MAX_SHARED_WRITERS`; null
     when unbounded). Only AgentRT-managed writers are counted: editors and
@@ -480,6 +482,19 @@ def capacity() -> dict:
     The LLM slot is held for one transport call, not across a retry's backoff
     sleep: a request waiting to retry a 429 should not be occupying the capacity
     it is waiting to use.
+
+    `host` (POSIX only) reports total/available memory, daemon process-tree RSS,
+    and the ten largest immediate child process trees with truncated command
+    lines; it is null elsewhere. `daemon` reports pid, start time (from `/proc`,
+    falling back to `daemon_history.json`), unexpected-exit count, and last
+    unexpected-exit time. Missing history values are null. Server-provided
+    restart recovery fields such as `recovered_after_restart` and
+    `server_started_at` pass through unchanged.
+
+    `running_sessions` lists each running session's short id, title,
+    `iterations_used`, newest transcript event timestamp, seconds since it, and
+    `stalled`. A session is stalled when it has an event timestamp older than
+    `AGENTRT_STALL_SECONDS` (default 900); naive event timestamps are local time.
 
     A full pool does not refuse a dispatch: the input is persisted and queued.
     This call is how you see that backlog instead of inferring it from refusals.
