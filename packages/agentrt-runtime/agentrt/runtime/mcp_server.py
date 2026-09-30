@@ -71,6 +71,8 @@ def dispatch(
     idempotency_key: str | None = None,
     attachments: list[str] | None = None,
     workspace_mode: str | None = None,
+    context_files: list[str] | None = None,
+    require: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -122,28 +124,11 @@ def dispatch(
     unbound name is refused rather than silently falling back to a weaker
     policy.
 
-    MAX_ITERATIONS bounds one run of the agent. Left unset, the daemon applies
-    its own default of 500 -- there is no such thing as an unlimited session
-    here, only one whose ceiling you did not choose. Setting it lowers that.
-
-    Measured, so you know what you are buying:
-
-    - Running out puts the session in `error`, not `finished`, and nothing says
-      why. There is no counter and no message: a session that exhausted its
-      steps and one that genuinely failed report the same state. `status` shows
-      the ceiling, and the transcript ending mid-task after about that many
-      steps is what distinguishes them.
-    - The agent is not warned. It is cut between steps, mid-task, with no chance
-      to summarise -- so a session that stops this way has done part of the work
-      and told you nothing about which part. Check `artifacts`.
-    - The budget is per run, not per session. `control` with `send` starts a
-      fresh allowance of the same size, so a limit of 5 and three follow-ups is
-      up to twenty steps, not five.
-
-    It is a circuit breaker, not a cost control: it stops a session that would
-    otherwise run unattended, at the price of cutting it off mid-thought. For
-    work you are watching, `interrupt` is better -- it keeps the history and
-    lets you redirect. Reach for this when nobody will be watching.
+    MAX_ITERATIONS is 100000 by default (override with
+    AGENTRT_DEFAULT_MAX_ITERATIONS). Pass an explicit value to set a smaller
+    run budget. The agent loop's stuck detection is the normal guard against
+    unproductive loops; a separate lane adds a wrap-up notice near an explicit
+    cap, but the cap itself remains a hard stop.
 
     WHEN THIS IS WORTH IT. Dispatching costs about ten seconds of startup plus
     the session's own model spend. It pays off when the work is long, when
@@ -212,6 +197,14 @@ def dispatch(
     the input; `admission_status` is `queued` until then, so a freshly
     dispatched session is never reported as merely `idle`.
 
+    CONTEXT_FILES. `context_files` is a list of local UTF-8 text paths read by
+    this client and prepended once as `### Context file: <path>` blocks. Each
+    file is limited to 200 KB and their combined size to 1 MB.
+
+    REQUIRE. Set `require="commit"` to keep the agent running until it
+    advances workspace HEAD from the commit present at dispatch. A native Stop
+    hook checks this and returns the reason to the model when it blocks.
+
     ATTACHMENTS. `attachments` is a list of image paths to put on the first
     message. Each must be readable from the workspace, must sniff as PNG, JPEG,
     GIF or WebP from its own bytes (the extension is not consulted), and must be
@@ -246,6 +239,8 @@ def dispatch(
         idempotency_key=idempotency_key,
         attachments=attachments,
         workspace_mode=workspace_mode,
+        context_files=context_files,
+        require=require,
     )
 
 
@@ -429,7 +424,9 @@ def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
 
     Each item is a dict of the arguments `dispatch` takes: `task` and
     `workspace` are required; `title`, `permission`, `llm_profile`,
-    `max_iterations`, `tags` and `idempotency_key` are optional.
+    `max_iterations`, `tags`, `idempotency_key`, `context_files`, and `require`
+    are optional. `context_files` is a shared preamble per item, not copied into
+    any common outer task.
 
     Every item is validated before the first is created, so a malformed item
     cannot leave half a batch behind; the result separates `accepted` from
