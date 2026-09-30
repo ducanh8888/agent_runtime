@@ -101,11 +101,20 @@ def dispatch(
 
     Choose `inspect` for read-only repository audits that need structured
     search, narrow Git status/diff/log/show, version checks or sanitized
-    environment metadata. It has no shell and cannot mutate files.
+    environment metadata. Its tools are `file_editor`, `inspect`, and
+    `task_tracker`; it has no terminal and cannot mutate files. The `readonly`
+    preset has only `file_editor` and `task_tracker`, also with no terminal.
 
-    `workspace` confines the file editor to the workspace but still grants a
-    terminal, and a terminal can open any file you can. Treat it as constraining
-    ordinary behaviour, not as containment.
+    `workspace` grants `terminal`, `file_editor`, and `task_tracker`; `broad`
+    has that same tool set without the file-editor path confinement. Workspace
+    confinement affects file_editor writes only. If a terminal changes directory,
+    file_editor still writes only inside the workspace root. Do not ask a session
+    to create a sibling worktree and work there: pre-create the worktree and
+    dispatch with `workspace` set to that path.
+
+    To run read-only shell commands such as tests or SQL `SELECT` queries, use
+    `workspace` and explicitly instruct the session to run only the read-only
+    commands you intend. The read-only presets have no terminal.
 
     LLM_PROFILE. Optional name of the allowed LLM profile to run under, from
     `profiles`. It is a reference, not a credential -- the key never leaves the
@@ -268,9 +277,17 @@ def status(session: str) -> dict:
 
     session is the short id or the full UUID.
 
-    The execution states you will see: running means the agent is working;
-    paused means it was interrupted or stopped and can be resumed; finished
-    means it stopped on its own; error means it stopped without finishing.
+    `execution_status` is the SDK lifecycle value: `idle` (created/ready, no
+    run currently active), `running` (working), `paused` (suspended; resume or
+    send), `waiting_for_confirmation` (awaiting confirmation), `finished` (the
+    run stopped; check `result.truncated` to see whether its answer was cut off),
+    `error` (failed or hit its iteration limit;
+    inspect `result` and `transcript`, then interrupt and resume or send a
+    correction),
+    `stuck` (the detector found repeated failing tool calls or unproductive
+    empty responses; interrupt, then send a corrective instruction), and
+    `deleting` (deletion in progress). A missing status field can also normalize
+    to `null`; `_status_of` does not validate unexpected server strings.
 
     REQUEST SCOPE, separate from whether the session is running:
 
@@ -606,7 +623,9 @@ def transcript(
     may be two or three. It is capped at 100.
 
     Judge "is there more" by next_cursor, never by how few events came back. A
-    non-null cursor means older events exist no matter how short the page.
+    non-null cursor means older events exist no matter how short the page. This
+    event history is the ground truth when `result` looks wrong: use it to see
+    what the agent received, attempted and observed.
 
     The agent's private reasoning and its system prompt are excluded by default.
     They are the bulk of the raw payload and would cost you far more context than
@@ -692,7 +711,13 @@ def control(session: str, action: str, message: str | None = None) -> dict:
 
     - send -- give the agent a further instruction and let it act on it.
       Requires message. Works whether the session is running, paused or
-      finished; a finished session starts working again.
+      finished; a finished session starts working again. Its response includes
+      `iterations_used_before` and `status_before`, sampled before the send, as
+      well as the resulting `status`. Compare these to detect a no-op send: a
+      session may reply once without resuming, leaving both old values unchanged.
+      The run loop resets `iterations_used` at each run, so a send starts a fresh
+      per-run iteration allowance; one iteration is one agent step/LLM response,
+      regardless of how many parallel tool calls that response makes.
     - interrupt -- cancel what the agent is doing right now. Any command it is
       running is killed. The session becomes paused with its history intact, so
       you can send a correction and then resume.
@@ -837,6 +862,18 @@ def artifacts(session: str, path: str | None = None) -> dict:
 @mcp.tool()
 def profiles() -> dict:
     """List the permission presets and the LLM references dispatch accepts.
+
+    Tool sets are exact: `readonly` has `file_editor` and `task_tracker`;
+    `inspect` adds `inspect` to those; `workspace` has `terminal`,
+    `file_editor`, and `task_tracker`; `broad` has that same tool set. Only
+    `workspace` and `broad` have a terminal. Use `workspace` with an explicit
+    instruction when you need read-only shell commands (for example tests or
+    SQL `SELECT`); the named read-only presets cannot run commands.
+
+    File-editor writes are always confined to the dispatched workspace root,
+    even if the terminal changes directory. Never ask a session to create its
+    own sibling worktree and work there: pre-create the worktree and dispatch
+    with `workspace` set to it.
 
     Call this before dispatching work whose authority matters, rather than
     guessing a preset name -- an unknown name is refused, not quietly widened.
