@@ -2425,8 +2425,9 @@ class Client:
         }
 
     def send(self, session: str, message: str) -> dict:
-        """Post a user message and start a run (``run=True`` is required)."""
+        """Post a user message, start a run, and report before/after state."""
         resolved = self._resolve_session(session)
+        before = self.status(resolved)
         self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/events",
@@ -2439,6 +2440,8 @@ class Client:
         return {
             "id": resolved,
             "short_id": short_id(resolved),
+            "iterations_used_before": before.get("iterations_used"),
+            "status_before": before.get("status"),
             "status": self.status(resolved).get("status"),
         }
 

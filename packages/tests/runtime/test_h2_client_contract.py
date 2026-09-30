@@ -46,6 +46,29 @@ def _conversation(**overrides) -> dict:
     return payload
 
 
+def test_send_reports_pre_send_status_and_iterations() -> None:
+    samples = iter(
+        [
+            _conversation(execution_status="finished", iterations_used=3),
+            _conversation(execution_status="running", iterations_used=0),
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            assert request.url.path.endswith("/events")
+            assert request.read()
+            return httpx.Response(200, json={})
+        return httpx.Response(200, json=next(samples))
+
+    client = _mock_client(handler)
+    result = client.send(SESSION, "continue")
+
+    assert result["iterations_used_before"] == 3
+    assert result["status_before"] == "finished"
+    assert result["status"] == "running"
+
+
 def test_status_surfaces_request_scope() -> None:
     client = _mock_client(
         lambda request: httpx.Response(
