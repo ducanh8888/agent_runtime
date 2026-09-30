@@ -183,3 +183,80 @@ def test_dispatch_many_reports_per_item_outcomes() -> None:
     assert [item["index"] for item in result["accepted"]] == [0, 2]
     assert [item["index"] for item in result["failed"]] == [1]
     assert result["failed"][0]["error"]
+
+
+def test_dispatch_generates_a_key_and_retries_timeout_with_same_key() -> None:
+    seen: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        key = json.loads(request.content)["idempotency_key"]
+        seen.append(key)
+        if len(seen) == 1:
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    created = client.dispatch("task", "/tmp/ws")
+
+    assert created["id"] == CREATED
+    assert len(seen) == 2
+    assert seen[0] == seen[1]
+    assert seen[0]
+
+
+def test_dispatch_timeout_error_names_method_path_and_duration() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    client = _mock_client(handle)
+    client._timeout = 7.5
+
+    with pytest.raises(
+        client_mod.ClientError,
+        match=r"daemon busy.*7.5 s.*POST /api/conversations",
+    ):
+        client.dispatch("task", "/tmp/ws")
+
+
+def test_prefix_resolution_indexes_incrementally_and_detects_ambiguity() -> None:
+    from uuid import UUID
+
+    ids = [f"{i:08d}-0000-0000-0000-000000000000" for i in range(250)]
+    requests: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        page = params.get("page_id")
+        offset = (
+            0
+            if page is None
+            else next(
+                index for index, value in enumerate(ids) if UUID(value).hex == page
+            )
+        )
+        items = ids[offset : offset + 100]
+        next_page = UUID(ids[offset + 100]).hex if offset + 100 < len(ids) else None
+        return httpx.Response(
+            200,
+            json={
+                "items": [{"id": value} for value in items],
+                "next_page_id": next_page,
+            },
+        )
+
+    client = _mock_client(handle)
+    client._resolve_session("00000000")
+    first_count = len(requests)
+    assert first_count == 3
+
+    ids[:0] = ["00000000-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]
+    with pytest.raises(client_mod.AmbiguousSession):
+        client._resolve_session("00000000")
+    assert len(requests) == first_count + 1
+    assert all(params.get("sort_order") == "CREATED_AT_DESC" for params in requests)
+
+
+def test_full_uuid_resolution_does_not_search() -> None:
+    client = _mock_client(lambda request: pytest.fail("unexpected search"))
+    assert client._resolve_session(CREATED) == CREATED

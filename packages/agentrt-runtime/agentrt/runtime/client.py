@@ -1143,6 +1143,11 @@ class Client:
 
         try:
             response = attempt()
+        except httpx.TimeoutException as exc:
+            raise ClientError(
+                f"daemon busy or not responding within {self._timeout:g} s "
+                f"during {method.upper()} {path}"
+            ) from exc
         except httpx.TransportError:
             # The cached port and token come from daemon.json as it read at
             # first use. A daemon that restarts picks a new ephemeral port, so
@@ -1158,6 +1163,11 @@ class Client:
             try:
                 self._ensure_ready()
                 response = attempt()
+            except httpx.TimeoutException as retry_exc:
+                raise ClientError(
+                    f"daemon busy or not responding within {self._timeout:g} s "
+                    f"during {method.upper()} {path}"
+                ) from retry_exc
             except httpx.HTTPError as retry_exc:
                 raise ClientError(str(retry_exc)) from retry_exc
         except httpx.HTTPError as exc:
@@ -1166,6 +1176,9 @@ class Client:
         if response.status_code >= 400:
             if not (tolerate_404 and response.status_code == 404):
                 raise ClientError(response.text)
+        elif method.upper() == "DELETE" and path.startswith("/api/conversations/"):
+            deleted_id = path.removeprefix("/api/conversations/")
+            getattr(self, "_session_index", {}).pop(deleted_id, None)
 
         return response
 
@@ -1209,31 +1222,19 @@ class Client:
             pass
         else:
             return session
-
         prefix = str(session).casefold()
-        matches: list[str] = []
-        # Every page, not the default one. This used `list_sessions()` with its
-        # default limit of 50, so a session older than the fifty most recent
-        # could not be addressed by short id at all -- and the message said "no
-        # session matches", which reads exactly like "it was deleted". Hit for
-        # real: a session the docs name as evidence not to delete was reported
-        # missing, and it was sitting at row 53 of 58. Nothing expires here, so
-        # every runtime crosses that line eventually and then quietly loses
-        # its own history.
-        for item in self._all_sessions():
-            full = item.get("id")
-            if full is None:
-                continue
-            if str(full).casefold().startswith(prefix):
-                matches.append(str(full))
-
+        sessions = self._all_sessions()
+        matches = [
+            str(full)
+            for item in sessions
+            if (full := item.get("id")) is not None
+            and str(full).casefold().startswith(prefix)
+        ]
         if not matches:
             raise SessionNotFound(f"no session matches {session!r}")
-
         if len(matches) > 1:
             listed = ", ".join(short_id(full) for full in matches)
             raise AmbiguousSession(f"session prefix {session!r} is ambiguous: {listed}")
-
         return matches[0]
 
     def _profile_id(
@@ -1379,8 +1380,7 @@ class Client:
             body["max_iterations"] = max_iterations
         if tags:
             body["tags"] = _clean_tags(tags)
-        if idempotency_key:
-            body["idempotency_key"] = idempotency_key
+        body["idempotency_key"] = idempotency_key or str(uuid.uuid4())
         if workspace_mode:
             body["workspace_mode"] = workspace_mode
         if attachments:
@@ -1390,7 +1390,15 @@ class Client:
                 *blocks,
             ]
 
-        data = self._send("POST", "/api/conversations", json=body).json()
+        try:
+            response = self._send("POST", "/api/conversations", json=body)
+        except ClientError as exc:
+            if not isinstance(
+                exc.__cause__, (httpx.TimeoutException, httpx.TransportError)
+            ):
+                raise
+            response = self._send("POST", "/api/conversations", json=body)
+        data = response.json()
         full_id = data.get("id")
         result: dict = {
             "id": full_id,
@@ -1409,32 +1417,70 @@ class Client:
         return result
 
     def _all_sessions(self) -> list[dict]:
-        """Every session the daemon knows, paged.
-
-        Resolving a prefix has to see all of them: a partial view turns a real
-        session into a "not found", and would also miss the case where a prefix
-        is ambiguous because the second match is on a later page -- which would
-        pick one of two sessions silently, the worse of the two failures.
-
-        Bounded at 50 pages so a runtime with a pathological number of sessions
-        degrades into a wrong answer rather than an unbounded loop; a caller
-        that far out should be using full ids.
-        """
+        """Refresh and return the incremental index of all known sessions."""
+        index: dict[str, dict] = getattr(self, "_session_index", {})
+        indexed = hasattr(self, "_session_index")
         out: list[dict] = []
         page: str | None = None
-        for _ in range(50):
-            params: dict[str, object] = {"limit": 100}
-            if page:
-                params["page_id"] = page
-            data = self._send("GET", "/api/conversations/search", params=params).json()
-            items = data.get("items") if isinstance(data, dict) else None
-            if not isinstance(items, list) or not items:
-                break
-            out.extend(item for item in items if isinstance(item, dict))
-            page = data.get("next_page_id") if isinstance(data, dict) else None
-            if not page:
-                break
-        return out
+        hit_known = False
+        try:
+            for _ in range(50):
+                params: dict[str, object] = {
+                    "limit": 100,
+                    "sort_order": "CREATED_AT_DESC",
+                }
+                if page:
+                    params["page_id"] = page
+                data = self._send(
+                    "GET", "/api/conversations/search", params=params
+                ).json()
+                items = data.get("items") if isinstance(data, dict) else None
+                if not isinstance(items, list) or not items:
+                    break
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    full = item.get("id")
+                    if full is not None and str(full) in index:
+                        hit_known = True
+                    else:
+                        out.append(item)
+                        if full is not None:
+                            index[str(full)] = item
+                if hit_known:
+                    break
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+                if not page:
+                    break
+        except ClientError as exc:
+            if "sort_order" not in str(exc):
+                raise
+            refresh_at = getattr(self, "_session_index_refresh_at", 0.0)
+            if indexed and time.monotonic() - refresh_at < 2.0:
+                return list(index.values())
+            index.clear()
+            out = []
+            page = None
+            for _ in range(50):
+                params = {"limit": 100}
+                if page:
+                    params["page_id"] = page
+                data = self._send(
+                    "GET", "/api/conversations/search", params=params
+                ).json()
+                items = data.get("items") if isinstance(data, dict) else None
+                if not isinstance(items, list) or not items:
+                    break
+                out.extend(item for item in items if isinstance(item, dict))
+                page = data.get("next_page_id") if isinstance(data, dict) else None
+                if not page:
+                    break
+            index.update(
+                {str(item["id"]): item for item in out if item.get("id") is not None}
+            )
+        self._session_index = index
+        self._session_index_refresh_at = time.monotonic()
+        return list(index.values())
 
     def list_sessions(self, limit: int = 50) -> list[dict]:
         """Return the most recent sessions from the daemon."""
