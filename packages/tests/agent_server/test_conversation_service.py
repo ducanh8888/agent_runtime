@@ -1877,6 +1877,8 @@ class TestConversationServiceStartConversation:
         assert str(expected_worktree) in suffix
         assert expected_branch in suffix
         assert "Do all file and git work inside this worktree" in suffix
+        assert "Do not create or switch branches" in suffix
+        assert "new, appropriately-named branch" not in suffix
 
     @pytest.mark.asyncio
     async def test_start_conversation_with_worktree_preserves_relative_workspace(

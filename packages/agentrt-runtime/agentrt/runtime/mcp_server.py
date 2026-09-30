@@ -30,8 +30,9 @@ THE LOOP.
    cap: dispatch all of them now; `capacity` shows the host's memory if you
    are unsure it can take them.
 2. Isolate. Each writer needs its own tree. `workspace_mode="isolated_worktree"`
-   gives a session a writable git worktree whose commits land on branch
-   `agentrt/<full id>` of the source repository, ready to merge.
+   gives a session a writable git worktree on branch `agentrt/<full id>`
+   of the source repository. Tell it to stay on that branch; verify the ref
+   actually advanced before merging.
    `"snapshot"` gives a detached worktree pinned to HEAD, for reviewers. Or
    pre-create a worktree and pass it as `workspace`. Never ask a session to
    make its own worktree: its file editor only writes inside `workspace`.
@@ -49,8 +50,9 @@ THE LOOP.
    change. Do not loop over `status`.
 5. Verify. A session's report is a claim. `result.completed_cleanly` says
    whether the final answer is intact; `artifacts` lists the files it really
-   changed; `transcript` shows what it really did; `git log` on its branch
-   shows what it committed.
+   changed; `transcript` shows what it really did. In the source repository,
+   check `git log agentrt/<full id>` and verify the ref advanced from the
+   pinned SHA; an agent can switch branches despite the instruction.
 6. Recover by status:
    - `finished` but the work is missing -> `control send` with the correction.
    - `stuck`, or going the wrong way -> `control interrupt`, then `send`.
@@ -221,7 +223,9 @@ def dispatch(
 
     - `"isolated_worktree"`: writable, on a new branch `agentrt/<full id>` in
       the source repository. The way to fan out several writers into one
-      repository: each commits on its own branch, and you merge the branches.
+      repository: each commits on its assigned branch, and you verify that
+      branch advanced before merging. `require="commit"` only checks worktree
+      HEAD, not which branch it points to; agents can still switch branches.
     - `"snapshot"`: detached at HEAD. For reviewers and reproducible reads.
 
     The worktree is removed when the session is deleted; commits on an

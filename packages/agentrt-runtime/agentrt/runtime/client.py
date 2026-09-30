@@ -1959,7 +1959,7 @@ class Client:
         result: object,
     ) -> tuple[bool, str | None]:
         latest_error: dict | None = None
-        final_message = False
+        final_answer = False
         boundary_reached = False
         cursor: str | None = None
         pages = 0
@@ -1976,7 +1976,9 @@ class Client:
                 if event.get("type") == "error" and latest_error is None:
                     latest_error = event
                 if event.get("type") == "message" and event.get("role") == "assistant":
-                    final_message = True
+                    final_answer = True
+                if event.get("type") == "action" and event.get("is_finish"):
+                    final_answer = True
             if reached_boundary:
                 boundary_reached = True
                 break
@@ -1987,8 +1989,8 @@ class Client:
 
         if not boundary_reached:
             return False, "request_boundary_not_found"
-        if not final_message:
-            return False, "final_agent_message_missing"
+        if not final_answer:
+            return False, "final_agent_answer_missing"
         if finish_reason in {"error", "length", "max_output_tokens"}:
             return False, f"finish_reason_{finish_reason}"
         if latest_error:
@@ -2849,6 +2851,15 @@ class Client:
                     "thought": _capped(_join_text(item.get("thought")), 400),
                 }
                 _add_action_location(entry, item.get("action"))
+                action = item.get("action")
+                if (
+                    item.get("source") == "agent"
+                    and item.get("tool_name") == "finish"
+                    and isinstance(action, dict)
+                    and action.get("kind") == "FinishAction"
+                    and isinstance(action.get("message"), str)
+                ):
+                    entry["is_finish"] = True
                 if include_reasoning:
                     reasoning = item.get("reasoning_content")
                     if isinstance(reasoning, str) and reasoning:
