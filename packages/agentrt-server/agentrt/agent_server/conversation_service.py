@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
@@ -490,6 +491,9 @@ def _prepare_request_workspace(
 
 
 logger = logging.getLogger(__name__)
+
+#: Minimum spacing between activity-driven meta.json writes (updated_at).
+_META_PERSIST_INTERVAL_SECONDS = 15.0
 
 
 class InvalidParentConversation(ValueError):
@@ -3297,6 +3301,18 @@ class _EventSubscriber(Subscriber):
             return
         self.service.stored.updated_at = utc_now()
         update_last_execution_time()
+        # The in-memory value above serves this daemon's own search, but
+        # meta.json kept the creation time, so anything reading it -- a
+        # restarted daemon, the catalog before a conversation is hydrated --
+        # reported an active session as untouched since creation. Persist it,
+        # throttled so a busy run does not rewrite meta.json on every event.
+        now = time.monotonic()
+        if now - self.service.meta_saved_at >= _META_PERSIST_INTERVAL_SECONDS:
+            self.service.meta_saved_at = now
+            try:
+                await self.service.save_meta()
+            except Exception:
+                logger.debug("updated_at persist skipped", exc_info=True)
 
 
 @observe(

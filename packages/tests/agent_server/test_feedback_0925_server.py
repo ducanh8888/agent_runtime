@@ -109,6 +109,43 @@ async def test_running_record_held_by_live_lease_is_recovered_after_expiry(
         assert "DaemonRestarted" in codes
 
 
+async def test_updated_at_advances_with_activity_in_search_and_on_disk(
+    tmp_path: Path,
+) -> None:
+    """25/09 #5: `updated_at` in list/status stayed at creation time while a
+    session was active. Activity must move it both in this daemon's search
+    and in the persisted meta.json another reader (a restarted daemon, the
+    catalog before hydration) sees."""
+    from agentrt.sdk.event import PauseEvent
+
+    persist = tmp_path / "persist"
+    persist.mkdir()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    conv_id = uuid4()
+    async with ConversationService(conversations_dir=persist) as svc:
+        info, _ = await svc.start_conversation(
+            StartConversationRequest(
+                conversation_id=conv_id,
+                agent=Agent(llm=placeholder_llm("upd"), tools=[]),
+                workspace=LocalWorkspace(working_dir=str(workspace)),
+                autotitle=False,
+            )
+        )
+        created = info.updated_at
+        await asyncio.sleep(0.05)
+        event_service = await svc.get_event_service(conv_id)
+        assert event_service is not None
+        await event_service._pub_sub(PauseEvent())
+
+        page = await svc.search_conversations(limit=10)
+        listed = next(item for item in page.items if item.id == conv_id)
+        assert listed.updated_at > created
+
+        meta = json.loads((persist / conv_id.hex / "meta.json").read_text())
+        assert datetime.fromisoformat(meta["updated_at"]) > created
+
+
 async def test_running_record_with_free_lease_is_recovered_at_startup(
     tmp_path: Path,
 ) -> None:

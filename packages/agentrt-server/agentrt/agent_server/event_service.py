@@ -222,6 +222,9 @@ class EventService:
     # True when start() found this conversation persisted as RUNNING -- i.e.
     # a previous daemon died mid-run -- and moved it to ERROR.
     recovered_from_restart: bool = field(default=False, init=False)
+    # time.monotonic() of the last activity-driven meta.json write; 0 means
+    # never, so the first event after start persists immediately.
+    meta_saved_at: float = field(default=0.0, init=False)
     _conversation: LocalConversation | None = field(default=None, init=False)
     _pub_sub: PubSub[Event] = field(
         default_factory=lambda: PubSub[Event](max_subscribers=50), init=False
