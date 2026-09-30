@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
@@ -491,6 +492,9 @@ def _prepare_request_workspace(
 
 logger = logging.getLogger(__name__)
 
+#: Minimum spacing between activity-driven meta.json writes (updated_at).
+_META_PERSIST_INTERVAL_SECONDS = 15.0
+
 
 class InvalidParentConversation(ValueError):
     """``parent_conversation_id`` is unknown, self-referential, or in
@@ -934,6 +938,13 @@ class ConversationService:
     )
     _lease_renewal_task: asyncio.Task | None = field(default=None, init=False)
     _eviction_task: asyncio.Task | None = field(default=None, init=False)
+    # Restart recovery. RUNNING records whose lease was still held by another
+    # (still-live) owner at startup are retried until they can be recovered,
+    # instead of being skipped once and left reading `running` forever.
+    _pending_recovery: set[UUID] = field(default_factory=set, init=False)
+    _recovery_task: asyncio.Task | None = field(default=None, init=False)
+    _recovered_after_restart: int = field(default=0, init=False)
+    _server_started_at: str | None = field(default=None, init=False)
     _run_executor: ThreadPoolExecutor | None = field(default=None, init=False)
     _credential_bindings: dict[UUID, dict[str, VersionedCredentialBinding]] = field(
         default_factory=dict, init=False
@@ -1191,6 +1202,14 @@ class ConversationService:
             "llm_limit": llm_limit,
             "shared_writer_limit": shared_cap or None,
             "busiest_workspace_writers": busiest,
+            # Restart visibility. A daemon that was killed and restarted used
+            # to be invisible to callers: its in-flight sessions just stopped.
+            # `server_started_at` changes on every restart; the counters say
+            # how many runs the restart cut off and how many still await
+            # recovery because another owner's lease had not yet expired.
+            "server_started_at": self._server_started_at,
+            "recovered_after_restart": self._recovered_after_restart,
+            "pending_restart_recovery": len(self._pending_recovery),
         }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:
@@ -2782,6 +2801,52 @@ class ConversationService:
             event_service.stored, state, self._children_of(conversation_id)
         )
 
+    async def _try_recover_running(self, conversation_id: UUID) -> bool:
+        """Load one conversation persisted as RUNNING so start() can settle it.
+
+        Returns True when nothing more needs doing (recovered, or no longer
+        RUNNING, or failed in a way retrying will not fix); False when its
+        lease is still held by another owner and a later retry is needed.
+        """
+        record = self._conversation_records.get(conversation_id)
+        if record is None or (
+            record.execution_status != ConversationExecutionStatus.RUNNING
+        ):
+            return True
+        try:
+            event_service = await self._get_or_load_event_service(conversation_id)
+        except Exception:
+            # One broken conversation must not prevent the server from
+            # starting or make every healthy conversation unavailable.
+            logger.exception(
+                "error_recovering_running_conversation:%s",
+                conversation_id,
+                stack_info=True,
+            )
+            return True
+        if event_service is None:
+            # Lease still held by another owner (see _get_or_load_event_service).
+            return False
+        if event_service.recovered_from_restart:
+            self._recovered_after_restart += 1
+        return True
+
+    async def _deferred_recovery_loop(self) -> None:
+        """Retry RUNNING records skipped at startup until their lease frees.
+
+        Found in use: a daemon started while the previous one was still alive
+        (so its lease was held), the old one was then killed, and nothing ever
+        looked at those records again -- they read `running` indefinitely with
+        no process behind them. A live owner that keeps renewing simply keeps
+        deferring; this never steals a lease the claim itself would refuse.
+        """
+        interval = max(1.0, min(15.0, self.lease_ttl_seconds / 3))
+        while self._pending_recovery:
+            await asyncio.sleep(interval)
+            for conversation_id in list(self._pending_recovery):
+                if await self._try_recover_running(conversation_id):
+                    self._pending_recovery.discard(conversation_id)
+
     async def __aenter__(self):
         self.conversations_dir.mkdir(parents=True, exist_ok=True)
         self._run_executor = ThreadPoolExecutor(
@@ -2804,22 +2869,17 @@ class ConversationService:
         # conversation. RUNNING records may contain an interrupted tool call;
         # EventService.start() marks those records as ERROR and appends the
         # corresponding recovery event. A live lease still prevents takeover.
+        self._server_started_at = utc_now().isoformat()
         running_ids = [
             conversation_id
             for conversation_id, record in self._conversation_records.items()
             if record.execution_status == ConversationExecutionStatus.RUNNING
         ]
         for conversation_id in running_ids:
-            try:
-                await self._get_or_load_event_service(conversation_id)
-            except Exception:
-                # One broken conversation must not prevent the server from
-                # starting or make every healthy conversation unavailable.
-                logger.exception(
-                    "error_recovering_running_conversation:%s",
-                    conversation_id,
-                    stack_info=True,
-                )
+            if not await self._try_recover_running(conversation_id):
+                self._pending_recovery.add(conversation_id)
+        if self._pending_recovery:
+            self._recovery_task = asyncio.create_task(self._deferred_recovery_loop())
 
         # Deployment-level provider cap, installed once per process. Zero
         # leaves the SDK's own behaviour alone.
@@ -2922,6 +2982,11 @@ class ConversationService:
                         pending.setdefault(secret_name, binding)
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        if self._recovery_task is not None:
+            self._recovery_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._recovery_task
+            self._recovery_task = None
         if self._admission_task is not None:
             self._admission_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -3236,6 +3301,18 @@ class _EventSubscriber(Subscriber):
             return
         self.service.stored.updated_at = utc_now()
         update_last_execution_time()
+        # The in-memory value above serves this daemon's own search, but
+        # meta.json kept the creation time, so anything reading it -- a
+        # restarted daemon, the catalog before a conversation is hydrated --
+        # reported an active session as untouched since creation. Persist it,
+        # throttled so a busy run does not rewrite meta.json on every event.
+        now = time.monotonic()
+        if now - self.service.meta_saved_at >= _META_PERSIST_INTERVAL_SECONDS:
+            self.service.meta_saved_at = now
+            try:
+                await self.service.save_meta()
+            except Exception:
+                logger.debug("updated_at persist skipped", exc_info=True)
 
 
 @observe(
