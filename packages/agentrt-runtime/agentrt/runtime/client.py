@@ -134,12 +134,17 @@ def _task_paths_outside_workspace(task: str, workspace: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for match in _ABS_PATH_PATTERN.finditer(task):
-        candidate = match.group(0)
+        if re.search(r"https?://[^\s]*$", task[: match.start()], re.IGNORECASE):
+            continue
+        candidate = match.group(0).rstrip(".,;:)]}'\"")
         if candidate in seen:
             continue
         seen.add(candidate)
+        path = Path(candidate)
+        if not path.exists() and not (path.suffix and path.parent.is_dir()):
+            continue
         try:
-            resolved = Path(candidate).resolve()
+            resolved = path.resolve()
         except (OSError, ValueError):
             continue
         if not permissions.contains(root, resolved):
@@ -1663,9 +1668,39 @@ class Client:
         # `result()` directly never saw that correction. Added here so it
         # does regardless of call path; `_wait_bucket` only needs `status`
         # and `result`, both already set above.
-        payload["bucket"] = _wait_bucket(payload)
+        payload["bucket"] = (
+            _wait_bucket(payload)
+            if (status or "").lower() in SETTLED_STATUSES
+            else "still_running"
+        )
         payload = _apply_result_paging(payload, offset=offset, max_chars=max_chars)
+        if status == "finished":
+            try:
+                completed_cleanly, reason = self._completion_quality(
+                    resolved,
+                    request_message_id=payload.get("request_message_id"),
+                    finish_reason=payload.get("finish_reason"),
+                    result=payload.get("result"),
+                )
+                payload["completed_cleanly"] = completed_cleanly
+                if reason:
+                    payload["completed_cleanly_reason"] = reason
+            except (ClientError, json.JSONDecodeError):
+                payload["completed_cleanly"] = False
+                payload["completed_cleanly_reason"] = "transcript_unavailable"
+        else:
+            payload["completed_cleanly"] = False
+            payload["completed_cleanly_reason"] = "session_not_finished"
         if status == "error":
+            if not payload.get("result") and not payload.get("error"):
+                try:
+                    error = self._latest_transcript_error(
+                        resolved, request_message_id=payload.get("request_message_id")
+                    )
+                    if error:
+                        payload["error"] = error
+                except (ClientError, json.JSONDecodeError):
+                    pass
             try:
                 payload["progress_summary"] = self._progress_summary(
                     resolved,
@@ -1736,6 +1771,74 @@ class Client:
             return "no tool calls completed before the error"
         parts = [f"{name} x{count}" for name, count in sorted(tally.items())]
         return ", ".join(parts)
+
+    def _latest_transcript_error(
+        self, resolved: str, *, request_message_id: object
+    ) -> dict | None:
+        cursor: str | None = None
+        pages = 0
+        while pages < 5:
+            page = self.transcript(resolved, limit=100, cursor=cursor)
+            for event in reversed(page.get("events", [])):
+                if (
+                    request_message_id is not None
+                    and event.get("id") == request_message_id
+                ):
+                    return None
+                if event.get("type") == "error":
+                    return {"code": event.get("code"), "detail": event.get("detail")}
+            cursor = page.get("next_cursor")
+            pages += 1
+            if not cursor:
+                break
+        return None
+
+    def _completion_quality(
+        self,
+        resolved: str,
+        *,
+        request_message_id: object,
+        finish_reason: object,
+        result: object,
+    ) -> tuple[bool, str | None]:
+        latest_error: dict | None = None
+        final_message = False
+        boundary_reached = False
+        cursor: str | None = None
+        pages = 0
+        while pages < 5:
+            page = self.transcript(resolved, limit=100, cursor=cursor)
+            reached_boundary = False
+            for event in reversed(page.get("events", [])):
+                if (
+                    request_message_id is not None
+                    and event.get("id") == request_message_id
+                ):
+                    reached_boundary = True
+                    break
+                if event.get("type") == "error" and latest_error is None:
+                    latest_error = event
+                if event.get("type") == "message" and event.get("role") == "assistant":
+                    final_message = True
+            if reached_boundary:
+                boundary_reached = True
+                break
+            cursor = page.get("next_cursor")
+            pages += 1
+            if not cursor:
+                break
+
+        if not boundary_reached:
+            return False, "request_boundary_not_found"
+        if not final_message:
+            return False, "final_agent_message_missing"
+        if finish_reason in {"error", "length", "max_output_tokens"}:
+            return False, f"finish_reason_{finish_reason}"
+        if latest_error:
+            return False, "conversation_error_after_request"
+        if not isinstance(result, str):
+            return False, "final_result_missing"
+        return True, None
 
     def _attachment_blocks(
         self,
@@ -2780,6 +2883,8 @@ class Client:
             # correct answer. A caller reading `files` alone cannot tell.
             "filtered": since is not None,
             "files": [],
+            "large_files": [],
+            "symlinks": [],
             "truncated": False,
             "total_scanned": 0,
             # Files seen outside the pruned directories, which is not the
@@ -2812,6 +2917,8 @@ class Client:
             }
 
         found: list[tuple[float, dict]] = []
+        large_files: list[dict] = []
+        symlinks: list[dict] = []
         total = 0
         scan_errors = 0
 
@@ -2824,30 +2931,50 @@ class Client:
                 workspace, onerror=_on_walk_error
             ):
                 dirnames[:] = sorted(d for d in dirnames if d not in PRUNED_DIRS)
+                for name in dirnames:
+                    full = os.path.join(dirpath, name)
+                    if os.path.islink(full):
+                        try:
+                            link_stat = os.lstat(full)
+                        except OSError:
+                            scan_errors += 1
+                            continue
+                        if since is None or link_stat.st_mtime >= since:
+                            symlinks.append(
+                                {
+                                    "path": os.path.relpath(full, workspace).replace(
+                                        os.sep, "/"
+                                    ),
+                                    "size": link_stat.st_size,
+                                    "modified": datetime.fromtimestamp(
+                                        link_stat.st_mtime, tz=UTC
+                                    ).isoformat(),
+                                }
+                            )
                 for name in filenames:
                     full = os.path.join(dirpath, name)
                     try:
-                        entry_stat = os.stat(full)
+                        is_symlink = os.path.islink(full)
+                        entry_stat = os.lstat(full) if is_symlink else os.stat(full)
                     except OSError:
                         scan_errors += 1
                         continue
                     total += 1
                     if since is not None and entry_stat.st_mtime < since:
                         continue
-                    found.append(
-                        (
-                            entry_stat.st_mtime,
-                            {
-                                "path": os.path.relpath(full, workspace).replace(
-                                    os.sep, "/"
-                                ),
-                                "size": entry_stat.st_size,
-                                "modified": datetime.fromtimestamp(
-                                    entry_stat.st_mtime, tz=UTC
-                                ).isoformat(),
-                            },
-                        )
-                    )
+                    entry = {
+                        "path": os.path.relpath(full, workspace).replace(os.sep, "/"),
+                        "size": entry_stat.st_size,
+                        "modified": datetime.fromtimestamp(
+                            entry_stat.st_mtime, tz=UTC
+                        ).isoformat(),
+                    }
+                    if is_symlink:
+                        symlinks.append(entry)
+                    else:
+                        if entry_stat.st_size > 5 * 1024 * 1024:
+                            large_files.append(entry)
+                        found.append((entry_stat.st_mtime, entry))
         except OSError:
             # The walk itself failed, so the listing is unknown rather than
             # empty. The underlying message can carry a host path, so only the
@@ -2879,6 +3006,8 @@ class Client:
         return {
             **base,
             "files": files[:_ARTIFACTS_LIMIT],
+            "large_files": large_files,
+            "symlinks": symlinks,
             "truncated": listing_truncated,
             "total_scanned": total,
             # Typed outcome: `empty` after a successful filtered scan is a
