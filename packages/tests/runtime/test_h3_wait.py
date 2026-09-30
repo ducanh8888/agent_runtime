@@ -509,6 +509,17 @@ def test_still_running_items_carry_a_title() -> None:
     assert out["still_running"][0]["title"] == "long index build"
 
 
+def test_wait_unbounded_when_timeout_zero() -> None:
+    """timeout=0 means unbounded; it waits until settled without deadline."""
+    statuses = {A: {"execution_status": "finished", "result_state": "final"}}
+    client = _mock_client(_handler(statuses))
+
+    out = client.wait([A], mode="all", timeout=0, poll_interval=0.1)
+
+    assert out["timed_out"] is False
+    assert [item["id"] for item in out["completed"]] == [A]
+
+
 def test_mcp_wait_tools_forward_include_usage(monkeypatch) -> None:
     """The tool wrappers are the surface an orchestrator actually calls."""
     from agentrt.runtime import mcp_server

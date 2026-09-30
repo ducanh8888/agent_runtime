@@ -2042,14 +2042,17 @@ class Client:
         if mode not in ("all", "any"):
             raise ValueError("mode must be 'all' or 'any'")
         interval = max(0.5, float(poll_interval))
-        requested_timeout = max(0.0, float(timeout))
-        safe_ceiling = config.wait_safe_ceiling_seconds()
-        effective_timeout = (
-            min(requested_timeout, safe_ceiling)
-            if safe_ceiling > 0
-            else requested_timeout
-        )
-        deadline = time.monotonic() + effective_timeout
+        requested_timeout = float(timeout)
+        if requested_timeout <= 0:
+            deadline = None
+        else:
+            safe_ceiling = config.wait_safe_ceiling_seconds()
+            effective_timeout = (
+                min(requested_timeout, safe_ceiling)
+                if safe_ceiling > 0
+                else requested_timeout
+            )
+            deadline = time.monotonic() + effective_timeout
         ids = list(dict.fromkeys(str(session) for session in session_ids))
 
         started = time.monotonic()
@@ -2078,13 +2081,16 @@ class Client:
                 break
             if not pending:
                 break
-            remaining_time = deadline - time.monotonic()
-            if remaining_time <= 0:
-                timed_out = True
-                break
-            # Never sleep past the deadline: a sweep plus the interval would
-            # otherwise overshoot the timeout the caller asked for.
-            time.sleep(min(interval, remaining_time))
+            if deadline is not None:
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    timed_out = True
+                    break
+                # Never sleep past the deadline: a sweep plus the interval would
+                # otherwise overshoot the timeout the caller asked for.
+                time.sleep(min(interval, remaining_time))
+            else:
+                time.sleep(interval)
 
         buckets: dict[str, list] = {
             "completed": [],

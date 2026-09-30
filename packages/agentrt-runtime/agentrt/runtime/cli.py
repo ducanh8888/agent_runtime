@@ -109,6 +109,27 @@ def _cmd_profiles(_args: argparse.Namespace) -> dict:
     return client_mod.Client().profiles()
 
 
+def _compact_wait_item(item: dict, default_bucket: str | None = None) -> dict:
+    bucket = item.get("bucket") or default_bucket
+    sid = item.get("short_id")
+    if not sid and item.get("id"):
+        sid = client_mod.short_id(item["id"])
+    result_len = item.get("result_length")
+    if result_len is None:
+        text = item.get("result")
+        result_len = len(text) if isinstance(text, str) else 0
+    compact: dict[str, object] = {
+        "short_id": sid,
+        "bucket": bucket,
+        "status": item.get("status"),
+        "title": item.get("title"),
+        "result_length": result_len,
+    }
+    if "completed_cleanly" in item and item["completed_cleanly"] is not None:
+        compact["completed_cleanly"] = item["completed_cleanly"]
+    return compact
+
+
 def _cmd_wait(args: argparse.Namespace) -> dict:
     """Block until the named sessions settle, or the timeout elapses.
 
@@ -123,12 +144,28 @@ def _cmd_wait(args: argparse.Namespace) -> dict:
     tell settled from timed-out.
     """
     client = client_mod.Client()
-    return client.wait(
+    raw = client.wait(
         args.session,
         mode=args.mode,
         timeout=args.timeout,
         poll_interval=args.poll_interval,
     )
+    sessions: list[dict] = []
+    for bucket_name in (
+        "completed",
+        "partial",
+        "failed",
+        "stopped",
+        "missing",
+        "still_running",
+    ):
+        for item in raw.get(bucket_name, []):
+            if isinstance(item, dict):
+                sessions.append(_compact_wait_item(item, default_bucket=bucket_name))
+    return {
+        "sessions": sessions,
+        "timed_out": bool(raw.get("timed_out", False)),
+    }
 
 
 def _cmd_transcript(args: argparse.Namespace) -> dict:
@@ -349,11 +386,8 @@ def _build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument(
         "--timeout",
         type=float,
-        default=600.0,
-        help=(
-            "seconds to block (default 600); internally capped at "
-            "AGENTRT_WAIT_SAFE_CEILING_SECONDS regardless of what is passed"
-        ),
+        default=0.0,
+        help="seconds to block (default 0 = unbounded)",
     )
     wait_parser.add_argument("--poll-interval", type=float, default=2.0)
     wait_parser.set_defaults(func=_cmd_wait)
