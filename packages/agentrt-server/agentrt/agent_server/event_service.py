@@ -219,6 +219,9 @@ class EventService:
     )
     owner_instance_id: str = field(default_factory=lambda: uuid4().hex)
     lease_ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS
+    # True when start() found this conversation persisted as RUNNING -- i.e.
+    # a previous daemon died mid-run -- and moved it to ERROR.
+    recovered_from_restart: bool = field(default=False, init=False)
     _conversation: LocalConversation | None = field(default=None, init=False)
     _pub_sub: PubSub[Event] = field(
         default_factory=lambda: PubSub[Event](max_subscribers=50), init=False
@@ -1435,6 +1438,22 @@ class EventService:
                         ),
                     )
                     self._conversation._on_event(error_event)
+            # Name the cause at the conversation level too. Without it the
+            # session read as a plain `error` with no code, indistinguishable
+            # from a provider failure, and callers had no way to tell that a
+            # daemon restart (e.g. an OOM kill) had cut it off mid-run.
+            self._conversation._on_event(
+                ConversationErrorEvent(
+                    source="environment",
+                    code="DaemonRestarted",
+                    detail=(
+                        "The runtime daemon restarted while this run was in "
+                        "flight, so the run was stopped. Its history is intact; "
+                        "send a message to continue it."
+                    ),
+                )
+            )
+            self.recovered_from_restart = True
 
         # Publish initial state update
         await self._publish_state_update()
