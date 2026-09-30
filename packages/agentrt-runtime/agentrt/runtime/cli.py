@@ -168,6 +168,19 @@ def _cmd_wait(args: argparse.Namespace) -> dict:
     }
 
 
+def _cmd_watch(args: argparse.Namespace) -> None:
+    """Stream one line per state change until sessions settle."""
+    client = client_mod.Client()
+    for change in client.watch(
+        args.session,
+        until=args.until,
+        interval=args.interval,
+    ):
+        line = f"{change['short_id']} {change['time']} {change['summary']}"
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+
 def _cmd_transcript(args: argparse.Namespace) -> dict:
     """Return a condensed transcript, one page at a time."""
     client = client_mod.Client()
@@ -391,6 +404,26 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     wait_parser.add_argument("--poll-interval", type=float, default=2.0)
     wait_parser.set_defaults(func=_cmd_wait)
+
+    watch_parser = _add_subparser(
+        subparsers,
+        "watch",
+        help="stream state changes for sessions until they settle",
+    )
+    watch_parser.add_argument("session", nargs="+", help="one or more session ids")
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="seconds between poll sweeps (default: 2.0)",
+    )
+    watch_parser.add_argument(
+        "--until",
+        choices=("all", "any"),
+        default="all",
+        help="watch until every session settles (default), or return on first",
+    )
+    watch_parser.set_defaults(func=_cmd_watch)
 
     transcript_parser = _add_subparser(
         subparsers, "transcript", help="show a condensed session transcript"
