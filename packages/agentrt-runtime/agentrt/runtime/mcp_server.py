@@ -24,7 +24,12 @@ Two things are worth knowing before the first call. A session is not cheaper
 than doing the work yourself -- it costs roughly ten seconds of startup and its
 own model spend, so it pays off on work that is long, separable, or worth
 detaching from. And whatever a session reports about its own work is a claim,
-not evidence; check the files it produced."""
+not evidence; check the files it produced.
+
+How to wait for sessions:
+- One notification when done -> run `agentrt wait <ids>` as a background shell command.
+- Live stream of state changes -> run `agentrt watch <ids>` under a monitor.
+- Quick check -> call `status` or `result` directly."""
 
 mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
 # FastMCP takes no version argument, so the low-level server falls back to the
@@ -243,8 +248,8 @@ def dispatch(
 # Named `list` for the orchestrator but not defined as `list` here: a
 # module-level rebinding of the builtin is a trap for anything added later.
 @mcp.tool(name="list")
-def list_sessions(limit: int = 20) -> dict:
-    """List recent sessions, newest first.
+def list_sessions(limit: int = 50, offset: int = 0) -> dict:
+    """List sessions newest first, with page controls.
 
     Returns id, short_id, title, status, timestamps and tags for each. Use it
     to find a session whose short_id you no longer have, or to see what is
@@ -254,12 +259,11 @@ def list_sessions(limit: int = 20) -> dict:
     they stop telling them apart. `tags` is what does -- set them with
     `control` and read them here. Check them before deleting anything in bulk.
 
-    `limit` is how many of the most recent to return, not a search. Sessions
-    are kept until deleted and nothing expires, so an old one falls off the end
-    of any listing you ask for; addressing it by short id still works, because
-    that looks through all of them.
+    `limit` is the page size (default 50); `offset` skips that many newest
+    sessions so older pages remain addressable. Sessions are kept until deleted
+    and nothing expires.
     """
-    return {"sessions": _guard(_get_client().list_sessions, limit)}
+    return {"sessions": _guard(_get_client().list_sessions, limit, offset)}
 
 
 @mcp.tool()
@@ -318,6 +322,10 @@ def result(
     read. When a window is used, `result_sha256` covers the whole text, not the
     window, so two pages of one answer can be told from two answers that start
     alike. Pass neither and the text is returned whole, as before.
+
+    To wait: one notification when done -> run `agentrt wait <ids>` as a
+    background shell command; live stream -> run `agentrt watch <ids>` under a
+    monitor; quick check -> call `status` or `result` directly.
 
     `state` scopes the answer. `final` means the run answering the newest
     consumed input finished; `result` is its text, and an empty string is a
@@ -418,8 +426,9 @@ def dispatch_many(tasks: list[dict], max_batch: int = 25) -> dict:
     cannot leave half a batch behind; the result separates `accepted` from
     `failed` with the reason for each failure. A full run pool is not a
     failure: accepted work is persisted and queued, and `capacity` reports the
-    backlog. Submit once, then collect with `wait_all` -- do not re-dispatch
-    what the daemon has already accepted.
+    backlog. Submit once, then collect with `result` when done -- do not
+    re-dispatch what the daemon has already accepted. For completion
+    notification, run `agentrt wait <ids>` as a background shell command.
     """
     return _guard(_get_client().dispatch_many, tasks, max_batch=max_batch)
 
@@ -468,89 +477,6 @@ def capacity() -> dict:
     This call is how you see that backlog instead of inferring it from refusals.
     """
     return _guard(_get_client().capacity)
-
-
-@mcp.tool()
-def wait_any(
-    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
-) -> dict:
-    """Block until one of these sessions settles, or the timeout elapses.
-
-    This is the blocking wait of a foreground launch: dispatch several sessions,
-    then wait once instead of polling `status`. `wait_all` is the same call that
-    requires every id.
-
-    The result groups ids by outcome:
-
-    - `completed` -- finished; the item carries the same fields `result` does.
-    - `partial` -- stopped with usable output (an error or limit after work).
-    - `failed` -- terminal with no usable output.
-    - `stopped` -- paused, so it can be resumed or finalized.
-    - `missing` -- unknown or deleted; a wait for a deleted session does not
-      wait forever.
-    - `still_running` -- the timeout ended the wait. These are NOT failures and
-      carry no partial output; wait again or read `status`.
-
-    A settled item also carries its `title` at no extra cost, and the same
-    `finish_reason` / `truncated` pair `result` reports -- so a fan-out can tell
-    a whole answer from one that was cut off without a second call. `include_usage`
-    adds a `usage` block to each settled item and is the one field that costs a
-    request per settled session -- worth setting for a single session, wasteful
-    across a fan-out. Either way a settled item is the whole answer: this call
-    already returns what `result` would, so there is nothing to fetch after it.
-
-    `timed_out` says whether the deadline, not completion, ended the wait. No
-    outcome means "someone must approve this" -- the caller resolves every
-    case.
-
-    A session is reported settled only after the same terminal condition has
-    held across two samples, because `finished` is provisional while a run may
-    continue for a stop hook or a message that arrived during its final step.
-    Expect at least one poll interval (about two seconds) of latency.
-
-    Do not pass a large `timeout` expecting this call to hold open that long:
-    it is capped internally (900s by default) well under the idle ceiling
-    some transports between an orchestrator and this server impose on a call
-    that sends nothing back for too long -- a `timeout` above the cap is
-    truncated to it and returns `still_running` there, not held further. Call
-    again on `still_running` rather than raising `timeout` to work around
-    this. And prefer not holding your own turn on this call at all for
-    anything expected to run long: poll `status` between other work, or
-    background a poll loop, rather than blocking here. If you ignore this and
-    your own client backgrounds the call anyway because it ran long, the
-    eventual notification is likely to re-deliver this whole result verbatim
-    -- a second copy of everything you could otherwise fetch once with
-    `result` -- which is the concrete cost of not heeding the advice above,
-    not a separate thing to work around. H10 item 6, 2026-09-18.
-    """
-    return _guard(
-        _get_client().wait,
-        session_ids,
-        mode="any",
-        timeout=timeout,
-        include_usage=include_usage,
-    )
-
-
-@mcp.tool()
-def wait_all(
-    session_ids: list[str], timeout: float = 600.0, include_usage: bool = False
-) -> dict:
-    """Block until every one of these sessions settles, or the timeout elapses.
-
-    Same result shape as `wait_any`; see that description for the buckets, for
-    what a settled item carries, and for the internal safe-ceiling cap on
-    `timeout` -- it applies here too. A timeout returns the unfinished ids under
-    `still_running` with `timed_out` true -- never as failures, and never with
-    partial output presented as a final answer.
-    """
-    return _guard(
-        _get_client().wait,
-        session_ids,
-        mode="all",
-        timeout=timeout,
-        include_usage=include_usage,
-    )
 
 
 @mcp.tool()

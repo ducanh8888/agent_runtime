@@ -520,26 +520,9 @@ def test_wait_unbounded_when_timeout_zero() -> None:
     assert [item["id"] for item in out["completed"]] == [A]
 
 
-def test_mcp_wait_tools_forward_include_usage(monkeypatch) -> None:
-    """The tool wrappers are the surface an orchestrator actually calls."""
+def test_mcp_wait_tools_removed() -> None:
+    """wait_any and wait_all are removed from the MCP tool surface."""
     from agentrt.runtime import mcp_server
 
-    captured: list[dict] = []
-
-    class FakeClient:
-        def wait(self, session_ids, **kwargs):
-            captured.append(kwargs)
-            return {"completed": []}
-
-    monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
-
-    mcp_server.wait_any([A], include_usage=True)
-    mcp_server.wait_all([A], include_usage=True)
-    mcp_server.wait_all([A])
-
-    assert captured[0]["mode"] == "any"
-    assert captured[0]["include_usage"] is True
-    assert captured[1]["mode"] == "all"
-    assert captured[1]["include_usage"] is True
-    # Omitted by default, so an older daemon path is unchanged.
-    assert captured[2]["include_usage"] is False
+    assert not hasattr(mcp_server, "wait_any")
+    assert not hasattr(mcp_server, "wait_all")
