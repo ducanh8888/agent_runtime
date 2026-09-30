@@ -1364,10 +1364,13 @@ class Client:
             "workspace": {"working_dir": workspace},
             "agent_profile_id": profile_id,
             # The daemon imports these modules "to trigger tool auto
-            # registration". Naming the guard module is what installs the
-            # permission-aware file editor inside the daemon process, which is
-            # a different process from this one.
-            "tool_module_qualnames": {"file_editor": bootstrap.GUARD_MODULE},
+            # registration". Naming the guard modules installs the guarded
+            # executors inside the daemon process, which is separate from this
+            # client.
+            "tool_module_qualnames": {
+                "file_editor": bootstrap.GUARD_MODULE,
+                "terminal": bootstrap.TERMINAL_GUARD_MODULE,
+            },
             "initial_message": {
                 "role": "user",
                 "content": [{"type": "text", "text": task}],
