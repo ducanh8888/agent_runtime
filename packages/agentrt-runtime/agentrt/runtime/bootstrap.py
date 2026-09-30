@@ -124,6 +124,7 @@ def _build_llm(router: config.RouterConfig):
 
 
 GUARD_MODULE = "agentrt.runtime.guarded_tools"
+TERMINAL_GUARD_MODULE = "agentrt.runtime.guarded_terminal"
 
 
 def _tools_for(preset: permissions.Permission):
@@ -142,8 +143,9 @@ def _tools_for(preset: permissions.Permission):
     from agentrt.tools.preset.default import register_default_tools
 
     # Registers terminal / file_editor / task_tracker under their own names.
-    # The guarded file editor replaces one of them, so this has to run first.
+    # The guards replace two of them, so this has to run first.
     register_default_tools(enable_browser=False)
+    from agentrt.runtime import guarded_terminal  # noqa: F401
 
     specs = []
     for name in permissions.tools_for(preset):
