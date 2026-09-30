@@ -1,226 +1,176 @@
 # AgentRT
 
-**A local runtime for background coding-agent sessions: dispatch a task, close
-your terminal, come back later and collect the result.**
+**Bring-your-own-key sub-agents for Claude Code (and Codex), over MCP.**
+Claude plans, splits and verifies the work; AgentRT runs it — in the
+background, in parallel, on your own model keys or router.
 
-## Why this exists
+## The idea
 
-Running a coding agent in your terminal ties the work to the terminal. Close
-the laptop, lose the shell, or let the orchestrating process exit, and the run
-dies with it — and long tasks are exactly the ones you do not want to babysit.
+Claude Code's native sub-agents run inside the conversation, on the same
+Claude quota, and end when the conversation ends. That is the right tool for a
+quick, focused lookup. It is the wrong tool for twenty parallel coding tasks
+that each take an hour.
 
-AgentRT moves the session into a small local daemon. The thing you talk to (a
-CLI, or an MCP server inside your editor or agent) is a thin client; the
-session is not. It keeps running across client restarts, and you collect it
-later by id.
+AgentRT adds a second kind of sub-agent. Connect its MCP server and Claude gets
+tools to **dispatch** work to background sessions, **watch** them, **check**
+what they actually changed, and **recover** the ones that fail. The sessions
+run in a local daemon on whatever OpenAI-compatible endpoint you configure — a
+provider directly, or a router such as OmniRoute or 9Router that picks models
+and rotates accounts for you.
 
-That makes it a good fit for work that is long, separable, or worth detaching
-from the conversation that started it — a repo-wide review, a migration, a test
-sweep, or a second opinion from a fork of an existing session.
+Claude stops being the worker and becomes the orchestrator.
 
-It is **not** a sandbox and not a hosted service: it runs agents on your
-machine, against your directories, using your provider credentials.
+|  | Native sub-agent | AgentRT session |
+|---|---|---|
+| Runs on | Claude's quota | Your key / router (BYOK) |
+| Lifetime | Ends with the conversation | Survives it; collect later by id |
+| Parallelism | A few, inside one turn | As many as your machine and provider allow |
+| Waiting | Automatic notification | `agentrt wait` in the background (one notification) or `agentrt watch` under a monitor (event stream) |
+| Isolation | Shared checkout | Per-session git worktree or pinned snapshot |
+| Checking the work | Trust the reply | `artifacts` and `transcript` show what really changed |
+| Control | None once started | `send`, `interrupt`, `stop`, `resume`, `finalize`, fork |
 
-## Core capabilities
+Use both. Keep native sub-agents for short lookups; send long, separable or
+parallel work to AgentRT.
 
-- **Persistent sessions.** Dispatch, exit, reconnect. Sessions survive the
-  orchestrator process ending.
-- **Full lifecycle control.** `send`, `interrupt`, `stop`, `resume`,
-  `finalize`, `delete` — each leaving the session resumable, and recorded where
-  the agent itself can see it when it resumes.
-- **Session forking.** `dispatch_from` starts a new session from another one's
-  event history, optionally bounded to a point in that history, so a reviewer
-  can start from the writer's actual work rather than a summary of it.
-- **Permission presets.** `readonly`, `inspect`, `workspace`, `broad`, with a
-  path guard around the file editor. What each one really enforces is
-  [documented precisely](docs/reference/security-permissions.md), including
-  where a terminal defeats confinement.
-- **Result and usage collection.** Request-scoped results, token/cost usage per
-  session, and a condensed transcript of what the session actually did.
-- **Artifacts.** Read what a session changed on disk, rather than trusting its
-  own account of it.
-- **Bounded waiting.** `wait` blocks until a session settles, with a documented
-  safe ceiling instead of a call that hangs.
-
-## Architecture at a glance
+## How it works
 
 ```
-orchestrator (Claude Code, Codex, a script)
-        │
-        ├── agentrt        CLI, machine-facing
-        └── agentrt-mcp    MCP server, stdio
-                │
-                ▼
-        daemon (persistent)  ──  session: workspace, agent, event log
+Claude Code / Codex  (orchestrator: plans, dispatches, verifies)
+        │  MCP (stdio)
+        ▼
+agentrt-mcp ── agentrt CLI
+        │  local HTTP, token-authenticated
+        ▼
+daemon (persistent) ── session: workspace, agent, tools, event log
+        │  OpenAI-compatible Chat Completions
+        ▼
+your endpoint: provider or router (OmniRoute, 9Router, …)
 ```
 
-The daemon owns the sessions and binds an ephemeral local port. Everything
-persistent lives in a state directory (`AGENTRT_STATE_DIR`, default
-`~/.agentrt`), one event log per session.
-[Architecture](docs/reference/architecture.md) has the process boundaries, the
-on-disk layout and the lifecycle in full.
+The daemon owns the sessions, so closing Claude Code does not stop them. Each
+session keeps a full event log; results, transcripts and artifacts are read
+from it. Details: [architecture](docs/reference/architecture.md).
 
 ## Quick start
 
-Needs [uv](https://docs.astral.sh/uv/) and a provider credential.
+Needs [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv tool install packages/agentrt-runtime   # gives `agentrt` and `agentrt-mcp`
-
-agentrt config                             # prints state_dir, and the resolved profile
-cp .env.example <state_dir>/.env           # then fill in your provider credential
+uv tool install packages/agentrt-runtime          # installs `agentrt` and `agentrt-mcp`
+agentrt config                                     # prints the state directory
 ```
 
-Then dispatch a task and come back for it:
+Put your endpoint in `<state_dir>/.env` — three settings, always together:
 
 ```bash
-agentrt dispatch "summarise the module layout, then run the test suite" \
-  --workspace ~/src/my-project --title "layout review"
+AGENTRT_API_KEY=...                          # your provider or router key
+AGENTRT_BASE_URL=https://your-router.example # or a provider's endpoint
+AGENTRT_DEFAULT_MODEL=default                # model id as that endpoint names it
 ```
 
-`dispatch` returns a short id. Exit whenever you like; the session keeps going.
+AgentRT does not choose, rotate or fall back between models; your endpoint
+does. `tools/omniroute_probe.py` checks whether a model handles AgentRT's
+tool-calling loop correctly before you rely on it.
 
-## CLI
-
-```bash
-agentrt list                              # known sessions, newest first
-agentrt status  4a7da681                  # lifecycle + request scope
-agentrt wait    4a7da681 --timeout 300    # block until it settles
-agentrt result  4a7da681                  # the answer, and how it ended
-agentrt usage   4a7da681                  # tokens and cost for the session
-agentrt artifacts 4a7da681                # files it actually changed
-agentrt transcript 4a7da681               # condensed: what it did, step by step
-agentrt interrupt 4a7da681                # stop now, keep it resumable
-agentrt send    4a7da681 "now fix the two failures" 
-agentrt delete  4a7da681                  # remove the session and its history
-```
-
-Ids may be shortened to an unambiguous prefix. `--text` is a top-level flag —
-`agentrt --text status <id>` — and renders one line instead of JSON.
-
-`agentrt wait` exists to be backgrounded: it exits **0** when every requested
-outcome settled, **3** when the deadline ended the wait (so a timeout is a
-successful call with an unfinished answer, not an error), and 1/2 when the call
-itself failed. A script can check the exit code rather than parse output.
-
-## MCP
-
-`agentrt-mcp` is a stdio MCP server. Point a client at it and the tools appear:
+Connect the orchestrator:
 
 ```bash
 claude mcp add agentrt -- "$(command -v agentrt-mcp)"
 codex  mcp add agentrt -- "$(command -v agentrt-mcp)"
 ```
 
-The registered tools are `dispatch`, `dispatch_from`, `dispatch_many`, `list`,
-`status`, `result`, `usage`, `capacity`, `wait_any`, `wait_all`, `finalize`,
-`transcript`, `read_evidence`, `artifacts`, `control`, `profiles`.
+The tool descriptions are the operating manual: an orchestrator that connects
+learns from them how to fan out, wait, verify and recover. Nothing in `docs/` is
+needed at run time.
 
-Their docstrings are the product documentation — they travel with the tool into
-whatever agent is calling it — so start there rather than in `docs/`.
+## The orchestration loop
 
-## Common workflows
+1. **Split and isolate.** One session per independent piece of work. Give each
+   its own workspace: `workspace_mode="isolated_worktree"` or `"snapshot"`, or a
+   worktree you create first. Do not ask a session to create its own worktree
+   elsewhere — its file editor only writes inside the workspace it was given.
+2. **Dispatch.** `dispatch` or `dispatch_many`, with a permission preset,
+   optional shared `context_files`, and `require="commit"` when the task must
+   end in a commit.
+3. **Wait without blocking.** Run `agentrt wait <ids>` as a background command
+   for one notification when everything settles, or `agentrt watch <ids>`
+   under a monitor for one line per event.
+4. **Verify.** A session's account of its work is a claim. Check `artifacts`
+   (files actually changed), `transcript` (what it actually did) and
+   `result` (`completed_cleanly` says whether the final answer is intact).
+5. **Recover.** `status` names the state and the fitting action: `send` a
+   correction, `interrupt` and redirect, `resume`, or fork a reviewer with
+   `dispatch_from`.
 
-**Detach a long job and collect it later**
+## MCP tools
 
-```bash
-agentrt dispatch "run the full suite and bisect any failure" --workspace .
-# ... later, from anywhere
-agentrt list && agentrt result <id>
-```
+`dispatch`, `dispatch_many`, `dispatch_from`, `list`, `status`, `result`,
+`transcript`, `artifacts`, `read_evidence`, `usage`, `capacity`, `control`,
+`finalize`, `profiles`.
 
-**Get a second opinion on work in progress**
-
-```
-dispatch_from(session="<writer id>", task="read the diff and look for defects",
-              from_event_id="<an event id from transcript>")
-```
-
-The fork inherits the writer's history and workspace, so the reviewer starts
-from the work itself. Chains are bounded (default 3 generations).
-
-**Review without letting it write**
-
-```bash
-agentrt dispatch "audit the dependency tree for CVEs" --workspace . \
-  --permission readonly
-```
-
-A `readonly` session cannot write the workspace, but it can produce a report;
-the daemon provisions a directory for that outside the workspace, and
-`artifacts` reads it back.
-
-**Pin a run to a commit**
+## CLI
 
 ```bash
-agentrt dispatch "reproduce the reported failure" --workspace . \
-  --workspace-mode snapshot
+agentrt dispatch "run the suite and fix failures" --workspace ~/src/app
+agentrt wait  <id> [<id> ...]         # exits when settled: 0 done, 3 timeout
+agentrt watch <id> [<id> ...]         # one line per state change
+agentrt status | result | transcript | artifacts | usage  <id>
+agentrt send <id> "now fix the two failures"
+agentrt interrupt | stop | resume | delete  <id>
+agentrt list --limit 50
 ```
 
-`snapshot` creates a detached worktree at the repository's current HEAD, so the
-run is isolated and reproducible; `status` reports the pinned commit.
+Ids can be shortened to an unambiguous prefix. `--text` gives one-line output.
 
 ## Permissions
 
 | Preset | Terminal | File editor |
 |---|---|---|
-| `readonly` | no | view only, inside the workspace |
-| `inspect` | no | view only, plus structured `inspect` (search, narrow git, metadata) |
-| `workspace` | yes | confined to the workspace |
+| `readonly` | no | view only; may write a report outside the workspace |
+| `inspect` | no | view only, plus structured search, narrow git and metadata |
+| `workspace` | yes | writes only inside the workspace |
 | `broad` | yes | unconfined |
 
-A terminal defeats path confinement, so `workspace` and `broad` constrain
-ordinary behaviour rather than containing a determined one.
-[Permissions and what they actually enforce](docs/reference/security-permissions.md)
-is the honest version, including the credential guard's known limits.
+A terminal defeats path confinement: `workspace` and `broad` constrain ordinary
+behaviour, they do not contain a determined agent. AgentRT is **not a
+sandbox** — it runs agents on your machine, in your directories, with your
+credentials. [What each preset really enforces](docs/reference/security-permissions.md).
 
-## Project status
+## Status
 
-**Pre-1.0** (`agentrt-runtime` 0.1.0). Phases H0–H7 are complete, including a
-production cutover; H8 (consumer-reported defects) and H9 (parity with native
-sub-agent primitives) are partly implemented. The
-[hardening plan](docs/plans/deepseek-hardening.md) tracks exactly which items
-are done, which are open, and which were deliberately declined — read it rather
-than inferring status from this line.
-
-No release branches, no backports; changes land on `main`.
+Pre-1.0 (`agentrt-runtime` 0.1.0), used daily for multi-session work. The
+[active plan](docs/plans/omniroute-migration.md) and its predecessor
+[hardening plan](docs/plans/deepseek-hardening.md) record what is done, what is
+open and what was declined.
 
 ## Documentation
 
-- [Documentation index](docs/README.md) — start here, grouped by task.
-- [Architecture](docs/reference/architecture.md) — processes, state on disk, lifecycle.
-- [Daemon behaviour](docs/reference/daemon-behavior.md) — what the API does not tell you.
-- [Permissions](docs/reference/security-permissions.md) — what the guard enforces, and what it does not.
-- [Orchestration guide](docs/guides/orchestration.md) — how to dispatch and verify.
-- [Testing](docs/guides/testing.md) — which checks to run, and when.
+- [Documentation index](docs/README.md)
+- [Architecture](docs/reference/architecture.md)
+- [Daemon behaviour](docs/reference/daemon-behavior.md) — what the API does not tell you
+- [Permissions](docs/reference/security-permissions.md)
+- [Orchestration guide](docs/guides/orchestration.md)
+- [Testing](docs/guides/testing.md)
 
 ## Development
 
 ```bash
-./packages/.venv/bin/python -m agentrt.runtime.cli --help   # POSIX
-./packages/.venv/Scripts/python.exe -m agentrt.runtime.cli --help   # Windows
+./packages/.venv/bin/python -m agentrt.runtime.cli --help
+./packages/.venv/bin/python -m pytest packages/tests/runtime/ -q
 ```
 
-The suite is run with the workspace venv; see
-[docs/guides/testing.md](docs/guides/testing.md) for narrow selections, the
-full gate, and the known environment-dependent failures.
 [AGENTS.md](AGENTS.md) has the conventions, invariants and definition of done.
 
-## Upstream relationship
+## Upstream
 
-AgentRT is a **hard fork** of [OpenHands'
+AgentRT is a hard fork of [OpenHands'
 `software-agent-sdk`](https://github.com/OpenHands/software-agent-sdk) at
-`f47083cc`, with the `openhands.*` packages renamed to `agentrt.*`.
-
-The fork supplies the agent loop, events, tools, workspaces and the agent
-server (`packages/agentrt-sdk`, `agentrt-server`, `agentrt-tools`,
-`agentrt-workspace`). `packages/agentrt-runtime` — the daemon, CLI, MCP
-surface, permission guard and profiles — is this project's own code, and is
-where essentially all of the work described above lives. Where the two differ
-in behaviour, the vendored packages' own docstrings still describe their
-upstream intent.
-
-Upstream is MIT-licensed, and that licence and attribution are preserved.
+`f47083cc`, with `openhands.*` renamed to `agentrt.*`. The fork supplies the
+agent loop, tools, workspaces and agent server (`packages/agentrt-sdk`,
+`agentrt-server`, `agentrt-tools`, `agentrt-workspace`).
+`packages/agentrt-runtime` — daemon, CLI, MCP surface, permission guards — is
+this project's own code.
 
 ## License
 
