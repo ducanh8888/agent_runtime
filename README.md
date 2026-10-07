@@ -211,6 +211,8 @@ agent loop, tools, workspaces, and agent server (`packages/agentrt-sdk`,
 `packages/agentrt-runtime` — daemon, CLI, MCP surface, and permission guards —
 is this project's own code.
 
+AgentRT is developed and maintained by [HTL 16666 Media](https://mr16666.com).
+
 ## License
 
 MIT — see [LICENSE](LICENSE), which retains the OpenHands copyright notice.

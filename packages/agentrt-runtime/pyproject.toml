@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agentrt-runtime"
 version = "0.1.0"
-description = "A local runtime for background coding-agent sessions, with a CLI and an MCP server"
+description = "Persistent MCP runtime for running parallel background sub-agents from Claude Code and Codex."
 requires-python = ">=3.12"
 dependencies = [
     "agentrt-sdk",
@@ -30,6 +30,10 @@ dependencies = [
     # deadline so a catastrophic pattern cannot stall the daemon.
     "regex>=2025.9.18",
 ]
+
+[project.urls]
+Homepage = "https://mr16666.com/products"
+Source = "https://github.com/ducanh8888/agent_runtime"
 
 [tool.setuptools.packages.find]
 include = ["agentrt.runtime*"]
