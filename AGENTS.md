@@ -133,7 +133,7 @@ process boundaries.
   that it arrived rather than reading a missing key as a value.
 - Update the docstring for the tool, not only the code: the docstring is what
   the orchestrator reads.
-- Record the decision in the active plan (`docs/plans/deepseek-hardening.md`)
+- Record the decision in the active plan (the `active_plan` in `docs/manifest.json`)
   when you ship it, including what you measured and what you rejected.
 
 ## Security-sensitive areas

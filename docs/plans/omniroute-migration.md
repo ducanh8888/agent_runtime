@@ -325,3 +325,33 @@ safety) beyond what the above already covers; exposing route/provider/failure
 metadata without invasive SDK changes (§13 of the original task). Neither is
 blocking the current combo's use -- both are follow-on hardening if the
 owner wants them, not required for what shipped.
+
+## 10. Devin-first loop with the router session (2026-10-08)
+
+Worked jointly with the OmniRoute session; router-side changes are recorded
+in `ops/PATCHES.md` and `ops/DEPLOYS.md` outside this repository. The local
+test bed uses the router alias `agentrt-worker` (three Devin models served,
+gemini/codex as fallback only, no `anthropic/*`).
+
+**Shipped here**, each with a test that fails without it:
+
+| Commit | Change | Measured |
+|---|---|---|
+| 8973e8c | per-call `router` provenance: `x-correlation-id` (+ provider/model when sent) | E2E: every call's id lands in `base_state.json` stats. OmniRoute omits provider/model on streamed responses, and sessions stream, so in practice only the id arrives; it is the join key to router `call_logs`. One id may span several router rows (router-internal fallback); the last row answered. |
+| 8dcca08 | pin `litellm==1.93.1` in `agentrt-sdk` | `uv tool install` ignores `uv.lock`; litellm 1.103.4 made every `openai/<alias>` send `reasoning_effort: "high"`. Body is now `{model}` only. |
+| 1dc2ed3 | refresh the stored LLM profile when `.env` changes | Changing `AGENTRT_DEFAULT_MODEL` no longer needs a hand edit; no rewrite when unchanged. |
+| f51861d | `status.tools` (#2 item 3) | A "tools unavailable" answer can be checked from outside. |
+| acef636 | condenser `max_tokens = 40000`, migrated onto existing profiles | Nothing capped prompts before (sessions reached 150k–180k tokens per call). Router data: Devin 502s 4% → 12% and p50 ×2 above ~40k tokens. |
+| ecf8cbe | `inspect git` accepts a linked worktree's own metadata | Snapshot reviewers were refused every git command; now status/log work, and a borrowed worktree's metadata is still refused. |
+| 7504f97 | `AGENTRT_PUBLIC_SKILLS` allow-list (daemon default `code-review`) | `<SKILLS>` was 24.4k chars of 68 public skills per call; now the repo's skills plus `code-review`. |
+
+**Measured but not changed**: give-up wording is not a completion signal
+(3/7 healthy sessions also ended with a plain message). The router now
+refuses plain-text Devin endings when a `finish` tool exists, which makes
+`ended_with` meaningful. Devin usage reports ~34 prompt tokens per call
+(router bug), so per-call token stats are unknown on Devin.
+
+**Open**: `.claude/skills/` is not a project-skill directory, so a target
+repo's skills kept there do not reach the model (it was never loaded, before
+or after 7504f97). The 10 test failures in `tests/runtime/test_h5_dispatch.py` use
+workspaces that do not exist after fix #3; they predate this work.

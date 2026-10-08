@@ -51,9 +51,11 @@ immutable result records. Machine consumers should read
 
 - [Testing](guides/testing.md) — which checks to run, narrow selections first,
   and the known environment-dependent failures.
-- [Hardening plan](plans/deepseek-hardening.md) — the active plan: which items
-  are done, which are open, and which were deliberately declined. This is the
-  authority on project status, not any summary elsewhere.
+- [OmniRoute migration plan](plans/omniroute-migration.md) — the active plan:
+  which items are done, which are open, and which were deliberately declined.
+  This is the authority on project status, not any summary elsewhere.
+- [Hardening plan](plans/deepseek-hardening.md) — the completed DeepSeek
+  hardening plan.
 - [Initial runtime plan](plans/initial-runtime.md) — the historical P1–P4 plan.
 - [Self-audit and evidence](research/deepseek-hardening-audit.md) — the audit
   the active plan was built from.
