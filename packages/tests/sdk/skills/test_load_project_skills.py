@@ -385,3 +385,23 @@ def test_load_project_skills_loads_skills_directories_from_git_root(tmp_path):
     assert any(
         s.name == "root_skill" and "Loaded from root" in s.content for s in skills
     )
+
+
+def test_load_project_skills_from_claude_skills_dir(tmp_path):
+    """AgentRT fork: .claude/skills is a project-skill dir, below .agents/skills."""
+    for base, body in ((".claude", "claude copy"), (".agents", "agents copy")):
+        d = tmp_path / base / "skills" / "shared"
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text(
+            f"---\nname: shared\ndescription: d\n---\n{body}\n", encoding="utf-8"
+        )
+    only = tmp_path / ".claude" / "skills" / "claude-only"
+    only.mkdir(parents=True)
+    (only / "SKILL.md").write_text(
+        "---\nname: claude-only\ndescription: d\n---\nbody\n", encoding="utf-8"
+    )
+
+    skills = {s.name: s for s in load_project_skills(tmp_path)}
+
+    assert "claude-only" in skills
+    assert "agents copy" in skills["shared"].content

@@ -1105,6 +1105,9 @@ def load_project_skills(work_dir: str | Path) -> list[Skill]:
             root / ".agents" / "skills",
             root / ".agentrt" / "skills",
             root / ".agentrt" / "microagents",  # Legacy support
+            # AgentRT fork: repositories written for Claude Code keep their
+            # skills here; lowest precedence so the native dirs win.
+            root / ".claude" / "skills",
         ]
 
         _load_and_merge_from_dirs(
