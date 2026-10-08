@@ -13,7 +13,7 @@ dependencies = [
     "httpx[socks]>=0.27.0",
     "jsonschema>=4.23.0",
     "joserfc>=1.6.8",
-    "litellm>=1.93.0",
+    "litellm==1.93.1",  # same pin as the workspace: `uv tool install` ignores uv.lock, and newer litellm makes unknown router aliases send reasoning_effort
     "pillow>=12.3.0",
     "pydantic>=2.12.5",
     "python-frontmatter>=1.1.0",
