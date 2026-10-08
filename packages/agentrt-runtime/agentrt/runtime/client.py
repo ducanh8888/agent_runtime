@@ -2283,6 +2283,12 @@ class Client:
                 raise ValueError(f"item {index} has no task")
             if not combined.get("workspace"):
                 raise ValueError(f"item {index} has no workspace")
+            path = os.path.abspath(os.path.expanduser(str(combined["workspace"])))
+            creatable = combined.get("create_workspace") and combined.get(
+                "workspace_mode"
+            ) in (None, "shared")
+            if not os.path.isdir(path) and not creatable:
+                raise ValueError(f"item {index} workspace {path} does not exist")
             merged.append(combined)
 
         self._ensure_ready()

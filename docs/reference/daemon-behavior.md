@@ -75,6 +75,18 @@ loop appending one line per second to a file. At interrupt the file had 3 lines;
 3 seconds later 3; 11 seconds later still 3. The child process is killed, not
 merely orphaned while the agent loop stops.
 
+**A step holds the session lock; `run` and `finalize` no longer wait on it.**
+The run loop holds the conversation lock across a step, including a tool call.
+A tool stuck on a hung command therefore held it indefinitely, and `POST /run`
+on that running session, or `POST /finalize`, waited out the client's 120 s
+timeout as if the daemon were down (issue #5). `run` now answers 409 at once
+when a run is in flight (the client reports `already_running: true`).
+`finalize` waits at most `FINALIZE_STEP_WAIT_SECONDS` (10 s) for the step to
+let go, pausing under the lock when it does; otherwise it answers 409
+`step_in_progress` and pauses nothing. `interrupt` does not take the lock and
+remains the way to cancel such a step. Verified by server tests against a held
+lock, not yet on a live hung command.
+
 **`send` needs `run: true`.** The `run` field defaults to `false`, which appends
 the message and leaves the agent where it was. Against a paused or finished
 session that is a silent no-op: HTTP 200, message stored, nothing happens. Any
@@ -290,6 +302,11 @@ Starting a conversation initialises the working directory as a git repository if
 it is not one already, and does nothing if it is. Observed, then confirmed in
 `event_service.py`: the `/api/git/changes` endpoint needs a real repository to
 compute against. No commit is made.
+
+The runtime client no longer creates a missing workspace: `dispatch` refuses a
+path that does not exist unless `create_workspace` is set (shared mode only), so
+a typo is no longer turned into an empty repository (issue #3). This server
+behaviour for an existing non-git directory is unchanged.
 
 Two consequences. A directory pointed at for the first time acquires a `.git`,
 which is why `artifacts` prunes that name. The current server exposes guarded

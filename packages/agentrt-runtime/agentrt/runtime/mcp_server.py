@@ -497,8 +497,10 @@ def dispatch_many(
     `tags` are merged, so `defaults={"tags": {"batch": "b1"}}` plus a per-item
     `{"lane": "api"}` gives both.
 
-    Every item is validated (including unknown argument names) before the
-    first is created, so a malformed item cannot leave half a batch behind.
+    Every item is validated (including unknown argument names and a
+    workspace that does not exist -- pass `create_workspace` to allow one)
+    before the first is created, so a malformed item cannot leave half a
+    batch behind.
     Items are then created in parallel; outcomes keep submission order, split
     into `accepted` (with each `short_id`) and `failed` (with the reason).
     There is no run cap, so everything accepted starts now.
@@ -585,6 +587,11 @@ def finalize(session: str, summary: bool = False) -> dict:
     does, including `state`. It is not rollback: a command already running may
     still be running, so an external effect is reported as unknown rather than
     as undone. Repeating it for the same input returns the same outcome.
+
+    If the run is inside a step that does not release the session within
+    about 10 s (typically a tool stuck on a hung command), this returns a
+    `step_in_progress` error instead of waiting, and nothing is paused. Use
+    `control interrupt` to cancel that step, then `send` to redirect.
 
     `summary` asks for a tools-disabled wrap-up produced by a thinking/high
     call charged to the run's remaining iteration allowance. It is off by

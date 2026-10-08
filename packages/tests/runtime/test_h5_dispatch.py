@@ -462,3 +462,21 @@ def test_dispatch_creates_the_workspace_only_when_asked(tmp_path) -> None:
             workspace_mode="snapshot",
             create_workspace=True,
         )
+
+
+def test_dispatch_many_refuses_a_missing_workspace_before_any_item(tmp_path) -> None:
+    """#3: the check runs in the up-front pass, so a typo in one item does
+    not leave the earlier items created."""
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(201, json=_created_body(request))
+
+    tasks = [
+        {"task": "a", "workspace": str(tmp_path)},
+        {"task": "b", "workspace": str(tmp_path / "typo")},
+    ]
+    with pytest.raises(ValueError, match="item 1 workspace .* does not exist"):
+        _mock_client(handler).dispatch_many(tasks)
+    assert not [c for c in calls if c.method == "POST"]

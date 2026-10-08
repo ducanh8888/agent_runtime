@@ -2350,20 +2350,25 @@ class EventService:
         return await self.get_agent_response_result()
 
     async def _step_lock_frees(self) -> bool:
-        """Whether the in-flight step releases the conversation within a bound.
+        """Pause the run if its step releases the conversation within a bound.
 
         A step stuck in a tool holds the lock indefinitely; waiting on it
-        blocked finalize for the client's whole timeout (#5). The probe gives
-        up instead of queueing, so no abandoned call pauses the run later.
+        blocked finalize for the client's whole timeout (#5). The pause is
+        made while the lock is held here, so the run cannot start another
+        step first; on timeout nothing is queued to pause the run later.
         """
-        state = self._conversation._state if self._conversation else None
-        if state is None:
+        conversation = self._conversation
+        if conversation is None:
             return True
+        state = conversation._state
 
         def probe() -> bool:
             if not state.acquire(timeout=FINALIZE_STEP_WAIT_SECONDS):
                 return False
-            state.release()
+            try:
+                conversation.pause()
+            finally:
+                state.release()
             return True
 
         loop = asyncio.get_running_loop()
