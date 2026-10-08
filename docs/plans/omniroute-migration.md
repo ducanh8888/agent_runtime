@@ -343,6 +343,7 @@ gemini/codex as fallback only, no `anthropic/*`).
 | f51861d | `status.tools` (#2 item 3) | A "tools unavailable" answer can be checked from outside. |
 | acef636 | condenser `max_tokens = 40000`, migrated onto existing profiles | Nothing capped prompts before (sessions reached 150k–180k tokens per call). Router data: Devin 502s 4% → 12% and p50 ×2 above ~40k tokens. |
 | ecf8cbe | `inspect git` accepts a linked worktree's own metadata | Snapshot reviewers were refused every git command; now status/log work, and a borrowed worktree's metadata is still refused. |
+| b36aac9 | `.claude/skills` as a project-skill dir | Repo skills kept there now reach `<SKILLS>` (they never did before). |
 | 7504f97 | `AGENTRT_PUBLIC_SKILLS` allow-list (daemon default `code-review`) | `<SKILLS>` was 24.4k chars of 68 public skills per call; now the repo's skills plus `code-review`. |
 
 **Measured but not changed**: give-up wording is not a completion signal
@@ -351,7 +352,5 @@ refuses plain-text Devin endings when a `finish` tool exists, which makes
 `ended_with` meaningful. Devin usage reports ~34 prompt tokens per call
 (router bug), so per-call token stats are unknown on Devin.
 
-**Open**: `.claude/skills/` is not a project-skill directory, so a target
-repo's skills kept there do not reach the model (it was never loaded, before
-or after 7504f97). The 10 test failures in `tests/runtime/test_h5_dispatch.py` use
+**Open**: The 10 test failures in `tests/runtime/test_h5_dispatch.py` use
 workspaces that do not exist after fix #3; they predate this work.
