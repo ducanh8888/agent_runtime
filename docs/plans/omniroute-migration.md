@@ -352,5 +352,5 @@ refuses plain-text Devin endings when a `finish` tool exists, which makes
 `ended_with` meaningful. Devin usage reports ~34 prompt tokens per call
 (router bug), so per-call token stats are unknown on Devin.
 
-**Open**: The 10 test failures in `tests/runtime/test_h5_dispatch.py` use
-workspaces that do not exist after fix #3; they predate this work.
+The 10 `tests/runtime/test_h5_dispatch.py` failures (hard-coded workspaces
+that fix #3 now refuses) were fixed in the tests; `tests/runtime` is green.

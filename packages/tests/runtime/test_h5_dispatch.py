@@ -5,11 +5,28 @@ from __future__ import annotations
 import json
 import types
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx
 import pytest
 
 from agentrt.runtime import bootstrap, client as client_mod, config
+
+
+_ROOT = Path("/nonexistent")
+
+
+def _ws(name: str) -> str:
+    return str(_ROOT / name)
+
+
+@pytest.fixture(autouse=True)
+def _workspaces(tmp_path: Path):
+    """Dispatch refuses a workspace that does not exist (#3)."""
+    global _ROOT
+    _ROOT = tmp_path
+    for name in ("ws", "w", "other", "w0", "w1", "w2"):
+        (tmp_path / name).mkdir()
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +103,7 @@ def test_dispatch_sends_the_idempotency_key() -> None:
         return httpx.Response(201, json=_created_body(request))
 
     client = _mock_client(handle)
-    client.dispatch("task", "/tmp/ws", idempotency_key="batch-1:0")
+    client.dispatch("task", _ws("ws"), idempotency_key="batch-1:0")
 
     assert seen["body"]["idempotency_key"] == "batch-1:0"
 
@@ -102,7 +119,7 @@ def test_dispatch_omits_workspace_mode_by_default() -> None:
         return httpx.Response(201, json=_created_body(request))
 
     client = _mock_client(handle)
-    client.dispatch("task", "/tmp/ws")
+    client.dispatch("task", _ws("ws"))
 
     assert "workspace_mode" not in seen["body"]
 
@@ -115,7 +132,7 @@ def test_dispatch_sends_snapshot_workspace_mode() -> None:
         return httpx.Response(201, json=_created_body(request))
 
     client = _mock_client(handle)
-    client.dispatch("task", "/tmp/ws", workspace_mode="snapshot")
+    client.dispatch("task", _ws("ws"), workspace_mode="snapshot")
 
     assert seen["body"]["workspace_mode"] == "snapshot"
 
@@ -131,7 +148,7 @@ def test_dispatch_surfaces_the_pinned_commit() -> None:
         return httpx.Response(201, json=body)
 
     client = _mock_client(handle)
-    created = client.dispatch("task", "/tmp/ws", workspace_mode="snapshot")
+    created = client.dispatch("task", _ws("ws"), workspace_mode="snapshot")
 
     assert created["workspace_mode"] == "snapshot"
     assert created["workspace_resolved_sha"] == "abc1234"
@@ -141,7 +158,7 @@ def test_dispatch_response_omits_pinned_commit_for_shared_mode() -> None:
     client = _mock_client(
         lambda request: httpx.Response(201, json=_created_body(request))
     )
-    created = client.dispatch("task", "/tmp/ws")
+    created = client.dispatch("task", _ws("ws"))
 
     assert "workspace_resolved_sha" not in created
     assert "workspace_mode" not in created
@@ -161,7 +178,7 @@ def test_dispatch_many_validates_before_any_side_effect() -> None:
     with pytest.raises(ValueError, match="no workspace"):
         client.dispatch_many([{"task": "one"}])
     with pytest.raises(ValueError, match="exceeds the batch size"):
-        client.dispatch_many([{"task": "t", "workspace": "/tmp/w"}] * 3, max_batch=2)
+        client.dispatch_many([{"task": "t", "workspace": _ws("w")}] * 3, max_batch=2)
 
     # Nothing was created by a rejected batch.
     assert calls["n"] == 0
@@ -179,9 +196,9 @@ def test_dispatch_many_reports_per_item_outcomes() -> None:
 
     result = client.dispatch_many(
         [
-            {"task": "good one", "workspace": "/tmp/w"},
-            {"task": "bad", "workspace": "/tmp/w"},
-            {"task": "good two", "workspace": "/tmp/w"},
+            {"task": "good one", "workspace": _ws("w")},
+            {"task": "bad", "workspace": _ws("w")},
+            {"task": "good two", "workspace": _ws("w")},
         ]
     )
 
@@ -201,22 +218,22 @@ def test_dispatch_many_applies_defaults_and_rejects_unknown_arguments() -> None:
     client = _mock_client(handle)
 
     with pytest.raises(ValueError, match="unknown argument"):
-        client.dispatch_many([{"task": "t", "workspace": "/tmp/w", "wrokspace": 1}])
+        client.dispatch_many([{"task": "t", "workspace": _ws("w"), "wrokspace": 1}])
     assert bodies == []
 
     result = client.dispatch_many(
         [
             {"task": "one", "tags": {"lane": "a"}},
-            {"task": "two", "workspace": "/tmp/other", "tags": {"lane": "b"}},
+            {"task": "two", "workspace": _ws("other"), "tags": {"lane": "b"}},
         ],
-        defaults={"workspace": "/tmp/w", "tags": {"batch": "x"}},
+        defaults={"workspace": _ws("w"), "tags": {"batch": "x"}},
     )
 
     assert result["count"] == 2
     tags = sorted((body["tags"]["batch"], body["tags"]["lane"]) for body in bodies)
     assert tags == [("x", "a"), ("x", "b")]
     workspaces = sorted(body["workspace"]["working_dir"] for body in bodies)
-    assert workspaces == ["/tmp/other", "/tmp/w"]
+    assert workspaces == [_ws("other"), _ws("w")]
 
 
 def test_dispatch_many_submits_items_concurrently() -> None:
@@ -237,7 +254,7 @@ def test_dispatch_many_submits_items_concurrently() -> None:
 
     client = _mock_client(handle)
     result = client.dispatch_many(
-        [{"task": f"t{i}", "workspace": f"/tmp/w{i}"} for i in range(3)]
+        [{"task": f"t{i}", "workspace": _ws(f"w{i}")} for i in range(3)]
     )
 
     assert result["count"] == 3
@@ -256,7 +273,7 @@ def test_dispatch_generates_a_key_and_retries_timeout_with_same_key() -> None:
         return httpx.Response(201, json=_created_body(request))
 
     client = _mock_client(handle)
-    created = client.dispatch("task", "/tmp/ws")
+    created = client.dispatch("task", _ws("ws"))
 
     assert created["id"] == CREATED
     assert len(seen) == 2
@@ -275,7 +292,7 @@ def test_dispatch_timeout_error_names_method_path_and_duration() -> None:
         client_mod.ClientError,
         match=r"daemon busy.*7.5 s.*POST /api/conversations",
     ):
-        client.dispatch("task", "/tmp/ws")
+        client.dispatch("task", _ws("ws"))
 
 
 def test_prefix_resolution_indexes_incrementally_and_detects_ambiguity() -> None:
