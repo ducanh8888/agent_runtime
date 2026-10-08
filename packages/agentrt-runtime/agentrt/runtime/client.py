@@ -244,6 +244,7 @@ _DISPATCH_ARGUMENTS = frozenset(
         "workspace_mode",
         "context_files",
         "require",
+        "create_workspace",
     }
 )
 
@@ -1419,6 +1420,7 @@ class Client:
         workspace_mode: str | None = None,
         context_files: list[str] | None = None,
         require: str | None = None,
+        create_workspace: bool = False,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1449,7 +1451,15 @@ class Client:
         as before regardless of what it finds. H10 item 4, 2026-09-18.
         """
         workspace = os.path.abspath(os.path.expanduser(workspace))
-        os.makedirs(workspace, exist_ok=True)
+        if not os.path.isdir(workspace):
+            # #3: creating it silently turned a typo, or a worktree the caller
+            # had not made yet, into a session reviewing an empty repository.
+            if not create_workspace or workspace_mode not in (None, "shared"):
+                raise ClientError(
+                    f"workspace {workspace} does not exist; create it first, or "
+                    "pass create_workspace=true to start in a new empty directory"
+                )
+            os.makedirs(workspace, exist_ok=True)
         outside = _task_paths_outside_workspace(task, workspace)
         task = _with_context_files(task, context_files)
         if require not in (None, "commit"):

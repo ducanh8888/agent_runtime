@@ -116,6 +116,7 @@ def dispatch(
     workspace_mode: str | None = None,
     context_files: list[str] | None = None,
     require: str | None = None,
+    create_workspace: bool = False,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -211,7 +212,11 @@ def dispatch(
     - Do not describe its tools. The selected permission profile already tells
       it which tools are available.
 
-    WORKSPACE. An absolute path, created if missing. Give each session its own
+    WORKSPACE. An absolute path to an existing directory; a path that does
+    not exist is refused, so a typo or a worktree you have not created yet
+    fails here instead of starting a session on an empty tree. Pass
+    `create_workspace=true` to start in a new empty directory on purpose
+    (shared mode only). Give each session its own
     directory unless you specifically want them sharing one: nothing
     coordinates concurrent writes, so two sessions in one directory can
     overwrite each other silently, and sequencing them is your job.
@@ -289,6 +294,7 @@ def dispatch(
         workspace_mode=workspace_mode,
         context_files=context_files,
         require=require,
+        create_workspace=create_workspace,
     )
 
 

@@ -428,3 +428,37 @@ def test_dispatch_warns_about_running_session_in_same_workspace(tmp_path) -> Non
 def test_default_max_iterations_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("AGENTRT_DEFAULT_MAX_ITERATIONS", "1234")
     assert config.default_max_iterations() == 1234
+
+
+def test_dispatch_refuses_a_workspace_that_does_not_exist(tmp_path) -> None:
+    """#3: a missing path used to be created and then git-initialised, so a
+    typo became a session reviewing an empty repository."""
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(201, json=_created_body(request))
+
+    missing = tmp_path / "not-yet-created"
+    with pytest.raises(client_mod.ClientError, match="does not exist"):
+        _mock_client(handler).dispatch("task", str(missing))
+    assert not missing.exists()
+    assert not [c for c in calls if c.method == "POST"]
+
+
+def test_dispatch_creates_the_workspace_only_when_asked(tmp_path) -> None:
+    client = _mock_client(
+        lambda request: httpx.Response(201, json=_created_body(request))
+    )
+    target = tmp_path / "fresh"
+
+    client.dispatch("task", str(target), create_workspace=True)
+
+    assert target.is_dir()
+    with pytest.raises(client_mod.ClientError, match="does not exist"):
+        client.dispatch(
+            "task",
+            str(tmp_path / "pinned"),
+            workspace_mode="snapshot",
+            create_workspace=True,
+        )

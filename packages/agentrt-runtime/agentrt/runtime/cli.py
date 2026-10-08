@@ -80,6 +80,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         workspace_mode=args.workspace_mode,
         context_files=args.context_file or None,
         require=args.require,
+        create_workspace=args.create_workspace,
     )
 
 
@@ -365,6 +366,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--require",
         choices=("commit",),
         help="require workspace HEAD to advance before the session finishes",
+    )
+    dispatch_parser.add_argument(
+        "--create-workspace",
+        action="store_true",
+        help="create --workspace if it does not exist (shared mode only)",
     )
     dispatch_parser.add_argument(
         "--attachment",
