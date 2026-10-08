@@ -17,6 +17,7 @@ from agentrt.agent_server.persistence import (
 )
 from agentrt.runtime import bootstrap, client as client_mod
 from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+from agentrt.sdk.settings.model import LLMSummarizingCondenserSettings
 
 
 @pytest.fixture
@@ -272,3 +273,31 @@ def test_dispatch_refuses_allowed_but_unbound_llm_profile(state) -> None:
     with pytest.raises(client_mod.ClientError, match="bound to LLM profile"):
         client.dispatch("do it", state, permission="workspace", llm_profile="other")
     assert client.sent == []
+
+
+def test_condenser_token_cap_on_new_and_existing_profiles(state) -> None:
+    ids = bootstrap.ensure_profiles()
+    store = get_agent_profile_store()
+    profile = store.load("inspect")
+    assert isinstance(profile, OpenHandsAgentProfile)
+    assert isinstance(profile.condenser, LLMSummarizingCondenserSettings)
+    assert profile.condenser.max_tokens == bootstrap.CONDENSER_MAX_TOKENS
+
+    # A profile saved before the cap existed is migrated on the fast path.
+    store.save(
+        profile.model_copy(
+            update={
+                "condenser": profile.condenser.model_copy(update={"max_tokens": None})
+            }
+        )
+    )
+    assert bootstrap.ensure_profiles() == ids
+    reloaded = store.load("inspect")
+    assert isinstance(reloaded, OpenHandsAgentProfile)
+    assert isinstance(reloaded.condenser, LLMSummarizingCondenserSettings)
+    assert reloaded.condenser.max_tokens == bootstrap.CONDENSER_MAX_TOKENS
+
+    path = Path(state) / "agent-profiles" / "inspect.json"
+    settled = _digest(path)
+    assert bootstrap.ensure_profiles() == ids
+    assert _digest(path) == settled

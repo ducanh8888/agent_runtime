@@ -182,6 +182,41 @@ def _constrain_switch_llm(store, profile):
     return constrained
 
 
+#: Summarise history once a request's events exceed this many tokens. Nothing
+#: else caps a router alias: its input limit is unknown, so the SDK has no
+#: token trigger, and the 240-event trigger never fired in measured sessions
+#: (prompts reached 180k tokens). Router data, 2026-10-08, 2,079 Devin calls:
+#: failures rise from ~4% to 12% and p50 latency doubles past ~40k tokens.
+CONDENSER_MAX_TOKENS = 40_000
+
+
+def _cap_condenser(store, profile):
+    """Give an existing agent profile the condenser token cap, if it lacks it.
+
+    Same shape as ``_constrain_switch_llm``: only a summarising condenser whose
+    cap differs is rewritten, so a restart leaves settled profiles alone.
+    """
+    from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+    from agentrt.sdk.settings.model import LLMSummarizingCondenserSettings
+
+    if not isinstance(profile, OpenHandsAgentProfile):
+        return profile
+    condenser = profile.condenser
+    if not isinstance(condenser, LLMSummarizingCondenserSettings):
+        return profile
+    if condenser.max_tokens == CONDENSER_MAX_TOKENS:
+        return profile
+    capped = profile.model_copy(
+        update={
+            "condenser": condenser.model_copy(
+                update={"max_tokens": CONDENSER_MAX_TOKENS}
+            )
+        }
+    )
+    store.save(capped)
+    return capped
+
+
 def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
     """Create the LLM and agent profiles if absent; return id per preset.
 
@@ -214,7 +249,9 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         else:
             _refresh_llm_profile(state)
             return {
-                preset: _constrain_switch_llm(agent_store, profile).id
+                preset: _cap_condenser(
+                    agent_store, _constrain_switch_llm(agent_store, profile)
+                ).id
                 for preset, profile in loaded.items()
             }
 
@@ -261,6 +298,7 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
             enable_switch_llm_tool=False,
             **kwargs,
         )
+        profile = _cap_condenser(agent_store, profile)
         agent_store.save(profile)
         ids[preset] = profile.id
     return ids
