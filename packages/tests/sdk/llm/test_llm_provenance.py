@@ -27,8 +27,10 @@ from agentrt.sdk.llm.utils.provenance import (
     CallProvenance,
     EndpointProvenance,
     RouteProvenance,
+    RouterProvenance,
     normalize_thinking_mode,
     policy_from_call_kwargs,
+    router_from_headers,
 )
 from agentrt.sdk.llm.utils.telemetry import Telemetry
 
@@ -410,3 +412,53 @@ class TestLegacyJsonCompatibility:
         payload = metrics.get()
         assert "provenance" not in payload["token_usages"][0]
         assert "provenance" not in payload["accumulated_token_usage"]
+
+
+class TestRouterProvenance:
+    """Router headers join a session's call to the router's own call log."""
+
+    def test_router_headers_recorded_on_the_call(self, monkeypatch):
+        llm = LLM(
+            model="openai/agentrt-worker",
+            base_url="http://127.0.0.1:20128/v1",
+            api_key=SecretStr("SUPERSECRET"),
+        )
+
+        def completion(**kwargs):
+            resp = _response()
+            resp._hidden_params["additional_headers"] = {
+                "llm_provider-x-correlation-id": "corr-123",
+                "llm_provider-x-omniroute-provider": "dva",
+                "llm_provider-x-omniroute-model": "swe-2-max",
+            }
+            return resp
+
+        monkeypatch.setattr("agentrt.sdk.llm.llm.litellm_completion", completion)
+        llm.completion(messages=[_user_message()])
+
+        provenance = llm.metrics.token_usages[0].provenance
+        assert provenance is not None
+        assert provenance.router == RouterProvenance(
+            correlation_id="corr-123", provider="dva", model="swe-2-max"
+        )
+        dumped = json.loads(llm.metrics.token_usages[0].model_dump_json())
+        assert dumped["provenance"]["router"]["correlation_id"] == "corr-123"
+
+    def test_no_router_headers_keeps_legacy_shape(self, monkeypatch):
+        llm = LLM(model="deepseek/deepseek-flash", api_key=SecretStr("k"))
+        monkeypatch.setattr(
+            "agentrt.sdk.llm.llm.litellm_completion", lambda **kw: _response()
+        )
+        llm.completion(messages=[_user_message()])
+
+        provenance = llm.metrics.token_usages[0].provenance
+        assert provenance is not None
+        assert provenance.router is None
+        assert "router" not in json.loads(provenance.model_dump_json())
+
+    def test_bare_header_names_accepted(self):
+        assert router_from_headers({"X-Correlation-Id": "c"}) == RouterProvenance(
+            correlation_id="c"
+        )
+        assert router_from_headers({"content-type": "x"}) is None
+        assert router_from_headers(None) is None

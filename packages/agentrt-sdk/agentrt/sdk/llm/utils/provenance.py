@@ -32,7 +32,7 @@ from collections.abc import Mapping
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 
 #: Bound copied identifiers so caller/provider data cannot grow unbounded.
@@ -138,6 +138,52 @@ class ProviderConfirmation(BaseModel):
     reasoning_policy: ConfirmationStatus = "unknown"
 
 
+class RouterProvenance(BaseModel):
+    """What a router in front of the provider said served this call.
+
+    Copied from response headers (OmniRoute's ``x-correlation-id``,
+    ``x-omniroute-provider``, ``x-omniroute-model``). ``correlation_id`` is the
+    key the router's own call log is indexed by, so a session can be joined to
+    the router's record of the exact upstream turn. Each field is ``None``
+    when the header was absent; nothing here is a credential.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    correlation_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
+
+
+_ROUTER_HEADERS = {
+    "correlation_id": "x-correlation-id",
+    "provider": "x-omniroute-provider",
+    "model": "x-omniroute-model",
+}
+
+
+def router_from_headers(headers: Any) -> RouterProvenance | None:
+    """Read router identity from LiteLLM's ``additional_headers``, if any.
+
+    LiteLLM prefixes raw provider headers with ``llm_provider-``; the bare name
+    is accepted too. Returns ``None`` when no router header is present, so a
+    direct provider call records nothing rather than an empty object.
+    """
+    if not isinstance(headers, Mapping):
+        return None
+    lowered = {str(k).lower(): v for k, v in headers.items()}
+    values = {
+        field: _optional_str(
+            lowered.get(f"llm_provider-{name}", lowered.get(name)),
+            limit=_MAX_COMPONENT_LENGTH,
+        )
+        for field, name in _ROUTER_HEADERS.items()
+    }
+    if not any(values.values()):
+        return None
+    return RouterProvenance(**values)
+
+
 class CallProvenance(BaseModel):
     """Per-call provenance recorded alongside a completed provider call."""
 
@@ -148,6 +194,15 @@ class CallProvenance(BaseModel):
     configured: RouteProvenance = Field(default_factory=RouteProvenance)
     sent: RouteProvenance = Field(default_factory=RouteProvenance)
     confirmation: ProviderConfirmation = Field(default_factory=ProviderConfirmation)
+    router: RouterProvenance | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unknown_router(self, handler, info):  # noqa: ARG002
+        """Keep pre-router JSON unchanged when no router header was seen."""
+        data = handler(self)
+        if self.router is None and isinstance(data, dict):
+            data.pop("router", None)
+        return data
 
 
 def _thinking_fields(thinking: Any) -> tuple[str | None, int | None]:

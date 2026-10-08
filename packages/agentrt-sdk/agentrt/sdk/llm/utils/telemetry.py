@@ -16,7 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from agentrt.sdk.llm.utils.litellm_provider import LLMProvider
 from agentrt.sdk.llm.utils.metrics import Metrics
 from agentrt.sdk.llm.utils.openhands_provider import litellm_call_kwargs
-from agentrt.sdk.llm.utils.provenance import CallProvenance, call_identity
+from agentrt.sdk.llm.utils.provenance import (
+    CallProvenance,
+    call_identity,
+    router_from_headers,
+)
 from agentrt.sdk.logger import get_logger
 
 
@@ -187,6 +191,11 @@ class Telemetry(BaseModel):
                     at - started, reasoning=reasoning, response_id=response_id
                 )
         provenance = self._take_provenance(response_id)
+        if provenance is not None:
+            hidden = getattr(resp, "_hidden_params", None) or {}
+            router = router_from_headers(hidden.get("additional_headers"))
+            if router is not None:
+                provenance = provenance.model_copy(update={"router": router})
 
         # 2) cost
         cost = self._compute_cost(resp, provider_info=provider_info)
