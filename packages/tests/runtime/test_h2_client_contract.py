@@ -834,3 +834,104 @@ def test_a_daemon_that_does_not_report_the_reason_adds_no_key() -> None:
 
     assert "finish_reason" not in payload
     assert "truncated" not in payload
+
+
+def _paged_handler(items: list[dict], response: dict) -> Handler:
+    """Serve ``items`` (newest first) 100 per page, as the daemon does."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/agent_final_response"):
+            return httpx.Response(200, json=response)
+        if path.endswith("/events/search"):
+            start = int(request.url.params.get("page_id") or 0)
+            page = items[start : start + 100]
+            nxt = str(start + 100) if start + 100 < len(items) else None
+            return httpx.Response(200, json={"items": page, "next_page_id": nxt})
+        return httpx.Response(200, json=_conversation(execution_status="finished"))
+
+    return handler
+
+
+def _final(text: str) -> dict:
+    return {
+        "response": text,
+        "state": "final",
+        "request_message_id": "u1",
+        "finish_reason": None,
+    }
+
+
+_USER_BOUNDARY = {
+    "kind": "MessageEvent",
+    "id": "u1",
+    "llm_message": {"role": "user", "content": "task"},
+}
+
+
+def test_long_run_reaches_its_request_boundary() -> None:
+    """#4: a 248-iteration run put the boundary past a fixed five-page walk,
+    and a complete answer was reported request_boundary_not_found."""
+    finish = {
+        "kind": "ActionEvent",
+        "id": "fin",
+        "source": "agent",
+        "tool_name": "finish",
+        "action": {"kind": "FinishAction", "message": "Done."},
+    }
+    steps = [
+        {"kind": "ActionEvent", "id": f"a{i}", "tool_name": "terminal"}
+        for i in range(640)
+    ]
+    items = [finish, *steps, _USER_BOUNDARY]
+
+    payload = _mock_client(_paged_handler(items, _final("Done."))).result(SESSION)
+
+    assert payload["completed_cleanly"] is True
+    assert payload["ended_with"] == "finish"
+    assert payload["tool_calls_in_request"] == 640
+
+
+def test_final_message_that_is_a_tool_call_is_not_clean() -> None:
+    """#2: the final text was a tool call the runtime never executed."""
+    text = '<tool>{"name":"proxy_terminal","arguments":{"command":"grep x"}}'
+    items = [
+        {
+            "kind": "MessageEvent",
+            "id": "a1",
+            "llm_message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": text}],
+            },
+        },
+        _USER_BOUNDARY,
+    ]
+
+    payload = _mock_client(_paged_handler(items, _final(text))).result(SESSION)
+
+    assert payload["completed_cleanly"] is False
+    assert payload["completed_cleanly_reason"] == (
+        "final_message_is_unexecuted_tool_call"
+    )
+    assert payload["ended_with"] == "message"
+
+
+def test_answer_without_tool_calls_reports_the_count() -> None:
+    """#2: a no-attempt reply is visible as zero tool calls, not hidden."""
+    text = "I'm unable to complete this because tool access is unavailable."
+    items = [
+        {
+            "kind": "MessageEvent",
+            "id": "a1",
+            "llm_message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": text}],
+            },
+        },
+        _USER_BOUNDARY,
+    ]
+
+    payload = _mock_client(_paged_handler(items, _final(text))).result(SESSION)
+
+    assert payload["tool_calls_in_request"] == 0
+    assert payload["ended_with"] == "message"

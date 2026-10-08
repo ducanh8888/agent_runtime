@@ -129,6 +129,8 @@ def _compact_wait_item(item: dict, default_bucket: str | None = None) -> dict:
     }
     if "completed_cleanly" in item and item["completed_cleanly"] is not None:
         compact["completed_cleanly"] = item["completed_cleanly"]
+    if item.get("completed_cleanly_reason"):
+        compact["completed_cleanly_reason"] = item["completed_cleanly_reason"]
     return compact
 
 

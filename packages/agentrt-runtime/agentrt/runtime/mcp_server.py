@@ -378,6 +378,15 @@ def result(
     window, so two pages of one answer can be told from two answers that start
     alike. Pass neither and the text is returned whole, as before.
 
+    For a finished session, `completed_cleanly` says whether the request
+    ended with an intact answer; when false, `completed_cleanly_reason` names
+    why (for example `final_message_is_unexecuted_tool_call`: the model wrote
+    a tool call as text and nothing ran). `ended_with` is `finish` (the finish
+    tool) or `message` (plain text), and `tool_calls_in_request` counts the
+    tool calls this request made. A `message` ending with zero tool calls on a
+    task that needed work is a session that did not try -- `send` it back.
+    None of these certify the work itself; check `artifacts`.
+
     To wait: one notification when done -> run `agentrt wait <ids>` as a
     background shell command; live stream -> run `agentrt watch <ids>` under a
     monitor; quick check -> call `status` or `result` directly.

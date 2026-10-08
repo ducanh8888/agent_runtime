@@ -526,6 +526,24 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE.sub("", text)
 
 
+# A model that writes its tool call as text (observed: `<tool>{"name":
+# "proxy_terminal", "arguments": ...}`) ends the run with a message the
+# runtime never executed. Markup tags, or a JSON object naming a tool and
+# its arguments, are the two shapes seen. Only the start of the message is
+# checked, so an answer that quotes such markup in its body is not flagged.
+_TOOL_CALL_TEXT = re.compile(
+    r"(?:```[a-z]*\s*)?"
+    r"(?:<\s*(?:tool|tool_call|tool_use|function_call|invoke)\b"
+    r"|\{\s*\"name\"\s*:\s*\"[^\"]+\"\s*,\s*\"(?:arguments|parameters|input)\"\s*:)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_tool_call(text: str) -> bool:
+    """Whether a final message is an unexecuted tool call written as text."""
+    return bool(_TOOL_CALL_TEXT.match(text.lstrip()))
+
+
 def _add_action_location(entry: dict, action: object) -> None:
     """Copy a bounded path/range off a file action onto a transcript entry.
 
@@ -1833,15 +1851,14 @@ class Client:
         payload = _apply_result_paging(payload, offset=offset, max_chars=max_chars)
         if status == "finished":
             try:
-                completed_cleanly, reason = self._completion_quality(
-                    resolved,
-                    request_message_id=payload.get("request_message_id"),
-                    finish_reason=payload.get("finish_reason"),
-                    result=payload.get("result"),
+                payload.update(
+                    self._completion_quality(
+                        resolved,
+                        request_message_id=payload.get("request_message_id"),
+                        finish_reason=payload.get("finish_reason"),
+                        result=payload.get("result"),
+                    )
                 )
-                payload["completed_cleanly"] = completed_cleanly
-                if reason:
-                    payload["completed_cleanly_reason"] = reason
             except (ClientError, json.JSONDecodeError):
                 payload["completed_cleanly"] = False
                 payload["completed_cleanly_reason"] = "transcript_unavailable"
@@ -1902,52 +1919,53 @@ class Client:
         """
         if iterations_used == 0:
             return "no tool calls completed before the error"
+        events, _ = self._request_events(
+            resolved, request_message_id=request_message_id
+        )
         tally: dict[str, int] = {}
-        cursor: str | None = None
-        pages = 0
-        while pages < 5:
-            page = self.transcript(resolved, limit=100, cursor=cursor)
-            reached_boundary = False
-            for event in reversed(page.get("events", [])):
-                if (
-                    request_message_id is not None
-                    and event.get("id") == request_message_id
-                ):
-                    reached_boundary = True
-                    break
-                if event.get("type") == "action":
-                    name = event.get("tool") or "unknown"
-                    tally[name] = tally.get(name, 0) + 1
-            if reached_boundary:
-                break
-            cursor = page.get("next_cursor")
-            pages += 1
-            if not cursor:
-                break
+        for event in events:
+            if event.get("type") == "action":
+                name = event.get("tool") or "unknown"
+                tally[name] = tally.get(name, 0) + 1
         if not tally:
             return "no tool calls completed before the error"
         parts = [f"{name} x{count}" for name, count in sorted(tally.items())]
         return ", ".join(parts)
 
-    def _latest_transcript_error(
+    def _request_events(
         self, resolved: str, *, request_message_id: object
-    ) -> dict | None:
+    ) -> tuple[list[dict], bool]:
+        """This request's events, newest first, and whether its boundary was seen.
+
+        Walks every page back to ``request_message_id``. A fixed page budget
+        made a long run (hundreds of iterations) look as if its boundary did
+        not exist, so a complete answer was reported as unclean (#4).
+        """
+        events: list[dict] = []
         cursor: str | None = None
-        pages = 0
-        while pages < 5:
-            page = self.transcript(resolved, limit=100, cursor=cursor)
-            for event in reversed(page.get("events", [])):
+        seen: set[str] = set()
+        while True:
+            page, cursor = self._transcript_events(resolved, limit=100, cursor=cursor)
+            for event in reversed(page):
                 if (
                     request_message_id is not None
                     and event.get("id") == request_message_id
                 ):
-                    return None
-                if event.get("type") == "error":
-                    return {"code": event.get("code"), "detail": event.get("detail")}
-            cursor = page.get("next_cursor")
-            pages += 1
-            if not cursor:
-                break
+                    return events, True
+                events.append(event)
+            if not cursor or cursor in seen:
+                return events, False
+            seen.add(cursor)
+
+    def _latest_transcript_error(
+        self, resolved: str, *, request_message_id: object
+    ) -> dict | None:
+        events, _ = self._request_events(
+            resolved, request_message_id=request_message_id
+        )
+        for event in events:
+            if event.get("type") == "error":
+                return {"code": event.get("code"), "detail": event.get("detail")}
         return None
 
     def _completion_quality(
@@ -1957,47 +1975,54 @@ class Client:
         request_message_id: object,
         finish_reason: object,
         result: object,
-    ) -> tuple[bool, str | None]:
-        latest_error: dict | None = None
-        final_answer = False
-        boundary_reached = False
-        cursor: str | None = None
-        pages = 0
-        while pages < 5:
-            page = self.transcript(resolved, limit=100, cursor=cursor)
-            reached_boundary = False
-            for event in reversed(page.get("events", [])):
-                if (
-                    request_message_id is not None
-                    and event.get("id") == request_message_id
-                ):
-                    reached_boundary = True
-                    break
-                if event.get("type") == "error" and latest_error is None:
-                    latest_error = event
-                if event.get("type") == "message" and event.get("role") == "assistant":
-                    final_answer = True
-                if event.get("type") == "action" and event.get("is_finish"):
-                    final_answer = True
-            if reached_boundary:
-                boundary_reached = True
-                break
-            cursor = page.get("next_cursor")
-            pages += 1
-            if not cursor:
-                break
+    ) -> dict:
+        """Judge whether the current request ended with an intact answer.
 
+        Returns ``completed_cleanly``, ``completed_cleanly_reason`` when it is
+        false, ``ended_with`` (``finish`` tool or plain ``message``) and
+        ``tool_calls_in_request`` (tool calls other than ``finish``), so an
+        orchestrator can spot a run that answered without doing anything.
+        """
+        events, boundary_reached = self._request_events(
+            resolved, request_message_id=request_message_id
+        )
+        ended_with: str | None = None
+        final_text = ""
+        latest_error = False
+        tool_calls = 0
+        for event in events:
+            kind = event.get("type")
+            if kind == "error":
+                latest_error = True
+            elif kind == "action":
+                if event.get("is_finish"):
+                    ended_with = ended_with or "finish"
+                else:
+                    tool_calls += 1
+            elif kind == "message" and event.get("role") == "assistant":
+                if ended_with is None:
+                    ended_with = "message"
+                    final_text = event.get("text") or ""
+
+        quality: dict = {"ended_with": ended_with, "tool_calls_in_request": tool_calls}
         if not boundary_reached:
-            return False, "request_boundary_not_found"
-        if not final_answer:
-            return False, "final_agent_answer_missing"
-        if finish_reason in {"error", "length", "max_output_tokens"}:
-            return False, f"finish_reason_{finish_reason}"
-        if latest_error:
-            return False, "conversation_error_after_request"
-        if not isinstance(result, str):
-            return False, "final_result_missing"
-        return True, None
+            reason = "request_boundary_not_found"
+        elif ended_with is None:
+            reason = "final_agent_answer_missing"
+        elif ended_with == "message" and _looks_like_tool_call(final_text):
+            reason = "final_message_is_unexecuted_tool_call"
+        elif finish_reason in {"error", "length", "max_output_tokens"}:
+            reason = f"finish_reason_{finish_reason}"
+        elif latest_error:
+            reason = "conversation_error_after_request"
+        elif not isinstance(result, str):
+            reason = "final_result_missing"
+        else:
+            reason = None
+        quality["completed_cleanly"] = reason is None
+        if reason:
+            quality["completed_cleanly_reason"] = reason
+        return quality
 
     def _attachment_blocks(
         self,
@@ -2798,7 +2823,26 @@ class Client:
         2026-09-18.
         """
         resolved = self._resolve_session(session)
+        events, next_cursor = self._transcript_events(
+            resolved, limit=limit, cursor=cursor, include_reasoning=include_reasoning
+        )
+        return {
+            "id": resolved,
+            "short_id": short_id(resolved),
+            "status": self.status(resolved).get("status"),
+            "events": events,
+            "next_cursor": next_cursor,
+        }
 
+    def _transcript_events(
+        self,
+        resolved: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+        include_reasoning: bool = False,
+    ) -> tuple[list[dict], str | None]:
+        """One page of projected events, oldest first, and the older cursor."""
         params: dict[str, object] = {
             "sort_order": "TIMESTAMP_DESC",
             "limit": min(limit, 100),
@@ -2892,13 +2936,7 @@ class Client:
                 )
 
         events.reverse()
-        return {
-            "id": resolved,
-            "short_id": short_id(resolved),
-            "status": self.status(resolved).get("status"),
-            "events": events,
-            "next_cursor": data.get("next_page_id") if isinstance(data, dict) else None,
-        }
+        return events, data.get("next_page_id") if isinstance(data, dict) else None
 
     def read_evidence(
         self,
