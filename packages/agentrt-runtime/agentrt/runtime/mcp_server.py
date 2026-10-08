@@ -358,6 +358,9 @@ def status(session: str) -> dict:
     dispatched with `workspace_mode="snapshot"`: the commit its detached
     worktree is pinned to, so you can check what a review actually ran
     against without a separate call. Absent for the default `"shared"` mode.
+
+    `tools` lists the tool names the session was actually built with. Check
+    it before believing a session that says its tools are unavailable.
     """
     return _guard(_get_client().status, session)
 

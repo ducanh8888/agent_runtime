@@ -1755,6 +1755,13 @@ class Client:
             # chain (`max_fork_depth`).
             "parent_conversation_id": data.get("parent_conversation_id"),
         }
+        # The tools the session was actually built with, so a final answer
+        # claiming "tool access is unavailable" can be checked from outside.
+        agent = data.get("agent")
+        if isinstance(agent, dict) and isinstance(agent.get("tools"), list):
+            result["tools"] = [
+                tool.get("name") for tool in agent["tools"] if isinstance(tool, dict)
+            ]
         if data.get("error") is not None:
             result["error"] = data.get("error")
         # Reported whenever the session was given one, because it is the only

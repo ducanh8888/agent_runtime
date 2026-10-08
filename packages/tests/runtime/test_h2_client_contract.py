@@ -88,6 +88,19 @@ def test_status_surfaces_request_scope() -> None:
     assert status["iterations_remaining"] == 493
 
 
+def test_status_reports_the_tools_the_session_was_given() -> None:
+    """#2: a "tool access unavailable" answer can be checked from outside."""
+    client = _mock_client(
+        lambda request: httpx.Response(
+            200,
+            json=_conversation(
+                agent={"tools": [{"name": "file_editor"}, {"name": "inspect"}]}
+            ),
+        )
+    )
+    assert client.status(SESSION)["tools"] == ["file_editor", "inspect"]
+
+
 def test_status_surfaces_the_pinned_commit_for_snapshot_mode() -> None:
     """H8 item 8: a caller can check what a session actually ran against
     without a separate call."""
