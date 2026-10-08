@@ -346,6 +346,11 @@ def _daemon_env(token: str) -> dict[str, str]:
     # docs/plans/deepseek-hardening.md H9 (OpenHands ceremony), 2026-09-17.
     env.setdefault("AGENTRT_REGISTER_BUILTIN_SUBAGENTS", "0")
     env.setdefault("AGENTRT_ENABLE_VSCODE", "0")
+    # The public OpenHands skill catalogue (68 skills, ~24k chars re-sent on
+    # every LLM call) is mostly irrelevant to AgentRT workers; keep only the
+    # one they were measured using. The target repo's own skills are loaded
+    # separately and are unaffected.
+    env.setdefault("AGENTRT_PUBLIC_SKILLS", "code-review")
     # The vendored server's own run-pool cap defaults to 10 concurrent
     # conversation steps; without this a fan-out beyond that queues on the
     # daemon side even after AGENTRT_MAX_SESSIONS (this client's own,

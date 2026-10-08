@@ -15,6 +15,7 @@ sandbox < registered marketplace/public < user < org < project
 """
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -449,7 +450,7 @@ def discover_profile_skills() -> list[Skill]:
     ``LocalConversation``) — the old allow-list would instead have dangled and
     failed the launch.
     """
-    return list(
+    skills = list(
         load_all_skills(
             load_public=True,
             load_user=True,
@@ -457,6 +458,23 @@ def discover_profile_skills() -> list[Skill]:
             load_project=False,
         ).skills
     )
+    # AgentRT fork: AGENTRT_PUBLIC_SKILLS, when set, is a comma-separated
+    # allow-list for *public* skills only; user skills are always kept, and
+    # project skills never pass through here. Unset keeps upstream behaviour.
+    allowed = os.environ.get("AGENTRT_PUBLIC_SKILLS")
+    if allowed is None:
+        return skills
+    keep = {name.strip() for name in allowed.split(",") if name.strip()}
+    user_names = {
+        skill.name
+        for skill in load_all_skills(
+            load_public=False,
+            load_user=True,
+            load_org=False,
+            load_project=False,
+        ).skills
+    }
+    return [s for s in skills if s.name in user_names or s.name in keep]
 
 
 def sync_public_skills() -> tuple[bool, str]:

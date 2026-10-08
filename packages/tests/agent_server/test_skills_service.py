@@ -757,6 +757,24 @@ class TestDiscoverProfileSkills:
             "load_project": False,
         }
 
+    def test_public_allow_list_keeps_user_skills(self, monkeypatch):
+        """AgentRT fork: AGENTRT_PUBLIC_SKILLS trims only the public catalog."""
+        public = [
+            Skill(name="code-review", content="x"),
+            Skill(name="add-javadoc", content="y"),
+        ]
+        user = [Skill(name="mine", content="z")]
+
+        def load(**kwargs):
+            found = (public if kwargs["load_public"] else []) + user
+            return SkillLoadResult(skills=found, sources={})
+
+        monkeypatch.setenv("AGENTRT_PUBLIC_SKILLS", "code-review")
+        with patch(self._LOAD_ALL, side_effect=load):
+            result = discover_profile_skills()
+
+        assert [s.name for s in result] == ["code-review", "mine"]
+
     def test_propagates_unexpected_failure(self):
         # load_all_skills absorbs benign per-source failures internally; an
         # unexpected failure propagates rather than silently resolving to a
