@@ -418,6 +418,27 @@ def _text(text: str) -> list[TextContent | ImageContent]:
     return [TextContent(text=text)]
 
 
+def _is_own_linked_worktree(toplevel: Path, git_dir: str, common_dir: str) -> bool:
+    """Whether out-of-workspace git metadata belongs to this very worktree.
+
+    A linked worktree (`git worktree add`, which is how snapshot and isolated
+    sessions get theirs) keeps its metadata in `<common>/worktrees/<name>`,
+    outside the work tree by design. That directory's `gitdir` file names the
+    worktree's own `.git`, so it is accepted only when it points back here;
+    any other metadata outside the workspace is still refused.
+    """
+    try:
+        own = Path(git_dir).resolve(strict=True)
+        common = Path(common_dir).resolve(strict=True)
+        back = (own / "gitdir").read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return False
+    return (
+        own.parent == common / "worktrees"
+        and Path(back).resolve() == (toplevel / ".git").resolve()
+    )
+
+
 class InspectExecutor(ToolExecutor):
     """Run one validated read action, confined to the workspace."""
 
@@ -819,8 +840,11 @@ class InspectExecutor(ToolExecutor):
         # pointed at a directory the session was never given.
         try:
             toplevel = self._approve(top_lines[0].strip())
-            self._approve(top_lines[1].strip())
-            self._approve(top_lines[2].strip())
+            git_dir = top_lines[1].strip()
+            common_dir = top_lines[2].strip()
+            if not _is_own_linked_worktree(toplevel, git_dir, common_dir):
+                self._approve(git_dir)
+                self._approve(common_dir)
         except permissions.PermissionDenied as denied:
             return InspectObservation.from_text(
                 text=(

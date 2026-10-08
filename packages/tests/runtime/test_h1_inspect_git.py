@@ -212,3 +212,40 @@ def test_sanitized_environment_overrides_a_hostile_global_config(
     assert env["GIT_CONFIG_SYSTEM"] == os.devnull
     assert env["GIT_CONFIG_NOSYSTEM"] == "1"
     assert env["HOME"] == env["XDG_CONFIG_HOME"]
+
+
+def test_git_works_in_a_linked_worktree(
+    repo: Path, tmp_path: Path, state_dir: Path
+) -> None:
+    """Snapshot and isolated sessions run in a `git worktree add` checkout,
+    whose metadata lives in the source repository's `.git/worktrees/<name>`."""
+    worktree = tmp_path / "wt"
+    _git("worktree", "add", "-q", "--detach", str(worktree), cwd=repo)
+    (worktree / "a.txt").write_text("hello changed\n", encoding="utf-8")
+
+    status = _run(worktree, git_command="status")
+    assert status.exit_code == 0, status.text
+    assert "a.txt" in (status.stdout or "")
+    log = _run(worktree, git_command="log")
+    assert log.exit_code == 0
+    assert "init" in (log.stdout or "")
+
+
+def test_git_refuses_another_worktrees_metadata(
+    repo: Path, tmp_path: Path, state_dir: Path
+) -> None:
+    """A `.git` file borrowing some other worktree's metadata is not this
+    worktree's own, so it stays outside the workspace."""
+    _git("worktree", "add", "-q", "--detach", str(tmp_path / "other"), cwd=repo)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".git").write_text(
+        f"gitdir: {repo / '.git' / 'worktrees' / 'other'}\n", encoding="utf-8"
+    )
+
+    obs = _executor(workspace)(
+        inspect_tools.InspectAction(command="git", git_command="log")
+    )
+
+    assert obs.is_error is True
+    assert "metadata directory is outside" in obs.text
