@@ -3130,12 +3130,16 @@ class Client:
         """Resume a paused session. Maps to /run, not /goal/resume, which
         returns HTTP 400 "no_resumable_goal" on an ordinary conversation."""
         resolved = self._resolve_session(session)
-        self._send("POST", f"/api/conversations/{quote(resolved, safe='')}/run")
-        return {
-            "id": resolved,
-            "short_id": short_id(resolved),
-            "status": self.status(resolved).get("status"),
-        }
+        result: dict = {"id": resolved, "short_id": short_id(resolved)}
+        try:
+            self._send("POST", f"/api/conversations/{quote(resolved, safe='')}/run")
+        except ClientError as exc:
+            # #5: a session that is already running is an answer, not a fault.
+            if "already running" not in str(exc):
+                raise
+            result["already_running"] = True
+        result["status"] = self.status(resolved).get("status")
+        return result
 
     def delete(self, session: str) -> dict:
         """Delete a session."""

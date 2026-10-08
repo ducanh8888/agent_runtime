@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -213,3 +215,65 @@ def test_summary_flag_is_off_by_default(monkeypatch) -> None:
         assert finalize_summary_enabled() is True
     monkeypatch.setenv("AGENTRT_FINALIZE_SUMMARY", "no")
     assert finalize_summary_enabled() is False
+
+
+class _StepHoldingLock:
+    """Hold the conversation lock from another thread, as a long step does."""
+
+    def __init__(self, state: ConversationState) -> None:
+        self._state = state
+        self._held = threading.Event()
+        self._release = threading.Event()
+        self._thread = threading.Thread(target=self._hold, daemon=True)
+
+    def _hold(self) -> None:
+        with self._state:
+            self._held.set()
+            self._release.wait(10)
+
+    def __enter__(self) -> _StepHoldingLock:
+        self._thread.start()
+        assert self._held.wait(5)
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._release.set()
+        self._thread.join(5)
+
+
+@pytest.mark.asyncio
+async def test_run_on_a_running_session_answers_at_once(tmp_path) -> None:
+    """#5: resume on a running session waited for the step's lock, so it
+    timed out after 120 s like a daemon outage instead of saying so."""
+    state = _state(tmp_path)
+    service = _service(state)
+    service._run_task = asyncio.create_task(asyncio.sleep(10))
+    try:
+        with _StepHoldingLock(state):
+            with pytest.raises(ValueError, match="conversation_already_running"):
+                await asyncio.wait_for(service.run(), timeout=2)
+    finally:
+        service._run_task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_finalize_gives_up_on_a_held_step_without_pausing_later(
+    tmp_path, monkeypatch
+) -> None:
+    """#5: finalize on a run stuck inside a step blocked for 120 s, and the
+    abandoned call could still pause the session once the lock freed."""
+    monkeypatch.setattr(event_service_mod, "FINALIZE_STEP_WAIT_SECONDS", 0.2)
+    state = _state(tmp_path)
+    user = _user(state, "do the thing")
+    state.consumed_user_message_id = user.id
+    service = _service(state)
+    service._run_task = asyncio.create_task(asyncio.sleep(10))
+    try:
+        with _StepHoldingLock(state):
+            with pytest.raises(ValueError, match="step_in_progress"):
+                await asyncio.wait_for(service.finalize(), timeout=2)
+        await asyncio.sleep(0.3)
+        assert not service._conversation.pause.called
+        assert state.execution_status == ConversationExecutionStatus.RUNNING
+    finally:
+        service._run_task.cancel()

@@ -256,7 +256,10 @@ async def get_conversation_agent_final_response(
 
 @conversation_router.post(
     "/{conversation_id}/finalize",
-    responses={404: {"description": "Conversation not found"}},
+    responses={
+        404: {"description": "Conversation not found"},
+        409: {"description": "The run is inside a step; interrupt instead"},
+    },
 )
 async def finalize_conversation(
     conversation_id: UUID,
@@ -273,7 +276,18 @@ async def finalize_conversation(
     event_service = await conversation_service.get_event_service(conversation_id)
     if event_service is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    return await event_service.finalize(summary=request.summary)
+    try:
+        return await event_service.finalize(summary=request.summary)
+    except ValueError as e:
+        if str(e) != "step_in_progress":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "step_in_progress: the run is inside a step that has not "
+                "released the session; use interrupt to cancel it, or retry."
+            ),
+        ) from e
 
 
 @conversation_router.get(

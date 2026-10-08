@@ -935,3 +935,17 @@ def test_answer_without_tool_calls_reports_the_count() -> None:
 
     assert payload["tool_calls_in_request"] == 0
     assert payload["ended_with"] == "message"
+
+
+def test_resume_on_a_running_session_is_an_answer() -> None:
+    """#5: the daemon's 409 for a running session comes back as data."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/run"):
+            return httpx.Response(409, json={"detail": "Conversation already running."})
+        return httpx.Response(200, json=_conversation(execution_status="running"))
+
+    payload = _mock_client(handler).resume(SESSION)
+
+    assert payload["already_running"] is True
+    assert payload["status"] == "running"

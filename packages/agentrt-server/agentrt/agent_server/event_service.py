@@ -179,6 +179,10 @@ _START_DEADLINE_POLL_SECONDS = 15.0
 
 logger = get_logger(__name__)
 
+# How long finalize waits for an in-flight step to release the conversation
+# before telling the caller to interrupt instead.
+FINALIZE_STEP_WAIT_SECONDS = 10.0
+
 
 class CredentialBindingActivationTooLate(RuntimeError):
     pass
@@ -1480,6 +1484,11 @@ class EventService:
 
         # Use lock to make check-and-set atomic, preventing race conditions
         async with self._run_lock:
+            # Checked before the status read: that read takes the conversation
+            # lock, which a long step holds, so a resume on a running session
+            # waited out the client's timeout instead of answering (#5).
+            if self._run_task is not None and not self._run_task.done():
+                raise ValueError("conversation_already_running")
             if (
                 await self._get_execution_status()
                 == ConversationExecutionStatus.RUNNING
@@ -2301,6 +2310,8 @@ class EventService:
         # the agent has anything to be told about. An idle session finalized
         # here has nothing to explain, and a notice would invent a stop.
         run_was_in_flight = self._run_task is not None and not self._run_task.done()
+        if run_was_in_flight and not await self._step_lock_frees():
+            raise ValueError("step_in_progress")
         await self._pause_to_boundary()
         # PAUSED afterwards, not merely "a run existed": a run that completed
         # on its own during the pause window ends FINISHED, and telling the
@@ -2337,6 +2348,26 @@ class EventService:
         if claimed and boundary is not None and summary and finalize_summary_enabled():
             await self._run_final_summary(boundary)
         return await self.get_agent_response_result()
+
+    async def _step_lock_frees(self) -> bool:
+        """Whether the in-flight step releases the conversation within a bound.
+
+        A step stuck in a tool holds the lock indefinitely; waiting on it
+        blocked finalize for the client's whole timeout (#5). The probe gives
+        up instead of queueing, so no abandoned call pauses the run later.
+        """
+        state = self._conversation._state if self._conversation else None
+        if state is None:
+            return True
+
+        def probe() -> bool:
+            if not state.acquire(timeout=FINALIZE_STEP_WAIT_SECONDS):
+                return False
+            state.release()
+            return True
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, probe)
 
     async def _pause_to_boundary(self) -> None:
         """Pause until the session can no longer start new tools.
