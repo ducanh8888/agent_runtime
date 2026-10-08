@@ -212,6 +212,7 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         except Exception:
             pass
         else:
+            _refresh_llm_profile(state)
             return {
                 preset: _constrain_switch_llm(agent_store, profile).id
                 for preset, profile in loaded.items()
@@ -263,6 +264,35 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         agent_store.save(profile)
         ids[preset] = profile.id
     return ids
+
+
+def _refresh_llm_profile(state: Path) -> None:
+    """Rewrite the saved LLM profile when ``.env`` names a different endpoint.
+
+    Without this, changing ``AGENTRT_DEFAULT_MODEL`` (or the base URL or key) in
+    the operator's ``.env`` left the profile on disk pointing at the old model,
+    and dispatch was refused until someone edited the JSON by hand. Only the
+    three values ``.env`` owns are compared; the agent profiles, which refer to
+    the LLM profile by name, are untouched so their ids stay stable. Any failure
+    to read either side leaves the profile as it is.
+    """
+    from agentrt.agent_server.persistence import get_llm_profile_store
+
+    try:
+        router = config.load_router_config()
+        store = get_llm_profile_store()
+        current = store.load(LLM_PROFILE_NAME)
+    except Exception:
+        return
+    wanted = _build_llm(router)
+    if (
+        current.model == wanted.model
+        and current.base_url == wanted.base_url
+        and current.api_key == wanted.api_key
+    ):
+        return
+    store.save(LLM_PROFILE_NAME, wanted, include_secrets=True)
+    _tighten(state / "profiles" / f"{LLM_PROFILE_NAME}.json")
 
 
 def _tighten(path: Path) -> None:
