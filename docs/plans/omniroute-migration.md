@@ -354,3 +354,26 @@ refuses plain-text Devin endings when a `finish` tool exists, which makes
 
 The 10 `tests/runtime/test_h5_dispatch.py` failures (hard-coded workspaces
 that fix #3 now refuses) were fixed in the tests; `tests/runtime` is green.
+
+## 11. Windows portability audit (2026-10-09)
+
+Static audit by six AgentRT sessions (batch `win-audit`), each claim checked
+against the code. Fixed in 104a2a8: the `require="commit"` hook command is
+quoted for cmd.exe; snapshot worktrees live under `<state>/worktrees`
+instead of `/tmp`; NTFS alternate data streams are refused by the path guard;
+the stop error no longer says SIGTERM. Checked and fine: state dir under
+`%LOCALAPPDATA%`, detached launch flags, `taskkill` stop, UTF-8 stdout, PowerShell
+terminal backend selection, `inspect` git and search, credential files relying
+on the profile ACL.
+
+**Open, needs a native Windows run** (none of the above has run on Windows):
+
+- Daemon adoption is Linux-only (`daemon.py` `_proc_daemons`). If `daemon.json`
+  is lost while a daemon runs, Windows starts a second one on the same state dir.
+- Reserved device names (`CON`, `NUL`) and trailing-dot names are expected to be
+  refused or harmless via `resolve()`, but this is unmeasured.
+- Vendored PowerShell terminal: killing a command's child processes depends on
+  `Get-CimInstance Win32_Process`; with CIM unavailable, children survive a timeout.
+  Non-ASCII output under Windows PowerShell 5.1 is unverified.
+- `GIT_PAGER`/`PAGER=cat` and `EDITOR=true` defaults assume POSIX tools; harmless
+  inside Git for Windows, unverified for other programs.
