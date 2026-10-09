@@ -167,9 +167,7 @@ def test_search_text_reaches_the_model_with_path_and_line(
     assert "hello world" in model_visible_text
 
 
-def test_search_scope_accepts_a_single_file(
-    state_dir: Path, workspace: Path
-) -> None:
+def test_search_scope_accepts_a_single_file(state_dir: Path, workspace: Path) -> None:
     """H8 item 6: `path` naming a file searches that file, not an error.
 
     Used to reject any non-directory scope with "Not a directory" -- a
@@ -186,9 +184,7 @@ def test_search_scope_accepts_a_single_file(
     assert obs.matches[0].line == 2
 
 
-def test_search_missing_path_is_still_refused(
-    state_dir: Path, workspace: Path
-) -> None:
+def test_search_missing_path_is_still_refused(state_dir: Path, workspace: Path) -> None:
     """A scope that is neither a file nor a directory is still an error --
     the file-scope fix narrows the old blanket rejection, it does not
     remove it."""
@@ -576,3 +572,14 @@ def test_inspect_tool_create_requires_the_inspect_preset(
 
     with pytest.raises(permissions.PermissionDenied):
         inspect_tools.InspectTool.create(conv_state, permission="workspace")
+
+
+def test_check_path_refuses_ntfs_streams_on_windows(
+    state_dir: Path, workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(permissions.os, "name", "nt")
+    for raw in ("a.py:hidden", "a.py::$DATA", "C:a.py:x"):
+        with pytest.raises(permissions.PermissionDenied, match="data stream"):
+            permissions.check_path(
+                raw, root=workspace, permission="inspect", writing=False
+            )

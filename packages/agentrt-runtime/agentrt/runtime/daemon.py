@@ -314,6 +314,10 @@ def _daemon_env(token: str) -> dict[str, str]:
     state = config.state_dir()
     env["AGENTRT_CONVERSATIONS_PATH"] = str(state / "conversations")
     env["AGENTRT_WORKSPACE_PATH"] = str(state / "workspace")
+    # Snapshot/isolated worktrees otherwise go to a hard-coded
+    # /tmp/conversation-worktrees: `\\tmp` on the current drive on Windows,
+    # and a directory tmp cleaners may empty under a live session on Linux.
+    env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] = str(state / "worktrees")
     # Without this, the vendored server has no cipher and silently redacts a
     # conversation's persisted secrets -- including an LLM's API key -- to
     # `**********` whenever it saves state to disk. A fresh dispatch never
@@ -523,9 +527,7 @@ def stop(timeout: float = 10.0) -> bool:
     except ProcessLookupError:
         pass
     except OSError as exc:
-        raise RuntimeError(
-            f"Could not send SIGTERM to daemon pid {info.pid}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Could not stop daemon pid {info.pid}: {exc}") from exc
 
     deadline = time.monotonic() + max(timeout, 60.0)
     while _process_alive(info.pid) and time.monotonic() < deadline:

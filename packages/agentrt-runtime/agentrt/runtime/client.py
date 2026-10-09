@@ -540,6 +540,17 @@ _TOOL_CALL_TEXT = re.compile(
 )
 
 
+def _command_line(argv: list[str]) -> str:
+    """Quote argv for the hook runner, which executes it with ``shell=True``.
+
+    That shell is cmd.exe on Windows, which does not understand POSIX single
+    quotes -- and ``shlex.quote`` single-quotes every path with a backslash.
+    """
+    if os.name == "nt":
+        return subprocess.list2cmdline(argv)
+    return shlex.join(argv)
+
+
 def _looks_like_tool_call(text: str) -> bool:
     """Whether a final message is an unexecuted tool call written as text."""
     return bool(_TOOL_CALL_TEXT.match(text.lstrip()))
@@ -1509,14 +1520,8 @@ class Client:
             else config.default_max_iterations()
         )
         if require == "commit":
-            command = " ".join(
-                shlex.quote(part)
-                for part in (
-                    sys.executable,
-                    "-m",
-                    "agentrt.runtime.commit_hook",
-                    start_head or "",
-                )
+            command = _command_line(
+                [sys.executable, "-m", "agentrt.runtime.commit_hook", start_head or ""]
             )
             body["hook_config"] = {
                 "stop": [

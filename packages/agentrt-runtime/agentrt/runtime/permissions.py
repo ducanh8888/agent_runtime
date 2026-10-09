@@ -29,6 +29,7 @@ would otherwise look like it were enforcing more than it does.
 
 from __future__ import annotations
 
+import ntpath
 import os
 from pathlib import Path
 from typing import Literal
@@ -163,6 +164,12 @@ def check_path(
         raise PermissionDenied(
             f"this session is {permission}; it may view files but not change them"
         )
+
+    # An NTFS alternate data stream (`notes.txt:hidden`, `x::$DATA`) is a
+    # second body behind the same name, which nothing here can vet. ':' is an
+    # ordinary filename character on POSIX, so this is Windows-only.
+    if os.name == "nt" and ":" in ntpath.splitdrive(text)[1]:
+        raise PermissionDenied(f"refusing an NTFS alternate data stream: {text!r}")
 
     # Windows strips trailing dots and spaces from a path component when it
     # opens it, but Python's normalisation does not, so `.. ` survives as a

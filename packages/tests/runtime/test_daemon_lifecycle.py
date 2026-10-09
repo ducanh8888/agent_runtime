@@ -109,3 +109,10 @@ def test_ensure_running_refuses_multiple_discovered_daemons(monkeypatch):
     monkeypatch.setattr(daemon, "_proc_daemons", lambda: candidates)
     with pytest.raises(RuntimeError, match=r"pid=111 port=4321.*pid=222 port=4322"):
         daemon.ensure_running()
+
+
+def test_daemon_env_keeps_worktrees_in_the_state_dir():
+    env = daemon._daemon_env("token")
+    assert env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
+        config.state_dir() / "worktrees"
+    )

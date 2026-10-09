@@ -497,3 +497,13 @@ def test_dispatch_many_refuses_a_missing_workspace_before_any_item(tmp_path) -> 
     with pytest.raises(ValueError, match="item 1 workspace .* does not exist"):
         _mock_client(handler).dispatch_many(tasks)
     assert not [c for c in calls if c.method == "POST"]
+
+
+def test_commit_hook_command_is_quoted_for_cmd_exe_on_windows(monkeypatch) -> None:
+    """The hook runs with shell=True; cmd.exe does not understand '...'."""
+    monkeypatch.setattr(client_mod.os, "name", "nt")
+    command = client_mod._command_line(
+        [r"C:\Program Files\uv\python.exe", "-m", "agentrt.runtime.commit_hook", ""]
+    )
+    assert "'" not in command
+    assert command.startswith('"C:\\Program Files\\uv\\python.exe" -m ')
