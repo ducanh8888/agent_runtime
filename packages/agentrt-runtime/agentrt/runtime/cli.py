@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import deque
 
@@ -279,6 +280,38 @@ def _cmd_daemon_logs(args: argparse.Namespace) -> None:
         return None
     sys.stdout.write("".join(tail))
     return None
+
+
+def _header_pairs(raw: list[str]) -> dict[str, str]:
+    """`NAME=VALUE` pairs; `NAME=env:VAR` reads the value from the environment,
+    which keeps a token out of shell history."""
+    headers: dict[str, str] = {}
+    for item in raw:
+        name, sep, value = item.partition("=")
+        if not sep or not name:
+            raise client_mod.ClientError(f"--header must be NAME=VALUE: {item!r}")
+        if value.startswith("env:"):
+            var = value[4:]
+            if var not in os.environ:
+                raise client_mod.ClientError(f"--header {name}: ${var} is not set")
+            value = os.environ[var]
+        headers[name] = value
+    return headers
+
+
+def _cmd_mcp_list(_args: argparse.Namespace) -> dict:
+    """List the MCP servers worker sessions get."""
+    return client_mod.Client().mcp_servers()
+
+
+def _cmd_mcp_add(args: argparse.Namespace) -> dict:
+    """Give worker sessions an HTTP MCP server."""
+    return client_mod.Client().mcp_add(args.name, args.url, _header_pairs(args.header))
+
+
+def _cmd_mcp_remove(args: argparse.Namespace) -> dict:
+    """Stop giving worker sessions an MCP server."""
+    return client_mod.Client().mcp_remove(args.name)
 
 
 def _cmd_config(_args: argparse.Namespace) -> dict:
@@ -563,6 +596,32 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     logs_parser.add_argument("--lines", type=int, default=50)
     logs_parser.set_defaults(func=_cmd_daemon_logs)
+
+    mcp_parser = _add_subparser(
+        subparsers,
+        "mcp",
+        help="MCP servers every worker session gets (outside the path guard)",
+    )
+    mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", required=True)
+    mcp_list_parser = _add_subparser(mcp_subparsers, "list", help="list servers")
+    mcp_list_parser.set_defaults(func=_cmd_mcp_list)
+    mcp_add_parser = _add_subparser(
+        mcp_subparsers, "add", help="add an HTTP MCP server for worker sessions"
+    )
+    mcp_add_parser.add_argument("name")
+    mcp_add_parser.add_argument("url")
+    mcp_add_parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        help="NAME=VALUE, or NAME=env:VAR to read the value from $VAR",
+    )
+    mcp_add_parser.set_defaults(func=_cmd_mcp_add)
+    mcp_remove_parser = _add_subparser(
+        mcp_subparsers, "remove", help="remove an MCP server"
+    )
+    mcp_remove_parser.add_argument("name")
+    mcp_remove_parser.set_defaults(func=_cmd_mcp_remove)
 
     config_parser = _add_subparser(
         subparsers, "config", help="print runtime configuration summary"

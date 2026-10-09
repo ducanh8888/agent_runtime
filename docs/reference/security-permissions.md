@@ -84,6 +84,21 @@ Three honest limitations:
 - This protects the runtime's own credential files. It says nothing about the
   rest of the machine, which is what the terminal presets already concede.
 
+## MCP servers
+
+`agentrt mcp add NAME URL [--header NAME=VALUE|NAME=env:VAR]` gives **every**
+worker session, in every preset, the tools of an HTTP MCP server; `agentrt mcp
+list` and `agentrt mcp remove NAME` manage them, and `status` reports a
+session's `mcp_servers`. The daemon stores them in `<state>/settings.json`
+(header values encrypted with the state secret key, file mode 0600 on POSIX),
+a file the path guard already refuses to sessions.
+
+MCP tools act **outside** the file-editor guard: a `readonly` or `inspect`
+session is only as read-only as the MCP servers it is given. Add only servers
+whose tools are read-only, or accept that the presets no longer describe what
+a session can change. `mcp add` refuses a URL that reaches the daemon itself,
+so a worker cannot use MCP to start sessions; it accepts only http(s) URLs.
+
 ## Reports from read-only sessions
 
 A `readonly` or `inspect` session cannot write inside the workspace it was

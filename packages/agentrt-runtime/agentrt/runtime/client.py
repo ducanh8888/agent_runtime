@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -1412,6 +1412,48 @@ class Client:
             "allowed_llm_profiles": bootstrap.allowed_llm_profiles(),
         }
 
+    def mcp_servers(self) -> dict:
+        """MCP servers every worker session gets, with header values hidden."""
+        settings = self._send("GET", "/api/settings").json()
+        servers = (settings.get("agent_settings") or {}).get("mcp_config") or {}
+        return {
+            "servers": [
+                {
+                    "name": name,
+                    "url": server.get("url"),
+                    "command": server.get("command"),
+                    "headers": sorted((server.get("headers") or {}).keys()),
+                }
+                for name, server in sorted(servers.items())
+            ]
+        }
+
+    def mcp_add(self, name: str, url: str, headers: dict[str, str]) -> dict:
+        """Give every worker session an HTTP MCP server, stored by the daemon.
+
+        Refuses a URL that reaches this daemon: a worker that could call the
+        runtime's own API could start sessions of its own.
+        """
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ClientError(f"MCP server URL must be http(s): {url!r}")
+        self._ensure_ready()
+        own = urlsplit(self._base_url())
+        loopback = {"127.0.0.1", "localhost", "::1", own.hostname}
+        if parsed.hostname in loopback and parsed.port == own.port:
+            raise ClientError("refusing an MCP server that points at this daemon")
+        self._send(
+            "POST",
+            f"/api/settings/mcp/{quote(name, safe='')}",
+            json={"url": url, "headers": headers} if headers else {"url": url},
+        )
+        return self.mcp_servers()
+
+    def mcp_remove(self, name: str) -> dict:
+        """Stop giving worker sessions the named MCP server."""
+        self._send("DELETE", f"/api/settings/mcp/{quote(name, safe='')}")
+        return self.mcp_servers()
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -1767,6 +1809,8 @@ class Client:
             result["tools"] = [
                 tool.get("name") for tool in agent["tools"] if isinstance(tool, dict)
             ]
+        if isinstance(agent, dict) and isinstance(agent.get("mcp_config"), dict):
+            result["mcp_servers"] = sorted(agent["mcp_config"])
         if data.get("error") is not None:
             result["error"] = data.get("error")
         # Reported whenever the session was given one, because it is the only

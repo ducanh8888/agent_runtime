@@ -385,3 +385,14 @@ Second pass (next commit), after re-reading each path:
 `Get-CimInstance` (with Ctrl+Break and Ctrl+C as fallbacks); `PAGER=cat` and
 `EDITOR=true` are POSIX names, harmless for Git for Windows, which runs them
 through its own sh. None of this has run on native Windows.
+
+## 12. Worker sessions can use MCP servers (2026-10-09)
+
+`agentrt mcp add|list|remove` wraps the vendored server's existing
+`/api/settings/mcp/{name}` API; every preset gets every configured server
+(profiles keep `mcp_server_refs: null`). `status` reports `mcp_servers`.
+Measured: `research-mcp` (HTTP, auth header) registered with its token
+encrypted at rest; session 1aebf702 (`inspect`) called its `search` and `read`
+tools and finished with a cited source. The self-reference guard refuses the
+daemon's own URL. Not built: per-preset MCP selection and stdio servers; see
+docs/reference/security-permissions.md "MCP servers".

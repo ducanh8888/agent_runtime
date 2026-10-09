@@ -101,6 +101,39 @@ def test_status_reports_the_tools_the_session_was_given() -> None:
     assert client.status(SESSION)["tools"] == ["file_editor", "inspect"]
 
 
+def test_status_reports_the_sessions_mcp_servers() -> None:
+    client = _mock_client(
+        lambda request: httpx.Response(
+            200,
+            json=_conversation(
+                agent={"tools": [], "mcp_config": {"research-mcp": {}, "a": {}}}
+            ),
+        )
+    )
+    assert client.status(SESSION)["mcp_servers"] == ["a", "research-mcp"]
+
+
+def test_mcp_add_refuses_the_daemon_itself_and_non_http() -> None:
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"agent_settings": {"mcp_config": {}}})
+
+    client = _mock_client(handler)
+    for url in ("http://daemon.test/mcp", "http://localhost/mcp", "stdio:x"):
+        try:
+            client.mcp_add("self", url, {})
+        except client_mod.ClientError:
+            continue
+        raise AssertionError(f"accepted {url}")
+    assert not any(r.method == "POST" for r in sent)
+
+    client.mcp_add("research", "https://research.example/mcp", {"A": "b"})
+    post = next(r for r in sent if r.method == "POST")
+    assert post.url.path == "/api/settings/mcp/research"
+
+
 def test_status_surfaces_the_pinned_commit_for_snapshot_mode() -> None:
     """H8 item 8: a caller can check what a session actually ran against
     without a separate call."""

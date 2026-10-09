@@ -359,8 +359,10 @@ def status(session: str) -> dict:
     worktree is pinned to, so you can check what a review actually ran
     against without a separate call. Absent for the default `"shared"` mode.
 
-    `tools` lists the tool names the session was actually built with. Check
-    it before believing a session that says its tools are unavailable.
+    `tools` lists the tool names the session was actually built with, and
+    `mcp_servers` the MCP servers whose tools it also has (configured with
+    `agentrt mcp add`). Check them before believing a session that says its
+    tools are unavailable.
     """
     return _guard(_get_client().status, session)
 
