@@ -1480,6 +1480,79 @@ class ConversationService:
         record.execution_status = conversation_info.execution_status
         return conversation_info
 
+    async def _prewarm_conversation_infos(
+        self,
+        rows: list[tuple[UUID, _ConversationRecord]],
+        children_index: dict[UUID, list[UUID]],
+    ) -> None:
+        """Rebuild every stale cached row of a page in one worker-thread hop.
+
+        AgentRT fork (#10). A running session autosaves after every step, so
+        its cached row is stale at nearly every search, and ``_conversation_info``
+        then made two sequential ``to_thread`` hops per row. Each hop waits for
+        a busy event loop to come back around, so with ~120 sessions running a
+        page cost ~0.2 s per live row though the work is ~13 ms. Same checks
+        and the same cache as ``_conversation_info``, which then hits it; a
+        row that fails here is left to that per-row path, errors included.
+        """
+        event_services = self._event_services
+        if event_services is None:
+            return
+        targets = []
+        for conversation_id, record in rows:
+            event_service = event_services.get(conversation_id)
+            live = event_service is not None and event_service.is_open()
+            if live:
+                assert event_service is not None
+                record.stored = event_service.stored
+            signature = _state_signature(self._base_state_path(conversation_id, record))
+            if signature is None:
+                continue
+            stored_signature = (
+                _stored_metadata_signature(record.stored) if live else None
+            )
+            if (
+                record.cached_info is not None
+                and signature == record.state_signature
+                and (not live or stored_signature == record.stored_signature)
+            ):
+                continue
+            targets.append(
+                (
+                    conversation_id,
+                    record.stored,
+                    signature,
+                    stored_signature,
+                    children_index.get(conversation_id, []),
+                )
+            )
+        if not targets:
+            return
+
+        def build_all() -> dict[UUID, tuple]:
+            built = {}
+            for conversation_id, stored, signature, stored_sig, children in targets:
+                try:
+                    state = self._load_persisted_state_sync(conversation_id)
+                    if state is None:
+                        continue
+                    info = _compose_conversation_info(stored, state, children)
+                except Exception:
+                    continue
+                built[conversation_id] = (info, signature, stored_sig)
+            return built
+
+        for conversation_id, (info, signature, stored_sig) in (
+            await asyncio.to_thread(build_all)
+        ).items():
+            record = self._conversation_records.get(conversation_id)
+            if record is None:
+                continue
+            record.state_signature = signature
+            record.stored_signature = stored_sig
+            record.cached_info = info
+            record.execution_status = info.execution_status
+
     @staticmethod
     def _refresh_persisted_statuses_sync(
         targets: list[tuple[UUID, str, tuple[int, int] | None]],
@@ -1810,6 +1883,9 @@ class ConversationService:
         items: list[ConversationInfo] = []
         next_page_id = None
         children_index = self._children_index()
+        await self._prewarm_conversation_infos(
+            records[start_index : start_index + limit], children_index
+        )
         for conversation_id, record in records[start_index:]:
             if len(items) >= limit:
                 next_page_id = conversation_id.hex
