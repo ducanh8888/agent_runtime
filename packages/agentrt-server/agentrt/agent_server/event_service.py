@@ -995,7 +995,12 @@ class EventService:
             await self.stop_goal_loop()
         explicit_interrupt_generation = self._explicit_interrupt_generation
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._conversation.send_message, message)
+        # AgentRT fork: send_message takes the state lock, which a busy step
+        # holds for its whole tool call; wait for it on this conversation's own
+        # thread, not the shared default pool the API needs (#10).
+        await loop.run_in_executor(
+            self._emit_executor, self._conversation.send_message, message
+        )
         if run:
             if self._explicit_interrupt_generation != explicit_interrupt_generation:
                 return

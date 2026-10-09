@@ -851,7 +851,7 @@ class TestEventServiceSendMessage:
 
             # Verify send_message was called via executor
             mock_loop.run_in_executor.assert_any_call(
-                None, conversation.send_message, message
+                event_service._emit_executor, conversation.send_message, message
             )
             # Verify run was called via executor since run=True and agent is not running
             assert (
@@ -881,7 +881,7 @@ class TestEventServiceSendMessage:
 
             # Verify send_message was called via executor
             mock_loop.run_in_executor.assert_called_once_with(
-                None, conversation.send_message, message
+                event_service._emit_executor, conversation.send_message, message
             )
             # Verify run was NOT called since run=False
             assert mock_loop.run_in_executor.call_count == 1  # Only send_message call
@@ -1415,21 +1415,23 @@ class TestEventServiceSendMessage:
             user_message = Message(role="user", content=[])
             await event_service.send_message(user_message, run=False)
             mock_loop.run_in_executor.assert_any_call(
-                None, conversation.send_message, user_message
+                event_service._emit_executor, conversation.send_message, user_message
             )
 
             # Test with assistant message
             assistant_message = Message(role="assistant", content=[])
             await event_service.send_message(assistant_message, run=False)
             mock_loop.run_in_executor.assert_any_call(
-                None, conversation.send_message, assistant_message
+                event_service._emit_executor,
+                conversation.send_message,
+                assistant_message,
             )
 
             # Test with system message
             system_message = Message(role="system", content=[])
             await event_service.send_message(system_message, run=False)
             mock_loop.run_in_executor.assert_any_call(
-                None, conversation.send_message, system_message
+                event_service._emit_executor, conversation.send_message, system_message
             )
 
     @pytest.mark.asyncio
@@ -3546,3 +3548,42 @@ def test_emits_waiting_on_a_held_state_lock_leave_the_default_pool_free(
     finally:
         event_service._emit_executor.shutdown(wait=True)
     assert conversation._on_event.call_count == 64
+
+
+def test_send_to_a_busy_conversation_leaves_the_default_pool_free(
+    event_service: EventService,
+) -> None:
+    """AgentRT #10: send_message waits on the state lock a running step holds;
+    many sends to busy sessions must not starve the shared default executor."""
+    import threading
+
+    lock = threading.Lock()
+    sent: list[object] = []
+
+    def send_message(message: object) -> None:
+        with lock:
+            sent.append(message)
+
+    conversation = MagicMock()
+    conversation.send_message = send_message
+    event_service._conversation = conversation  # type: ignore[assignment]
+
+    async def scenario() -> int:
+        lock.acquire()  # the busy step
+        pending = [
+            asyncio.ensure_future(event_service.send_message(MagicMock()))
+            for _ in range(64)
+        ]
+        try:
+            await asyncio.sleep(0.1)
+            loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(loop.run_in_executor(None, lambda: 1), 5)
+        finally:
+            lock.release()
+            await asyncio.gather(*pending)
+
+    try:
+        assert asyncio.run(scenario()) == 1
+    finally:
+        event_service._emit_executor.shutdown(wait=True)
+    assert len(sent) == 64
