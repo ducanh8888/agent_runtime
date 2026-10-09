@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from collections import deque
 
@@ -282,14 +283,25 @@ def _cmd_daemon_logs(args: argparse.Namespace) -> None:
     return None
 
 
+_HEADER_NAME = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+")
+
+
 def _header_pairs(raw: list[str]) -> dict[str, str]:
-    """`NAME=VALUE` pairs; `NAME=env:VAR` reads the value from the environment,
-    which keeps a token out of shell history."""
+    """Headers as `Name: value` (as curl takes them) or `Name=value`.
+
+    Whichever separator comes first splits, so a token containing `=` or `:`
+    survives either form. A value of `env:VAR` is read from the environment,
+    which keeps a token out of shell history.
+    """
     headers: dict[str, str] = {}
     for item in raw:
-        name, sep, value = item.partition("=")
-        if not sep or not name:
-            raise client_mod.ClientError(f"--header must be NAME=VALUE: {item!r}")
+        cuts = [i for i in (item.find(":"), item.find("=")) if i > 0]
+        name = item[: min(cuts)].strip() if cuts else ""
+        if not _HEADER_NAME.fullmatch(name):
+            raise client_mod.ClientError(
+                f"--header must be 'Name: value' or 'Name=value': {item!r}"
+            )
+        value = item[min(cuts) + 1 :].strip()
         if value.startswith("env:"):
             var = value[4:]
             if var not in os.environ:
@@ -614,7 +626,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--header",
         action="append",
         default=[],
-        help="NAME=VALUE, or NAME=env:VAR to read the value from $VAR",
+        help="'Name: value' or Name=value; a value of env:VAR reads $VAR",
     )
     mcp_add_parser.set_defaults(func=_cmd_mcp_add)
     mcp_remove_parser = _add_subparser(
