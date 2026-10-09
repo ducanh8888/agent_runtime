@@ -116,3 +116,25 @@ def test_daemon_env_keeps_worktrees_in_the_state_dir():
     assert env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
         config.state_dir() / "worktrees"
     )
+
+
+def test_process_alive_never_uses_os_kill_on_windows(monkeypatch):
+    """On Windows os.kill(pid, 0) is TerminateProcess, not a probe."""
+
+    def kill(*args):
+        raise AssertionError("os.kill would terminate the process on Windows")
+
+    monkeypatch.setattr(daemon.os, "name", "nt")
+    monkeypatch.setattr(daemon.os, "kill", kill)
+    monkeypatch.setattr(daemon, "_windows_process_alive", lambda pid: True)
+    assert daemon._process_alive(1234) is True
+
+
+def test_ensure_running_refuses_a_second_daemon_without_discovery(monkeypatch):
+    info = daemon.DaemonInfo(port=4321, token="token", pid=os.getpid())
+    daemon._write_daemon_file(info)
+    monkeypatch.setattr(daemon.sys, "platform", "win32")
+    monkeypatch.setattr(daemon, "is_alive", lambda info: False)
+    monkeypatch.setattr(daemon, "_process_alive", lambda pid: True)
+    with pytest.raises(RuntimeError, match="running but not answering"):
+        daemon.ensure_running(startup_timeout=0.1)

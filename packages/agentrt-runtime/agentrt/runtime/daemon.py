@@ -235,7 +235,40 @@ def _log_tail() -> str:
     return "\n".join(lines[-30:])
 
 
+def _windows_process_alive(pid: int) -> bool:
+    """Liveness without side effects. On Windows `os.kill(pid, 0)` is not a
+    probe: it calls TerminateProcess and kills the process it asks about."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetExitCodeProcess.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    process_query_limited_information = 0x1000
+    error_access_denied = 5
+    still_active = 259
+
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        # Access denied means it exists but belongs to another user.
+        return getattr(ctypes, "get_last_error")() == error_access_denied
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def _process_alive(pid: int) -> bool:
+    if os.name == "nt":
+        return _windows_process_alive(pid)
     if sys.platform.startswith("linux"):
         try:
             stat = Path(f"/proc/{pid}/stat").read_text()
@@ -413,6 +446,13 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                 return info
             if not _process_alive(info.pid):
                 _record_unexpected_exit()
+            elif not sys.platform.startswith("linux"):
+                # Linux re-discovers it below through /proc; elsewhere a second
+                # daemon would start on the same state directory.
+                raise RuntimeError(
+                    f"AgentRT daemon pid {info.pid} is running but not answering "
+                    "its health check; wait and retry, or run `agentrt daemon stop`"
+                )
         candidates = _proc_daemons()
         if len(candidates) > 1:
             details = ", ".join(

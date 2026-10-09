@@ -135,6 +135,27 @@ def contains(root: Path, target: Path) -> bool:
         return False
 
 
+_WINDOWS = os.name == "nt"
+_WINDOWS_DEVICES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+    | {f"{kind}{n}" for kind in ("COM", "LPT") for n in "123456789"}
+)
+
+
+def _windows_alias(part: str) -> bool:
+    """A component Windows opens as a different object than its spelling.
+
+    `name.` and `name ` open `name`, so a check on the spelling is a check on
+    the wrong file; `NUL`, `con.txt` and `COM1 ` open a device. Drive roots
+    (`C:\\`) are left alone.
+    """
+    if part.endswith(("\\", "/")) or ":" in part:
+        return False
+    if part.endswith((".", " ")):
+        return True
+    return part.split(".")[0].rstrip(" ").upper() in _WINDOWS_DEVICES
+
+
 def check_path(
     raw_path: str,
     *,
@@ -168,7 +189,7 @@ def check_path(
     # An NTFS alternate data stream (`notes.txt:hidden`, `x::$DATA`) is a
     # second body behind the same name, which nothing here can vet. ':' is an
     # ordinary filename character on POSIX, so this is Windows-only.
-    if os.name == "nt" and ":" in ntpath.splitdrive(text)[1]:
+    if _WINDOWS and ":" in ntpath.splitdrive(text)[1]:
         raise PermissionDenied(f"refusing an NTFS alternate data stream: {text!r}")
 
     # Windows strips trailing dots and spaces from a path component when it
@@ -184,6 +205,10 @@ def check_path(
         if part and set(part) <= {".", " "}:
             raise PermissionDenied(
                 f"refusing a path component made only of dots and spaces: {part!r}"
+            )
+        if _WINDOWS and _windows_alias(part):
+            raise PermissionDenied(
+                f"refusing a name Windows would open as something else: {part!r}"
             )
 
     workspace = _real(root)

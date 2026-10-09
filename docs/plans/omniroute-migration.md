@@ -366,14 +366,22 @@ the stop error no longer says SIGTERM. Checked and fine: state dir under
 terminal backend selection, `inspect` git and search, credential files relying
 on the profile ACL.
 
-**Open, needs a native Windows run** (none of the above has run on Windows):
+Second pass (next commit), after re-reading each path:
 
-- Daemon adoption is Linux-only (`daemon.py` `_proc_daemons`). If `daemon.json`
-  is lost while a daemon runs, Windows starts a second one on the same state dir.
-- Reserved device names (`CON`, `NUL`) and trailing-dot names are expected to be
-  refused or harmless via `resolve()`, but this is unmeasured.
-- Vendored PowerShell terminal: killing a command's child processes depends on
-  `Get-CimInstance Win32_Process`; with CIM unavailable, children survive a timeout.
-  Non-ASCII output under Windows PowerShell 5.1 is unverified.
-- `GIT_PAGER`/`PAGER=cat` and `EDITOR=true` defaults assume POSIX tools; harmless
-  inside Git for Windows, unverified for other programs.
+- `daemon._process_alive` used `os.kill(pid, 0)`, which on Windows is
+  `TerminateProcess`: checking a slow daemon's liveness killed it and its
+  sessions, and `stop()` killed it before the graceful `taskkill`. Windows now
+  uses `OpenProcess` + `GetExitCodeProcess`. Introduced 2026-09-30, after the
+  move to Linux; the first audit pass read the line and missed it.
+- A daemon that is alive but not answering its health check is no longer
+  replaced by a second daemon on platforms without `/proc` discovery; the CLI
+  reports it instead. (A lost `daemon.json` still cannot be recovered there.)
+- The path guard refuses Windows device names (`NUL`, `con.txt`, `COM1`) and
+  components ending in a dot or space, which Windows opens as another object.
+- Vendored PowerShell terminal: the session is switched to UTF-8 input/output
+  first; it decoded UTF-8 while PowerShell wrote the console code page.
+
+**Still open**: killing a timed-out command's children relies on
+`Get-CimInstance` (with Ctrl+Break and Ctrl+C as fallbacks); `PAGER=cat` and
+`EDITOR=true` are POSIX names, harmless for Git for Windows, which runs them
+through its own sh. None of this has run on native Windows.

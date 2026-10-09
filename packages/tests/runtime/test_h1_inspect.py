@@ -577,9 +577,26 @@ def test_inspect_tool_create_requires_the_inspect_preset(
 def test_check_path_refuses_ntfs_streams_on_windows(
     state_dir: Path, workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(permissions.os, "name", "nt")
+    monkeypatch.setattr(permissions, "_WINDOWS", True)
     for raw in ("a.py:hidden", "a.py::$DATA", "C:a.py:x"):
         with pytest.raises(permissions.PermissionDenied, match="data stream"):
             permissions.check_path(
                 raw, root=workspace, permission="inspect", writing=False
             )
+
+
+def test_check_path_refuses_windows_aliases(
+    state_dir: Path, workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(permissions, "_WINDOWS", True)
+    for raw in ("NUL", "con.txt", "COM1", "sub/aux.py", "a.py.", "a.py "):
+        with pytest.raises(permissions.PermissionDenied, match="something else"):
+            permissions.check_path(
+                raw, root=workspace, permission="inspect", writing=False
+            )
+    assert (
+        permissions.check_path(
+            "a.py", root=workspace, permission="inspect", writing=False
+        )
+        == (workspace / "a.py").resolve()
+    )

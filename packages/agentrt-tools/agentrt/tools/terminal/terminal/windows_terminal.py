@@ -57,6 +57,13 @@ _WINDOWS_SPECIALS: dict[str, str] = {
 }
 
 
+_UTF8_CONSOLE = (
+    "$__utf8 = New-Object System.Text.UTF8Encoding $false; "
+    "[Console]::InputEncoding = $__utf8; [Console]::OutputEncoding = $__utf8; "
+    "$OutputEncoding = $__utf8; Remove-Variable __utf8\n"
+)
+
+
 class WindowsTerminal(TerminalInterface):
     """Persistent PowerShell session for Windows terminal execution."""
 
@@ -124,6 +131,10 @@ class WindowsTerminal(TerminalInterface):
         self.reader_thread.start()
         self._initialized = True
 
+        # AgentRT fork: the reader decodes UTF-8 and commands are written as
+        # UTF-8, but PowerShell uses the console code page (cp1252, cp1258, ...)
+        # for redirected pipes, so non-ASCII text was garbled both ways.
+        self._write_to_stdin(_UTF8_CONSOLE)
         self._wait_for_startup_output()
         self.clear_screen()
         logger.debug("Windows terminal initialized with work dir: %s", self.work_dir)
