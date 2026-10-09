@@ -344,7 +344,7 @@ gemini/codex as fallback only, no `anthropic/*`).
 | acef636 | condenser `max_tokens = 40000`, migrated onto existing profiles | Nothing capped prompts before (sessions reached 150k–180k tokens per call). Router data: Devin 502s 4% → 12% and p50 ×2 above ~40k tokens. |
 | ecf8cbe | `inspect git` accepts a linked worktree's own metadata | Snapshot reviewers were refused every git command; now status/log work, and a borrowed worktree's metadata is still refused. |
 | b36aac9 | `.claude/skills` as a project-skill dir | Repo skills kept there now reach `<SKILLS>` (they never did before). |
-| 7504f97 | `AGENTRT_PUBLIC_SKILLS` allow-list (daemon default `code-review`) | `<SKILLS>` was 24.4k chars of 68 public skills per call; now the repo's skills plus `code-review`. |
+| 7504f97 | `AGENTRT_PUBLIC_SKILLS` allow-list (daemon default now empty) | `<SKILLS>` was 24.4k chars of 68 public skills per call; now only the repo's own skills, and no `invoke_skill` tool when it has none. `code-review` was dropped after Devin invoked it 10× in 4 sessions at odd moments. |
 
 **Measured but not changed**: give-up wording is not a completion signal
 (3/7 healthy sessions also ended with a plain message). The router now
