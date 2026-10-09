@@ -956,7 +956,12 @@ class ConversationService:
     admission_poll_seconds: float = 2.0
     _admission_queue: list[UUID] = field(default_factory=list, init=False)
     _admission_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
-    _idempotency_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    # AgentRT fork: one lock per idempotency key, not one for the service. The
+    # single lock was held across every keyed create, and every AgentRT
+    # dispatch carries a key, so all creates ran one at a time (~3 s each:
+    # 100 sessions took ~5 min, and 8 parallel dispatches waited ~26 s each).
+    # Only submissions sharing a key need to be serialized. [lock, holders]
+    _idempotency_locks: dict[str, list] = field(default_factory=dict, init=False)
     # Folding is a read-modify-write of one file, so concurrent deletes of
     # different sessions must not interleave it.
     _spend_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
@@ -1920,8 +1925,21 @@ class ConversationService:
         """
         if not request.idempotency_key:
             return await self._start_conversation_inner(request)
-        async with self._idempotency_lock:
+        async with self._idempotency_key_lock(request.idempotency_key):
             return await self._start_conversation_inner(request)
+
+    @asynccontextmanager
+    async def _idempotency_key_lock(self, key: str):
+        """Serialize submissions that share ``key``; others run concurrently."""
+        entry = self._idempotency_locks.setdefault(key, [asyncio.Lock(), 0])
+        entry[1] += 1
+        try:
+            async with entry[0]:
+                yield
+        finally:
+            entry[1] -= 1
+            if entry[1] == 0:
+                del self._idempotency_locks[key]
 
     async def _start_conversation_inner(
         self,

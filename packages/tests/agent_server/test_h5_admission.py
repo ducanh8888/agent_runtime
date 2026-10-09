@@ -481,3 +481,39 @@ async def test_no_shared_writer_limit_by_default(tmp_path) -> None:
 
     assert surface["shared_writer_limit"] is None
     assert service._has_free_slot(workspace_root="/tmp/h5", workspace_mode="shared")
+
+
+# --- AgentRT #10: keyed creates run concurrently --------------------------
+
+
+async def _peak_concurrency(tmp_path, keys: list[str]) -> int:
+    import asyncio
+
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=0)
+    service._event_services = {}
+    active = peak = 0
+
+    async def slow_create(request):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.05)
+        active -= 1
+        return None, True
+
+    service._start_conversation_inner = slow_create  # type: ignore[method-assign]
+    await asyncio.gather(
+        *(service._start_conversation(_request(idempotency_key=k)) for k in keys)
+    )
+    assert service._idempotency_locks == {}
+    return peak
+
+
+@pytest.mark.asyncio
+async def test_creates_with_different_keys_run_concurrently(tmp_path) -> None:
+    assert await _peak_concurrency(tmp_path, [f"k{i}" for i in range(8)]) == 8
+
+
+@pytest.mark.asyncio
+async def test_creates_sharing_a_key_still_run_one_at_a_time(tmp_path) -> None:
+    assert await _peak_concurrency(tmp_path, ["same"] * 4) == 1
