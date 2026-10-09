@@ -479,9 +479,7 @@ def test_agent_step_tool_spans_nest_under_dispatcher_without_lmnr(tracing) -> No
             "agentrt.sdk.llm.llm.litellm_completion",
             side_effect=lambda messages, **kw: _response_with_two_tool_calls(),
         ),
-        patch(
-            "agentrt.sdk.agent.agent.should_enable_observability", return_value=True
-        ),
+        patch("agentrt.sdk.agent.agent.should_enable_observability", return_value=True),
         # Run the undecorated ``step``. Its ``@observe`` wrapper builds a real
         # lmnr span once observability is on anywhere in the process — and caches
         # it — which interposes between this test's parent span and the tool
@@ -508,3 +506,19 @@ def test_agent_step_tool_spans_nest_under_dispatcher_without_lmnr(tracing) -> No
         assert span.context.trace_id == parent_ctx.trace_id
         assert span.parent is not None
         assert span.parent.span_id == parent_ctx.span_id
+
+
+def test_aexecute_batch_single_call_stays_off_the_default_pool() -> None:
+    """AgentRT #10: a long single tool call must not occupy the asyncio default
+    executor, which the server's API needs for its own to_thread calls."""
+    executor = ParallelToolExecutor(max_workers=1)
+    threads: list[str] = []
+
+    def tool_runner(action: Any) -> list[Any]:
+        threads.append(threading.current_thread().name)
+        return [MagicMock()]
+
+    asyncio.run(executor.aexecute_batch([_make_action("c0")], tool_runner))
+
+    assert len(threads) == 1
+    assert threads[0].startswith("aexecute_one")

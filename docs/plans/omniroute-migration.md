@@ -396,3 +396,29 @@ encrypted at rest; session 1aebf702 (`inspect`) called its `search` and `read`
 tools and finished with a cited source. The self-reference guard refuses the
 daemon's own URL. Not built: per-preset MCP selection and stdio servers; see
 docs/reference/security-permissions.md "MCP servers".
+
+## 13. Daemon unresponsive under ~30+ busy sessions (#10, 2026-10-10)
+
+Reproduced locally: 20–40 sessions each running `sleep 300` made
+`POST /api/conversations` time out (14/40) and `search` / status of a running
+session hang past 60 s, while `/health` answered in 0.00 s and the daemon sat at
+~1% CPU. A `kill -USR2` dump (new, see below) showed 32 default-executor threads
+named `asyncio` inside terminal `execute`: the vendored `ParallelToolExecutor`
+ran a step's *single* tool call on the asyncio default pool (32 threads here),
+so long tool calls exhausted it and every `to_thread` in the API queued behind
+them. A second, smaller drain: events emitted from worker threads waited on the
+state lock in that same pool.
+
+Fixed (vendored, AgentRT-fork comments): a single tool call gets its own
+one-thread executor; thread-emitted events go to a per-conversation one-thread
+executor. Measured after, with 39 sessions in `sleep 300`: 40/40 dispatches,
+`search?limit=100` 0.09 s, running-session status 0.01 s.
+
+Diagnostics added to `server_launch`: `kill -USR1 <daemon pid>` dumps thread
+stacks, `kill -USR2` dumps every asyncio task's await chain plus threads by name,
+both to `daemon.log`.
+
+Not changed: `agentrt stop` on a session waits for the next step boundary (use
+`interrupt` to cancel a long command); per-command timeouts remain opt-in via
+`AGENTRT_TERMINAL_MAX_SECONDS`; `capacity` already flags `stalled` sessions
+after `AGENTRT_STALL_SECONDS`.

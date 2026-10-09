@@ -253,6 +253,19 @@ class EventService:
     _lease_task: asyncio.Task | None = field(default=None, init=False)
     _external_lease_renewal: bool = field(default=False, init=False)
     _run_executor: ThreadPoolExecutor | None = field(default=None, init=False)
+    # AgentRT fork: events emitted from worker threads wait for the state lock,
+    # which a running step holds for its whole LLM call or tool run. On the
+    # shared default executor each such wait pinned a thread for the step, so
+    # ~30 sessions in long tool calls exhausted it and every to_thread call in
+    # the API (search, status, create) queued behind them (#10). One thread
+    # per conversation keeps the waits off the shared pool; they serialize on
+    # the same lock anyway, so ordering is unchanged. Threads start lazily.
+    _emit_executor: ThreadPoolExecutor = field(
+        default_factory=lambda: ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="agentrt-emit"
+        ),
+        init=False,
+    )
     # Background task for a /goal loop that is running inside this conversation.
     _goal_loop_task: asyncio.Task | None = field(default=None, init=False)
     _goal_loop_outcome: GoalOutcome | None = field(default=None, init=False)
@@ -1111,7 +1124,11 @@ class EventService:
 
             # Run the locked callback in an executor to ensure the event is
             # both persisted and sent to WebSocket subscribers
-            main_loop.run_in_executor(None, locked_on_event)
+            try:
+                main_loop.run_in_executor(self._emit_executor, locked_on_event)
+            except RuntimeError:
+                # Emitted after close() shut the executor down.
+                logger.debug("Dropped event emitted after close: %s", type(event))
 
     def _setup_llm_log_streaming(self, agent: AgentBase) -> None:
         """Configure LLM log callbacks to stream logs via events."""
@@ -2028,6 +2045,8 @@ class EventService:
 
     async def close(self):
         self._closing = True
+        # Queued emits still run; no new thread outlives the conversation.
+        self._emit_executor.shutdown(wait=False)
         self._explicit_interrupt_generation += 1
         self._rerun_requested = False
         self._acp_internal_rerun_requested = False

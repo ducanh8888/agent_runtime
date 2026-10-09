@@ -159,16 +159,26 @@ class ParallelToolExecutor:
             return tools.get(ae.tool_name) if tools else None
 
         if len(action_events) == 1 or self._max_workers == 1:
-            return [
-                await self._arun_safe(
-                    action,
-                    tool_runner,
-                    _resolve(action),
-                    cancel_token,
-                    span_owner=span_owner,
-                )
-                for action in action_events
-            ]
+            # AgentRT fork: not the asyncio default pool either. A single tool
+            # call is the common case, and one that runs for minutes pinned a
+            # default-pool thread; ~32 busy sessions then left no thread for
+            # any to_thread call in the server's API (#10). wait=False so an
+            # interrupted call never blocks the event loop on shutdown.
+            pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aexecute_one")
+            try:
+                return [
+                    await self._arun_safe(
+                        action,
+                        tool_runner,
+                        _resolve(action),
+                        cancel_token,
+                        pool,
+                        span_owner,
+                    )
+                    for action in action_events
+                ]
+            finally:
+                pool.shutdown(wait=False)
 
         with ThreadPoolExecutor(
             max_workers=self._max_workers,

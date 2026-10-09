@@ -3507,3 +3507,42 @@ async def test_event_service_creates_lease_with_custom_ttl(tmp_path: Path) -> No
     assert service._lease is not None
     assert service._lease._ttl_seconds == 10.0
     assert (tmp_path / stored.id.hex / LEASE_FILE_NAME).exists()
+
+
+def test_emits_waiting_on_a_held_state_lock_leave_the_default_pool_free(
+    event_service: EventService,
+) -> None:
+    """AgentRT #10: a running step holds the state lock for its whole tool
+    call. Emits queued behind it used to pin default-executor threads, so a
+    few dozen busy sessions starved every to_thread call in the API."""
+    import threading
+
+    lock = threading.Lock()
+
+    class _HeldState:
+        def __enter__(self):
+            lock.acquire()
+
+        def __exit__(self, *exc):
+            lock.release()
+
+    conversation = MagicMock()
+    conversation._state = _HeldState()
+    event_service._conversation = conversation  # type: ignore[assignment]
+
+    async def scenario() -> int:
+        event_service._main_loop = asyncio.get_running_loop()
+        lock.acquire()  # the "running step"
+        try:
+            for _ in range(64):  # more than any default pool size
+                event_service._emit_event_from_thread(MagicMock())
+            loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(loop.run_in_executor(None, lambda: 1), 5)
+        finally:
+            lock.release()
+
+    try:
+        assert asyncio.run(scenario()) == 1
+    finally:
+        event_service._emit_executor.shutdown(wait=True)
+    assert conversation._on_event.call_count == 64
