@@ -401,21 +401,33 @@ class FileEditor:
         except OSError as e:
             return self._view_error(path, f"Cannot view {path}: {e}", "read_error")
 
+        # AgentRT fork (#14): this used to be an error, and a model that sent
+        # both kept resending both until stuck detection fired (41 of ~160
+        # sessions in one fan-out). The cursor already fixes the page, so
+        # continue from it and say that view_range was ignored.
+        ignored_range_note = None
         if cursor is not None and view_range:
-            return self._view_error(
-                path,
-                "Cannot combine `cursor` with `view_range`: the cursor already "
-                "fixes the requested range.",
-                "invalid_cursor",
-                cursor=cursor,
-                scan=scan,
-                encoding=encoding,
+            ignored_range_note = (
+                "Note: `view_range` was ignored because `cursor` was given; the "
+                "cursor fixes the page. Send only `cursor` to continue, or only "
+                "`view_range` to read specific lines."
             )
+            view_range = None
 
         try:
-            return self._view_file_page(
+            observation = self._view_file_page(
                 path, scan, encoding, view_range, cursor, max_lines
             )
+            if ignored_range_note is not None and not observation.is_error:
+                observation = observation.model_copy(
+                    update={
+                        "content": [
+                            TextContent(text=ignored_range_note),
+                            *observation.content,
+                        ]
+                    }
+                )
+            return observation
         except InvalidCursorError as e:
             return self._view_error(
                 path,

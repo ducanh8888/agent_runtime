@@ -343,19 +343,6 @@ def test_cursor_page_size_is_bound(tmp_path):
     assert _numbered_lines(continued)[0][0] == 11
 
 
-def test_cursor_cannot_be_combined_with_view_range(tmp_path):
-    path = tmp_path / "conflict.txt"
-    _write_lines(path, "L", 1200)
-    cursor = file_editor(command="view", path=str(path)).cursor
-    assert cursor is not None
-
-    result = file_editor(
-        command="view", path=str(path), cursor=cursor, view_range=[1, 5]
-    )
-    assert result.is_error is True
-    assert result.view_status == "invalid_cursor"
-
-
 def test_cursor_continues_within_requested_range(tmp_path):
     path = tmp_path / "ranged.txt"
     _write_lines(path, "L", 25)
@@ -383,3 +370,22 @@ def test_directory_view_is_typed(tmp_path):
 
     assert result.is_error is False
     assert result.view_status == "directory"
+
+
+def test_cursor_with_view_range_continues_instead_of_erroring(tmp_path):
+    """AgentRT #14: a model that sent both kept resending both until stuck."""
+    path = tmp_path / "pages.txt"
+    _write_lines(path, "L", 1200)
+    first = file_editor(command="view", path=str(path))
+    assert first.cursor is not None
+
+    both = file_editor(
+        command="view", path=str(path), cursor=first.cursor, view_range=[1, 5]
+    )
+    cursor_only = file_editor(command="view", path=str(path), cursor=first.cursor)
+
+    assert both.is_error is False
+    assert "`view_range` was ignored" in both.text
+    assert both.view_status == cursor_only.view_status
+    assert both.cursor == cursor_only.cursor
+    assert _numbered_lines(both) == _numbered_lines(cursor_only)
