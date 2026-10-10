@@ -2644,7 +2644,10 @@ class Client:
                     pending.discard(session)
                 else:
                     terminal_prev[session] = terminal
-            if settled and mode == "any":
+            # A missing id is an outcome too (it is in the `missing` bucket and
+            # `watch` counts it as settled): `any` returns on it rather than
+            # waiting out the others.
+            if (settled or missing) and mode == "any":
                 break
             if not pending:
                 break
@@ -2675,15 +2678,33 @@ class Client:
             elif session in settled:
                 try:
                     payload = self.result(session)
-                except ClientError:
-                    # Deleted between the last sample and the result read.
-                    buckets["missing"].append(
-                        {
-                            "id": session,
-                            "short_id": short_id(session),
-                            "bucket": "missing",
-                        }
-                    )
+                except ClientError as exc:
+                    # Gone between the last sample and the result read, or the
+                    # read failed (a daemon timeout under load is also a
+                    # ClientError). Only a session that is really gone is
+                    # `missing`; otherwise report it unread so the caller can
+                    # ask for its result again.
+                    try:
+                        gone = self._wait_status(session) is None
+                    except ClientError:
+                        gone = False
+                    if gone:
+                        buckets["missing"].append(
+                            {
+                                "id": session,
+                                "short_id": short_id(session),
+                                "bucket": "missing",
+                            }
+                        )
+                    else:
+                        buckets["still_running"].append(
+                            {
+                                "id": session,
+                                "short_id": short_id(session),
+                                "bucket": "still_running",
+                                "error": f"result read failed, retry: {exc}",
+                            }
+                        )
                     continue
                 bucket = _wait_bucket(payload)
                 payload["bucket"] = bucket
