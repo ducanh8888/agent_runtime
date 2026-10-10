@@ -3,7 +3,9 @@
 import asyncio
 import inspect
 import logging
+import time
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 
 import mcp.types
@@ -312,7 +314,114 @@ class _ToolListChangedHandler(MessageHandler):
             )
 
 
+_PROBE_TIMEOUT_SECONDS = 10.0
+# Servers that failed to answer are skipped for this long, so a dead one costs
+# one wait, not one per session start or resume. Keyed by name and endpoint, so
+# re-registering a server at another URL is picked up at once.
+_DEAD_FOR_SECONDS = 60.0
+_dead_until: dict[tuple[str, str], float] = {}
+
+
+def _endpoint(name: str, server: MCPServer) -> tuple[str, str]:
+    return (name, str(server.url or server.command))
+
+
 def create_mcp_tools(
+    mcp_config: dict[str, MCPServer],
+    timeout: float = 30.0,
+    *,
+    on_tools_changed: ToolsChangedCallback | None = None,
+    on_tools_reconciled: ToolsReconciledCallback | None = None,
+    mcp_oauth_token_storage: AsyncKeyValue | None = None,
+    mcp_oauth_factory: MCPOAuthFactory | None = None,
+) -> MCPClient:
+    """Create MCP tools, leaving out servers that cannot be reached.
+
+    AgentRT fork (#13, #11). All servers share one connection attempt, so a
+    single one that hangs or refuses failed the whole session start with an
+    error that did not say which, and every ``send`` that resumed a session
+    paid for it again. When that attempt fails and several servers are
+    configured, each is tried alone; the sessions keep the ones that answer and
+    the log names the ones that did not. With one server, or none answering,
+    the original error is raised unchanged.
+    """
+
+    def attempt(servers: dict[str, MCPServer]) -> MCPClient:
+        return _create_mcp_tools_once(
+            servers,
+            timeout,
+            on_tools_changed=on_tools_changed,
+            on_tools_reconciled=on_tools_reconciled,
+            mcp_oauth_token_storage=mcp_oauth_token_storage,
+            mcp_oauth_factory=mcp_oauth_factory,
+        )
+
+    try:
+        servers = enabled_mcp_servers(_require_native_mcp_config(mcp_config))
+    except Exception:
+        servers = {}
+    now = time.monotonic()
+    dead = {
+        n for n, sv in servers.items() if _dead_until.get(_endpoint(n, sv), 0) > now
+    }
+    if dead and len(dead) < len(servers):
+        mcp_config = {n: sv for n, sv in mcp_config.items() if n not in dead}
+        servers = {n: sv for n, sv in servers.items() if n not in dead}
+
+    try:
+        return attempt(mcp_config)
+    except Exception:
+        if len(servers) < 2:
+            raise
+        usable = _responsive_servers(
+            servers,
+            min(timeout, _PROBE_TIMEOUT_SECONDS),
+            mcp_oauth_token_storage=mcp_oauth_token_storage,
+            mcp_oauth_factory=mcp_oauth_factory,
+        )
+        if not usable or len(usable) == len(servers):
+            raise
+        skipped = sorted(set(servers) - set(usable))
+        for name in skipped:
+            _dead_until[_endpoint(name, servers[name])] = (
+                time.monotonic() + _DEAD_FOR_SECONDS
+            )
+        logger.warning(
+            "MCP server(s) %s did not answer and were left out of this session "
+            "(skipped for %ds); using %s",
+            ", ".join(skipped),
+            _DEAD_FOR_SECONDS,
+            ", ".join(usable),
+        )
+        return attempt({name: servers[name] for name in usable})
+
+
+def _responsive_servers(
+    servers: dict[str, MCPServer],
+    timeout: float,
+    *,
+    mcp_oauth_token_storage: AsyncKeyValue | None,
+    mcp_oauth_factory: MCPOAuthFactory | None,
+) -> list[str]:
+    """Names of the servers that connect and list tools on their own."""
+
+    def probe(name: str) -> str | None:
+        try:
+            _create_mcp_tools_once(
+                {name: servers[name]},
+                timeout,
+                mcp_oauth_token_storage=mcp_oauth_token_storage,
+                mcp_oauth_factory=mcp_oauth_factory,
+            ).sync_close()
+        except Exception:
+            return None
+        return name
+
+    with ThreadPoolExecutor(max_workers=len(servers)) as pool:
+        return [name for name in pool.map(probe, list(servers)) if name]
+
+
+def _create_mcp_tools_once(
     mcp_config: dict[str, MCPServer],
     timeout: float = 30.0,
     *,
