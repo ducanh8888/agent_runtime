@@ -97,8 +97,13 @@ class GuardedTerminalExecutor(ToolExecutor):
         conversation: Any = None,
     ) -> TerminalObservation:
         limit = _max_seconds()
+        # The limit is a maximum (#15): it also caps a timeout the model chose.
+        # A model asking for a longer one got no limit at all, and a command
+        # that never returns (an unclosed quote leaves the shell waiting for
+        # input) then held the session for as long as it asked, with the
+        # no-output check switched off, which a timeout does.
         injected_timeout = (
-            action.timeout is None
+            (action.timeout is None or action.timeout > limit)
             and limit > 0
             and not action.is_input
             and bool(action.command.strip())

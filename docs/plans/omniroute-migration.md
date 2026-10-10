@@ -448,3 +448,28 @@ load test here); the `terminal` tool's failure when the tmux server dies is
 still unhandled. #15 asks `capacity` to say whether a stalled session waits on
 the model or on a tool; not built. #11's dispatch blocking is unconfirmed after
 the MCP fix; the reporter's runtime predates it.
+
+### 14.1 Follow-up from the replies (2026-10-11)
+
+The reporter of #15 gave the correlation ids and showed the stalls were not a
+model call: in both sessions the newest event was a `terminal` action with no
+result (an unclosed quote left the shell waiting for input; a long pytest
+wrapper), and no tool timeout fired. `3fe7d863` was quiet for 9715 s, well past
+the 1800 s `AGENTRT_TERMINAL_MAX_SECONDS` default.
+
+Cause found in the guard: the limit was injected only when the model gave no
+`timeout`. A model that passed its own larger one got no limit, and the
+vendored session treats any `timeout` as "blocking", which switches off its
+30 s no-output check. Changed (`guarded_terminal.py`): the limit also caps a
+longer model timeout. Verified live with a 20 s cap: `echo 'never closed` with
+`timeout=600` returned after 20 s, the session finished in 37 s.
+`capacity.running_sessions[].waiting_on` now says `tool:<name>` or `model`.
+
+Corrected: the #10 comment said per-command timeouts were opt-in; the 1800 s
+default is on (43c373a). Not changed, and the operator's call: that injection
+also disables the 30 s no-output return, so a command with no `timeout` that
+waits for input blocks up to 30 min instead of handing control back at 30 s;
+returning at 30 s costs one model turn per 30 s of silence on legitimate long
+commands. Unconfirmed: whether the stall of `3fe7d863` was a model-chosen
+timeout above 1800 s or a hung terminal backend (tmux is absent on this host,
+so the second could not be tried); the reporter has the action's `timeout`.

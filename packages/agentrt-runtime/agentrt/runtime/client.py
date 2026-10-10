@@ -551,6 +551,18 @@ def _command_line(argv: list[str]) -> str:
     return shlex.join(argv)
 
 
+def _waiting_on(newest: object) -> str | None:
+    """What a session whose newest event is `newest` is waiting for."""
+    if not isinstance(newest, dict):
+        return None
+    kind = newest.get("type")
+    if kind == "action":
+        return f"tool:{newest.get('tool') or 'unknown'}"
+    if kind in {"observation", "message"}:
+        return "model"
+    return None
+
+
 def _looks_like_tool_call(text: str) -> bool:
     """Whether a final message is an unexecuted tool call written as text."""
     return bool(_TOOL_CALL_TEXT.match(text.lstrip()))
@@ -2423,6 +2435,11 @@ class Client:
         `running_sessions` contains each running session's short id, title,
         iterations_used, newest transcript event timestamp, seconds since that
         event, and `stalled` when it exceeds AGENTRT_STALL_SECONDS (default 900).
+        `waiting_on` says what a quiet session is waiting for: `tool:<name>`
+        when its newest event is a tool call with no result yet (interrupt it),
+        `model` when it is waiting for the next model reply (a retry or the
+        router's timeout will end it), null when the newest event is not
+        informative.
         Event timestamps without a timezone are interpreted as local time.
 
         `in_flight_llm` counts provider transport calls currently holding a slot;
@@ -2469,6 +2486,7 @@ class Client:
                 continue
             session_id = session.get("id")
             newest = None
+            waiting_on = None
             if isinstance(session_id, str):
                 try:
                     status = self.status(session_id)
@@ -2479,6 +2497,7 @@ class Client:
                         if isinstance(e, dict) and isinstance(e.get("timestamp"), str)
                     ]
                     newest = timestamps[0] if timestamps else None
+                    waiting_on = _waiting_on(events[0] if events else None)
                 except (ClientError, ValueError, TypeError):
                     status = {}
             else:
@@ -2500,6 +2519,7 @@ class Client:
                     "last_event_at": newest,
                     "seconds_since_last_event": elapsed,
                     "stalled": elapsed is not None and elapsed > threshold,
+                    "waiting_on": waiting_on,
                 }
             )
         result["running_sessions"] = running

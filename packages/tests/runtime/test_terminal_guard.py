@@ -71,3 +71,17 @@ def test_terminal_preserves_explicit_timeout(tmp_path: Path, monkeypatch) -> Non
 
     assert inner.action is not None
     assert inner.action.timeout == 5
+
+
+def test_terminal_caps_a_longer_model_timeout(tmp_path: Path, monkeypatch) -> None:
+    """#15: the limit is a maximum. A model asking for more than it got no limit,
+    and an unclosed quote then held the session for as long as it asked."""
+    monkeypatch.setenv("AGENTRT_TERMINAL_MAX_SECONDS", "12")
+    inner = _RecordingInner()
+    executor = guarded_terminal.GuardedTerminalExecutor(inner, str(tmp_path))
+
+    result = executor(TerminalAction(command="make test", timeout=7200))
+
+    assert inner.action is not None
+    assert inner.action.timeout == 12
+    assert "Stopped by AgentRT's 12-second terminal limit" in result.text

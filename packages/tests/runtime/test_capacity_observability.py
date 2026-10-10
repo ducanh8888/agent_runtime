@@ -110,3 +110,15 @@ def test_capacity_adds_fake_proc_daemon_and_stall_data(monkeypatch, tmp_path):
     assert session["iterations_used"] == 8
     assert session["last_event_at"] == old
     assert session["stalled"] is True
+    # The newest event is a tool call with no result after it (#15).
+    assert session["waiting_on"].startswith("tool:")
+
+
+def test_waiting_on_tells_a_pending_tool_from_a_pending_model_reply() -> None:
+    waiting_on = client_mod._waiting_on
+
+    assert waiting_on({"type": "action", "tool": "terminal"}) == "tool:terminal"
+    assert waiting_on({"type": "observation", "tool": "terminal"}) == "model"
+    assert waiting_on({"type": "message", "role": "user"}) == "model"
+    assert waiting_on({"type": "error"}) is None
+    assert waiting_on(None) is None
