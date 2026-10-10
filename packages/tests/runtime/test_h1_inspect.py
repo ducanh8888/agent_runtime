@@ -600,3 +600,18 @@ def test_check_path_refuses_windows_aliases(
         )
         == (workspace / "a.py").resolve()
     )
+
+
+def test_check_path_refuses_a_hard_link_to_the_secret_key(
+    state_dir: Path, workspace: Path
+) -> None:
+    """secret.key encrypts every persisted secret; it was in neither the
+    protected names nor the identity list, so an alias passed the guard."""
+    key = state_dir / "secret.key"
+    key.write_text("0123456789abcdef", encoding="utf-8")
+    (workspace / "alias.txt").hardlink_to(key)
+
+    with pytest.raises(permissions.PermissionDenied):
+        permissions.check_path(
+            "alias.txt", root=workspace, permission="inspect", writing=False
+        )

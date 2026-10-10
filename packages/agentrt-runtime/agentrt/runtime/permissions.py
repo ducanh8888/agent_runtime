@@ -259,6 +259,7 @@ def is_runtime_secret_location(resolved: Path) -> bool:
             "daemon.json",
             "settings.json",
             "secrets.json",
+            "secret.key",
         }:
             return True
         if len(parts) == 2 and parts[0] in {"profiles", "agent-profiles"}:
@@ -304,6 +305,7 @@ def runtime_secret_identities() -> set[tuple[int, int]]:
                 state / "daemon.json",
                 state / "settings.json",
                 state / "secrets.json",
+                state / "secret.key",
                 *(state / "profiles").glob("*.json"),
                 *(state / "provider-connections").rglob("*.json"),
                 *(state / "agent-profiles").glob("*.json"),
