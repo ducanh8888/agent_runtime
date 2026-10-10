@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from typing import Any, cast
 
 import pytest
@@ -19,7 +20,15 @@ def isolated_state_dir(tmp_path, monkeypatch):
 
 
 def test_stop_terminates_child_and_removes_daemon_file():
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    # The marker argument makes it look like the server to stop().
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import time; time.sleep(120)",
+            "agentrt.runtime.server_launch",
+        ]
+    )
     daemon._write_daemon_file(daemon.DaemonInfo(port=1234, token="token", pid=proc.pid))
 
     assert daemon.stop(timeout=0.1) is True
@@ -83,6 +92,7 @@ def test_stop_keeps_metadata_if_process_survives_signals(monkeypatch):
         daemon.DaemonInfo(port=1234, token="token", pid=os.getpid())
     )
     monkeypatch.setattr(daemon, "_process_alive", lambda pid: True)
+    monkeypatch.setattr(daemon, "_is_agentrt_daemon", lambda pid: True)
     monkeypatch.setattr(daemon.time, "monotonic", iter([0, 100, 101, 107]).__next__)
     monkeypatch.setattr(daemon.time, "sleep", lambda _: None)
     monkeypatch.setattr(daemon, "_terminate", lambda pid: None)
@@ -171,3 +181,43 @@ def test_status_tells_a_slow_daemon_from_a_dead_one(monkeypatch):
     monkeypatch.setattr(daemon, "_process_alive", lambda pid: False)
     gone = daemon.status()
     assert (gone["running"], gone["responding"], gone["pid"]) == (False, False, None)
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="identity check is /proc based"
+)
+def test_stop_does_not_signal_a_process_that_is_not_the_daemon():
+    """daemon.json outlives a daemon that died uncleanly; its pid may be reused."""
+    stranger = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        daemon._write_daemon_file(
+            daemon.DaemonInfo(port=1234, token="token", pid=stranger.pid)
+        )
+
+        assert daemon.stop(timeout=0.1) is False
+
+        assert stranger.poll() is None  # still running
+        assert not config.daemon_file().exists()
+    finally:
+        stranger.kill()
+
+
+def test_start_lock_is_not_taken_from_a_start_still_within_its_allowance(tmp_path):
+    lock = tmp_path / "daemon.lock"
+    lock.write_text(str(os.getpid()))  # a live owner
+    aged = time.time() - 200  # past the old 120 s rule, inside the 240 s allowance
+    os.utime(lock, (aged, aged))
+    assert daemon._lock_is_stale(lock) is False
+
+    long_ago = time.time() - 400
+    os.utime(lock, (long_ago, long_ago))
+    assert daemon._lock_is_stale(lock) is True
+
+
+def test_start_lock_of_a_dead_owner_is_reclaimed_at_once(tmp_path):
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    lock = tmp_path / "daemon.lock"
+    lock.write_text(str(gone.pid))
+
+    assert daemon._lock_is_stale(lock) is True

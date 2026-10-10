@@ -410,6 +410,43 @@ def _daemon_env(token: str) -> dict[str, str]:
     return env
 
 
+#: A start may take up to 240 s (`ensure_running`'s ceiling); the lock is not
+#: refreshed while it does, so it is only "stale by age" past that, with margin.
+_LOCK_STALE_SECONDS = 300.0
+
+
+def _lock_is_stale(lock_path: Path) -> bool:
+    """Whether a start lock was left behind rather than held.
+
+    Reclaiming after 120 s, as this once did, took a lock from a start that was
+    still within its 240 s allowance, and two daemons could start on one state
+    directory. The lock now records its owner: one that is gone is reclaimed at
+    once, an unknown or live one only after the full allowance.
+    """
+    try:
+        age = time.time() - lock_path.stat().st_mtime
+    except OSError:
+        return False
+    try:
+        owner = int(lock_path.read_text().strip() or 0)
+    except (OSError, ValueError):
+        owner = 0
+    if owner > 0 and not _process_alive(owner):
+        return True
+    return age > _LOCK_STALE_SECONDS
+
+
+def _is_agentrt_daemon(pid: int) -> bool:
+    """Whether `pid` is an AgentRT server (Linux; elsewhere nothing to check)."""
+    if not sys.platform.startswith("linux"):
+        return True
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    return b"agentrt.runtime.server_launch" in cmdline
+
+
 def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
     """Start the daemon if needed, or return the already-running instance."""
     lock_path = config.state_dir() / "daemon.lock"
@@ -429,6 +466,7 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                     lock_path,
                     os.O_CREAT | os.O_EXCL | os.O_RDWR,
                 )
+                os.write(lock_fd, str(os.getpid()).encode())
             except FileExistsError:
                 if time.monotonic() >= acquire_deadline:
                     raise RuntimeError(
@@ -438,7 +476,7 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                         f"Lock path: {lock_path}"
                     ) from None
                 try:
-                    if time.time() - lock_path.stat().st_mtime > 120.0:
+                    if _lock_is_stale(lock_path):
                         lock_path.unlink()
                         continue
                 except OSError:
@@ -563,7 +601,9 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
 def stop(timeout: float = 10.0) -> bool:
     """Stop the daemon, escalating only after allowing graceful shutdown."""
     info = read_info()
-    if info is None or not _process_alive(info.pid):
+    # daemon.json can outlive a daemon that died uncleanly, and its pid may
+    # then belong to an unrelated process: do not signal what is not ours.
+    if info is None or not _process_alive(info.pid) or not _is_agentrt_daemon(info.pid):
         _remove_daemon_file()
         return False
 
