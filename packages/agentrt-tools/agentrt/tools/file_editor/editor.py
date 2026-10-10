@@ -134,7 +134,12 @@ class FileEditor:
         _path = Path(path)
         self.validate_path(command, _path)
         if command == "view":
-            return self.view(_path, view_range, cursor, max_lines)
+            # AgentRT fork (#14): some models fill every optional field of the
+            # schema with an empty value (cursor "", view_range []). An empty
+            # cursor is no cursor; read as one it was "Invalid view cursor"
+            # (or, next to a view_range, "Cannot combine"), the same error on
+            # every retry until stuck detection fired.
+            return self.view(_path, view_range, cursor or None, max_lines)
         elif command == "create":
             if file_text is None:
                 raise EditorToolParameterMissingError(command, "file_text")

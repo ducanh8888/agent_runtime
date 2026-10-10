@@ -389,3 +389,22 @@ def test_cursor_with_view_range_continues_instead_of_erroring(tmp_path):
     assert both.view_status == cursor_only.view_status
     assert both.cursor == cursor_only.cursor
     assert _numbered_lines(both) == _numbered_lines(cursor_only)
+
+
+def test_empty_cursor_is_no_cursor(tmp_path):
+    """AgentRT #14: Devin sends cursor="" and view_range=[] when it means neither.
+
+    Both loops (Invalid view cursor; Cannot combine) came from reading "" as one.
+    """
+    path = tmp_path / "pages.txt"
+    _write_lines(path, "L", 1200)
+    plain = file_editor(command="view", path=str(path))
+
+    empty = file_editor(command="view", path=str(path), cursor="", view_range=[])
+    ranged = file_editor(command="view", path=str(path), cursor="", view_range=[3, 6])
+
+    assert empty.is_error is False
+    assert _numbered_lines(empty) == _numbered_lines(plain)
+    assert ranged.is_error is False
+    assert [n for n, _ in _numbered_lines(ranged)] == [3, 4, 5, 6]
+    assert "`view_range` was ignored" not in ranged.text
