@@ -95,10 +95,14 @@ def _guard(fn, *args, **kwargs) -> dict:
 
     A raised exception reaches the orchestrator as a protocol error, which it
     cannot reason about. A dict it can read tells it what to do differently.
+    That holds for any failure, not only the client's own: an unexpected
+    exception used to escape as a bare protocol error ("No module named ...").
+    It is returned with its type and message, so a programmer error stays
+    visible rather than hidden.
     """
     try:
         return fn(*args, **kwargs)
-    except client_mod.ClientError as exc:
+    except Exception as exc:
         return {"error": type(exc).__name__, "message": str(exc)}
 
 
@@ -320,7 +324,10 @@ def list_sessions(limit: int = 50, offset: int = 0) -> dict:
     sessions so older pages remain addressable. Sessions are kept until deleted
     and nothing expires.
     """
-    return {"sessions": _guard(_get_client().list_sessions, limit, offset)}
+    sessions = _guard(_get_client().list_sessions, limit, offset)
+    if isinstance(sessions, dict) and "error" in sessions:
+        return sessions  # a failure is the top-level error, as for every other tool
+    return {"sessions": sessions}
 
 
 @mcp.tool()
@@ -817,6 +824,12 @@ def control(session: str, action: str, message: str | None = None) -> dict:
                     f"'{pair}=yes' to set it, or '{pair}=' to remove it",
                 }
             parsed[key.strip()] = value.strip()
+        if not parsed:
+            return {
+                "error": "MalformedTag",
+                "message": f"{message!r} holds no key=value pair; write "
+                "'key=value', separated by commas",
+            }
         return _guard(client.tag, session, parsed)
 
     if action in ("interrupt", "stop", "resume", "delete"):
