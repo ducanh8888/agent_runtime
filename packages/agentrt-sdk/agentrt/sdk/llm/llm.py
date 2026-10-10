@@ -1182,6 +1182,13 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             "api_base": provider_info.api_base,
             "api_version": self.api_version,
             "timeout": self.timeout,
+            # AgentRT fork (#15): the OpenAI client under litellm retries a
+            # timed-out call twice on its own, so a call that hangs took 3x
+            # `timeout` to fail (19.8 s for timeout=6), and the SDK's own
+            # retry loop (num_retries, with backoff and telemetry) then
+            # multiplied that again: a session could sit silent ~90 minutes
+            # on timeout=300. One retry layer, the visible one.
+            "max_retries": 0,
             "drop_params": self.drop_params,
             "seed": self.seed,
             **self._aws_kwargs(),
@@ -2296,6 +2303,13 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             "api_base": provider_info.api_base,
             "api_version": self.api_version,
             "timeout": self.timeout,
+            # AgentRT fork (#15): the OpenAI client under litellm retries a
+            # timed-out call twice on its own, so a call that hangs took 3x
+            # `timeout` to fail (19.8 s for timeout=6), and the SDK's own
+            # retry loop (num_retries, with backoff and telemetry) then
+            # multiplied that again: a session could sit silent ~90 minutes
+            # on timeout=300. One retry layer, the visible one.
+            "max_retries": 0,
             "drop_params": self.drop_params,
             "seed": self.seed,
             "messages": messages,
