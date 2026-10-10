@@ -138,3 +138,17 @@ def test_ensure_running_refuses_a_second_daemon_without_discovery(monkeypatch):
     monkeypatch.setattr(daemon, "_process_alive", lambda pid: True)
     with pytest.raises(RuntimeError, match="running but not answering"):
         daemon.ensure_running(startup_timeout=0.1)
+
+
+def test_worktree_root_can_be_moved_to_another_drive(monkeypatch, tmp_path):
+    """#12: the default lives in the state dir, but an operator can place
+    worktrees elsewhere, by either name."""
+    monkeypatch.delenv("AGENTRT_CONVERSATION_WORKTREE_ROOT", raising=False)
+    monkeypatch.setenv("AGENTRT_WORKTREE_ROOT", str(tmp_path / "e-drive"))
+    assert daemon._daemon_env("t")["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
+        tmp_path / "e-drive"
+    )
+    monkeypatch.setenv("AGENTRT_CONVERSATION_WORKTREE_ROOT", str(tmp_path / "srv"))
+    assert daemon._daemon_env("t")["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
+        tmp_path / "srv"
+    )

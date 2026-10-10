@@ -350,7 +350,12 @@ def _daemon_env(token: str) -> dict[str, str]:
     # Snapshot/isolated worktrees otherwise go to a hard-coded
     # /tmp/conversation-worktrees: `\\tmp` on the current drive on Windows,
     # and a directory tmp cleaners may empty under a live session on Linux.
-    env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] = str(state / "worktrees")
+    # Overridable (#12): AGENTRT_WORKTREE_ROOT, or the server's own
+    # AGENTRT_CONVERSATION_WORKTREE_ROOT, for a worktree on another drive.
+    env.setdefault(
+        "AGENTRT_CONVERSATION_WORKTREE_ROOT",
+        env.get("AGENTRT_WORKTREE_ROOT") or str(state / "worktrees"),
+    )
     # Without this, the vendored server has no cipher and silently redacts a
     # conversation's persisted secrets -- including an LLM's API key -- to
     # `**********` whenever it saves state to disk. A fresh dispatch never
