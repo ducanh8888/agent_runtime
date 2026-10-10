@@ -479,3 +479,40 @@ most 10 s for the message to be appended, then answers 202 and the append
 finishes in the background; `agentrt send` / `control send` report
 `queued: true`. Behaviour of `send_message` itself is unchanged. Before, the
 request was held for the whole step and outlasted the client's 120 s.
+
+### 14.2 Read-only review of the whole project by 20 sessions (2026-10-11)
+
+Twenty `inspect`-preset sessions on a snapshot of `90c7a9f`, one lane each (batch
+`review20`), through the Devin bridge. Quality varied: 8 of 20 first reports were
+empty or thin (cursor bug below, or 80 steps spent without reporting), and 5 had to be
+resumed or rerun. Every finding was re-checked against the code before acting.
+
+Fixed (each with a test that fails without it): `secret.key` is now protected by the
+path guard (a hard link to it passed); cancelling a multi-call tool batch no longer
+blocks the event loop; `wait(mode="any")` returns on a missing id and an unreadable
+result is no longer reported as "missing"; the daemon start lock is no longer taken
+from a start still inside its 240 s allowance and `daemon stop` no longer signals a
+process that is not the daemon; MCP tools return unexpected exceptions as data, a
+`list` failure is a top-level error, and an empty `tag` is refused.
+
+Found while running it, not by a reviewer: three sessions went stuck on
+`Invalid view cursor` because the model sends every optional field of a tool schema
+empty (`"cursor": ""`). An empty cursor is now no cursor (this was the real cause of
+#14).
+
+Rejected after tracing the code: a stale-cache race in the batched search rows (the
+signature is read before the state, so a write in between forces a rebuild, not a stale
+row); a "lost wake-up" in the FIFO lock (the waiter checks for the free lock before its
+timeout); a stale status refresh (the `continue` skips the invalidation too).
+
+Open, low or unverified: `watch` fetches 50 events per poll and ignores the next
+cursor, so a burst of more than 50 between polls is skipped; the admission lock is held
+across a run start and may be what still serializes creates (40 creates took 43 s);
+deleting an `isolated_worktree` session whose workspace is a subdirectory of the repo
+leaves the worktree registration until the next `git worktree prune`; the server
+returns `str(exc)` in 500 bodies (clients are authenticated and local); terminal output
+masking fails open if the secret registry raises (vendored); `Telemetry` shares
+request start/context across concurrent calls on one LLM instance (metrics only);
+`close()` shuts the emit executor without waiting; the LLM slot limit is not resized
+by a second `install_provider_slots`. Lanes 01, 09 and 18 produced no verified
+finding and were not a clean bill of health.
