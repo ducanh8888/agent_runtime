@@ -522,3 +522,34 @@ def test_aexecute_batch_single_call_stays_off_the_default_pool() -> None:
 
     assert len(threads) == 1
     assert threads[0].startswith("aexecute_one")
+
+
+def test_aexecute_batch_cancellation_does_not_wait_for_the_tools() -> None:
+    """AgentRT #10: leaving `with ThreadPoolExecutor` joined the threads, so
+    cancelling a batch (an interrupt) blocked the event loop until the slowest
+    tool call ended."""
+    import time
+
+    executor = ParallelToolExecutor(max_workers=2)
+    release = threading.Event()
+
+    def tool_runner(action: Any) -> list[Any]:
+        release.wait(5)
+        return [MagicMock()]
+
+    async def scenario() -> float:
+        started = time.monotonic()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(
+                executor.aexecute_batch(
+                    [_make_action("c0"), _make_action("c1")], tool_runner
+                ),
+                0.2,
+            )
+        return time.monotonic() - started
+
+    try:
+        elapsed = asyncio.run(scenario())
+    finally:
+        release.set()
+    assert elapsed < 1.5

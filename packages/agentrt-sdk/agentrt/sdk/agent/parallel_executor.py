@@ -180,10 +180,11 @@ class ParallelToolExecutor:
             finally:
                 pool.shutdown(wait=False)
 
-        with ThreadPoolExecutor(
+        pool = ThreadPoolExecutor(
             max_workers=self._max_workers,
             thread_name_prefix="aexecute_batch",
-        ) as pool:
+        )
+        try:
             return list(
                 await asyncio.gather(
                     *[
@@ -199,6 +200,13 @@ class ParallelToolExecutor:
                     ]
                 )
             )
+        finally:
+            # AgentRT fork (#10, #15): `with ThreadPoolExecutor` joined its
+            # threads on the way out, so cancelling a batch (an interrupt) ran
+            # that join on the event loop and froze the daemon until the
+            # slowest tool call ended. On success every call has returned, so
+            # not waiting loses nothing.
+            pool.shutdown(wait=False, cancel_futures=True)
 
     async def _arun_safe(
         self,
