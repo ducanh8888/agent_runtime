@@ -603,9 +603,14 @@ def stop(timeout: float = 10.0) -> bool:
 def status() -> dict:
     """Return a JSON-serialisable status dict, never exposing the token."""
     info = read_info()
-    if info is None or not is_alive(info):
+    responding = info is not None and is_alive(info)
+    # `running` is the process, `responding` its health check (#13): a daemon
+    # that is up but slow used to read as `running: false`, which sent
+    # operators to start a second one.
+    if info is None or not (responding or _process_alive(info.pid)):
         return {
             "running": False,
+            "responding": False,
             "port": None,
             "pid": None,
             "base_url": None,
@@ -615,6 +620,7 @@ def status() -> dict:
 
     return {
         "running": True,
+        "responding": responding,
         "port": info.port,
         "pid": info.pid,
         "base_url": info.base_url,

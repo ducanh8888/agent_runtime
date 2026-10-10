@@ -152,3 +152,22 @@ def test_worktree_root_can_be_moved_to_another_drive(monkeypatch, tmp_path):
     assert daemon._daemon_env("t")["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
         tmp_path / "srv"
     )
+
+
+def test_status_tells_a_slow_daemon_from_a_dead_one(monkeypatch):
+    """#13: a live process that fails its health check is `running` but not
+    `responding`; only a missing process is `running: false`."""
+    live = daemon.DaemonInfo(port=4321, token="token", pid=os.getpid())
+    daemon._write_daemon_file(live)
+    monkeypatch.setattr(daemon, "is_alive", lambda info: False)
+
+    slow = daemon.status()
+    assert (slow["running"], slow["responding"], slow["pid"]) == (
+        True,
+        False,
+        os.getpid(),
+    )
+
+    monkeypatch.setattr(daemon, "_process_alive", lambda pid: False)
+    gone = daemon.status()
+    assert (gone["running"], gone["responding"], gone["pid"]) == (False, False, None)
