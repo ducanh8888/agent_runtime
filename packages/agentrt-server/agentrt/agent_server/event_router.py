@@ -2,6 +2,7 @@
 Local Event router for OpenHands SDK.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated, Any, cast
@@ -11,6 +12,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Response,
     status,
 )
 from starlette.responses import JSONResponse
@@ -203,14 +205,39 @@ async def batch_get_conversation_events(
     return events
 
 
+# AgentRT fork (#15, #10): appending a message takes the conversation lock,
+# which a running step holds for its whole tool call. Holding the request that
+# long made a send to a session in a long command outlast the client's 120 s
+# and look like a dead daemon. After this long the append carries on in the
+# background and the answer is 202; the message is read when the step ends.
+SEND_WAIT_SECONDS = 10.0
+
+
+def _log_background_send(task: "asyncio.Future[None]") -> None:
+    if not task.cancelled() and (error := task.exception()) is not None:
+        logger.warning("Queued message send failed: %r", error)
+
+
 @event_router.post("")
 async def send_message(
     request: SendMessageRequest,
+    response: Response,
     event_service: EventService = Depends(get_event_service),
 ) -> Success:
-    """Send a message to a conversation"""
+    """Send a message to a conversation.
+
+    Answers 200 once the message is appended. If the conversation is in the
+    middle of a step and the append has not happened within a few seconds,
+    answers 202: the message is queued and is read when the step ends.
+    """
     message = Message(role=request.role, content=request.content)
-    await event_service.send_message(message, request.run)
+    pending = asyncio.ensure_future(event_service.send_message(message, request.run))
+    done, _ = await asyncio.wait({pending}, timeout=SEND_WAIT_SECONDS)
+    if not done:
+        pending.add_done_callback(_log_background_send)
+        response.status_code = status.HTTP_202_ACCEPTED
+        return Success()
+    pending.result()  # raises what send_message raised, as before
     return Success()
 
 

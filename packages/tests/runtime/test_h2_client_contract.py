@@ -69,6 +69,18 @@ def test_send_reports_pre_send_status_and_iterations() -> None:
     assert result["status"] == "running"
 
 
+def test_send_reports_whether_the_message_was_queued() -> None:
+    """A 202 from the server means the session was mid-step (#15)."""
+    for code, queued in ((200, False), (202, True)):
+
+        def handler(request: httpx.Request, code: int = code) -> httpx.Response:
+            if request.method == "POST":
+                return httpx.Response(code, json={"success": True})
+            return httpx.Response(200, json=_conversation(execution_status="running"))
+
+        assert _mock_client(handler).send(SESSION, "continue")["queued"] is queued
+
+
 def test_status_surfaces_request_scope() -> None:
     client = _mock_client(
         lambda request: httpx.Response(

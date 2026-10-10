@@ -3169,7 +3169,7 @@ class Client:
         """Post a user message, start a run, and report before/after state."""
         resolved = self._resolve_session(session)
         before = self.status(resolved)
-        self._send(
+        response = self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/events",
             json={
@@ -3184,6 +3184,8 @@ class Client:
             "iterations_used_before": before.get("iterations_used"),
             "status_before": before.get("status"),
             "status": self.status(resolved).get("status"),
+            # 202: the session was mid-step; the message is read when it ends.
+            "queued": response.status_code == 202,
         }
 
     def interrupt(self, session: str) -> dict:

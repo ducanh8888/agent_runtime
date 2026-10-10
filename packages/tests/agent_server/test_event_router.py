@@ -808,3 +808,70 @@ class TestSearchEventsEndpoint:
 
         finally:
             client.app.dependency_overrides.clear()
+
+
+class TestSendToABusySession:
+    """AgentRT #15 / #10: a send must not be held for the length of a step."""
+
+    @staticmethod
+    def _request() -> SendMessageRequest:
+        return SendMessageRequest(
+            role="user", content=[TextContent(text="hi")], run=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_slow_append_is_answered_202_and_still_delivered(self, monkeypatch):
+        import asyncio
+
+        from fastapi import Response
+
+        from agentrt.agent_server import event_router
+
+        monkeypatch.setattr(event_router, "SEND_WAIT_SECONDS", 0.05)
+        release = asyncio.Event()
+        delivered: list[Message] = []
+
+        async def held_by_a_running_step(message, run):
+            await release.wait()
+            delivered.append(message)
+
+        service = MagicMock()
+        service.send_message = held_by_a_running_step
+        response = Response()
+
+        result = await event_router.send_message(self._request(), response, service)
+
+        assert response.status_code == 202
+        assert result.success is True
+        assert delivered == []
+
+        release.set()
+        await asyncio.sleep(0.05)
+        assert len(delivered) == 1  # the step ended; the message was appended
+
+    @pytest.mark.asyncio
+    async def test_prompt_append_is_answered_normally(self):
+        from fastapi import Response
+
+        from agentrt.agent_server import event_router
+
+        service = MagicMock()
+        service.send_message = AsyncMock()
+        response = Response()
+
+        await event_router.send_message(self._request(), response, service)
+
+        assert response.status_code != 202
+        service.send_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_errors_from_a_prompt_append_still_reach_the_caller(self):
+        from fastapi import Response
+
+        from agentrt.agent_server import event_router
+
+        service = MagicMock()
+        service.send_message = AsyncMock(side_effect=ValueError("inactive_service"))
+
+        with pytest.raises(ValueError, match="inactive_service"):
+            await event_router.send_message(self._request(), Response(), service)

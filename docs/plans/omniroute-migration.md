@@ -473,3 +473,9 @@ returning at 30 s costs one model turn per 30 s of silence on legitimate long
 commands. Unconfirmed: whether the stall of `3fe7d863` was a model-chosen
 timeout above 1800 s or a hung terminal backend (tmux is absent on this host,
 so the second could not be tried); the reporter has the action's `timeout`.
+
+`send` to a session in the middle of a step (#15 item 2, #10): the route waits at
+most 10 s for the message to be appended, then answers 202 and the append
+finishes in the background; `agentrt send` / `control send` report
+`queued: true`. Behaviour of `send_message` itself is unchanged. Before, the
+request was held for the whole step and outlasted the client's 120 s.

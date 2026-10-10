@@ -735,6 +735,9 @@ def control(session: str, action: str, message: str | None = None) -> dict:
       `iterations_used_before` and `status_before`, sampled before the send, as
       well as the resulting `status`. Compare these to detect a no-op send: a
       session may reply once without resuming, leaving both old values unchanged.
+      `queued: true` means the session was in the middle of a step (a long tool
+      call) and the message is waiting for it to end; it is not lost, and
+      `interrupt` is the way to make the session read it sooner.
       The run loop resets `iterations_used` at each run, so a send starts a fresh
       per-run iteration allowance; one iteration is one agent step/LLM response,
       regardless of how many parallel tool calls that response makes.
