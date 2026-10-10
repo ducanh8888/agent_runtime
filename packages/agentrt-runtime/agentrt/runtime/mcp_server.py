@@ -270,7 +270,11 @@ def dispatch(
     persisted and the conversation is queued, then admitted when a slot frees.
     Read `capacity` for the backlog. `idempotency_key` makes a repeated
     submission return the conversation the first one created; the same key with
-    a different submission is refused rather than silently replayed.
+    a different submission is refused rather than silently replayed. If this
+    call times out or is cancelled, the session may already exist and be
+    running: `list` before dispatching again, or pass the same `idempotency_key`
+    on the retry. Without one, every dispatch gets a fresh key, so a retry
+    starts a second writer on the same task.
 
     `outside_workspace_paths`, when present on the response, lists absolute
     paths found in `task` that resolve outside `workspace` -- most often a

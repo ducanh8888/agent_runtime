@@ -422,3 +422,29 @@ Not changed: `agentrt stop` on a session waits for the next step boundary (use
 `interrupt` to cancel a long command); per-command timeouts remain opt-in via
 `AGENTRT_TERMINAL_MAX_SECONDS`; `capacity` already flags `stalled` sessions
 after `AGENTRT_STALL_SECONDS`.
+
+## 14. Issues #6–#15, worked with the router session (2026-10-11)
+
+Router-side numbers (call_logs since deploy 17, 83,130 Devin calls): 98.8% OK;
+only 29 responses (0.035%) exhausted the bridge's repair attempts; the
+`claimed_missing_tools` give-up pattern has 0 hits in the current log window;
+the `proxy_` leak is resolved in the bridge. Not covered by the router's
+validator: plain-text endings from Codex / Gemini / Astra, which pass through
+(relevant to #7 when the combo falls back to them). Response bodies are not
+logged, so leaked `<tool>` text cannot be counted on the router side.
+
+Fixed here, each with a test that fails without it:
+
+| Issue | Change |
+|---|---|
+| #12 | `AGENTRT_WORKTREE_ROOT` / `AGENTRT_CONVERSATION_WORKTREE_ROOT` override the worktree location (my earlier change had made it fixed). |
+| #6 | `require=commit` hook no longer blocks after a rebase: when the dispatch commit is no longer an ancestor, HEAD's reflog decides. A session that only moved HEAD is still blocked. Not done: a cap on consecutive rejections. |
+| #14 | `file_editor view` accepts `cursor` with `view_range` (vendored): it continues from the cursor and says `view_range` was ignored. The router does not alter tool arguments or results, so the loop was the model's. |
+| #13, #11 | An unreachable MCP server no longer fails session start (vendored): servers are tried alone after the shared attempt fails; dead ones are skipped for 60 s. `daemon status` reports `running` and `responding` separately. The MCP `dispatch` docstring now says to `list` or reuse the `idempotency_key` after a timeout. |
+| #15 | `max_retries=0` on model calls (vendored): litellm's hidden retries tripled every timeout, and with `num_retries=5` a hung call could keep a session silent ~90 min on `timeout=300`; now ~30 min. The timeout value is unchanged. |
+
+Open: #13's tmux-server exit under ~230 sessions is not reproduced (no tmux
+load test here); the `terminal` tool's failure when the tmux server dies is
+still unhandled. #15 asks `capacity` to say whether a stalled session waits on
+the model or on a tool; not built. #11's dispatch blocking is unconfirmed after
+the MCP fix; the reporter's runtime predates it.
