@@ -1130,41 +1130,53 @@ class ConversationService:
                 self._mark_admission(record.stored, "admitted")
                 await event_service.save_meta()
 
-        await self._recover_idle_unconsumed()
+        await self._recover_pending_run_intents()
 
-    async def _recover_idle_unconsumed(self) -> None:
-        """Start idle conversations whose latest user input is not consumed."""
-        for conversation_id, record in list(self._conversation_records.items()):
-            if record.execution_status != ConversationExecutionStatus.IDLE:
+    async def _recover_pending_run_intents(self) -> None:
+        """Start a loaded conversation whose requested run never started.
+
+        A dispatched session is supposed to be running or queued, and a run
+        request that was dropped (an interrupt landing between the append and
+        the start) left it neither: idle, with nobody to start it. The event
+        service records that request, and this retries it.
+
+        Bounded to conversations already loaded, and read from memory: the
+        anomaly is a live race, a run's intent does not survive the process
+        that dropped it, and walking every stored record on a two-second tick
+        would load thousands of conversations to ask a question only a live
+        one can answer.
+        """
+        loaded = list((self._event_services or {}).items())
+        for conversation_id, event_service in loaded:
+            if not event_service.is_open():
                 continue
-            if record.stored.admission_state == "queued":
+            if event_service.stored.admission_state == "queued":
+                # The admission queue owns it; starting it here would race it.
+                continue
+            if not event_service.has_pending_run_intent():
                 continue
             if not self._has_free_slot(
-                workspace_root=str(record.stored.workspace.working_dir),
-                workspace_mode=record.stored.workspace_mode,
+                workspace_root=str(event_service.stored.workspace.working_dir),
+                workspace_mode=event_service.stored.workspace_mode,
             ):
                 continue
             async with self._conversation_lifecycle(conversation_id):
-                event_service = await self._get_or_load_event_service_locked(
-                    conversation_id
-                )
-                if event_service is None:
+                if not event_service.is_open():
                     continue
-                if not event_service.has_unconsumed_user_message():
-                    continue
-                logger.warning(
-                    "idle conversation %s has an unconsumed user message; starting run",
-                    conversation_id,
-                )
                 try:
                     await event_service.run()
                 except ValueError as exc:
                     if str(exc) == "conversation_already_running":
                         continue
                     logger.warning(
-                        "could not recover idle conversation %s: %s",
+                        "could not recover conversation %s with a pending run: %s",
                         conversation_id,
                         exc,
+                    )
+                else:
+                    logger.warning(
+                        "started conversation %s, which had a pending run request",
+                        conversation_id,
                     )
 
     async def _admission_loop(self) -> None:

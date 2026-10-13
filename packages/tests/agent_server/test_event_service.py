@@ -3587,3 +3587,95 @@ def test_send_to_a_busy_conversation_leaves_the_default_pool_free(
     finally:
         event_service._emit_executor.shutdown(wait=True)
     assert len(sent) == 64
+
+
+@pytest.mark.timeout(30)
+async def test_a_run_request_dropped_by_an_interrupt_is_recovered(
+    real_conversation_service, tmp_path, monkeypatch
+):
+    """A run request dropped between the append and the start is not lost.
+
+    The 7-of-194 case: an interrupt landed between the message being appended
+    and the run starting, so ``send_message(run=True)`` returned having started
+    nothing, with no error anywhere. The dispatched session then sat ``idle``
+    for hours and only a later ``send`` revived it. The request is now recorded
+    and the admission scheduler starts it.
+    """
+    (tmp_path / "ws").mkdir()
+    parent_llm = SlowTestLLM.from_messages([text_message("reply one")], latency_s=0.0)
+    info = await start_conversation_with_test_llm(
+        real_conversation_service,
+        parent_llm=parent_llm,
+        workspace_dir=str(tmp_path / "ws"),
+        usage_id="pending-run-intent",
+        initial_text=None,
+    )
+    es = await real_conversation_service.get_event_service(info.id)
+    assert es is not None
+
+    # The interrupt lands while the append is finishing, which is the window
+    # send_message checks the generation it captured in.
+    append = es._conversation.send_message
+
+    def _append_then_interrupt(message) -> None:
+        append(message)
+        es._explicit_interrupt_generation += 1
+
+    monkeypatch.setattr(es._conversation, "send_message", _append_then_interrupt)
+
+    await es.send_message(
+        Message(role="user", content=[TextContent(text="go")]), run=True
+    )
+
+    assert es._run_task is None, "the run must not have started"
+    assert parent_llm._call_count == 0
+    assert es.has_pending_run_intent() is True
+
+    # The scheduler entry point the admission loop calls every few seconds.
+    await real_conversation_service._admit_queued()
+
+    deadline = time.monotonic() + 5.0
+    while parent_llm._call_count < 1 and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+
+    assert parent_llm._call_count == 1, "the recorded run request was never started"
+    assert es.has_pending_run_intent() is False, "a started run satisfies the intent"
+
+
+@pytest.mark.timeout(30)
+async def test_the_scheduler_does_not_run_a_deliberate_run_false_append(
+    real_conversation_service, tmp_path
+):
+    """Input appended with run=False is not a run request.
+
+    ``SendMessageRequest.run`` is documented as "whether the agent loop should
+    automatically run if not running", so appending input to prepare a
+    conversation is a supported thing to do. The scheduler therefore keys on
+    the recorded *request*, never on "idle with an unconsumed message".
+    """
+    (tmp_path / "ws").mkdir()
+    parent_llm = SlowTestLLM.from_messages(
+        [text_message("must not run")], latency_s=0.0
+    )
+    info = await start_conversation_with_test_llm(
+        real_conversation_service,
+        parent_llm=parent_llm,
+        workspace_dir=str(tmp_path / "ws"),
+        usage_id="deliberate-run-false",
+        initial_text=None,
+    )
+    es = await real_conversation_service.get_event_service(info.id)
+    assert es is not None
+
+    await es.send_message(
+        Message(role="user", content=[TextContent(text="just append")]), run=False
+    )
+
+    assert es.has_pending_run_intent() is False
+
+    # The scheduler entry point the admission loop calls every few seconds.
+    await real_conversation_service._admit_queued()
+    await asyncio.sleep(0.3)  # give an erroneous start a chance to fire
+
+    assert parent_llm._call_count == 0
+    assert es._run_task is None

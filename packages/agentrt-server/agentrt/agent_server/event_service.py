@@ -237,6 +237,13 @@ class EventService:
     # Set when a send_message(run=True) is rejected because a run is still
     # wrapping up; consumed by _run_and_publish to re-run the stranded message.
     _rerun_requested: bool = field(default=False, init=False)
+    # Set when a caller asked for a run and none started -- an interrupt
+    # landed between the append and the start, or run() refused for a reason
+    # that is not terminal. A run that starts clears it. Unlike "idle with an
+    # unconsumed message", this records the *request*, so the admission
+    # scheduler can recover a dispatched session without ever starting a
+    # conversation a client appended input to with run=False on purpose.
+    _run_intent_pending: bool = field(default=False, init=False)
     # Set only for the internal ACP interrupt/restart path triggered by a new
     # send_message(run=True). Explicit user pause/interrupt clears it so user
     # stop intent wins over an earlier automatic restart request.
@@ -797,15 +804,15 @@ class EventService:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_execution_status_sync)
 
-    def has_unconsumed_user_message(self) -> bool:
-        """Return whether persisted input is newer than the consumed boundary."""
-        if not self._conversation:
-            return False
-        with self._conversation._state as state:
-            return (
-                state.last_user_message_id is not None
-                and state.last_user_message_id != state.consumed_user_message_id
-            )
+    def has_pending_run_intent(self) -> bool:
+        """Return whether a caller asked for a run that never started.
+
+        The scheduler retries these. It is deliberately not "idle with an
+        unconsumed message": a client may append input with ``run=False`` on
+        purpose, and starting that conversation would be a run nobody asked
+        for.
+        """
+        return self._run_intent_pending and not self._closing
 
     # -- H8 item 12: a run that never starts -------------------------------
 
@@ -1013,9 +1020,10 @@ class EventService:
         )
         if run:
             if self._explicit_interrupt_generation != explicit_interrupt_generation:
+                self._run_intent_pending = True
                 logger.warning(
                     "run request for conversation %s was interrupted before start; "
-                    "the admission safety net will recover the appended message",
+                    "recorded for the admission scheduler to recover",
                     self.stored.id,
                 )
                 return
@@ -1029,10 +1037,11 @@ class EventService:
                 interrupted_acp = True
                 await self.interrupt(internal_acp_rerun=True)
                 if self._explicit_interrupt_generation != explicit_interrupt_generation:
+                    self._run_intent_pending = True
                     logger.warning(
                         "run request for conversation %s was interrupted while "
-                        "superseding an ACP prompt; the admission safety net will "
-                        "recover the appended message",
+                        "superseding an ACP prompt; recorded for the admission "
+                        "scheduler to recover",
                         self.stored.id,
                     )
                     return
@@ -1055,9 +1064,19 @@ class EventService:
                         self._rerun_requested = True
                         if interrupted_acp:
                             self._acp_internal_rerun_requested = True
-                else:
+                elif str(e) == "inactive_service":
+                    # Terminal: the conversation is gone, so a retry cannot
+                    # help and the intent must not outlive it.
                     logger.warning(
                         "run request for conversation %s was not started: %s",
+                        self.stored.id,
+                        e,
+                    )
+                else:
+                    self._run_intent_pending = True
+                    logger.warning(
+                        "run request for conversation %s was not started; "
+                        "recorded for the admission scheduler: %s",
                         self.stored.id,
                         e,
                     )
@@ -1552,6 +1571,9 @@ class EventService:
             # Check if there's already a running task
             if self._run_task is not None and not self._run_task.done():
                 raise ValueError("conversation_already_running")
+
+            # A run is starting, so any recorded intent to run is satisfied.
+            self._run_intent_pending = False
 
             # Capture conversation reference for the closure
             conversation = self._conversation
