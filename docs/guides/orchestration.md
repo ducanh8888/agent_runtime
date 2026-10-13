@@ -146,6 +146,42 @@ thing that tests what a package actually says it needs.
 The installed copy is a snapshot. Changing the source does not change it --
 `uv tool install --reinstall` does.
 
+## Upgrading, and what the runtime now handles itself
+
+    git pull --ff-only
+    uv tool install --reinstall packages/agentrt-runtime
+    agentrt daemon stop && agentrt daemon start     # only with no session running
+
+The daemon executes the installed snapshot, so both steps are needed before a
+source change is live; a restart reports the runs it cut off in
+`capacity.recovered_after_restart`. After a restart on Windows, clear any
+`powershell.exe` left by the *previous* build once -- a killed daemon does not
+take its children with it.
+
+Nothing below needs an outside process, and each item replaced something an
+orchestrator used to have to do:
+
+- **A session's terminal is closed when its run ends** and rebuilt on the next
+  command, with a note telling the model its shell state is gone. Shell counting
+  and a kill-the-oldest janitor are no longer needed (and a janitor kills a live
+  session's shell too). `AGENTRT_TERMINAL_REAP_AFTER_RUN=0` restores the old
+  behaviour for a deployment that depends on shell state between runs.
+- **A stuck command cannot hold a run.** The command limit
+  (`AGENTRT_TERMINAL_MAX_SECONDS`, default 1800) is enforced from the caller as
+  well as inside the shell, so a shell that exited without a prompt marker
+  returns an error observation instead of leaving the session `running` for
+  hours; the terminal is reset for the next command.
+- **A dispatched session cannot sit `idle` in silence.** A run request that was
+  dropped is recorded and retried by the scheduler within seconds.
+- **`capacity()` is cheap** and answers from loaded conversations, with the
+  running sessions, their `iterations_used`, `last_progress_at` and
+  `waiting_on` (`tool:<name>` = interrupt it, `model` = leave it alone), and
+  `loaded_conversations` -- the number of shells a Windows host is holding.
+
+What still costs an orchestrator: polling per session. List once with
+`list(status="running")` or read `capacity()`, not one `status`/`transcript`
+call per session per loop.
+
 ## Configuration and state
 
 Configuration resolves from the process environment, then `<state-dir>/.env`,

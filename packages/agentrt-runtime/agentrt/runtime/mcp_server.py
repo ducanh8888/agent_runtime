@@ -67,7 +67,34 @@ THE LOOP.
    the rest.
 
 Ids can be shortened to an unambiguous prefix. Errors come back as
-{"error", "message"} data -- read the message, it names the fix."""
+{"error", "message"} data -- read the message, it names the fix.
+
+WHAT THE RUNTIME ALREADY DOES, so an orchestrator does not have to:
+
+- A session's terminal (a shell; a PowerShell process on Windows) is created
+  on its first run and closed when that run ends; the next command gets a fresh
+  one. Do not count or kill shells from outside -- a janitor that kills the
+  oldest ones kills a live session's shell too.
+- A command that does not return within AGENTRT_TERMINAL_MAX_SECONDS (default
+  1800) is stopped and the call always returns an observation, including when
+  the shell exits underneath it.
+- A run request that never started (an interrupt landing between the message
+  and the run) is retried by the scheduler, so a dispatched session cannot sit
+  `idle` in silence.
+- One poll of `capacity` is answered from the daemon's loaded conversations:
+  `running`, `queued`, `running_sessions` (with `iterations_used`,
+  `last_progress_at`, `waiting_on`) and `loaded_conversations`.
+
+WHAT NOT TO DO, because it costs more than it buys:
+
+- Do not call `status` or `transcript` once per session per loop. `wait` blocks
+  until sessions settle, and everything a status poll is watching for is in
+  `capacity`.
+- Do not page the whole store to find work: `list(status="running")` asks for
+  running sessions only.
+- Pass full UUIDs where you have them. A short id is fine, but resolving one
+  makes the client page the store.
+"""
 
 mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
 # FastMCP takes no version argument, so the low-level server falls back to the
