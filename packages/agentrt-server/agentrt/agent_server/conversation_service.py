@@ -1130,6 +1130,43 @@ class ConversationService:
                 self._mark_admission(record.stored, "admitted")
                 await event_service.save_meta()
 
+        await self._recover_idle_unconsumed()
+
+    async def _recover_idle_unconsumed(self) -> None:
+        """Start idle conversations whose latest user input is not consumed."""
+        for conversation_id, record in list(self._conversation_records.items()):
+            if record.execution_status != ConversationExecutionStatus.IDLE:
+                continue
+            if record.stored.admission_state == "queued":
+                continue
+            if not self._has_free_slot(
+                workspace_root=str(record.stored.workspace.working_dir),
+                workspace_mode=record.stored.workspace_mode,
+            ):
+                continue
+            async with self._conversation_lifecycle(conversation_id):
+                event_service = await self._get_or_load_event_service_locked(
+                    conversation_id
+                )
+                if event_service is None:
+                    continue
+                if not event_service.has_unconsumed_user_message():
+                    continue
+                logger.warning(
+                    "idle conversation %s has an unconsumed user message; starting run",
+                    conversation_id,
+                )
+                try:
+                    await event_service.run()
+                except ValueError as exc:
+                    if str(exc) == "conversation_already_running":
+                        continue
+                    logger.warning(
+                        "could not recover idle conversation %s: %s",
+                        conversation_id,
+                        exc,
+                    )
+
     async def _admission_loop(self) -> None:
         while True:
             await asyncio.sleep(self.admission_poll_seconds)

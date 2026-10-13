@@ -797,6 +797,16 @@ class EventService:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_execution_status_sync)
 
+    def has_unconsumed_user_message(self) -> bool:
+        """Return whether persisted input is newer than the consumed boundary."""
+        if not self._conversation:
+            return False
+        with self._conversation._state as state:
+            return (
+                state.last_user_message_id is not None
+                and state.last_user_message_id != state.consumed_user_message_id
+            )
+
     # -- H8 item 12: a run that never starts -------------------------------
 
     def _record_start_deadline_sync(self, deadline: float) -> None:
@@ -1003,6 +1013,11 @@ class EventService:
         )
         if run:
             if self._explicit_interrupt_generation != explicit_interrupt_generation:
+                logger.warning(
+                    "run request for conversation %s was interrupted before start; "
+                    "the admission safety net will recover the appended message",
+                    self.stored.id,
+                )
                 return
             (
                 did_mark_acp_prompt_superseded,
@@ -1014,6 +1029,12 @@ class EventService:
                 interrupted_acp = True
                 await self.interrupt(internal_acp_rerun=True)
                 if self._explicit_interrupt_generation != explicit_interrupt_generation:
+                    logger.warning(
+                        "run request for conversation %s was interrupted while "
+                        "superseding an ACP prompt; the admission safety net will "
+                        "recover the appended message",
+                        self.stored.id,
+                    )
                     return
             try:
                 await self.run(
@@ -1029,13 +1050,17 @@ class EventService:
                 # is what keeps a deliberate run=False append, or an IDLE reached
                 # via another path, from triggering an unwanted run.
                 # "inactive_service" is terminal and must not re-arm.
-                if (
-                    str(e) == "conversation_already_running"
-                    and not active_acp_prompt_has_latest_message
-                ):
-                    self._rerun_requested = True
-                    if interrupted_acp:
-                        self._acp_internal_rerun_requested = True
+                if str(e) == "conversation_already_running":
+                    if not active_acp_prompt_has_latest_message:
+                        self._rerun_requested = True
+                        if interrupted_acp:
+                            self._acp_internal_rerun_requested = True
+                else:
+                    logger.warning(
+                        "run request for conversation %s was not started: %s",
+                        self.stored.id,
+                        e,
+                    )
 
     def _mark_running_acp_prompt_superseded_sync(self) -> tuple[bool, bool]:
         """Mark the currently running ACP prompt superseded if needed.
