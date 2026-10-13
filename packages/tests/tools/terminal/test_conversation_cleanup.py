@@ -10,7 +10,10 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, ClassVar, Literal
 from unittest.mock import Mock
 
+import pytest
+
 from agentrt.sdk import Agent, Conversation
+from agentrt.sdk.conversation.state import ConversationExecutionStatus
 from agentrt.sdk.tool import Tool, ToolExecutor, register_tool
 from agentrt.tools.terminal import TerminalExecutor, TerminalTool
 
@@ -221,3 +224,150 @@ def test_terminal_executor_close_handles_missing_session():
 
         # This should not raise an exception
         terminal_executor.close()
+
+
+# --------------------------------------------------------------------------
+# #17: a run's end releases the shell, and the next command gets a new one.
+# --------------------------------------------------------------------------
+
+
+def test_reap_closes_the_shell_and_the_next_command_builds_a_new_one():
+    """reap() closes the process without disabling the executor."""
+    from agentrt.tools.terminal import TerminalAction
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        executor = TerminalExecutor(working_dir=temp_dir, terminal_type="subprocess")
+        first_terminal = executor.session.terminal
+        first_process = first_terminal.process
+
+        executor.reap()
+
+        assert first_process is not None
+        assert first_process.poll() is not None, "the shell survived reap()"
+
+        observation = executor(TerminalAction(command="echo alive"))
+
+        assert observation.exit_code == 0, observation.text
+        assert executor.session.terminal is not first_terminal, "no fresh shell"
+        assert "terminal was reset" in observation.text
+
+
+def _scripted_agent(tools: list[Tool]):
+    """An LLM-free agent: one scripted reply per step, then the run finishes."""
+    from pydantic import PrivateAttr, SecretStr
+
+    from agentrt.sdk.agent.base import AgentBase
+    from agentrt.sdk.conversation.types import (
+        ConversationCallbackType,
+        ConversationTokenCallbackType,
+    )
+    from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
+    from agentrt.sdk.llm import LLM, Message, TextContent
+
+    class _ScriptedAgent(AgentBase):
+        _replies: list[str] = PrivateAttr(default_factory=list)
+        _calls: int = PrivateAttr(default=0)
+
+        def __init__(self, replies: list[str]) -> None:
+            super().__init__(
+                llm=LLM(
+                    model="gpt-4o-mini",
+                    api_key=SecretStr("test-key"),
+                    usage_id="test-llm",
+                ),
+                tools=tools,
+            )
+            self._replies = replies
+
+        def init_state(self, state, on_event: ConversationCallbackType) -> None:  # noqa: ARG002
+            on_event(
+                SystemPromptEvent(
+                    source="agent", system_prompt=TextContent(text="dummy"), tools=[]
+                )
+            )
+
+        def step(
+            self,
+            conversation,
+            on_event: ConversationCallbackType,
+            on_token: ConversationTokenCallbackType | None = None,
+        ) -> None:
+            reply = self._replies[min(self._calls, len(self._replies) - 1)]
+            self._calls += 1
+            on_event(
+                MessageEvent(
+                    source="agent",
+                    llm_message=Message(
+                        role="assistant", content=[TextContent(text=reply)]
+                    ),
+                )
+            )
+            conversation.state.execution_status = ConversationExecutionStatus.FINISHED
+
+    return _ScriptedAgent(["answer one"])
+
+
+@pytest.mark.asyncio
+async def test_a_finished_run_closes_the_sessions_shell(monkeypatch):
+    """The run's end reaps the terminal, and the next command still works.
+
+    Before #17 the shell outlived the run until the whole conversation was
+    closed, so a fleet running sessions for hours kept one shell per session
+    that had run -- on Windows, a PowerShell process each.
+    """
+    monkeypatch.delenv("AGENTRT_TERMINAL_REAP_AFTER_RUN", raising=False)
+    # Force the single-shell backend: pool mode has no one session to watch.
+    monkeypatch.setattr("agentrt.tools.terminal.impl._is_tmux_available", lambda: False)
+    monkeypatch.setattr(
+        "agentrt.tools.terminal.terminal.factory._is_tmux_available", lambda: False
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        conversation = Conversation(
+            agent=_scripted_agent([Tool(name=TerminalTool.name)]),
+            workspace=temp_dir,
+        )
+        conversation._ensure_agent_ready()
+        tool = conversation.agent.tools_map[TerminalTool.name]
+        executor = tool.as_executable().executor
+        first_process = executor.session.terminal.process
+
+        conversation.send_message("question one")
+        await conversation.arun()
+
+        assert first_process is not None
+        assert first_process.poll() is not None, (
+            "the run ended but its shell is still alive"
+        )
+
+        from agentrt.tools.terminal import TerminalAction
+
+        observation = executor(TerminalAction(command="echo still works"))
+        assert observation.exit_code == 0, observation.text
+
+
+@pytest.mark.asyncio
+async def test_reap_after_run_can_be_turned_off(monkeypatch):
+    """AGENTRT_TERMINAL_REAP_AFTER_RUN=0 keeps the shell across runs."""
+    monkeypatch.setenv("AGENTRT_TERMINAL_REAP_AFTER_RUN", "0")
+    monkeypatch.setattr("agentrt.tools.terminal.impl._is_tmux_available", lambda: False)
+    monkeypatch.setattr(
+        "agentrt.tools.terminal.terminal.factory._is_tmux_available", lambda: False
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        conversation = Conversation(
+            agent=_scripted_agent([Tool(name=TerminalTool.name)]),
+            workspace=temp_dir,
+        )
+        conversation._ensure_agent_ready()
+        tool = conversation.agent.tools_map[TerminalTool.name]
+        executor = tool.as_executable().executor
+        first_process = executor.session.terminal.process
+
+        conversation.send_message("question one")
+        await conversation.arun()
+
+        assert first_process is not None
+        assert first_process.poll() is None, "the shell was reaped despite the flag"
+        executor.close()

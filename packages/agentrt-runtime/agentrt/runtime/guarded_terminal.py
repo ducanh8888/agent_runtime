@@ -149,6 +149,12 @@ class GuardedTerminalExecutor(ToolExecutor):
         if callable(close):
             close()
 
+    def reap(self) -> None:
+        """Delegate the between-runs reap to the wrapped executor (#17)."""
+        reap = getattr(self._inner, "reap", None)
+        if callable(reap):
+            reap()
+
 
 class GuardedTerminalTool(TerminalTool):
     @classmethod

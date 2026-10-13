@@ -1476,6 +1476,46 @@ class LocalConversation(BaseConversation):
                     exc,
                 )
 
+    @staticmethod
+    def _reap_after_run_enabled() -> bool:
+        raw = os.environ.get("AGENTRT_TERMINAL_REAP_AFTER_RUN")
+        if raw is None:
+            return True
+        return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+    def _reap_run_scoped_tools(self) -> None:
+        """Release resources a tool holds *between* runs.
+
+        The terminal is one persistent shell per conversation, and on Windows
+        that shell is a PowerShell process: it lived from the conversation's
+        first run until the conversation was closed (idle eviction, delete or
+        daemon shutdown), so a fleet running sessions for hours accumulated a
+        live shell per session that had run, and nothing brought it down while
+        anything kept reading the conversation (#17).
+
+        A tool opts in by implementing ``reap()`` -- closing its resource
+        without disabling the executor, which rebuilds it on the next call --
+        so no tool changes behaviour by default. Set
+        ``AGENTRT_TERMINAL_REAP_AFTER_RUN=0`` to keep shell state (working
+        directory, exported variables, background jobs) across runs.
+        """
+        if not self._reap_after_run_enabled():
+            return
+        for tool in list(self.agent.tools_map.values()):
+            try:
+                executor = tool.as_executable().executor
+            except (NotImplementedError, AttributeError, RuntimeError):
+                continue
+            reap = getattr(executor, "reap", None)
+            if not callable(reap):
+                continue
+            try:
+                reap()
+            except Exception as exc:
+                logger.warning(
+                    "Error reaping executor for tool '%s': %s", tool.name, exc
+                )
+
     def load_plugin(self, plugin_ref: str) -> None:
         """Load a plugin from the conversation's registered marketplaces."""
         self._ensure_plugins_loaded()
@@ -2173,6 +2213,7 @@ class LocalConversation(BaseConversation):
             ) from e
         finally:
             self._cancel_token = None
+            self._reap_run_scoped_tools()
 
     @observe(name="conversation.arun")
     async def arun(self) -> None:
@@ -2677,6 +2718,7 @@ class LocalConversation(BaseConversation):
             if self._cancel_token is not None and not self._cancel_token.is_cancelled:
                 self._cancel_token = None
             self._arun_task = None
+            self._reap_run_scoped_tools()
 
     def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
         """Set the confirmation policy and store it in conversation state."""

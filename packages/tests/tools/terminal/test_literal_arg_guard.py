@@ -93,6 +93,9 @@ def executor_without_shell() -> TerminalExecutor:
     """
     exe = TerminalExecutor.__new__(TerminalExecutor)
     exe._pool = None
+    # Stand in for the shell ``__init__`` would have created: a call rebuilds
+    # a missing one, and every path that would touch this one is stubbed.
+    exe._session = object()
 
     def _reach_shell(*_args: object, **_kwargs: object) -> TerminalObservation:
         raise AssertionError(_SHELL_SENTINEL)

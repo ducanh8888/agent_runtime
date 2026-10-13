@@ -50,6 +50,13 @@ _TMUX_POOL_RECOVERY_MESSAGE = (
     "or conditional shell logic instead. Please rerun any needed command."
 )
 
+_REAP_RESET_NOTE = (
+    "The terminal was reset after the previous run because AgentRT does not "
+    "keep a session's shell alive between runs. Shell state is gone: the "
+    "working directory is back to the session's, exported variables and "
+    "background jobs did not survive. Re-run any setup the command needs."
+)
+
 _TMUX_RECOVERABLE_ERROR_MARKERS = (
     "no server running",
     "can't find session",
@@ -538,7 +545,47 @@ class TerminalExecutor(ToolExecutor[TerminalAction, TerminalObservation]):
             self._recover_tmux_pool(pool)
             return self._tmux_pool_recovery_observation(action, error)
 
+    def _ensure_initialized(self) -> bool:
+        """Create the shell if ``reap()`` (or nothing yet) left us without one.
+
+        Returns whether a shell was created here, so the caller can tell the
+        model its shell state did not survive the wait between runs.
+        """
+        if self._pool is None and self._session is None:
+            if self._terminal_type in (None, "tmux") and _is_tmux_available():
+                self._initialize_pool()
+            else:
+                self._session = create_terminal_session(
+                    work_dir=self._working_dir,
+                    username=self._username,
+                    no_change_timeout_seconds=self._no_change_timeout_seconds,
+                    terminal_type=self._terminal_type,
+                    shell_path=self.shell_path,
+                    env=self._env,
+                )
+                self._session.initialize()
+            return True
+        return False
+
     def __call__(
+        self,
+        action: TerminalAction,
+        conversation: "LocalConversation | None" = None,
+    ) -> TerminalObservation:
+        reinitialized = self._ensure_initialized()
+        observation = self._execute(action, conversation)
+        if reinitialized:
+            observation = observation.model_copy(
+                update={
+                    "content": [
+                        *observation.content,
+                        TextContent(text="\n" + _REAP_RESET_NOTE),
+                    ]
+                }
+            )
+        return observation
+
+    def _execute(
         self,
         action: TerminalAction,
         conversation: "LocalConversation | None" = None,
@@ -594,8 +641,30 @@ class TerminalExecutor(ToolExecutor[TerminalAction, TerminalObservation]):
             with suppress(Exception):
                 self._session.interrupt()
 
+    def reap(self) -> None:
+        """Close the current shell without permanently disabling the executor."""
+        if self._pool is not None:
+            pool = self._pool
+            with self._sessions_lock:
+                for session in self._sessions.values():
+                    session._closed = True
+                    session.terminal._closed = True
+                self._sessions.clear()
+            with suppress(Exception):
+                pool.close()
+            self._pool = None
+        elif self._session is not None:
+            session = self._session
+            self._session = None
+            with suppress(Exception):
+                session.close()
+
     def close(self) -> None:
-        """Close the terminal session and clean up resources."""
+        """Close the terminal session and clean up resources.
+
+        Keeps the closed handle, as it always has: ``close`` ends the
+        executor's life, while ``reap`` ends only the current shell's.
+        """
         if self._pool is not None:
             self._pool.close()
             with self._sessions_lock:

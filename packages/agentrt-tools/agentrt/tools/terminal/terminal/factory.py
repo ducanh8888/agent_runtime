@@ -1,6 +1,7 @@
 """Factory for creating appropriate terminal sessions based on system capabilities."""
 
 import platform
+import shutil
 import subprocess
 import warnings
 from collections.abc import Mapping
@@ -40,18 +41,27 @@ def _get_powershell_command(explicit_shell_path: str | None = None) -> str | Non
     for candidate in candidates:
         if not candidate:
             continue
-        try:
-            result = subprocess.run(
-                [candidate, "-Command", "Write-Host 'PowerShell Available'"],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                env=sanitized_env(),
-            )
-        except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError, OSError):
-            continue
-        if result.returncode == 0:
-            return candidate
+        resolved = shutil.which(candidate)
+        if resolved is not None:
+            return resolved
+        if explicit_shell_path is not None and candidate == explicit_shell_path:
+            try:
+                result = subprocess.run(
+                    [candidate, "-Command", "Write-Host 'PowerShell Available'"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5.0,
+                    env=sanitized_env(),
+                )
+            except (
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+                PermissionError,
+                OSError,
+            ):
+                continue
+            if result.returncode == 0:
+                return candidate
     return None
 
 

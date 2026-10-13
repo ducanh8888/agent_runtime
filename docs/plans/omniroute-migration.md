@@ -516,3 +516,41 @@ request start/context across concurrent calls on one LLM instance (metrics only)
 `close()` shuts the emit executor without waiting; the LLM slot limit is not resized
 by a second `install_provider_slots`. Lanes 01, 09 and 18 produced no verified
 finding and were not a clean bill of health.
+
+### 15. The two issues filed after 14.2 (2026-10-13)
+
+`#16` (`capacity()` flat ~7.5 s, list scaling with stored sessions) and `#17` (one
+live PowerShell per session on Windows; 147-177 shells, host out of commit limit,
+daemon unable to restart). Measured here on a ~410-session store, then fixed.
+
+Client-side, found by measurement rather than by reading: every new client process
+paid `bootstrap.ensure_profiles()` before its first request -- 4.23 s of a 4.40 s
+first `list_sessions(20)`, most of it importing the LLM stack -- which is why the
+operator's CLI timings were flat in the page size (`agentrt --help` 0.27 s,
+`list --limit 20` 8.6 s on their host). `_ensure_ready` now only makes the daemon
+reachable; `_ensure_profiles` bootstraps on demand, and only `_profile_id` needs it.
+Same call after: 0.36 s (343987c).
+
+Daemon-side: `Client.capacity()` was the rest of it -- `list_sessions(limit=1000)`
+is 10 pages (the route caps a page at 100) plus `status` and `transcript` per
+running session, ~28 requests per poll, every poll, against the route the operator
+saw time out. The daemon now answers from the conversations it has loaded:
+`running_sessions` in `capacity()`, O(running), one request (35441a2). `stalled`
+and `waiting_on` are judged on the newest *projected* event (message/action/
+observation/error), not on the newest event of any kind: a run publishes state
+updates continuously, so the old rule reported a wedged session as fresh, and with
+a limit=1 page it was often null outright. `list` gained the `status` filter.
+Not done: an index or archiving (both are design changes the operator has not
+approved); resolving a short id still pages the store client-side.
+
+Windows: a session's terminal now closes when its run ends and is rebuilt on the
+next call, with a note telling the model its shell state is gone; `capacity()`
+reports `loaded_conversations` (at most one terminal each) so the backlog is visible
+without counting processes; and `_get_powershell_command` resolves the executable
+with `shutil.which` instead of spawning a PowerShell to probe for one -- that probe
+was also what turned host pressure into an intermittent 500 on `POST
+/api/conversations` ("PowerShell is not available on this system").
+`AGENTRT_TERMINAL_REAP_AFTER_RUN=0` keeps the old behaviour for a deployment that
+relies on shell state surviving between runs. Not covered: a daemon that is killed
+rather than stopped still orphans the shells loaded at that moment (Windows does not
+kill children with the parent).

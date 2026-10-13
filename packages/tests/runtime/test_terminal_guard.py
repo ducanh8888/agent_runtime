@@ -10,6 +10,10 @@ from agentrt.tools.terminal.definition import TerminalAction, TerminalObservatio
 class _RecordingInner:
     def __init__(self) -> None:
         self.action: TerminalAction | None = None
+        self.reaped = 0
+
+    def reap(self) -> None:
+        self.reaped += 1
 
     def __call__(
         self, action: TerminalAction, conversation: Any = None
@@ -85,3 +89,28 @@ def test_terminal_caps_a_longer_model_timeout(tmp_path: Path, monkeypatch) -> No
     assert inner.action is not None
     assert inner.action.timeout == 12
     assert "Stopped by AgentRT's 12-second terminal limit" in result.text
+
+
+def test_guard_delegates_reap_to_the_wrapped_executor(tmp_path: Path) -> None:
+    """#17: the daemon wraps the terminal, so `reap` must reach the real one.
+
+    A run's end reaps the terminal; on the daemon path the tool's executor is
+    this guard, and a guard that swallowed `reap` would leave every session's
+    PowerShell alive exactly as before the fix.
+    """
+    inner = _RecordingInner()
+    executor = guarded_terminal.GuardedTerminalExecutor(inner, str(tmp_path))
+
+    executor.reap()
+
+    assert inner.reaped == 1
+
+
+def test_guard_reap_is_a_noop_for_an_inner_without_it(tmp_path: Path) -> None:
+    class _PlainInner:
+        def __call__(self, action: Any, conversation: Any = None):
+            return TerminalObservation.from_text("ok", command="x")
+
+    executor = guarded_terminal.GuardedTerminalExecutor(_PlainInner(), str(tmp_path))
+
+    executor.reap()  # must not raise

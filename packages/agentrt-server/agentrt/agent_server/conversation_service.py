@@ -1333,6 +1333,10 @@ class ConversationService:
             "recovered_after_restart": self._recovered_after_restart,
             "pending_restart_recovery": len(self._pending_recovery),
             "running_sessions": self._running_session_details(),
+            # Loaded conversations are the ones holding a live terminal (one
+            # each at most), so this is the number an operator on Windows needs
+            # to watch: it is what "only N sessions are running" hides (#17).
+            "loaded_conversations": len(self._event_services or {}),
         }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:
