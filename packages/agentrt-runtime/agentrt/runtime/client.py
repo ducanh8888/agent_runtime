@@ -1195,17 +1195,30 @@ class Client:
     # ------------------------------------------------------------------
 
     def _ensure_ready(self) -> None:
-        """Make sure the daemon is running and profiles are bootstrapped."""
+        """Make sure the daemon is reachable.
+
+        Profiles are deliberately not bootstrapped here. `ensure_profiles`
+        loads every preset's agent profile and rebuilds the LLM profile, which
+        costs seconds (most of it importing the LLM stack) in every new
+        process: a read-only call such as `list` paid it before it sent a
+        single request, and the floor was flat in the page size because of it.
+        Only a request that needs a profile id pays for one -- see
+        `_ensure_profiles`.
+        """
         _ = self.info
 
+        if self._http is None:
+            self._http = httpx.Client(timeout=self._timeout, follow_redirects=True)
+
+    def _ensure_profiles(self) -> dict:
+        """Return the preset -> profile id map, bootstrapping it once."""
         if self._profile_ref is None:
             profiles = bootstrap.ensure_profiles()
             if not isinstance(profiles, dict) or not profiles:
                 raise ClientError("bootstrap did not produce agent profiles")
             self._profile_ref = profiles
-
-        if self._http is None:
-            self._http = httpx.Client(timeout=self._timeout, follow_redirects=True)
+        assert isinstance(self._profile_ref, dict)
+        return self._profile_ref
 
     def _base_url(self) -> str:
         info = self._daemon_info
@@ -1380,11 +1393,8 @@ class Client:
         runtime does not reference, or that the preset is not bound to, is a
         clear error rather than a silent fallback.
         """
-        if self._profile_ref is None:
-            self._ensure_ready()
+        profiles = self._ensure_profiles()
         preset = permissions.normalise(permission)
-        profiles = self._profile_ref
-        assert isinstance(profiles, dict)
         if preset not in profiles:
             raise ClientError(
                 f"no agent profile for permission {preset!r}; "

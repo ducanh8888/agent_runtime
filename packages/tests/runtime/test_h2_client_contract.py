@@ -1007,3 +1007,46 @@ def test_resume_on_a_running_session_is_an_answer() -> None:
 
     assert payload["already_running"] is True
     assert payload["status"] == "running"
+
+
+def test_a_read_does_not_bootstrap_profiles(monkeypatch) -> None:
+    """A read must not pay for the profile bootstrap.
+
+    `_ensure_ready` used to call `bootstrap.ensure_profiles`, so every new
+    client process -- which is every CLI invocation -- loaded all four
+    preset agent profiles and rebuilt the LLM profile before sending a
+    single request: 4.2 s here, and the reason `agentrt list --limit 20`
+    showed a floor that was flat in the page size. Only a call that needs a
+    profile id pays for it.
+    """
+    bootstrapped: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/search")
+        return httpx.Response(200, json={"items": [], "next_page_id": None})
+
+    monkeypatch.setattr(
+        client_mod.daemon,
+        "ensure_running",
+        lambda: types.SimpleNamespace(base_url="http://daemon.test", token="test"),
+    )
+    monkeypatch.setattr(
+        client_mod.bootstrap,
+        "ensure_profiles",
+        lambda **_kw: bootstrapped.append("bootstrap") or {},
+    )
+
+    client = client_mod.Client()
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+
+    assert client.list_sessions(limit=1) == []
+    assert bootstrapped == []
+
+    monkeypatch.setattr(
+        client_mod.bootstrap,
+        "ensure_profiles",
+        lambda **_kw: bootstrapped.append("on demand") or {"readonly": "profile-id"},
+    )
+
+    assert client._profile_id("readonly") == "profile-id"
+    assert bootstrapped == ["on demand"]
