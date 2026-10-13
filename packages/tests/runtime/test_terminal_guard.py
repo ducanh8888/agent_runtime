@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,13 @@ class _RecordingInner:
     def __init__(self) -> None:
         self.action: TerminalAction | None = None
         self.reaped = 0
+        self.interrupted = 0
 
     def reap(self) -> None:
         self.reaped += 1
+
+    def interrupt(self) -> None:
+        self.interrupted += 1
 
     def __call__(
         self, action: TerminalAction, conversation: Any = None
@@ -114,3 +119,63 @@ def test_guard_reap_is_a_noop_for_an_inner_without_it(tmp_path: Path) -> None:
     executor = guarded_terminal.GuardedTerminalExecutor(_PlainInner(), str(tmp_path))
 
     executor.reap()  # must not raise
+
+
+def test_guard_stops_waiting_when_the_backend_never_returns(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A stuck backend must not hold the run past its deadline (#15).
+
+    The client's sessions sat `running` with no events for hours because the
+    wall-clock limit lives inside the session loop, which is what is stuck when
+    a shell exits without a prompt marker. The guard now waits out here.
+    """
+    import threading
+
+    monkeypatch.setenv("AGENTRT_TERMINAL_MAX_SECONDS", "1")
+    monkeypatch.setattr(guarded_terminal, "_DEADLINE_GRACE_SECONDS", 0.2)
+    monkeypatch.setattr(guarded_terminal, "_INTERRUPT_GRACE_SECONDS", 0.2)
+
+    released = threading.Event()
+
+    class _StuckInner:
+        interrupted = 0
+        reaped = 0
+
+        def __call__(self, action: Any, conversation: Any = None):
+            released.wait(30)
+            return TerminalObservation.from_text("late", command="late")
+
+        def interrupt(self) -> None:
+            type(self).interrupted += 1
+
+        def reap(self) -> None:
+            type(self).reaped += 1
+
+    executor = guarded_terminal.GuardedTerminalExecutor(_StuckInner(), str(tmp_path))
+    start = time.monotonic()
+
+    result = executor(TerminalAction(command="sleep forever"))
+
+    elapsed = time.monotonic() - start
+    assert elapsed < 10, f"the call waited {elapsed:.1f}s past its deadline"
+    assert result.is_error is True
+    assert "did not return within" in result.text
+    assert _StuckInner.interrupted == 1, "the stuck command was not interrupted"
+    assert _StuckInner.reaped == 1, "the shell was not reset for the next command"
+    released.set()
+
+
+def test_guard_delegates_interrupt_to_the_wrapped_executor(tmp_path: Path) -> None:
+    """ParallelToolExecutor interrupts the tool's executor -- which is the guard.
+
+    Without the delegation the terminal command kept running when a session was
+    interrupted, so `interrupt`/`delete` could not take the conversation back
+    (#15).
+    """
+    inner = _RecordingInner()
+    executor = guarded_terminal.GuardedTerminalExecutor(inner, str(tmp_path))
+
+    executor.interrupt()
+
+    assert inner.interrupted == 1
