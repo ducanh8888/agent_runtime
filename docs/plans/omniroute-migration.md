@@ -554,3 +554,16 @@ was also what turned host pressure into an intermittent 500 on `POST
 relies on shell state surviving between runs. Not covered: a daemon that is killed
 rather than stopped still orphans the shells loaded at that moment (Windows does not
 kill children with the parent).
+
+Follow-up the same day, from the client's three quiet sessions and the router's call
+log (578/595/590 model calls, ~3.3M input tokens each, no edit produced): a run request
+that never started is now recorded and retried (3944168, 07fdb0c — keyed on the request,
+never on "idle with an unconsumed message", which would start a conversation a client
+prepared with `run=False`); a stuck terminal call can no longer hold a run (363c85b:
+the guard enforces the command deadline itself, delegates `interrupt`, which it never
+did — that is why `interrupt`/`delete` timed out at 120 s — and resets the shell it
+abandons); and the behaviour that produced the thrash is addressed in the system prompt
+rather than by a step budget (76930cd), which the operator rejected as a lever because a
+long task would be forced to resume or rush. The client-facing consequence is documented
+in the MCP instructions and `docs/guides/orchestration.md` (07b8d28), per the operator's
+directive that the client carry as little of agentRT's operation as possible.
