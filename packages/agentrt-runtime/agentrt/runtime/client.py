@@ -551,6 +551,28 @@ def _command_line(argv: list[str]) -> str:
     return shlex.join(argv)
 
 
+def _add_stall(entry: dict, threshold: float, now: datetime) -> None:
+    """Add ``seconds_since_last_progress`` and ``stalled`` to a session entry.
+
+    Judged from the newest *projected* event (message/action/observation/
+    error), never from the newest raw one: a state update is published while a
+    run goes on, so it proves liveness but not progress, and scoring a stall on
+    it would report a wedged session as fresh.
+    """
+    at = entry.get("last_progress_at")
+    elapsed = None
+    if isinstance(at, str):
+        try:
+            event_at = datetime.fromisoformat(at)
+            if event_at.tzinfo is None:
+                event_at = event_at.astimezone()
+            elapsed = max(0.0, (now - event_at).total_seconds())
+        except ValueError:
+            pass
+    entry["seconds_since_last_progress"] = elapsed
+    entry["stalled"] = elapsed is not None and elapsed > threshold
+
+
 def _waiting_on(newest: object) -> str | None:
     """What a session whose newest event is `newest` is waiting for."""
     if not isinstance(newest, dict):
@@ -1728,7 +1750,13 @@ class Client:
         self._session_index_refresh_at = time.monotonic()
         return list(index.values())
 
-    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+    def list_sessions(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        *,
+        status: str | None = None,
+    ) -> list[dict]:
         """Return the most recent sessions from the daemon, with page controls."""
         if limit <= 0:
             return []
@@ -1743,6 +1771,8 @@ class Client:
             params: dict[str, object] = {"limit": req_limit}
             if page:
                 params["page_id"] = page
+            if status is not None:
+                params["status"] = status
             data = self._send("GET", "/api/conversations/search", params=params).json()
 
             if isinstance(data, list):
@@ -2443,13 +2473,23 @@ class Client:
         history fields are null when that optional file is absent.
 
         `running_sessions` contains each running session's short id, title,
-        iterations_used, newest transcript event timestamp, seconds since that
-        event, and `stalled` when it exceeds AGENTRT_STALL_SECONDS (default 900).
-        `waiting_on` says what a quiet session is waiting for: `tool:<name>`
-        when its newest event is a tool call with no result yet (interrupt it),
-        `model` when it is waiting for the next model reply (a retry or the
-        router's timeout will end it), null when the newest event is not
-        informative.
+        iterations_used and two different times. `last_event_at` is liveness:
+        the newest event of any kind, including the state updates a run
+        publishes continuously. `last_progress_at` and
+        `seconds_since_last_progress` are progress: the newest event a
+        transcript would show (message, action, observation, error), and
+        `stalled` is set when that exceeds AGENTRT_STALL_SECONDS (default 900).
+        A session can be alive and not progressing; judging a stall on liveness
+        would report a wedged session as fresh. `waiting_on` says what a quiet
+        session waits for, from the same progress event: `tool:<name>` when it
+        is a tool call with no result yet (interrupt it), `model` when the
+        newest progress event is an observation or a message (a retry or the
+        router's timeout will end it), null when there is no progress event.
+
+        The daemon computes these from the conversations it has loaded, so a
+        poll costs one request. Against an older daemon this falls back to
+        listing running sessions and reading each one; that path is the
+        expensive one, and it is why the fields exist on the server side.
         Event timestamps without a timezone are interpreted as local time.
 
         `in_flight_llm` counts provider transport calls currently holding a slot;
@@ -2491,47 +2531,71 @@ class Client:
         threshold = _stall_seconds()
         running = []
         now = datetime.now().astimezone()
-        for session in self.list_sessions(limit=1000):
-            if session.get("status") != "running":
-                continue
-            session_id = session.get("id")
-            newest = None
-            waiting_on = None
-            if isinstance(session_id, str):
-                try:
-                    status = self.status(session_id)
-                    events = self.transcript(session_id, limit=1).get("events", [])
-                    timestamps = [
-                        e.get("timestamp")
-                        for e in events
-                        if isinstance(e, dict) and isinstance(e.get("timestamp"), str)
-                    ]
-                    newest = timestamps[0] if timestamps else None
-                    waiting_on = _waiting_on(events[0] if events else None)
-                except (ClientError, ValueError, TypeError):
-                    status = {}
-            else:
-                status = {}
-            elapsed = None
-            if newest:
-                try:
-                    event_at = datetime.fromisoformat(newest)
-                    if event_at.tzinfo is None:
-                        event_at = event_at.astimezone()
-                    elapsed = max(0.0, (now - event_at).total_seconds())
-                except ValueError:
-                    pass
-            running.append(
-                {
+        server_running = result.get("running_sessions")
+        if isinstance(server_running, list):
+            for session in server_running:
+                if not isinstance(session, dict):
+                    continue
+                progress = session.get("last_progress")
+                entry = {
+                    "id": session.get("short_id") or session.get("id"),
+                    "title": session.get("title"),
+                    "iterations_used": session.get("iterations_used"),
+                    "last_event_at": session.get("last_event_at"),
+                    "last_progress_at": (
+                        progress.get("timestamp")
+                        if isinstance(progress, dict)
+                        else None
+                    ),
+                    "waiting_on": _waiting_on(progress),
+                }
+                _add_stall(entry, threshold, now)
+                running.append(entry)
+        else:
+            # Older daemon: ask for running sessions only, then read the two
+            # projections that answer the same questions from a page instead of
+            # one request per session.
+            for session in self.list_sessions(limit=1000, status="running"):
+                session_id = session.get("id")
+                progress = None
+                status: dict = {}
+                liveness = None
+                if isinstance(session_id, str):
+                    try:
+                        status = self.status(session_id)
+                        events = self.transcript(session_id, limit=20).get("events", [])
+                        projected = [
+                            e
+                            for e in events
+                            if isinstance(e, dict)
+                            and e.get("type")
+                            in {"action", "observation", "message", "error"}
+                        ]
+                        # The page is oldest first, so the last entry is newest.
+                        progress = projected[-1] if projected else None
+                        raw = [
+                            e.get("timestamp")
+                            for e in events
+                            if isinstance(e, dict)
+                            and isinstance(e.get("timestamp"), str)
+                        ]
+                        liveness = raw[-1] if raw else None
+                    except (ClientError, ValueError, TypeError):
+                        progress = None
+                entry = {
                     "id": session.get("short_id"),
                     "title": session.get("title"),
                     "iterations_used": status.get("iterations_used"),
-                    "last_event_at": newest,
-                    "seconds_since_last_event": elapsed,
-                    "stalled": elapsed is not None and elapsed > threshold,
-                    "waiting_on": waiting_on,
+                    "last_event_at": liveness,
+                    "last_progress_at": (
+                        progress.get("timestamp")
+                        if isinstance(progress, dict)
+                        else None
+                    ),
+                    "waiting_on": _waiting_on(progress),
                 }
-            )
+                _add_stall(entry, threshold, now)
+                running.append(entry)
         result["running_sessions"] = running
         return result
 

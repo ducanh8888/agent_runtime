@@ -122,3 +122,70 @@ def test_waiting_on_tells_a_pending_tool_from_a_pending_model_reply() -> None:
     assert waiting_on({"type": "message", "role": "user"}) == "model"
     assert waiting_on({"type": "error"}) is None
     assert waiting_on(None) is None
+
+
+def test_capacity_uses_the_daemons_running_sessions_in_one_request(
+    monkeypatch, tmp_path
+) -> None:
+    """`capacity` must not page the store and read each running session (#16).
+
+    The sweep it used to do -- list a thousand rows, then `status` and
+    `transcript` per running session -- was about 28 requests per poll and
+    most of the 7.5 s an orchestrator measured on a 3,000-session store.
+    """
+    monkeypatch.setattr(client_mod.config, "state_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        client_mod.daemon, "read_info", lambda: types.SimpleNamespace(pid=50)
+    )
+    monkeypatch.setenv("AGENTRT_STALL_SECONDS", "900")
+
+    progress_at = (
+        (datetime.now().astimezone() - timedelta(seconds=1200))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    live_at = datetime.now().astimezone().replace(tzinfo=None).isoformat()
+    requests: list[str] = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        assert request.url.path.endswith("/capacity"), request.url.path
+        return httpx.Response(
+            200,
+            json={
+                "running_sessions": [
+                    {
+                        "id": SESSION,
+                        "short_id": SESSION[:8],
+                        "title": "wedged",
+                        "iterations_used": 12,
+                        "last_event_at": live_at,
+                        "last_progress": {
+                            "timestamp": progress_at,
+                            "type": "action",
+                            "tool": "terminal",
+                        },
+                    }
+                ],
+                "loaded_conversations": 41,
+            },
+        )
+
+    client = client_mod.Client()
+    client._daemon_info = types.SimpleNamespace(
+        base_url="http://daemon.test", token="token"
+    )
+    client._profile_ref = {}
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+
+    result = client.capacity()
+
+    assert requests == ["/api/conversations/capacity"]
+    assert result["loaded_conversations"] == 41
+    [session] = result["running_sessions"]
+    assert session["iterations_used"] == 12
+    # Alive (a state update just arrived) but not progressing for 20 minutes.
+    assert session["last_event_at"] == live_at
+    assert session["last_progress_at"] == progress_at
+    assert session["stalled"] is True
+    assert session["waiting_on"] == "tool:terminal"

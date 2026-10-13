@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -1214,6 +1214,74 @@ class ConversationService:
 
         return purge(conversations_dir)
 
+    #: Event kinds a transcript shows. A state update is published while a run
+    #: goes on, so it says the conversation is alive but not that it is making
+    #: progress -- judging a stall by it would report every wedged session as
+    #: fresh, which is the opposite of what the field is for.
+    _PROGRESS_EVENT_TYPES: ClassVar[dict[str, str]] = {
+        "MessageEvent": "message",
+        "ActionEvent": "action",
+        "ObservationEvent": "observation",
+        "ConversationErrorEvent": "error",
+    }
+
+    @classmethod
+    def _projected_event(cls, event: object) -> dict[str, Any] | None:
+        """Project one event the way the client's transcript does, or None."""
+        kind = type(event).__name__
+        event_type = cls._PROGRESS_EVENT_TYPES.get(kind)
+        if event_type is None:
+            return None
+        return {
+            "timestamp": getattr(event, "timestamp", None),
+            "type": event_type,
+            "tool": getattr(event, "tool_name", None),
+        }
+
+    def _running_session_details(self) -> list[dict[str, Any]]:
+        """Return metadata for conversations with a live run task.
+
+        Read from the loaded conversation's state, so an orchestrator polling
+        `capacity` costs O(running) and no HTTP round trips -- it used to be
+        sent to the store instead (list a thousand rows, then two requests per
+        running session), which was most of a poll's cost (#16).
+        """
+        details: list[dict[str, Any]] = []
+        for service in (self._event_services or {}).values():
+            task = getattr(service, "_run_task", None)
+            conversation = getattr(service, "_conversation", None)
+            if task is None or task.done() or conversation is None:
+                continue
+            state = getattr(conversation, "_state", None)
+            if state is None:
+                continue
+            events = state.events
+            newest = events[len(events) - 1] if events else None
+            progress = None
+            for event in reversed(events):
+                progress = self._projected_event(event)
+                if progress is not None:
+                    break
+            stored = service.stored
+            details.append(
+                {
+                    "id": str(stored.id),
+                    "short_id": stored.id.hex[:8],
+                    "title": stored.title,
+                    "iterations_used": state.iterations_used,
+                    # Liveness: anything arrived, of any kind.
+                    "last_event_at": (
+                        getattr(newest, "timestamp", None)
+                        if newest is not None
+                        else None
+                    ),
+                    # Progress: the newest event a transcript would show, which
+                    # is what "stalled" and "waiting_on" are about.
+                    "last_progress": progress,
+                }
+            )
+        return details
+
     async def capacity(self) -> dict[str, int | str | None]:
         """Report the admission surface.
 
@@ -1264,6 +1332,7 @@ class ConversationService:
             "server_started_at": self._server_started_at,
             "recovered_after_restart": self._recovered_after_restart,
             "pending_restart_recovery": len(self._pending_recovery),
+            "running_sessions": self._running_session_details(),
         }
 
     def _load_catalog_sync(self) -> dict[UUID, _ConversationRecord]:

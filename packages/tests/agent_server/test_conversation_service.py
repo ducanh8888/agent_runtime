@@ -4661,3 +4661,56 @@ class TestDirtyOverlaySubdirectory:
         assert (workspace_dir / "a.py").read_text() == "edited\n"
         # ...and not nested a second time.
         assert not (workspace_dir / "pkg").exists()
+
+
+class _RunTask:
+    """A run-task stand-in: only ``done()`` is consulted."""
+
+    def __init__(self, done: bool) -> None:
+        self._done = done
+
+    def done(self) -> bool:
+        return self._done
+
+
+def test_running_session_details_do_not_score_a_stall_on_liveness(tmp_path) -> None:
+    """A state update is liveness, not progress.
+
+    The distinction is the whole point of #16's running-session fields: a run
+    publishes state updates continuously, so judging "stalled" by the newest
+    event of any kind reports every wedged session as fresh. `last_event_at`
+    is the newest event of any kind; `last_progress` is the newest event a
+    transcript would show.
+    """
+    from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
+
+    progress_at = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+    live_at = datetime(2026, 1, 1, 10, 5, tzinfo=UTC)
+    action = _create_running_terminal_action().model_copy(
+        update={"timestamp": progress_at}
+    )
+    update = ConversationStateUpdateEvent(
+        key="execution_status", value="running"
+    ).model_copy(update={"timestamp": live_at})
+
+    conversation_id = uuid4()
+    conversation = SimpleNamespace(
+        _state=SimpleNamespace(events=[action, update], iterations_used=7)
+    )
+    stub = SimpleNamespace(
+        _run_task=_RunTask(done=False),
+        _conversation=conversation,
+        stored=SimpleNamespace(
+            id=conversation_id, title="a running session"
+        ),
+    )
+    service = ConversationService(conversations_dir=tmp_path)
+    service._event_services = {conversation_id: stub}
+
+    [detail] = service._running_session_details()
+
+    assert detail["last_event_at"] == live_at
+    assert detail["last_progress"]["timestamp"] == progress_at
+    assert detail["last_progress"]["type"] == "action"
+    assert detail["last_progress"]["tool"] == "terminal"
+    assert detail["iterations_used"] == 7
