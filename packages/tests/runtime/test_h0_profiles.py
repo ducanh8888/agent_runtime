@@ -118,7 +118,7 @@ def test_fast_path_migrates_base_created_switch_llm_off(state) -> None:
         assert reloaded.enable_switch_llm_tool is False
         assert reloaded.id == ids[preset]
         assert [tool.name for tool in (reloaded.tools or [])] == original_tools[preset]
-        assert reloaded.system_message_suffix == "operator-set"
+        assert (reloaded.system_message_suffix or "").startswith("operator-set")
 
     # The upgrade rewrote the profile, and running again leaves it alone.
     assert _digest(workspace_path) != before
@@ -301,3 +301,44 @@ def test_condenser_token_cap_on_new_and_existing_profiles(state) -> None:
     settled = _digest(path)
     assert bootstrap.ensure_profiles() == ids
     assert _digest(path) == settled
+
+
+def test_presets_carry_the_session_guidance(state) -> None:
+    """Every AgentRT preset's system prompt says what the session is for.
+
+    The evidence is in the module: three worker sessions spent 578-595 model
+    calls each over ~3 h reading a repository and producing no edit. The
+    runtime cannot call that stuck (every step succeeded) and a step cap would
+    hit long but real tasks, so the guidance lives in the prompt.
+    """
+    bootstrap.ensure_profiles()
+
+    for preset in ("readonly", "workspace", "broad"):
+        profile = get_agent_profile_store().load(preset)
+        assert isinstance(profile, OpenHandsAgentProfile)
+        assert profile.system_message_suffix is not None
+        assert "Working in this session" in profile.system_message_suffix
+        assert "no edit, no new conclusion and no report" in profile.system_message_suffix
+
+
+def test_guidance_is_added_once_and_keeps_an_operators_own_suffix(state) -> None:
+    """Additive and idempotent: no duplicates, and nothing of the operator's is lost."""
+    ids = bootstrap.ensure_profiles()
+    store = get_agent_profile_store()
+
+    profile = store.load("workspace")
+    assert isinstance(profile, OpenHandsAgentProfile)
+    store.save(
+        profile.model_copy(
+            update={"system_message_suffix": "Operator note: run the tests twice."}
+        )
+    )
+
+    bootstrap.ensure_profiles()
+    reloaded = store.load("workspace")
+    assert isinstance(reloaded, OpenHandsAgentProfile)
+    suffix = reloaded.system_message_suffix or ""
+
+    assert "Operator note: run the tests twice." in suffix
+    assert suffix.count("Working in this session") == 1
+    assert reloaded.id == ids["workspace"], "rebuild must reuse the profile id"

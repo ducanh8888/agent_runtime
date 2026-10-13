@@ -160,6 +160,55 @@ def _tools_for(preset: permissions.Permission):
     return specs
 
 
+#: Guidance appended to every AgentRT preset's system prompt. Field evidence
+#: (2026-10-13): three worker sessions spent 578-595 model calls each over ~3 h
+#: reading the repository and producing no edit; every step succeeded, so the
+#: runtime's stuck detector had nothing to fire on, and a step budget would
+#: have forced a resume or a rushed answer on long but real tasks instead. The
+#: prompt is where this belongs: it shapes the behaviour before it loops.
+SESSION_GUIDANCE = """\
+## Working in this session
+
+What counts in an AgentRT session is what you change and what you report, not
+how much you read. Read the file you were pointed at, not the neighbourhood,
+and never re-read what you already have.
+
+If your last several steps produced no edit, no new conclusion and no report,
+stop and answer one question in one sentence: what is still missing before you
+can act? Then act on it, or name it as the blocker. More reading is not an
+answer to that question.
+
+When the task is larger than the session, do the part that changes something
+and report exactly what is done, what is not, and what the next step is.
+Review and audit work is the exception -- there the reading is the deliverable
+-- but write your report as soon as you have enough to say.
+"""
+
+
+def _add_session_guidance(store, profile):
+    """Append the session guidance to a preset's system prompt, once.
+
+    Additive and idempotent: an operator's own suffix is kept, and a profile
+    that already carries the guidance is not rewritten. Only the OpenHands kind
+    AgentRT builds is touched.
+    """
+    from agentrt.sdk.profiles.agent_profile import OpenHandsAgentProfile
+
+    if not isinstance(profile, OpenHandsAgentProfile):
+        return profile
+    existing = profile.system_message_suffix or ""
+    if SESSION_GUIDANCE in existing:
+        return profile
+    merged = (
+        f"{existing.rstrip()}\n\n{SESSION_GUIDANCE}"
+        if existing.strip()
+        else SESSION_GUIDANCE
+    )
+    updated = profile.model_copy(update={"system_message_suffix": merged})
+    store.save(updated)
+    return updated
+
+
 def _constrain_switch_llm(store, profile):
     """Force the worker's own LLM-profile switch off for an AgentRT preset.
 
@@ -250,7 +299,10 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
             _refresh_llm_profile(state)
             return {
                 preset: _cap_condenser(
-                    agent_store, _constrain_switch_llm(agent_store, profile)
+                    agent_store,
+                    _constrain_switch_llm(
+                        agent_store, _add_session_guidance(agent_store, profile)
+                    ),
                 ).id
                 for preset, profile in loaded.items()
             }
@@ -294,6 +346,7 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
             name=preset,
             llm_profile_ref=LLM_PROFILE_NAME,
             tools=_tools_for(preset),
+            system_message_suffix=SESSION_GUIDANCE,
             enable_sub_agents=False,
             enable_switch_llm_tool=False,
             **kwargs,
