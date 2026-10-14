@@ -4814,3 +4814,43 @@ async def test_search_filters_by_status_tag_and_id_prefix(
     assert await search(id_prefix=str(running_tagged).replace("-", "")[:10]) == {
         running_tagged
     }
+
+
+@pytest.mark.asyncio
+async def test_a_failed_create_leaves_no_conversation_behind(
+    tmp_path, monkeypatch
+) -> None:
+    """A create that errors must not leave an `idle` orphan (#18).
+
+    Two dispatches overnight answered with an error while the conversation had
+    been stored and never started: the client took the error to mean the work
+    was not accepted, and the orphan pinned its queue item for hours -- both
+    were only found by scanning meta.json on disk.
+    """
+    conversations_dir = tmp_path / "conversations"
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    request = StartConversationRequest(
+        agent=Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[]),
+        workspace=LocalWorkspace(working_dir=str(workspace_dir)),
+        confirmation_policy=NeverConfirm(),
+        initial_message={
+            "role": "user",
+            "content": [{"type": "text", "text": "do the thing"}],
+        },
+    )
+
+    async with ConversationService(conversations_dir=conversations_dir) as service:
+
+        async def _refuse(*_args, **_kwargs):
+            raise RuntimeError("admission refused")
+
+        monkeypatch.setattr(service, "_admit_or_queue", _refuse)
+
+        with pytest.raises(RuntimeError, match="admission refused"):
+            await service.start_conversation(request)
+
+        assert service._event_services == {}, "an event service survived"
+        assert service._conversation_records == {}, "a catalog record survived"
+
+    assert not any(path.is_dir() for path in conversations_dir.iterdir())

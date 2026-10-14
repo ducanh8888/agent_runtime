@@ -2614,7 +2614,15 @@ class ConversationService:
             message = Message(
                 role=initial_message.role, content=initial_message.content
             )
-            await self._admit_or_queue(event_service, message)
+            try:
+                await self._admit_or_queue(event_service, message)
+            except BaseException:
+                # A create that answers with an error must not leave a
+                # conversation behind: the caller reads the error as "not
+                # accepted" and retries, while an `idle` orphan pins whatever
+                # the caller was tracking until someone notices it (#18).
+                await self._discard_failed_create(conversation_id, event_service)
+                raise
 
         state = await event_service.get_state()
         conversation_info = _compose_conversation_info(event_service.stored, state)
@@ -2625,6 +2633,29 @@ class ConversationService:
         )
 
         return conversation_info, True
+
+    async def _discard_failed_create(
+        self, conversation_id: UUID, event_service: EventService
+    ) -> None:
+        """Remove a conversation whose creation failed after it was stored.
+
+        The lease lives inside the conversation directory, so removing it also
+        releases the lease. A worktree the create may have made is left to
+        `git worktree prune` -- the same leftover as a deleted
+        `isolated_worktree` session, and not worth a second failure path here.
+        """
+        try:
+            await event_service.close()
+        except Exception:
+            logger.warning(
+                "Failed to close conversation %s after a failed create",
+                conversation_id,
+                exc_info=True,
+            )
+        self._event_services.pop(conversation_id, None)
+        self._conversation_records.pop(conversation_id, None)
+        self._credential_bindings.pop(conversation_id, None)
+        shutil.rmtree(self.conversations_dir / conversation_id.hex, ignore_errors=True)
 
     async def _cancel_queued_admission(self, conversation_id: UUID) -> None:
         """A conversation the caller stopped must not start on its own later.

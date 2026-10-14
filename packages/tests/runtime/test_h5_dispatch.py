@@ -429,7 +429,12 @@ def test_dispatch_prepends_context_files_and_sets_commit_hook(tmp_path) -> None:
     )
     body = seen["body"]
     text = body["initial_message"]["content"][0]["text"]
-    assert text == f"### Context file: {context}\nshared preamble\n\ndo the work"
+    # The header says the content is here, so a session told to "read the
+    # attached file" works from the text instead of answering about it (#8).
+    assert text == (
+        f"### Context file: {context} (full content inlined below; "
+        "nothing to open)\nshared preamble\n\ndo the work"
+    )
     hook = body["hook_config"]["stop"][0]["hooks"][0]
     assert hook["type"] == "command"
     assert "agentrt.runtime.commit_hook" in hook["command"]

@@ -182,6 +182,15 @@ What still costs an orchestrator: polling per session. List once with
 `list(status="running")` or read `capacity()`, not one `status`/`transcript`
 call per session per loop.
 
+### Spawning the CLI from a background service (Windows)
+
+`agentrt` is a console-subsystem program: a process it starts from a *detached*
+parent (no console of its own) gets a fresh console window on the user's desktop
+for every call -- dozens per minute from a polling loop. Pass
+`creationflags=CREATE_NO_WINDOW` on `os.name == "nt"`, or avoid the spawn
+entirely: the MCP surface is stdio and the daemon is HTTP, so an orchestrator
+that talks to either never starts a console (#20).
+
 ## Configuration and state
 
 Configuration resolves from the process environment, then `<state-dir>/.env`,

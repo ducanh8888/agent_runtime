@@ -286,8 +286,12 @@ def _read_context_files(paths: list[str]) -> list[tuple[str, str]]:
 def _with_context_files(task: str, paths: list[str] | None) -> str:
     if not paths:
         return task
+    # Say the content is here. A session told to "read the attached file" that
+    # does not realise the text is already in its first message tends to answer
+    # about the attachment instead of working from it (#8).
     parts = [
-        f"### Context file: {path}\n{content}"
+        f"### Context file: {path} (full content inlined below; "
+        f"nothing to open)\n{content}"
         for path, content in _read_context_files(paths)
     ]
     return "\n\n".join([*parts, task])
