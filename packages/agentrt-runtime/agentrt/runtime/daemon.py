@@ -449,6 +449,16 @@ def _is_agentrt_daemon(pid: int) -> bool:
 
 def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
     """Start the daemon if needed, or return the already-running instance."""
+    # A daemon that answers needs no lock. The lock serializes *starting*, and
+    # taking it on every call made each CLI invocation queue behind whoever
+    # held it: an 8-worker dispatch pool got "Another agentrt CLI/MCP process
+    # is starting or holding the daemon lock" for most calls and about one
+    # dispatch per 5 s (#19). This reads the same metadata the locked path
+    # reads first anyway.
+    running = read_info()
+    if running is not None and is_alive(running):
+        return running
+
     lock_path = config.state_dir() / "daemon.lock"
     lock_fd: int | None = None
     # The startup default is 240s rather than 60s. Measured on a fresh
@@ -468,6 +478,10 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                 )
                 os.write(lock_fd, str(os.getpid()).encode())
             except FileExistsError:
+                # Whoever holds the lock may have just started the daemon:
+                # adopt it rather than waiting out their whole start.
+                if (started := read_info()) is not None and is_alive(started):
+                    return started
                 if time.monotonic() >= acquire_deadline:
                     raise RuntimeError(
                         "Another agentrt CLI/MCP process is starting or holding "

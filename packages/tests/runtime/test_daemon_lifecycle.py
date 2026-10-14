@@ -221,3 +221,42 @@ def test_start_lock_of_a_dead_owner_is_reclaimed_at_once(tmp_path):
     lock.write_text(str(gone.pid))
 
     assert daemon._lock_is_stale(lock) is True
+
+
+def test_a_running_daemon_is_returned_without_the_start_lock(monkeypatch, tmp_path):
+    """Concurrent CLI calls must not queue behind the daemon lock (#19).
+
+    The lock exists so two processes cannot start two daemons; it was taken on
+    every call, so an 8-worker dispatch pool got "Another agentrt CLI/MCP
+    process is starting or holding the daemon lock" for most of its calls.
+    """
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    live = daemon.DaemonInfo(port=4321, token="live-token", pid=os.getpid())
+    monkeypatch.setattr(daemon, "read_info", lambda: live)
+    monkeypatch.setattr(daemon, "is_alive", lambda info: True)
+
+    # Someone else holds the start lock; a call must not care.
+    lock_path = tmp_path / "daemon.lock"
+    lock_path.write_text(str(os.getpid()))
+
+    assert daemon.ensure_running() == live
+    assert lock_path.exists(), "the other process's lock was disturbed"
+
+
+def test_a_start_in_progress_is_adopted_as_soon_as_it_answers(
+    monkeypatch, tmp_path
+):
+    """The callers that lost the start-lock race adopt the winner's daemon."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    live = daemon.DaemonInfo(port=4322, token="started-token", pid=os.getpid())
+    answers = iter([None, live, live, live])
+
+    monkeypatch.setattr(
+        daemon, "read_info", lambda: next(answers, live)
+    )
+    monkeypatch.setattr(daemon, "is_alive", lambda info: True)
+    # The lock is held by a live process for the whole call, as during a real
+    # start -- a dead owner would look stale and take a different path.
+    (tmp_path / "daemon.lock").write_text(str(os.getpid()))
+
+    assert daemon.ensure_running() == live
