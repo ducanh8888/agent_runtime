@@ -567,3 +567,17 @@ rather than by a step budget (76930cd), which the operator rejected as a lever b
 long task would be forced to resume or rush. The client-facing consequence is documented
 in the MCP instructions and `docs/guides/orchestration.md` (07b8d28), per the operator's
 directive that the client carry as little of agentRT's operation as possible.
+
+Second batch from the same fleet (2026-10-14, four new issues): `list` had no server-side
+filters, so finding work meant paging ~3,000 sessions and a session past the page limit read
+as "no session" (#21); resolving a short id did the same paging in a fresh process, which is
+why CLI `status`/`send` took 19-30 s while the long-lived MCP server answered in 1-2 s (#19) —
+both fixed in f19f890 (`status`/`tag`/`id_prefix` on the search route, one-request resolution
+with a fallback for an older daemon). A create whose initial message could not be admitted
+answered with an error and left an `idle` conversation behind, pinning the caller's item for
+hours (#18): the admission is now the last fallible step and a failure removes the conversation
+(f4c8d1c). The Windows console window per CLI call is inherent to a console-subsystem
+executable, so it is documented rather than worked around in-process (#20), and a context file
+is inlined into the first message — its header now says so, because a task phrased as "read the
+attached file" was being answered *about* the attachment with zero tool calls (#8).
+Client-facing rule that came out of it: filter server-side, never page the catalog.
