@@ -1926,14 +1926,21 @@ class ConversationService:
         self,
         page_id: str | None = None,
         limit: int = 100,
-        execution_status: ConversationExecutionStatus | None = None,
+        execution_status: (
+            ConversationExecutionStatus | list[ConversationExecutionStatus] | None
+        ) = None,
         sort_order: ConversationSortOrder = ConversationSortOrder.CREATED_AT_DESC,
+        *,
+        tags: dict[str, str] | None = None,
+        id_prefix: str | None = None,
     ) -> ConversationPage:
         items, next_page_id = await self._search_conversations(
             page_id=page_id,
             limit=limit,
             execution_status=execution_status,
             sort_order=sort_order,
+            tags=tags,
+            id_prefix=id_prefix,
         )
         return ConversationPage(
             items=items,
@@ -1962,24 +1969,56 @@ class ConversationService:
         self,
         page_id: str | None,
         limit: int,
-        execution_status: ConversationExecutionStatus | None,
+        execution_status: (
+            ConversationExecutionStatus | list[ConversationExecutionStatus] | None
+        ),
         sort_order: ConversationSortOrder,
+        *,
+        tags: dict[str, str] | None = None,
+        id_prefix: str | None = None,
     ) -> tuple[list[ConversationInfo], str | None]:
         if self._event_services is None:
             raise ValueError("inactive_service")
         await self._reconcile_active_records()
 
-        if execution_status is not None:
+        wanted_statuses = (
+            None
+            if execution_status is None
+            else (
+                {execution_status}
+                if isinstance(execution_status, ConversationExecutionStatus)
+                else set(execution_status)
+            )
+        )
+        if wanted_statuses:
             # Refresh before snapshotting below: this awaits, and a conversation
             # going live replaces its catalog record, so a snapshot taken first
             # would filter on the superseded one. Full state is still loaded
             # only for the page items.
             await self._refresh_execution_statuses()
 
+        # A short id is a prefix of the catalog key, so it is answered from the
+        # catalog the daemon already holds -- the caller used to page the whole
+        # store to resolve one (`AgentRT` #19).
+        wanted_prefix = id_prefix.casefold().replace("-", "") if id_prefix else None
+
+        def _matches(conversation_id: UUID, record: _ConversationRecord) -> bool:
+            if wanted_statuses and record.execution_status not in wanted_statuses:
+                return False
+            if wanted_prefix is not None and not str(conversation_id).replace(
+                "-", ""
+            ).casefold().startswith(wanted_prefix):
+                return False
+            if tags and any(
+                record.stored.tags.get(key) != value for key, value in tags.items()
+            ):
+                return False
+            return True
+
         records = [
             (conversation_id, record)
             for conversation_id, record in self._conversation_records.items()
-            if execution_status is None or record.execution_status == execution_status
+            if _matches(conversation_id, record)
         ]
         if sort_order in (
             ConversationSortOrder.CREATED_AT,

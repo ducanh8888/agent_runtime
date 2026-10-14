@@ -121,6 +121,50 @@ START_CONVERSATION_EXAMPLES = [
 # Read methods
 
 
+def _parse_status_filter(
+    raw: list[str] | None,
+) -> ConversationExecutionStatus | list[ConversationExecutionStatus] | None:
+    """Accept `status=running`, `status=running,idle` and repeated parameters.
+
+    The service takes a single status or a list; one value is passed as one so
+    the existing single-status behaviour (and its status refresh) is unchanged.
+    """
+    values = [
+        part.strip() for item in raw or [] for part in item.split(",") if part.strip()
+    ]
+    if not values:
+        return None
+    try:
+        parsed = [ConversationExecutionStatus(value) for value in values]
+    except ValueError as exc:
+        known = ", ".join(status.value for status in ConversationExecutionStatus)
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown status {values!r}; known values: {known}",
+        ) from exc
+    return parsed[0] if len(parsed) == 1 else parsed
+
+
+def _parse_tag_filter(raw: list[str] | None) -> dict[str, str] | None:
+    """Parse `key=value` tags; a malformed one is refused, not ignored."""
+    if not raw:
+        return None
+    tags: dict[str, str] = {}
+    for item in raw:
+        for part in item.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            key, separator, value = part.partition("=")
+            if not separator or not key.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"tag {part!r} is not key=value",
+                )
+            tags[key.strip()] = value.strip()
+    return tags or None
+
+
 @conversation_router.get("/search")
 async def search_conversations(
     page_id: Annotated[
@@ -132,8 +176,35 @@ async def search_conversations(
         Query(title="The max number of results in the page", gt=0, lte=100),
     ] = 100,
     status: Annotated[
-        ConversationExecutionStatus | None,
-        Query(title="Optional filter by conversation execution status"),
+        list[str] | None,
+        Query(
+            title=(
+                "Optional filter by execution status. Repeat the parameter or "
+                "comma-separate the values: status=running&status=idle, or "
+                "status=running,idle"
+            )
+        ),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        Query(
+            title=(
+                "Optional filter by tag, as key=value. Repeatable, and all "
+                "given tags must match"
+            )
+        ),
+    ] = None,
+    id_prefix: Annotated[
+        str | None,
+        Query(
+            title=(
+                "Optional filter by conversation id prefix (a short id). "
+                "Resolves a short id in one request instead of paging the "
+                "whole catalog"
+            ),
+            min_length=1,
+            max_length=36,
+        ),
     ] = None,
     sort_order: Annotated[
         ConversationSortOrder,
@@ -146,7 +217,12 @@ async def search_conversations(
     assert limit > 0
     assert limit <= 100
     page = await conversation_service.search_conversations(
-        page_id, limit, status, sort_order
+        page_id,
+        limit,
+        _parse_status_filter(status),
+        sort_order,
+        tags=_parse_tag_filter(tag),
+        id_prefix=id_prefix,
     )
     if not include_skills:
         # ``model_copy`` rather than in-place mutation so we never

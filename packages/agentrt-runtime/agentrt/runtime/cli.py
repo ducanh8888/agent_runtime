@@ -89,7 +89,18 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
 def _cmd_list(args: argparse.Namespace) -> list:
     """Return recent sessions in reverse chronological order."""
     client = client_mod.Client()
-    return client.list_sessions(limit=args.limit, offset=args.offset)
+    tag = {}
+    for pair in args.tag or []:
+        key, separator, value = pair.partition("=")
+        if not separator or not key.strip():
+            raise SystemExit(f"error: --tag expects key=value, got {pair!r}")
+        tag[key.strip()] = value.strip()
+    return client.list_sessions(
+        limit=args.limit,
+        offset=args.offset,
+        status=args.status,
+        tag=tag or None,
+    )
 
 
 def _cmd_status(args: argparse.Namespace) -> dict:
@@ -439,6 +450,22 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=50,
         help="maximum sessions to return (default: 50)",
+    )
+    list_parser.add_argument(
+        "--status",
+        default=None,
+        help=(
+            "filter server-side by status; several values comma-separated "
+            "(e.g. running,idle). Without it, filtering means paging the "
+            "whole catalog"
+        ),
+    )
+    list_parser.add_argument(
+        "--tag",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="filter by tag; repeatable, and all given tags must match",
     )
     list_parser.add_argument(
         "--offset",

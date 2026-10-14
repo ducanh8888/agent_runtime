@@ -3911,9 +3911,7 @@ class TestConversationTreeForkAndNavigate:
         async with ConversationService(
             conversations_dir=tmp_path / "conversations"
         ) as svc:
-            info, _, _ = await self._start_with_events(
-                svc, workspace_dir, ["first"]
-            )
+            info, _, _ = await self._start_with_events(svc, workspace_dir, ["first"])
 
             fork_info = await svc.fork_conversation(info.id)
 
@@ -4700,9 +4698,7 @@ def test_running_session_details_do_not_score_a_stall_on_liveness(tmp_path) -> N
     stub = SimpleNamespace(
         _run_task=_RunTask(done=False),
         _conversation=conversation,
-        stored=SimpleNamespace(
-            id=conversation_id, title="a running session"
-        ),
+        stored=SimpleNamespace(id=conversation_id, title="a running session"),
     )
     service = ConversationService(conversations_dir=tmp_path)
     service._event_services = {conversation_id: stub}
@@ -4714,3 +4710,107 @@ def test_running_session_details_do_not_score_a_stall_on_liveness(tmp_path) -> N
     assert detail["last_progress"]["type"] == "action"
     assert detail["last_progress"]["tool"] == "terminal"
     assert detail["iterations_used"] == 7
+
+
+async def _noop() -> None:
+    return None
+
+
+async def _async_simple_id(conversation_id):
+    return SimpleNamespace(id=conversation_id)
+
+
+@pytest.mark.asyncio
+async def test_search_filters_by_status_tag_and_id_prefix(
+    tmp_path, monkeypatch
+) -> None:
+    """The catalog answers the filters, so a caller does not page it (#21).
+
+    Finding "the live session for tag lane=X" used to mean `list --limit 3000`
+    (~10 s) and filtering in the client -- and a session beyond the limit was
+    silently absent, which reads as "no session" and invites a duplicate
+    dispatch. A short id used to page the same way (#19).
+    """
+    from agentrt.agent_server.conversation_service import _ConversationRecord
+    from agentrt.sdk.workspace import LocalWorkspace
+
+    def record(conversation_id, *, status, tags):
+        return _ConversationRecord(
+            stored=SimpleNamespace(
+                id=conversation_id,
+                tags=tags,
+                workspace=LocalWorkspace(working_dir="/tmp/search-filters"),
+                workspace_mode="shared",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                parent_conversation_id=None,
+                title="a session",
+            ),
+            execution_status=status,
+        )
+
+    running_tagged = uuid4()
+    idle_tagged = uuid4()
+    running_other = uuid4()
+    service = ConversationService(conversations_dir=tmp_path)
+    service._event_services = {}
+    # The selection is what this test is about; composing each row's info from
+    # a state file is covered elsewhere, and these records have none.
+    monkeypatch.setattr(
+        service,
+        "_conversation_info",
+        lambda conversation_id, record, children_index=None: _async_simple_id(
+            conversation_id
+        ),
+    )
+    monkeypatch.setattr(
+        service, "_prewarm_conversation_infos", lambda *args, **kwargs: _noop()
+    )
+    service._conversation_records = {
+        running_tagged: record(
+            running_tagged,
+            status=ConversationExecutionStatus.RUNNING,
+            tags={"batch": "review20", "lane": "03"},
+        ),
+        idle_tagged: record(
+            idle_tagged,
+            status=ConversationExecutionStatus.IDLE,
+            tags={"batch": "review20"},
+        ),
+        running_other: record(
+            running_other,
+            status=ConversationExecutionStatus.RUNNING,
+            tags={"batch": "studio-w2"},
+        ),
+    }
+
+    async def search(**kwargs):
+        items, _ = await service._search_conversations(
+            kwargs.pop("page_id", None),
+            kwargs.pop("limit", 10),
+            kwargs.pop("execution_status", None),
+            kwargs.pop("sort_order", ConversationSortOrder.CREATED_AT_DESC),
+            **kwargs,
+        )
+        return {item.id for item in items}
+
+    assert await search(tags={"batch": "review20"}) == {
+        running_tagged,
+        idle_tagged,
+    }
+    assert await search(tags={"batch": "review20", "lane": "03"}) == {running_tagged}
+    assert await search(execution_status=ConversationExecutionStatus.RUNNING) == {
+        running_tagged,
+        running_other,
+    }
+    assert await search(
+        execution_status=[
+            ConversationExecutionStatus.RUNNING,
+            ConversationExecutionStatus.IDLE,
+        ],
+        tags={"batch": "review20"},
+    ) == {running_tagged, idle_tagged}
+    assert await search(id_prefix=str(running_tagged)[:8]) == {running_tagged}
+    assert await search(id_prefix=str(running_tagged).replace("-", "")[:10]) == {
+        running_tagged
+    }

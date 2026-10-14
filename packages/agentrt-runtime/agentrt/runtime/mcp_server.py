@@ -336,8 +336,13 @@ def dispatch(
 # Named `list` for the orchestrator but not defined as `list` here: a
 # module-level rebinding of the builtin is a trap for anything added later.
 @mcp.tool(name="list")
-def list_sessions(limit: int = 50, offset: int = 0) -> dict:
-    """List sessions newest first, with page controls.
+def list_sessions(
+    limit: int = 50,
+    offset: int = 0,
+    status: str | None = None,
+    tags: str | None = None,
+) -> dict:
+    """List sessions newest first, with page controls and server-side filters.
 
     Returns id, short_id, title, status, timestamps and tags for each. Use it
     to find a session whose short_id you no longer have, or to see what is
@@ -350,11 +355,39 @@ def list_sessions(limit: int = 50, offset: int = 0) -> dict:
     `limit` is the page size (default 50); `offset` skips that many newest
     sessions so older pages remain addressable. Sessions are kept until deleted
     and nothing expires.
+
+    FILTER SERVER-SIDE, do not page the catalog and filter afterwards: a
+    catalogue of a few thousand sessions costs seconds per page. `status`
+    takes one value or several separated by commas (`"running,idle"`), and
+    `tags` takes `key=value` pairs separated by commas
+    (`"batch=review20,lane=03"`), all of which must match. Ordering is
+    newest-created first.
     """
-    sessions = _guard(_get_client().list_sessions, limit, offset)
+    tag_map = _parse_tag_argument(tags)
+    if isinstance(tag_map, dict) and "error" in tag_map:
+        return tag_map
+    sessions = _guard(
+        lambda: _get_client().list_sessions(limit, offset, status=status, tag=tag_map)
+    )
     if isinstance(sessions, dict) and "error" in sessions:
         return sessions  # a failure is the top-level error, as for every other tool
     return {"sessions": sessions}
+
+
+def _parse_tag_argument(tags: str | None) -> dict[str, str] | None:
+    """Parse `"batch=x,lane=1"`; a malformed pair is refused, not ignored."""
+    if tags is None or not tags.strip():
+        return None
+    parsed: dict[str, str] = {}
+    for part in tags.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        key, separator, value = part.partition("=")
+        if not separator or not key.strip():
+            return {"error": "InvalidTag", "message": f"tag {part!r} is not key=value"}
+        parsed[key.strip()] = value.strip()
+    return parsed or None
 
 
 @mcp.tool()

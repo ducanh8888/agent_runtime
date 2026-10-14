@@ -8,7 +8,7 @@ from agentrt.runtime import client as client_mod, mcp_server
 
 
 class _BrokenClient:
-    def list_sessions(self, limit, offset):
+    def list_sessions(self, limit, offset, *, status=None, tag=None):
         raise client_mod.ClientError("daemon busy or not responding within 120 s")
 
     def status(self, session):

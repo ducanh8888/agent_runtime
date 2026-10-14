@@ -1392,6 +1392,11 @@ class Client:
         else:
             return session
         prefix = str(session).casefold()
+        resolved = self._resolve_prefix_filtered(prefix)
+        if resolved is not None:
+            return resolved
+
+        # The daemon ignored the id filter (it predates it): page the catalog.
         sessions = self._all_sessions()
         matches = [
             str(full)
@@ -1405,6 +1410,40 @@ class Client:
             listed = ", ".join(short_id(full) for full in matches)
             raise AmbiguousSession(f"session prefix {session!r} is ambiguous: {listed}")
         return matches[0]
+
+    def _resolve_prefix_filtered(self, prefix: str) -> str | None:
+        """Resolve a short id in one request, or None against an older daemon.
+
+        The daemon filters the catalog by id prefix, so this costs one request
+        instead of a page of a hundred rows per thousand stored sessions --
+        which is what made `agentrt status <short-id>` take 19-30 s on a
+        catalogue of 3,000 (#19). A daemon that does not know the parameter
+        ignores it and answers with unfiltered rows or a page cursor, which is
+        how the fallback is detected rather than assumed.
+        """
+        data = self._send(
+            "GET",
+            "/api/conversations/search",
+            params={"limit": 2, "id_prefix": prefix},
+        ).json()
+        items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            return None
+        ids = [
+            str(item["id"])
+            for item in items
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        ]
+        if isinstance(data, dict) and data.get("next_page_id") is not None:
+            return None  # more matches than a page: let the fallback decide
+        if any(not full.casefold().startswith(prefix) for full in ids):
+            return None  # the daemon ignored the filter
+        if not ids:
+            raise SessionNotFound(f"no session matches {prefix!r}")
+        if len(ids) > 1:
+            listed = ", ".join(short_id(full) for full in ids)
+            raise AmbiguousSession(f"session prefix {prefix!r} is ambiguous: {listed}")
+        return ids[0]
 
     def _profile_id(
         self, permission: str | None = None, llm_profile: str | None = None
@@ -1756,8 +1795,17 @@ class Client:
         offset: int = 0,
         *,
         status: str | None = None,
+        tag: dict[str, str] | None = None,
+        id_prefix: str | None = None,
     ) -> list[dict]:
-        """Return the most recent sessions from the daemon, with page controls."""
+        """Return the most recent sessions from the daemon, with page controls.
+
+        `status` filters server-side and accepts several values
+        (`"running,idle"`); `tag` filters by `key=value` pairs, all of which
+        must match; `id_prefix` returns the sessions whose short id starts with
+        it. Filtering here rather than after the fact is the difference between
+        one page and paging the whole catalog (#21).
+        """
         if limit <= 0:
             return []
         offset = max(0, offset)
@@ -1773,6 +1821,10 @@ class Client:
                 params["page_id"] = page
             if status is not None:
                 params["status"] = status
+            if tag:
+                params["tag"] = [f"{key}={value}" for key, value in tag.items()]
+            if id_prefix is not None:
+                params["id_prefix"] = id_prefix
             data = self._send("GET", "/api/conversations/search", params=params).json()
 
             if isinstance(data, list):

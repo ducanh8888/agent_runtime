@@ -99,40 +99,51 @@ def test_cli_list_forwards_limit_and_offset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CLI list defaults to limit 50, offset 0 and forwards custom flags."""
-    calls: list[tuple[int, int]] = []
+    calls: list[tuple] = []
 
     class FakeClient:
-        def list_sessions(self, limit: int = 50, offset: int = 0) -> list:
-            calls.append((limit, offset))
+        def list_sessions(self, limit=50, offset=0, *, status=None, tag=None):
+            calls.append((limit, offset, status, tag))
             return []
 
     monkeypatch.setattr(client_mod, "Client", lambda: FakeClient())
 
     code = main(["list"])
     assert code == 0
-    assert calls[-1] == (50, 0)
+    assert calls[-1] == (50, 0, None, None)
 
     code = main(["list", "--limit", "10", "--offset", "20"])
     assert code == 0
-    assert calls[-1] == (10, 20)
+    assert calls[-1] == (10, 20, None, None)
+
+    # The filters go to the daemon, not applied after paging the catalog.
+    code = main(["list", "--status", "running,idle", "--tag", "batch=x"])
+    assert code == 0
+    assert calls[-1] == (50, 0, "running,idle", {"batch": "x"})
 
 
 def test_mcp_list_sessions_forwards_limit_and_offset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """MCP list_sessions tool forwards limit and offset."""
-    calls: list[tuple[int, int]] = []
+    calls: list[tuple] = []
 
     class FakeClient:
-        def list_sessions(self, limit: int = 50, offset: int = 0) -> list:
-            calls.append((limit, offset))
+        def list_sessions(self, limit=50, offset=0, *, status=None, tag=None):
+            calls.append((limit, offset, status, tag))
             return [{"id": "s1"}]
 
     monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
 
     res = mcp_server.list_sessions()
-    assert calls[-1] == (50, 0)
+    assert calls[-1] == (50, 0, None, None)
     assert res == {"sessions": [{"id": "s1"}]}
 
     mcp_server.list_sessions(limit=15, offset=30)
-    assert calls[-1] == (15, 30)
+    assert calls[-1] == (15, 30, None, None)
+
+    # Tag strings are parsed into the map the client sends.
+    mcp_server.list_sessions(status="running", tags="batch=x,lane=1")
+    assert calls[-1] == (50, 0, "running", {"batch": "x", "lane": "1"})
+
+    assert "error" in mcp_server.list_sessions(tags="batch")

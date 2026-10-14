@@ -324,14 +324,51 @@ def test_prefix_resolution_indexes_incrementally_and_detects_ambiguity() -> None
 
     client = _mock_client(handle, stub_search=False)
     client._resolve_session("00000000")
+    # One probe that the daemon does not know `id_prefix` (this fake ignores
+    # it), then the incremental index: three pages for 250 sessions.
     first_count = len(requests)
-    assert first_count == 3
+    assert first_count == 4
 
     ids[:0] = ["00000000-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]
     with pytest.raises(client_mod.AmbiguousSession):
         client._resolve_session("00000000")
-    assert len(requests) == first_count + 1
-    assert all(params.get("sort_order") == "CREATED_AT_DESC" for params in requests)
+    assert len(requests) == first_count + 2  # the probe, then the re-page
+    # Every paged request asks for the same order; only the probe differs.
+    assert all(
+        params.get("sort_order") == "CREATED_AT_DESC"
+        for params in requests
+        if "id_prefix" not in params
+    )
+
+
+def test_prefix_resolution_is_one_request_when_the_daemon_filters_ids() -> None:
+    """A short id is answered from the catalog, not by paging it (#19).
+
+    Resolving one short id used to page a hundred rows per thousand sessions,
+    which is what made `agentrt status <short-id>` take 19-30 s against a
+    catalogue of 3,000.
+    """
+    wanted = "3fe7d863-0000-0000-0000-000000000000"
+    requests: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        matches = [wanted] if wanted.startswith(params.get("id_prefix", "")) else []
+        return httpx.Response(
+            200,
+            json={"items": [{"id": value} for value in matches], "next_page_id": None},
+        )
+
+    client = _mock_client(handle, stub_search=False)
+
+    assert client._resolve_session("3fe7d863") == wanted
+    assert len(requests) == 1
+    assert requests[0]["id_prefix"] == "3fe7d863"
+
+    with pytest.raises(client_mod.SessionNotFound):
+        client._resolve_session("ffffff")
+    assert len(requests) == 2
 
 
 def test_full_uuid_resolution_does_not_search() -> None:

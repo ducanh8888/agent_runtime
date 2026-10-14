@@ -144,7 +144,12 @@ def test_search_conversations_default_params(
 
         # Verify service was called with default parameters
         mock_conversation_service.search_conversations.assert_called_once_with(
-            None, 100, None, ConversationSortOrder.CREATED_AT_DESC
+            None,
+            100,
+            None,
+            ConversationSortOrder.CREATED_AT_DESC,
+            tags=None,
+            id_prefix=None,
         )
     finally:
         client.app.dependency_overrides.clear()
@@ -188,6 +193,8 @@ def test_search_conversations_with_all_params(
             50,
             ConversationExecutionStatus.IDLE,
             ConversationSortOrder.UPDATED_AT_DESC,
+            tags=None,
+            id_prefix=None,
         )
     finally:
         client.app.dependency_overrides.clear()
@@ -2745,5 +2752,81 @@ def test_start_conversation_client_tool_registration_error_returns_422(
 
         assert response.status_code == 422
         assert "collides with an existing non-client tool" in response.json()["detail"]
+    finally:
+        client.app.dependency_overrides.clear()
+
+
+def test_search_status_and_tag_filters_parse_repeated_and_joined_values() -> None:
+    """`?status=running,idle&tag=a=1&tag=b=2` is what a client sends (#21)."""
+    from fastapi import HTTPException
+
+    from agentrt.agent_server.conversation_router import (
+        _parse_status_filter,
+        _parse_tag_filter,
+    )
+    from agentrt.sdk.conversation.state import ConversationExecutionStatus
+
+    assert _parse_status_filter(None) is None
+    assert _parse_status_filter(["running"]) is ConversationExecutionStatus.RUNNING
+    assert _parse_status_filter(["running,idle"]) == [
+        ConversationExecutionStatus.RUNNING,
+        ConversationExecutionStatus.IDLE,
+    ]
+    assert _parse_status_filter(["running", "idle"]) == [
+        ConversationExecutionStatus.RUNNING,
+        ConversationExecutionStatus.IDLE,
+    ]
+    with pytest.raises(HTTPException) as unknown:
+        _parse_status_filter(["napping"])
+    assert unknown.value.status_code == 422
+
+    assert _parse_tag_filter(None) is None
+    assert _parse_tag_filter(["batch=x", "lane=1"]) == {"batch": "x", "lane": "1"}
+    assert _parse_tag_filter(["batch=x,lane=1"]) == {"batch": "x", "lane": "1"}
+    with pytest.raises(HTTPException) as malformed:
+        _parse_tag_filter(["batch"])
+    assert malformed.value.status_code == 422
+
+
+def test_search_conversations_forwards_tag_and_id_prefix_filters(
+    client, mock_conversation_service, sample_conversation_info
+):
+    """Repeated and comma-joined filters both reach the service parsed (#21)."""
+    mock_conversation_service.search_conversations.return_value = ConversationPage(
+        items=[sample_conversation_info], next_page_id=None
+    )
+    client.app.dependency_overrides[get_conversation_service] = lambda: (
+        mock_conversation_service
+    )
+
+    try:
+        response = client.get(
+            "/api/conversations/search",
+            params=[
+                ("limit", 20),
+                ("status", "running,idle"),
+                ("tag", "batch=review20"),
+                ("tag", "lane=03"),
+                ("id_prefix", "3fe7d863"),
+            ],
+        )
+
+        assert response.status_code == 200
+        mock_conversation_service.search_conversations.assert_called_once_with(
+            None,
+            20,
+            [
+                ConversationExecutionStatus.RUNNING,
+                ConversationExecutionStatus.IDLE,
+            ],
+            ConversationSortOrder.CREATED_AT_DESC,
+            tags={"batch": "review20", "lane": "03"},
+            id_prefix="3fe7d863",
+        )
+
+        bad = client.get(
+            "/api/conversations/search", params={"tag": "batch"}
+        )
+        assert bad.status_code == 422
     finally:
         client.app.dependency_overrides.clear()
