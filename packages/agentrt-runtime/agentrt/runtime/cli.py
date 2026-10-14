@@ -440,11 +440,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="tag the session at dispatch; repeatable",
+        help=(
+            "tag the session at dispatch; repeatable. Keys are lowercase "
+            "alphanumeric, optionally hyphen-separated (no underscores)"
+        ),
     )
     dispatch_parser.set_defaults(func=_cmd_dispatch)
 
-    list_parser = _add_subparser(subparsers, "list", help="list known sessions")
+    list_parser = _add_subparser(
+        subparsers, "list", help="list known sessions, newest-created first"
+    )
     list_parser.add_argument(
         "--limit",
         type=int,
@@ -465,7 +470,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         metavar="KEY=VALUE",
-        help="filter by tag; repeatable, and all given tags must match",
+        help=(
+            "filter by tag; repeatable, and all given tags must match. Keys "
+            "are lowercase alphanumeric, optionally hyphen-separated (no "
+            "underscores); values are free text"
+        ),
     )
     list_parser.add_argument(
         "--offset",
