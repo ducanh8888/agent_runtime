@@ -20,16 +20,24 @@ import pytest
 
 from agentrt.tools.terminal.terminal import windows_terminal
 
-pytestmark = pytest.mark.skipif(platform.system() != "Windows",
-                                reason="WindowsTerminal is Windows-only")
+
+pytestmark = pytest.mark.skipif(
+    platform.system() != "Windows", reason="WindowsTerminal is Windows-only"
+)
 
 
 def _kill_orphans(marker: str) -> None:
     subprocess.run(
-        ["powershell", "-NoProfile", "-Command",
-         "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "
-         f"'{marker}' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"],
-        capture_output=True, timeout=60)
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "
+            f"'{marker}' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}",
+        ],
+        capture_output=True,
+        timeout=60,
+    )
 
 
 def test_close_returns_while_an_orphan_holds_the_pipe(tmp_path) -> None:
@@ -39,12 +47,14 @@ def test_close_returns_while_an_orphan_holds_the_pipe(tmp_path) -> None:
     try:
         # cmd starts ping in the background and exits at once: ping is
         # orphaned (its parent is gone) and inherits PowerShell's stdout.
-        terminal.send_keys(f'cmd /c "start /b ping -n 60 127.0.0.1 > nul & '
-                           f'rem {marker}"')
+        terminal.send_keys(
+            f'cmd /c "start /b ping -n 60 127.0.0.1 > nul & rem {marker}"'
+        )
         time.sleep(3)
         done = threading.Event()
-        worker = threading.Thread(target=lambda: (terminal.close(), done.set()),
-                                  daemon=True)
+        worker = threading.Thread(
+            target=lambda: (terminal.close(), done.set()), daemon=True
+        )
         started = time.monotonic()
         worker.start()
         finished = done.wait(timeout=30)

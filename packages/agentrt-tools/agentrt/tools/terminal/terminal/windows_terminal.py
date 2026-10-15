@@ -187,6 +187,8 @@ class WindowsTerminal(TerminalInterface):
     def close(self) -> None:
         """Stop the PowerShell process and background reader.
 
+        AgentRT fork (#22).
+
         Order matters on Windows: the process is stopped first, so the
         reader's blocked ``stdout.read()`` sees EOF and the thread exits;
         only then are the pipes closed. Closing ``stdout`` while the reader
