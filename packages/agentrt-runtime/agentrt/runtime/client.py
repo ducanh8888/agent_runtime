@@ -1474,6 +1474,12 @@ class Client:
                     "the LLM profiles its agent profiles reference."
                 )
             bound = bootstrap.agent_profile_llm_ref(preset)
+            if llm_profile == config.HARD_LLM_PROFILE and bound != llm_profile:
+                # The preset's copy bound to the hard model: same tools and
+                # guidance, the whole session on that model.
+                hard_id = bootstrap.hard_agent_profile_id(preset)
+                if hard_id is not None:
+                    return str(hard_id)
             if bound != llm_profile:
                 raise ClientError(
                     f"permission {preset!r} is bound to LLM profile {bound!r}; "
@@ -1608,7 +1614,9 @@ class Client:
         preset = permissions.normalise(permission)
         profile_id = self._profile_id(preset, llm_profile)
         resolved_llm = (
-            bootstrap.agent_profile_llm_ref(preset) or bootstrap.LLM_PROFILE_NAME
+            llm_profile
+            or bootstrap.agent_profile_llm_ref(preset)
+            or bootstrap.LLM_PROFILE_NAME
         )
 
         cap = config.max_running_sessions()

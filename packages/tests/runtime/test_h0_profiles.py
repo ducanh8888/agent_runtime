@@ -318,7 +318,9 @@ def test_presets_carry_the_session_guidance(state) -> None:
         assert isinstance(profile, OpenHandsAgentProfile)
         assert profile.system_message_suffix is not None
         assert "Working in this session" in profile.system_message_suffix
-        assert "no edit, no new conclusion and no report" in profile.system_message_suffix
+        assert (
+            "no edit, no new conclusion and no report" in profile.system_message_suffix
+        )
 
 
 def test_guidance_is_added_once_and_keeps_an_operators_own_suffix(state) -> None:
@@ -342,3 +344,33 @@ def test_guidance_is_added_once_and_keeps_an_operators_own_suffix(state) -> None
     assert "Operator note: run the tests twice." in suffix
     assert suffix.count("Working in this session") == 1
     assert reloaded.id == ids["workspace"], "rebuild must reuse the profile id"
+
+
+def test_hard_model_runs_a_whole_session_on_its_own_profile(
+    state, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_HARD_MODEL", "agentrt-hard")
+    profiles = bootstrap.ensure_profiles()
+    assert bootstrap.allowed_llm_profiles() == ["default", "hard"]
+    assert get_llm_profile_store().load("hard").model == "openai/agentrt-hard"
+    hard = get_agent_profile_store().load("workspace-hard")
+    base = get_agent_profile_store().load("workspace")
+    assert hard.tools == base.tools
+    assert hard.system_message_suffix == base.system_message_suffix
+
+    client = _StubClient(profiles)
+    result = client.dispatch(
+        "plan it", state, permission="workspace", llm_profile="hard"
+    )
+
+    assert result["llm_profile"] == "hard"
+    assert client.sent[0]["json"]["agent_profile_id"] == str(hard.id)
+    assert bootstrap.ensure_profiles() == profiles  # presets keep their ids
+    assert get_agent_profile_store().load("workspace-hard").id == hard.id
+
+
+def test_hard_profile_is_refused_when_no_hard_model_is_set(state) -> None:
+    profiles = bootstrap.ensure_profiles()
+    client = _StubClient(profiles)
+    with pytest.raises(client_mod.ClientError, match="not allowed"):
+        client.dispatch("plan it", state, permission="workspace", llm_profile="hard")

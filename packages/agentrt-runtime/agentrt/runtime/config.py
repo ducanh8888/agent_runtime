@@ -462,6 +462,32 @@ def workers() -> int:
         return 1
 
 
+def _setting(name: str) -> str:
+    """A setting from the process env, then ``<state-dir>/.env``; "" if unset."""
+    raw = os.environ.get(name, "").strip()
+    if raw:
+        return raw
+    try:
+        return read_dotenv(config_file()).get(name, "").strip()
+    except OSError:
+        return ""
+
+
+#: The LLM profile a dispatch selects for reasoning-heavy work.
+HARD_LLM_PROFILE = "hard"
+
+
+def hard_model() -> str | None:
+    """The router model for reasoning-heavy sessions (``AGENTRT_HARD_MODEL``).
+
+    When set, the runtime saves a second LLM profile, ``hard``, at the same
+    endpoint and key, and a dispatch with ``llm_profile="hard"`` runs its whole
+    session on it. A session never changes model mid-way, so the provider's
+    prompt cache stays warm. Unset: every session uses the default model.
+    """
+    return _setting("AGENTRT_HARD_MODEL") or None
+
+
 # The vendored server's own run-pool cap (`agentrt-server`'s Config.
 # max_concurrent_runs, env var AGENTRT_MAX_CONCURRENT_RUNS) is a second,
 # independent limit from AGENTRT_MAX_SESSIONS above -- one is this client

@@ -15,10 +15,11 @@ files only it reads.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import SecretStr
 
@@ -299,6 +300,7 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
             pass
         else:
             _refresh_llm_profile(state)
+            _sync_hard_profiles(agent_store)
             return {
                 preset: _cap_condenser(
                     agent_store,
@@ -356,7 +358,72 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         profile = _cap_condenser(agent_store, profile)
         agent_store.save(profile)
         ids[preset] = profile.id
+    _sync_hard_profiles(agent_store)
     return ids
+
+
+def hard_agent_profile_name(preset: str) -> str:
+    return f"{preset}-{config.HARD_LLM_PROFILE}"
+
+
+def _sync_hard_profiles(agent_store) -> None:
+    """Save the ``hard`` LLM profile and a copy of each preset bound to it.
+
+    Only when ``AGENTRT_HARD_MODEL`` is set. Each copy is the preset's own
+    profile (same tools, guidance and condenser) with the LLM reference
+    changed, so choosing the hard model never changes what a session may do.
+    Ids are kept across restarts, like the presets'. Any failure leaves things
+    as they are: the default model keeps working.
+    """
+    from agentrt.agent_server.persistence import get_llm_profile_store
+
+    model = config.hard_model()
+    if not model:
+        return
+    try:
+        router = config.load_router_config()
+        llm_store = get_llm_profile_store()
+        wanted = _build_llm(dataclasses.replace(router, model=model))
+        try:
+            current = llm_store.load(config.HARD_LLM_PROFILE)
+        except Exception:
+            current = None
+        if current is None or (current.model, current.base_url, current.api_key) != (
+            wanted.model,
+            wanted.base_url,
+            wanted.api_key,
+        ):
+            llm_store.save(config.HARD_LLM_PROFILE, wanted, include_secrets=True)
+            _tighten(_use_state_dir() / "profiles" / f"{config.HARD_LLM_PROFILE}.json")
+        for preset in permissions.PRESETS:
+            base = agent_store.load(preset)
+            name = hard_agent_profile_name(preset)
+            try:
+                hard_id = agent_store.load(name).id
+            except Exception:
+                hard_id = uuid4()
+            agent_store.save(
+                base.model_copy(
+                    update={
+                        "id": hard_id,
+                        "name": name,
+                        "llm_profile_ref": config.HARD_LLM_PROFILE,
+                    }
+                )
+            )
+    except Exception:
+        logger.warning("Could not prepare the hard-model profiles", exc_info=True)
+
+
+def hard_agent_profile_id(preset: str) -> UUID | None:
+    """The id of a preset's hard-model profile, or None when there is none."""
+    from agentrt.agent_server.persistence import get_agent_profile_store
+
+    _use_state_dir()
+    try:
+        return get_agent_profile_store().load(hard_agent_profile_name(preset)).id
+    except Exception:
+        return None
 
 
 def _refresh_llm_profile(state: Path) -> None:
@@ -407,12 +474,16 @@ def allowed_llm_profiles() -> list[str]:
     store = get_agent_profile_store()
     refs: set[str] = set()
     for preset in permissions.PRESETS:
-        try:
-            profile = store.load(preset)
-        except Exception:
-            continue
-        if isinstance(profile, OpenHandsAgentProfile):
-            refs.add(profile.llm_profile_ref)
+        names = [preset]
+        if config.hard_model():
+            names.append(hard_agent_profile_name(preset))
+        for name in names:
+            try:
+                profile = store.load(name)
+            except Exception:
+                continue
+            if isinstance(profile, OpenHandsAgentProfile):
+                refs.add(profile.llm_profile_ref)
     return sorted(refs or {LLM_PROFILE_NAME})
 
 

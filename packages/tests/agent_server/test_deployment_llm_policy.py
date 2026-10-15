@@ -235,3 +235,10 @@ def test_weak_auxiliary_llm_is_rejected() -> None:
     )
     with pytest.raises(DeploymentPolicyError, match="auxiliary LLM"):
         enforce_agent_policy(agent, _policy())
+
+
+def test_extra_models_at_the_same_endpoint_are_allowed() -> None:
+    policy = _policy(extra_models=["deepseek-pro"])
+    assert llm_policy_violations(_direct_llm(model="openai/deepseek-pro"), policy) == []
+    violations = llm_policy_violations(_direct_llm(model="openai/other"), policy)
+    assert any("deepseek-pro" in v for v in violations)

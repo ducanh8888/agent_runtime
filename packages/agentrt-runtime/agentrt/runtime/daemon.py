@@ -25,7 +25,7 @@ import httpx
 from agentrt.runtime import config
 
 
-def _deployment_llm_policy() -> dict[str, str] | None:
+def _deployment_llm_policy() -> dict | None:
     """The deployment-only LLM policy for any server this runtime starts.
 
     Router-neutral since the OmniRoute migration (see
@@ -52,11 +52,14 @@ def _deployment_llm_policy() -> dict[str, str] | None:
         router = config.load_router_config()
     except ValueError:
         return None
-    return {
+    policy: dict = {
         "model": router.model,
         "base_url": router.base_url,
         "api_mode": "chat",
     }
+    if (hard := config.hard_model()) and hard != router.model:
+        policy["extra_models"] = [hard]
+    return policy
 
 
 @dataclass(frozen=True)

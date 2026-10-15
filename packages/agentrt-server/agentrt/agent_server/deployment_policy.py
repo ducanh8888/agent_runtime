@@ -41,7 +41,7 @@ from __future__ import annotations
 from typing import ClassVar
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentrt.sdk.agent.base import AgentBase
 from agentrt.sdk.llm import LLM
@@ -67,6 +67,9 @@ class DeploymentLLMPolicy(BaseModel):
 
     model: str
     base_url: str
+    # AgentRT fork: further model names allowed at the same endpoint, e.g. a
+    # separate router model for reasoning-heavy sessions.
+    extra_models: list[str] = Field(default_factory=list)
     api_mode: str = "chat"
     thinking_mode: str | None = None
     reasoning_effort: str | None = None
@@ -180,8 +183,9 @@ def llm_policy_violations(llm: LLM | None, policy: DeploymentLLMPolicy) -> list[
 
     violations: list[str] = []
     actual_model = api_model_name(llm.model)
-    if actual_model != policy.model:
-        violations.append(f"model must be {policy.model!r}")
+    if actual_model != policy.model and actual_model not in policy.extra_models:
+        allowed = " or ".join(repr(m) for m in (policy.model, *policy.extra_models))
+        violations.append(f"model must be {allowed}")
 
     expected_endpoint = _normalized_endpoint(policy.base_url)
     actual_endpoint = _normalized_endpoint(llm.base_url)
