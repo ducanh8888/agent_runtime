@@ -37,23 +37,21 @@ class ConversationStats(BaseModel):
         Returns:
             Dictionary with metrics serialized based on context
         """
-        # Get the default serialization
-        data = serializer(self)
-
-        # Check if we should use snapshot serialization
         context = info.context if info else None
         use_snapshot = context.get("use_snapshot", False) if context else False
 
-        if use_snapshot and "usage_to_metrics" in data:
-            # Replace each Metrics with its snapshot
-            usage_to_snapshots = {}
-            for usage_id, metrics in self.usage_to_metrics.items():
-                snapshot = metrics.get_snapshot()
-                usage_to_snapshots[usage_id] = snapshot.model_dump()
+        if use_snapshot:
+            # AgentRT fork (#22): build the snapshot without serializing the
+            # per-call lists first. They grow with every call, and a snapshot
+            # is published after every response.
+            return {
+                "usage_to_metrics": {
+                    usage_id: metrics.get_snapshot().model_dump()
+                    for usage_id, metrics in self.usage_to_metrics.items()
+                }
+            }
 
-            data["usage_to_metrics"] = usage_to_snapshots
-
-        return data
+        return serializer(self)
 
     def get_combined_metrics(self) -> Metrics:
         total_metrics = Metrics()

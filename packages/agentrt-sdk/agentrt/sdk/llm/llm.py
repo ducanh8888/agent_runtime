@@ -1263,6 +1263,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         self._telemetry.on_response(
             completed_resp,
             provider_info=self._provider_info,
+            copy_metrics=False,
         )
         return completed_resp
 
@@ -1582,6 +1583,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             resp,
             raw_resp=raw_resp,
             provider_info=self._provider_info,
+            copy_metrics=False,
         )
 
         # Ensure at least one choice.
@@ -1918,6 +1920,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                 self._telemetry.on_response(
                     ret,
                     provider_info=self._provider_info,
+                    copy_metrics=False,
                 )
                 return ret
 
@@ -2079,6 +2082,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                 self._telemetry.on_response(
                     ret,
                     provider_info=self._provider_info,
+                    copy_metrics=False,
                 )
                 return ret
 
@@ -2835,8 +2839,12 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
            If there are two blocks (static + dynamic), only the first is marked
            to enable cross-conversation cache sharing.
         2. Last user/tool message: Mark for caching to extend the cache prefix.
+
+        Marked messages are replaced in ``messages`` by copies, so the caller's
+        Message objects are never mutated.
         """
         if len(messages) > 0 and messages[0].role == "system":
+            messages[0] = messages[0].model_copy(deep=True)
             sys_content = messages[0].content
             if len(sys_content) >= 2:
                 # Two-block structure: static (index 0) + dynamic (index 1)
@@ -2850,11 +2858,11 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         # Second breakpoint: mark the last user/tool message so the cached prefix
         # extends every turn. Anthropic-only; Gemini is excluded from
         # PROMPT_CACHE_MODELS because its cache can't extend this way.
-        for message in reversed(messages):
-            if message.role in ("user", "tool"):
-                message.content[
-                    -1
-                ].cache_prompt = True  # Last item inside the message content
+        for index in range(len(messages) - 1, -1, -1):
+            if messages[index].role in ("user", "tool"):
+                messages[index] = messages[index].model_copy(deep=True)
+                # Last item inside the message content
+                messages[index].content[-1].cache_prompt = True
                 break
 
     def _inline_required(self) -> bool:
@@ -2866,14 +2874,17 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
     def _begin_chat_messages(
         self, messages: list[Message]
     ) -> tuple[list[Message], bool]:
-        """Deepcopy ``messages`` and apply prompt-caching flags.
+        """Detach ``messages`` and apply prompt-caching flags.
 
         Shared by the sync and async chat-formatting paths. Returns the
         detached message list and the resolved ``vision_enabled`` flag so
         callers can plug in their own (sync or async) inline-image pass
         without duplicating the boilerplate.
         """
-        messages = copy.deepcopy(messages)
+        # AgentRT fork (#22): copy only what is mutated here. Deep-copying the
+        # whole history on every call was the largest per-call CPU cost on the
+        # server's event loop; the image passes after this copy on write.
+        messages = list(messages)
         if self.is_caching_prompt_active():
             self._apply_prompt_caching(messages)
         return messages, self.vision_is_active()

@@ -171,11 +171,16 @@ class Telemetry(BaseModel):
         resp: ModelResponse | ResponsesAPIResponse,
         raw_resp: ModelResponse | None = None,
         provider_info: LLMProvider | None = None,
+        *,
+        copy_metrics: bool = True,
     ) -> Metrics:
         """
         Side-effects:
           - records latency, tokens, cost into Metrics
           - optionally writes a JSON log file
+
+        Returns a copy of the metrics, or with ``copy_metrics=False`` the live
+        object: the copy grows with every call recorded (AgentRT #22).
         """
         # 1) latency
         self._last_latency = time.time() - (self._req_start or time.time())
@@ -238,7 +243,7 @@ class Telemetry(BaseModel):
             except Exception:
                 logger.exception("Stats update callback failed", exc_info=True)
 
-        return self.metrics.deep_copy()
+        return self.metrics.deep_copy() if copy_metrics else self.metrics
 
     def on_error(self, _err: BaseException) -> None:
         # Best-effort logging for failed requests (so we can debug malformed

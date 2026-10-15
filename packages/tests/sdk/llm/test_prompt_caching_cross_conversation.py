@@ -7,6 +7,8 @@ For prompt caching to work across conversations, the system message must be
 identical for all conversations regardless of per-conversation context.
 """
 
+import json
+
 import pytest
 from pydantic import SecretStr
 
@@ -264,3 +266,22 @@ def test_cross_conversation_cache_sharing(tmp_path, first_suffix, second_suffix)
 
     assert static_prompts[0] == static_prompts[1]
     assert dynamic_contexts[0] != dynamic_contexts[1]
+
+
+def test_formatting_with_prompt_caching_leaves_caller_messages_unmarked():
+    llm = LLM(
+        model="claude-sonnet-4-20250514",
+        api_key=SecretStr("fake-key"),
+        usage_id="test",
+        caching_prompt=True,
+    )
+    assert llm.is_caching_prompt_active()
+    messages = [
+        Message(role="system", content=[TextContent(text="static")]),
+        Message(role="user", content=[TextContent(text="hello")]),
+    ]
+
+    formatted = llm.format_messages_for_llm(messages)
+
+    assert "cache_control" in json.dumps(formatted)
+    assert all(not m.content[0].cache_prompt for m in messages)
