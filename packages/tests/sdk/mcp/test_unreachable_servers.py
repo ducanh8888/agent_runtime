@@ -32,6 +32,7 @@ def attempts(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
 
     monkeypatch.setattr(utils, "_create_mcp_tools_once", once)
     monkeypatch.setattr(utils, "_dead_until", {})
+    monkeypatch.setattr(utils, "_RETRY_PAUSE_SECONDS", 0)
     return seen
 
 
@@ -75,3 +76,21 @@ def test_all_unreachable_raises_the_original_error(attempts, monkeypatch) -> Non
     monkeypatch.setattr(utils, "_create_mcp_tools_once", always_fail)
     with pytest.raises(TimeoutError, match="down"):
         utils.create_mcp_tools(_servers("a", "b"))
+
+
+def test_a_listing_that_fails_once_is_retried(attempts, monkeypatch) -> None:
+    """#28: a dispatch failed on a listing that answered seconds later."""
+    calls = 0
+
+    def flaky(servers, timeout=30.0, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TimeoutError("slow once")
+        return _Client(sorted(servers))
+
+    monkeypatch.setattr(utils, "_create_mcp_tools_once", flaky)
+    client = utils.create_mcp_tools(_servers("research"))
+
+    assert client.names == ["research"]  # type: ignore[attr-defined]
+    assert calls == 2

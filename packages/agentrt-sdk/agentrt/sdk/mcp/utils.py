@@ -327,6 +327,9 @@ _PROBE_TIMEOUT_SECONDS = 10.0
 # one wait, not one per session start or resume. Keyed by name and endpoint, so
 # re-registering a server at another URL is picked up at once.
 _DEAD_FOR_SECONDS = 60.0
+# A failed listing is tried once more after this pause before anything is
+# skipped or raised (#28).
+_RETRY_PAUSE_SECONDS = 1.0
 _dead_until: dict[tuple[str, str], float] = {}
 
 
@@ -352,6 +355,10 @@ def create_mcp_tools(
     configured, each is tried alone; the sessions keep the ones that answer and
     the log names the ones that did not. With one server, or none answering,
     the original error is raised unchanged.
+
+    The first failure is retried once (#28): a listing that timed out or failed
+    to connect was seen to succeed seconds later every time, and failing the
+    whole session start over it lost a dispatch that never needed MCP.
     """
 
     def attempt(servers: dict[str, MCPServer]) -> MCPClient:
@@ -376,6 +383,11 @@ def create_mcp_tools(
         mcp_config = {n: sv for n, sv in mcp_config.items() if n not in dead}
         servers = {n: sv for n, sv in servers.items() if n not in dead}
 
+    try:
+        return attempt(mcp_config)
+    except Exception as first:
+        logger.warning("MCP tool listing failed (%s); retrying once", first)
+    time.sleep(_RETRY_PAUSE_SECONDS)
     try:
         return attempt(mcp_config)
     except Exception:
