@@ -130,6 +130,30 @@ not fall when sessions are removed. `DELETE` on the same path is the only
 operation that lowers it. A fold that fails is recorded in `unarchived` rather
 than hidden.
 
+## Several worker processes (`AGENTRT_WORKERS`)
+
+One server process is one event loop, and in practice one core. Each step
+re-sends and re-serializes a session's whole history, so about 50 long sessions
+saturate it (#22). With `AGENTRT_WORKERS=N` (N > 1), `agentrt daemon start`
+launches a front process (`agentrt.runtime.front`) on the usual port, and the
+front starts N ordinary servers on private ports. Unset or 1 is the
+single-process daemon.
+
+- **Ownership is on disk.** Worker 0 keeps `conversations/`; worker k uses
+  `conversations-wk/`. A conversation belongs to the worker whose directory
+  holds it, and a fork stays with its source.
+- **Routing.** New conversations are placed round-robin. Every
+  `/api/conversations/{id}/...` call goes to the owner.
+- **Merged reads.** `search` and `count` are merged across workers. `search`
+  returns its own `page_id` cursor, so keep treating `page_id` as opaque.
+  `capacity` is summed and adds a `workers` list.
+- **Settings.** Writes under `/api/settings` go to every worker.
+- **Restarts.** The front answers `/health` itself and restarts a worker that
+  exits. That worker's in-flight runs come back as after a daemon restart; the
+  other workers are unaffected.
+- **Shared ledger.** Profiles, settings and the spend ledger stay shared in the
+  state directory. Ledger updates take a file lock.
+
 ## Usage and cost
 
 `metrics` on a conversation is **null**. Real figures are at

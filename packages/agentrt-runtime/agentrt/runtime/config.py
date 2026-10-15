@@ -411,6 +411,20 @@ def max_running_sessions() -> int:
         return DEFAULT_MAX_RUNNING_SESSIONS
 
 
+def workers() -> int:
+    """How many server processes the daemon runs (``AGENTRT_WORKERS``).
+
+    One process is one event loop and in practice one core, which about 50
+    long sessions saturate (#22, #24). Above 1, a front process spreads
+    sessions over that many workers. Default 1: the single-process daemon.
+    """
+    raw = os.environ.get("AGENTRT_WORKERS", "").strip()
+    try:
+        return max(1, int(raw)) if raw else 1
+    except ValueError:
+        return 1
+
+
 # The vendored server's own run-pool cap (`agentrt-server`'s Config.
 # max_concurrent_runs, env var AGENTRT_MAX_CONCURRENT_RUNS) is a second,
 # independent limit from AGENTRT_MAX_SESSIONS above -- one is this client
