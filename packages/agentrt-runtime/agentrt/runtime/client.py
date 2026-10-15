@@ -1670,6 +1670,9 @@ class Client:
             }
         if title is not None:
             body["title"] = title
+        if resolved_llm == config.HARD_LLM_PROFILE:
+            # Countable with `list --tag llm=hard`: the costly path (#24).
+            tags = {**(tags or {}), "llm": config.HARD_LLM_PROFILE}
         if tags:
             body["tags"] = _clean_tags(tags)
         body["idempotency_key"] = idempotency_key or str(uuid.uuid4())

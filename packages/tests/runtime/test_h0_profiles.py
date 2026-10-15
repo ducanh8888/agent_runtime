@@ -365,6 +365,7 @@ def test_hard_model_runs_a_whole_session_on_its_own_profile(
 
     assert result["llm_profile"] == "hard"
     assert client.sent[0]["json"]["agent_profile_id"] == str(hard.id)
+    assert client.sent[0]["json"]["tags"]["llm"] == "hard"
     assert bootstrap.ensure_profiles() == profiles  # presets keep their ids
     assert get_agent_profile_store().load("workspace-hard").id == hard.id
 
