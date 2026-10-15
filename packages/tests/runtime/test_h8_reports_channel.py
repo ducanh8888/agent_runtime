@@ -187,7 +187,7 @@ def test_create_provisions_reports_root_for_readonly_presets(
     assert isinstance(executor, guarded_tools.GuardedFileEditorExecutor)
     assert executor._reports_root == str(persistence / "reports")
     assert (persistence / "reports").is_dir()
-    assert str(persistence / "reports") in (tools[0].description or "")
+    assert repr(str(persistence / "reports")) in (tools[0].description or "")
 
 
 @pytest.mark.parametrize("preset", ["workspace", "broad"])
