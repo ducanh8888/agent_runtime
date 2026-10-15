@@ -65,6 +65,18 @@ def conversations_dir(state: Path, index: int) -> Path:
     return state / ("conversations" if index == 0 else f"conversations-w{index}")
 
 
+def _die_with_parent() -> None:
+    """Linux: a worker gets SIGTERM when the front dies, even by SIGKILL.
+
+    An orphaned worker would keep serving its conversations directory, and the
+    next front would start a second owner for the same sessions.
+    """
+    import ctypes
+
+    pr_set_pdeathsig = 1
+    ctypes.CDLL(None).prctl(pr_set_pdeathsig, signal.SIGTERM)
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -121,6 +133,8 @@ class Front:
             popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
         else:
             popen_kwargs["start_new_session"] = True
+            if sys.platform.startswith("linux"):
+                popen_kwargs["preexec_fn"] = _die_with_parent
         worker.proc = subprocess.Popen(
             [
                 sys.executable,
