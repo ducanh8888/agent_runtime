@@ -180,14 +180,22 @@ async def log_handler(message: LogMessage):
     Handles incoming logs from the MCP server and forwards them
     to the standard Python logging system.
     """
-    msg = message.data.get("msg")
-    extra = message.data.get("extra")
+    # AgentRT fork (#22): MCP lets `data` be any JSON value. Servers that send a
+    # plain string made `.get` raise, and the mcp session logged that failure
+    # as a multi-line warning carrying the whole message, once per notification
+    # (67 MB of daemon.log in 22 minutes on one client).
+    data = message.data
+    if isinstance(data, dict):
+        msg = data.get("msg", data)
+        extra = data.get("extra")
+    else:
+        msg, extra = data, None
 
     # Convert the MCP log level to a Python log level
     level = LOGGING_LEVEL_MAP.get(message.level.upper(), logging.INFO)
 
-    # Log the message using the standard logging library
-    logger.log(level, msg, extra=extra)
+    # `extra` keys become LogRecord attributes, so only a mapping is usable.
+    logger.log(level, msg, extra=extra if isinstance(extra, dict) else None)
 
 
 async def _connect_and_list_tools(client: MCPClient) -> None:
