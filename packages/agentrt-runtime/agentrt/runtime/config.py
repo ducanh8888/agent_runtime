@@ -419,6 +419,11 @@ def workers() -> int:
     sessions over that many workers. Default 1: the single-process daemon.
     """
     raw = os.environ.get("AGENTRT_WORKERS", "").strip()
+    if not raw:  # like the other settings: the process env, then <state-dir>/.env
+        try:
+            raw = read_dotenv(config_file()).get("AGENTRT_WORKERS", "").strip()
+        except OSError:
+            raw = ""
     try:
         return max(1, int(raw)) if raw else 1
     except ValueError:
