@@ -1492,6 +1492,9 @@ class Client:
     def profiles(self) -> dict:
         """List the permission presets and what each one grants."""
         self._ensure_ready()
+        # Profiles are created lazily; list after they exist, or a profile the
+        # configuration adds (``hard``) is missing until the first dispatch.
+        self._ensure_profiles()
         return {
             "default": permissions.DEFAULT_PERMISSION,
             "presets": [
