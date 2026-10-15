@@ -115,7 +115,11 @@ class Front:
             conversations_dir(self.state, worker.index)
         )
         popen_kwargs: dict = {}
-        if os.name != "nt":
+        if os.name == "nt":
+            # The front itself has no console; without this each worker would
+            # open a console window.
+            popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        else:
             popen_kwargs["start_new_session"] = True
         worker.proc = subprocess.Popen(
             [
