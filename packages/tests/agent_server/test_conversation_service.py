@@ -4712,8 +4712,8 @@ def test_running_session_details_do_not_score_a_stall_on_liveness(tmp_path) -> N
     assert detail["iterations_used"] == 7
 
 
-async def _noop() -> None:
-    return None
+async def _nothing_prewarmed() -> set:
+    return set()
 
 
 async def _async_simple_id(conversation_id):
@@ -4764,7 +4764,7 @@ async def test_search_filters_by_status_tag_and_id_prefix(
         ),
     )
     monkeypatch.setattr(
-        service, "_prewarm_conversation_infos", lambda *args, **kwargs: _noop()
+        service, "_prewarm_conversation_infos", lambda *args, **kwargs: _nothing_prewarmed()
     )
     service._conversation_records = {
         running_tagged: record(

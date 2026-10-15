@@ -245,6 +245,8 @@ class TestResolveAgentFromProfile:
                 "agentrt.agent_server.conversation_service.is_tool_usable",
                 return_value=False,
             ),
+            # AgentRT fork (#22): forcing is opt-in.
+            patch.dict("os.environ", {"AGENTRT_LLM_STREAM": "1"}),
         ):
             store_inst = MockStore.return_value
             store_inst.name_for_id.return_value = profile.name

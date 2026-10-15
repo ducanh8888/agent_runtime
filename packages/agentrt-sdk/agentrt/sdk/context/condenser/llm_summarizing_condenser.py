@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import Final
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from agentrt.sdk.context.condenser.base import (
     CondensationRequirement,
@@ -26,6 +26,9 @@ from agentrt.sdk.utils import maybe_truncate
 
 logger = get_logger(__name__)
 
+# Recount tokens exactly at least once per this many new events (#22).
+_EXACT_EVERY: Final = 40
+
 
 class Reason(Enum):
     """Reasons for condensation."""
@@ -47,6 +50,8 @@ class LLMSummarizingCondenser(RollingCondenser):
     llm: LLM
     max_size: int = Field(default=240, gt=0)
     max_tokens: int | None = None
+    # (event ids, exact token count) of the last exactly-counted view.
+    _counted: tuple[list[str], int] = PrivateAttr(default=([], 0))
 
     keep_first: int = Field(default=2, ge=0)
     """Minimum number of events to preserve at the start of the view. The first
@@ -117,6 +122,30 @@ class LLMSummarizingCondenser(RollingCondenser):
         ]
         return min(limits) if limits else None
 
+    def _token_count(self, view: View, agent_llm: LLM, max_tokens: int) -> int:
+        """Token count of ``view``, exact or a conservative estimate.
+
+        AgentRT fork (#22): an exact count re-tokenizes the whole history and
+        the tool schemas, 13-55 ms per agent step, which at 50 concurrent
+        sessions saturates the daemon. Between exact counts, events appended
+        since the last one are estimated at a third of their JSON size (over-
+        estimates English text and tool output). An exact count runs again once
+        the estimate nears the cap, after _EXACT_EVERY new events, or when the
+        view no longer extends the counted one (condensation, branch switch).
+        """
+        ids = [event.id for event in view.events]
+        counted_ids, counted = self._counted
+        n = len(counted_ids)
+        if n and len(ids) - n < _EXACT_EVERY and ids[:n] == counted_ids:
+            estimate = counted + sum(
+                len(event.model_dump_json()) // 3 for event in view.events[n:]
+            )
+            if estimate < max_tokens * 0.8:
+                return estimate
+        total = get_total_token_count(view.events, agent_llm)
+        self._counted = (ids, total)
+        return total
+
     def get_condensation_reasons(
         self, view: View, agent_llm: LLM | None = None
     ) -> set[Reason]:
@@ -139,7 +168,7 @@ class LLMSummarizingCondenser(RollingCondenser):
         # Reason 2: Token limit is provided and exceeded.
         max_tokens = self._effective_max_tokens(agent_llm)
         if max_tokens is not None and agent_llm is not None:
-            total_tokens = get_total_token_count(view.events, agent_llm)
+            total_tokens = self._token_count(view, agent_llm, max_tokens)
             if total_tokens > max_tokens:
                 logger.info(
                     "Condenser token limit exceeded: total_tokens=%d max_tokens=%d "

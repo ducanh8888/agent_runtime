@@ -394,6 +394,34 @@ def test_token_limit_uses_stricter_configured_or_agent_limit(
     assert (Reason.TOKENS in reasons) is expected_trigger
 
 
+def test_token_count_is_not_redone_every_step(mock_llm: LLM) -> None:
+    condenser = LLMSummarizingCondenser(
+        llm=mock_llm, max_size=1000, max_tokens=10_000, keep_first=2
+    )
+    agent_llm = MagicMock(spec=LLM)
+    agent_llm.effective_max_input_tokens = None
+    agent_llm.get_token_count.return_value = 100
+    events = [message_event(f"event {i}") for i in range(10)]
+
+    for n in range(10, 20):
+        events.append(message_event(f"event {n}"))
+        condenser.get_condensation_reasons(View.from_events(events), agent_llm)
+    assert agent_llm.get_token_count.call_count == 1
+
+    # A history that no longer extends the counted one is counted again.
+    condenser.get_condensation_reasons(View.from_events(events[5:]), agent_llm)
+    assert agent_llm.get_token_count.call_count == 2
+
+    # So is one whose estimate nears the cap.
+    agent_llm.get_token_count.return_value = 9_000
+    condenser.get_condensation_reasons(View.from_events(events[4:]), agent_llm)
+    reasons = condenser.get_condensation_reasons(
+        View.from_events([*events[4:], message_event("x" * 6_000)]), agent_llm
+    )
+    assert agent_llm.get_token_count.call_count == 4
+    assert Reason.TOKENS not in reasons
+
+
 def test_token_limit_inherits_agent_effective_input_limit(
     mock_llm: LLM,
 ) -> None:

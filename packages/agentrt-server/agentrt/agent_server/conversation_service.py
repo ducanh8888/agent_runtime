@@ -1646,7 +1646,7 @@ class ConversationService:
         self,
         rows: list[tuple[UUID, _ConversationRecord]],
         children_index: dict[UUID, list[UUID]],
-    ) -> None:
+    ) -> set[UUID]:
         """Rebuild every stale cached row of a page in one worker-thread hop.
 
         AgentRT fork (#10). A running session autosaves after every step, so
@@ -1656,10 +1656,12 @@ class ConversationService:
         page cost ~0.2 s per live row though the work is ~13 ms. Same checks
         and the same cache as ``_conversation_info``, which then hits it; a
         row that fails here is left to that per-row path, errors included.
+        Returns the rows whose cached info is current as of this call.
         """
         event_services = self._event_services
         if event_services is None:
-            return
+            return set()
+        current: set[UUID] = set()
         targets = []
         for conversation_id, record in rows:
             event_service = event_services.get(conversation_id)
@@ -1678,6 +1680,10 @@ class ConversationService:
                 and signature == record.state_signature
                 and (not live or stored_signature == record.stored_signature)
             ):
+                if record.cached_info.sub_conversation_ids == children_index.get(
+                    conversation_id, []
+                ):
+                    current.add(conversation_id)
                 continue
             targets.append(
                 (
@@ -1689,7 +1695,7 @@ class ConversationService:
                 )
             )
         if not targets:
-            return
+            return current
 
         def build_all() -> dict[UUID, tuple]:
             built = {}
@@ -1714,6 +1720,8 @@ class ConversationService:
             record.stored_signature = stored_sig
             record.cached_info = info
             record.execution_status = info.execution_status
+            current.add(conversation_id)
+        return current
 
     @staticmethod
     def _refresh_persisted_statuses_sync(
@@ -2084,15 +2092,23 @@ class ConversationService:
         items: list[ConversationInfo] = []
         next_page_id = None
         children_index = self._children_index()
-        await self._prewarm_conversation_infos(
+        prewarmed = await self._prewarm_conversation_infos(
             records[start_index : start_index + limit], children_index
         )
         for conversation_id, record in records[start_index:]:
             if len(items) >= limit:
                 next_page_id = conversation_id.hex
                 break
-            conversation_info = await self._conversation_info(
-                conversation_id, record, children_index
+            # AgentRT fork (#22): a running row autosaves every step, so by the
+            # time this loop reaches it the row prewarmed above is usually stale
+            # again; re-checking it cost two thread hops per row on a loaded
+            # event loop, and a page of 50 running rows took over 60 s.
+            conversation_info = (
+                record.cached_info
+                if conversation_id in prewarmed
+                else await self._conversation_info(
+                    conversation_id, record, children_index
+                )
             )
             if conversation_info is not None:
                 items.append(conversation_info)
