@@ -225,6 +225,18 @@ def _terminate(pid: int) -> None:
         os.kill(pid, signal.SIGTERM)
 
 
+def _kill(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        os.kill(pid, signal.SIGKILL)
+
+
 def _log_tail() -> str:
     try:
         lines = (
@@ -443,14 +455,42 @@ def _lock_is_stale(lock_path: Path) -> bool:
 
 
 def _is_agentrt_daemon(pid: int) -> bool:
-    """Whether `pid` is an AgentRT server (Linux; elsewhere nothing to check)."""
-    if not sys.platform.startswith("linux"):
-        return True
-    try:
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
-    except OSError:
-        return False
-    return any(_is_daemon_module(arg) for arg in cmdline.split(b"\0"))
+    """Whether `pid` is an AgentRT daemon process (the front or a server).
+
+    Linux reads /proc; Windows reads the command line through CIM, and any
+    error there means "not ours", so `stop()` never kills an unrelated
+    process that reused a stale pid. macOS remains unchecked.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+        except OSError:
+            return False
+        return any(_is_daemon_module(arg) for arg in cmdline.split(b"\0"))
+    if os.name == "nt":
+        try:
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    (
+                        "(Get-CimInstance Win32_Process -Filter "
+                        f"'ProcessId={int(pid)}').CommandLine"
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        if result.returncode != 0:
+            return False
+        return any(_is_daemon_module(arg.encode()) for arg in result.stdout.split())
+    return True
 
 
 def _is_daemon_module(arg: bytes) -> bool:
@@ -653,12 +693,7 @@ def stop(timeout: float = 10.0) -> bool:
 
     if _process_alive(info.pid):
         try:
-            os.kill(info.pid, signal.SIGKILL) if os.name != "nt" else subprocess.run(
-                ["taskkill", "/PID", str(info.pid), "/T", "/F"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
+            _kill(info.pid)
         except OSError:
             pass
         kill_deadline = time.monotonic() + 5.0
