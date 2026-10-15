@@ -496,6 +496,7 @@ logger = logging.getLogger(__name__)
 _META_PERSIST_INTERVAL_SECONDS = 15.0
 
 
+
 class InvalidParentConversation(ValueError):
     """``parent_conversation_id`` is unknown, self-referential, or in
     a different workspace."""
@@ -1094,7 +1095,19 @@ class ConversationService:
                 workspace_root=str(event_service.stored.workspace.working_dir),
                 workspace_mode=event_service.stored.workspace_mode,
             ):
+                # AgentRT fork (#22): persisted as queued until the run has
+                # really started. A daemon that dies between the append and
+                # the start -- a freeze mid-dispatch -- otherwise restarts with
+                # an `idle` session nobody will ever run; this way startup puts
+                # it back on the admission queue.
+                self._mark_admission(event_service.stored, "queued")
+                await event_service.save_meta()
                 await event_service.send_message(message, True)
+                if event_service.run_active():
+                    self._mark_admission(event_service.stored, "admitted")
+                    await event_service.save_meta()
+                elif event_service.stored.id not in self._admission_queue:
+                    self._admission_queue.append(event_service.stored.id)
                 return True
             # ``run=False`` persists the input without starting it.
             await event_service.send_message(message, False)
@@ -1191,6 +1204,14 @@ class ConversationService:
 
     def _rebuild_admission_queue(self) -> None:
         """Recover queued work from the catalog, oldest submission first."""
+        for record in self._conversation_records.values():
+            # A conversation that ran after being marked queued (the daemon
+            # stopped before writing `admitted`) must not be started again.
+            if (
+                record.stored.admission_state == "queued"
+                and record.execution_status != ConversationExecutionStatus.IDLE
+            ):
+                self._mark_admission(record.stored, "admitted")
         self._admission_queue = sorted(
             (
                 record.stored.id

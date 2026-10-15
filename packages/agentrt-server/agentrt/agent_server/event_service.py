@@ -804,6 +804,10 @@ class EventService:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_execution_status_sync)
 
+    def run_active(self) -> bool:
+        """Whether a run task exists and has not finished."""
+        return self._run_task is not None and not self._run_task.done()
+
     def has_pending_run_intent(self) -> bool:
         """Return whether a caller asked for a run that never started.
 

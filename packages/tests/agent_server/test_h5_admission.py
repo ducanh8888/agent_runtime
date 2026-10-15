@@ -334,6 +334,9 @@ class _FakeEventService:
     async def send_message(self, message, run) -> None:
         self.calls.append(run)
 
+    def run_active(self) -> bool:
+        return bool(self.calls) and self.calls[-1] is True
+
     async def save_meta(self) -> None:
         self.saved += 1
 
@@ -517,3 +520,50 @@ async def test_creates_with_different_keys_run_concurrently(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_creates_sharing_a_key_still_run_one_at_a_time(tmp_path) -> None:
     assert await _peak_concurrency(tmp_path, ["same"] * 4) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_start_that_never_happened_is_requeued_after_a_restart(
+    tmp_path,
+) -> None:
+    """A dispatch cut off between the append and the run start is not lost (#22).
+
+    During the Windows freeze two dispatches were stored and appended but never
+    started, and after the restart they sat `idle` for good. The admission is
+    now persisted as `queued` until the run has really started, so startup
+    rebuilds them into the queue -- and a conversation that did run is left
+    alone.
+    """
+    never_started = uuid4()
+    ran = uuid4()
+    service = ConversationService(conversations_dir=tmp_path)
+    service._event_services = {}
+    service._conversation_records = {
+        never_started: _record(never_started, admission_state="queued"),
+        ran: _ConversationRecord(
+            stored=_stored(ran, admission_state="queued"),
+            execution_status=ConversationExecutionStatus.FINISHED,
+        ),
+    }
+
+    service._rebuild_admission_queue()
+
+    assert service._admission_queue == [never_started]
+    assert service._conversation_records[ran].stored.admission_state == "admitted"
+
+
+@pytest.mark.asyncio
+async def test_a_dispatch_is_queued_until_its_run_starts(tmp_path) -> None:
+    """The persisted state reads `queued` until the run task exists."""
+    service = ConversationService(conversations_dir=tmp_path, max_concurrent_runs=1)
+    service._event_services = {}
+    fake = _FakeEventService(uuid4())
+    states_at_save: list[str] = []
+
+    async def save_meta() -> None:
+        states_at_save.append(fake.stored.admission_state)
+
+    fake.save_meta = save_meta  # type: ignore[method-assign]
+
+    assert await service._admit_or_queue(fake, _message()) is True
+    assert states_at_save == ["queued", "admitted"]
