@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import types
 from datetime import datetime, timedelta
 
@@ -100,11 +101,20 @@ def test_capacity_adds_fake_proc_daemon_and_stall_data(monkeypatch, tmp_path):
 
     assert result["recovered_after_restart"] is True
     assert result["server_started_at"] == "server-start"
-    assert result["host"]["total_memory_bytes"] == 1_024_000
-    assert result["host"]["daemon_process_tree_rss_bytes"] == 9 * hostinfo._PAGE_SIZE
-    assert result["host"]["biggest_children"][0]["rss_bytes"] == 7 * hostinfo._PAGE_SIZE
+    if os.name == "posix":
+        assert result["host"]["total_memory_bytes"] == 1_024_000
+        assert (
+            result["host"]["daemon_process_tree_rss_bytes"] == 9 * hostinfo._PAGE_SIZE
+        )
+        assert (
+            result["host"]["biggest_children"][0]["rss_bytes"]
+            == 7 * hostinfo._PAGE_SIZE
+        )
+        assert result["daemon"]["started_at"] != "history-start"
+    else:
+        assert result["host"] is None
+        assert result["daemon"]["started_at"] == "history-start"
     assert result["daemon"]["unexpected_exits"] == 2
-    assert result["daemon"]["started_at"] != "history-start"
     session = result["running_sessions"][0]
     assert session["id"] == SESSION[:8]
     assert session["iterations_used"] == 8
