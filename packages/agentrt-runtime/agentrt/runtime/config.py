@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import importlib.metadata
+import logging
 import os
 import secrets
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ITERATIONS = 100_000
 
@@ -132,7 +136,34 @@ def secret_key() -> str:
             fh.write(generated)
             fh.flush()
             os.fsync(fh.fileno())
-        if os.name != "nt":
+        if os.name == "nt":
+            username = os.environ.get("USERNAME")
+            if not username:
+                logger.warning("Could not restrict ACL for %s: USERNAME is unset", tmp)
+            else:
+                try:
+                    result = subprocess.run(
+                        [
+                            "icacls",
+                            tmp,
+                            "/inheritance:r",
+                            "/grant:r",
+                            f"{username}:(R,W)",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    logger.warning("Could not restrict ACL for %s: %s", tmp, exc)
+                else:
+                    if result.returncode:
+                        logger.warning(
+                            "Could not restrict ACL for %s: %s", tmp, result.stderr.strip()
+                        )
+        else:
             os.chmod(tmp, 0o600)
         os.replace(tmp, path)
     except BaseException:

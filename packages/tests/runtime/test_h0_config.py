@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import importlib.metadata
+import os
+import re
+import subprocess
 
 import pytest
 
@@ -193,8 +196,24 @@ def test_secret_key_file_is_owner_only(tmp_path, monkeypatch) -> None:
 
     config.secret_key()
 
-    mode = config.secret_key_file().stat().st_mode & 0o777
-    assert mode == 0o600
+    if os.name == "nt":
+        result = subprocess.run(
+            ["icacls", str(config.secret_key_file())],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        entries = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if re.search(r":\([^)]*\)$", line.strip())
+        ]
+        assert len(entries) == 1
+        assert os.environ["USERNAME"].casefold() in entries[0].casefold()
+        assert entries[0].endswith(":(R,W)")
+    else:
+        mode = config.secret_key_file().stat().st_mode & 0o777
+        assert mode == 0o600
 
 
 def test_secret_key_respects_an_existing_file(tmp_path, monkeypatch) -> None:
