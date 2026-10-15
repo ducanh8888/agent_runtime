@@ -570,7 +570,7 @@ def test_artifacts_lists_reports_alongside_workspace_files(
     """H8 item 7: a readonly/inspect session's report channel is listed the
     same way the workspace is, independently of it."""
     reports_dir = _reports_dir(tmp_path, monkeypatch)
-    (reports_dir / "findings.md").write_text("# findings\n")
+    (reports_dir / "findings.md").write_bytes(b"# findings\n")
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=_conversation())
