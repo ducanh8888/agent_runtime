@@ -38,7 +38,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from agentrt.runtime import config
+from agentrt.runtime import config, server_launch
 
 
 API_KEY_HEADER = "X-Session-API-Key"
@@ -488,6 +488,9 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
+    # The front is what clients connect to: on Windows one aborted connection
+    # would otherwise close its listener for good (PR #26).
+    server_launch._install_windows_accept_loop_resilience()
 
     front = Front(
         state=Path(os.environ.get("AGENTRT_PERSISTENCE_DIR") or config.state_dir()),
