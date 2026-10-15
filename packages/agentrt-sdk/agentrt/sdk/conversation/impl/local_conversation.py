@@ -2718,7 +2718,29 @@ class LocalConversation(BaseConversation):
             if self._cancel_token is not None and not self._cancel_token.is_cancelled:
                 self._cancel_token = None
             self._arun_task = None
-            self._reap_run_scoped_tools()
+            await self._reap_run_scoped_tools_off_loop()
+
+    async def _reap_run_scoped_tools_off_loop(self) -> None:
+        """Reap off the event loop, with a deadline (agent_runtime#22).
+
+        A tool's reap() can block -- on Windows, closing a shell whose pipe an
+        orphaned child still holds blocked forever -- and arun() runs on the
+        daemon's event loop, so a blocking reap froze every conversation. The
+        reap now runs in a worker thread; past the deadline it is abandoned
+        with a warning and the run ends anyway.
+        """
+        deadline = float(os.environ.get("AGENTRT_REAP_TIMEOUT_SECONDS", "30"))
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self._reap_run_scoped_tools), timeout=deadline
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Reaping run-scoped tools of conversation %s exceeded %.0fs; "
+                "abandoned so the event loop is not blocked",
+                self._state.id,
+                deadline,
+            )
 
     def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
         """Set the confirmation policy and store it in conversation state."""
