@@ -144,7 +144,8 @@ def test_ensure_running_refuses_a_second_daemon_without_discovery(monkeypatch):
     info = daemon.DaemonInfo(port=4321, token="token", pid=os.getpid())
     daemon._write_daemon_file(info)
     monkeypatch.setattr(daemon.sys, "platform", "win32")
-    monkeypatch.setattr(daemon, "is_alive", lambda info: False)
+    # Wedged: does not answer even given the busy allowance.
+    monkeypatch.setattr(daemon, "is_alive", lambda info, timeout=2.0: False)
     monkeypatch.setattr(daemon, "_process_alive", lambda pid: True)
     with pytest.raises(RuntimeError, match="running but not answering"):
         daemon.ensure_running(startup_timeout=0.1)
@@ -243,20 +244,39 @@ def test_a_running_daemon_is_returned_without_the_start_lock(monkeypatch, tmp_pa
     assert lock_path.exists(), "the other process's lock was disturbed"
 
 
-def test_a_start_in_progress_is_adopted_as_soon_as_it_answers(
-    monkeypatch, tmp_path
-):
+def test_a_start_in_progress_is_adopted_as_soon_as_it_answers(monkeypatch, tmp_path):
     """The callers that lost the start-lock race adopt the winner's daemon."""
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
     live = daemon.DaemonInfo(port=4322, token="started-token", pid=os.getpid())
     answers = iter([None, live, live, live])
 
-    monkeypatch.setattr(
-        daemon, "read_info", lambda: next(answers, live)
-    )
+    monkeypatch.setattr(daemon, "read_info", lambda: next(answers, live))
     monkeypatch.setattr(daemon, "is_alive", lambda info: True)
     # The lock is held by a live process for the whole call, as during a real
     # start -- a dead owner would look stale and take a different path.
     (tmp_path / "daemon.lock").write_text(str(os.getpid()))
 
     assert daemon.ensure_running() == live
+
+
+def test_a_busy_daemon_is_not_declared_dead(monkeypatch, tmp_path):
+    """A loaded daemon answers /health in seconds; that is busy, not dead (#22).
+
+    The 2 s probe failed callers with "running but not answering its health
+    check" while the daemon was merely slow, which is how the Windows client's
+    dispatches started failing during the freeze.
+    """
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    busy = daemon.DaemonInfo(port=4323, token="busy", pid=os.getpid())
+    probes: list[float] = []
+
+    def slow_health(info, timeout=2.0):
+        probes.append(timeout)
+        return timeout >= daemon.BUSY_HEALTH_TIMEOUT
+
+    monkeypatch.setattr(daemon, "read_info", lambda: busy)
+    monkeypatch.setattr(daemon, "is_alive", slow_health)
+    monkeypatch.setattr(daemon.sys, "platform", "win32")
+
+    assert daemon.ensure_running() == busy
+    assert probes[-1] == daemon.BUSY_HEALTH_TIMEOUT

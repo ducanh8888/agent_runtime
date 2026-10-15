@@ -413,6 +413,9 @@ def _daemon_env(token: str) -> dict[str, str]:
 #: A start may take up to 240 s (`ensure_running`'s ceiling); the lock is not
 #: refreshed while it does, so it is only "stale by age" past that, with margin.
 _LOCK_STALE_SECONDS = 300.0
+#: How long a daemon whose process is alive gets to answer /health before it
+#: is treated as wedged. Busy is not dead (#22).
+BUSY_HEALTH_TIMEOUT = 30.0
 
 
 def _lock_is_stale(lock_path: Path) -> bool:
@@ -503,6 +506,12 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
                 return info
             if not _process_alive(info.pid):
                 _record_unexpected_exit()
+            elif is_alive(info, timeout=BUSY_HEALTH_TIMEOUT):
+                # A loaded daemon answers /health in seconds, not milliseconds
+                # (measured 3-4 s at ~50 sessions, #22). Two seconds read that
+                # as "not answering" and failed the caller -- or, on Linux,
+                # risked starting a second daemon beside it.
+                return info
             elif not sys.platform.startswith("linux"):
                 # Linux re-discovers it below through /proc; elsewhere a second
                 # daemon would start on the same state directory.
