@@ -44,7 +44,9 @@ def _isolated_state_dir(tmp_path, monkeypatch):
     leaking whatever a real operator `.env`/shell happens to export.
     """
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(daemon.config, "repo_env_file", lambda: None)
     monkeypatch.delenv("AGENTRT_SECRET_KEY", raising=False)
+    monkeypatch.delenv("AGENTRT_DEPLOYMENT_LLM_POLICY", raising=False)
     for name in _ROUTER_SETTINGS:
         monkeypatch.delenv(name, raising=False)
 
@@ -76,11 +78,15 @@ def test_daemon_env_sets_router_derived_deployment_policy(router_config) -> None
     assert policy.reasoning_effort is None
 
 
-def test_daemon_env_omits_the_policy_when_router_config_is_unresolvable() -> None:
+def test_daemon_env_omits_the_policy_when_router_config_is_unresolvable(
+    monkeypatch,
+) -> None:
     """A bare `agentrt daemon start` before `.env` is written must still
     start the daemon -- matching DeploymentLLMPolicy's own documented
     opt-in behavior (server runs generic when the field is absent), not a
     new failure mode introduced by deriving the policy from config."""
+    for name in _ROUTER_SETTINGS:
+        monkeypatch.delenv(name, raising=False)
     env = daemon._daemon_env("test-token")
     assert "AGENTRT_DEPLOYMENT_LLM_POLICY" not in env
 

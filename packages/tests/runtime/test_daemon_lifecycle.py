@@ -141,7 +141,9 @@ def test_ensure_running_refuses_multiple_discovered_daemons(monkeypatch):
         daemon.ensure_running()
 
 
-def test_daemon_env_keeps_worktrees_in_the_state_dir():
+def test_daemon_env_keeps_worktrees_in_the_state_dir(monkeypatch):
+    monkeypatch.delenv("AGENTRT_CONVERSATION_WORKTREE_ROOT", raising=False)
+    monkeypatch.delenv("AGENTRT_WORKTREE_ROOT", raising=False)
     env = daemon._daemon_env("token")
     assert env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
         config.state_dir() / "worktrees"
