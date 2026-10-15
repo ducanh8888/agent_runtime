@@ -496,6 +496,25 @@ logger = logging.getLogger(__name__)
 _META_PERSIST_INTERVAL_SECONDS = 15.0
 
 
+def _force_stream() -> bool:
+    """Whether profile launches force token streaming. AgentRT fork: off by default.
+
+    Every streamed chunk is parsed by litellm and republished as a delta on
+    the server's single event loop. Measured with a mock router (AgentRT #22):
+    that per-chunk work was ~40% of the daemon's CPU; at 50 streaming sessions
+    the daemon sat near one full core and /health took 5-9 s, against 0.01-0.8 s
+    with streaming off, and 50 dispatches took 190 s against 94 s. Nothing in AgentRT
+    consumes the deltas (its clients poll results over REST/MCP), so the
+    cost bought nothing. ``AGENTRT_LLM_STREAM=1`` restores the upstream
+    behaviour for a client that renders live tokens.
+    """
+    return os.environ.get("AGENTRT_LLM_STREAM", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 class InvalidParentConversation(ValueError):
     """``parent_conversation_id`` is unknown, self-referential, or in
@@ -623,7 +642,7 @@ def _resolve_agent_from_profile(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Profile '{profile_name}' failed to resolve: {exc}") from exc
 
-    if isinstance(settings_config, OpenHandsAgentSettings):
+    if isinstance(settings_config, OpenHandsAgentSettings) and _force_stream():
         # Force streaming so this launch path wires on_token: a client can't set
         # llm.stream on a profile's referenced LLM ahead of time. Safe at this
         # layer (not the SDK resolver) because this server wires the token
