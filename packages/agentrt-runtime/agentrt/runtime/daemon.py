@@ -308,7 +308,10 @@ def _proc_daemons() -> list[DaemonInfo]:
                 if b"=" in item
             )
             if (
-                not any(b"agentrt.runtime.server_launch" in arg for arg in cmdline)
+                not any(_is_daemon_module(arg) for arg in cmdline)
+                # A front's workers serve the same state directory; the front
+                # is the daemon (#24).
+                or "AGENTRT_WORKER_INDEX" in env
                 or str(Path(env.get("AGENTRT_PERSISTENCE_DIR", "")).resolve()) != state
             ):
                 continue
@@ -447,7 +450,11 @@ def _is_agentrt_daemon(pid: int) -> bool:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
         return False
-    return b"agentrt.runtime.server_launch" in cmdline
+    return any(_is_daemon_module(arg) for arg in cmdline.split(b"\0"))
+
+
+def _is_daemon_module(arg: bytes) -> bool:
+    return arg in (b"agentrt.runtime.server_launch", b"agentrt.runtime.front")
 
 
 def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
@@ -545,8 +552,11 @@ def ensure_running(startup_timeout: float = 240.0) -> DaemonInfo:
             # Our launcher, not the server's own entry point: it registers the
             # workspace kinds this runtime supports before handing over. See
             # server_launch for why a missing import shows up as a validation
-            # error with an empty message.
-            "agentrt.runtime.server_launch",
+            # error with an empty message. With several workers the front
+            # starts them and is the daemon clients talk to (#24).
+            "agentrt.runtime.front"
+            if config.workers() > 1
+            else "agentrt.runtime.server_launch",
             "--host",
             "127.0.0.1",
             "--port",

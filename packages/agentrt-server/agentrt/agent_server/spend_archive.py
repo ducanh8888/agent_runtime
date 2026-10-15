@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from filelock import FileLock
+
 from agentrt.sdk.utils.files import atomic_write_text
 
 
@@ -36,6 +38,16 @@ class SpendArchiveError(RuntimeError):
 def archive_path(conversations_dir: str | Path) -> Path:
     """Where the ledger lives: beside the state directory, not inside it."""
     return Path(conversations_dir).parent / SPEND_ARCHIVE_NAME
+
+
+def _ledger_lock(conversations_dir: str | Path) -> FileLock:
+    """Serializes ledger updates across processes.
+
+    AgentRT fork (#24): with several workers, each process folds its own
+    deletions into the one shared ledger, and an in-process lock no longer
+    stops two read-modify-writes from losing one.
+    """
+    return FileLock(f"{archive_path(conversations_dir)}.lock")
 
 
 def _empty() -> dict:
@@ -91,18 +103,23 @@ def fold_conversation(
     the session discoverable, and deleting it again must not count it twice.
     The caller serializes concurrent folds; this function only reads and writes.
     """
-    archive = read_archive(conversations_dir)
-    if conversation_id in archive["folded_ids"]:
+    with _ledger_lock(conversations_dir):
+        archive = read_archive(conversations_dir)
+        if conversation_id in archive["folded_ids"]:
+            return archive
+        for model, totals in usage_by_model(stats).items():
+            bucket = archive["by_model"].setdefault(
+                model, dict.fromkeys(_TOKEN_FIELDS, 0)
+            )
+            for field in _TOKEN_FIELDS:
+                bucket[field] = int(bucket.get(field, 0)) + totals[field]
+        archive["sessions"] = int(archive.get("sessions", 0)) + 1
+        archive["folded_ids"].append(conversation_id)
+        archive["updated_at"] = at
+        atomic_write_text(
+            archive_path(conversations_dir), json.dumps(archive, indent=2)
+        )
         return archive
-    for model, totals in usage_by_model(stats).items():
-        bucket = archive["by_model"].setdefault(model, dict.fromkeys(_TOKEN_FIELDS, 0))
-        for field in _TOKEN_FIELDS:
-            bucket[field] = int(bucket.get(field, 0)) + totals[field]
-    archive["sessions"] = int(archive.get("sessions", 0)) + 1
-    archive["folded_ids"].append(conversation_id)
-    archive["updated_at"] = at
-    atomic_write_text(archive_path(conversations_dir), json.dumps(archive, indent=2))
-    return archive
 
 
 def record_unarchived(
@@ -119,13 +136,16 @@ def record_unarchived(
     the ledger rather than being silent, so a lifetime total that is short says
     so.
     """
-    archive = read_archive(conversations_dir)
-    archive["unarchived"].append(
-        {"conversation_id": conversation_id, "reason": reason, "at": at}
-    )
-    archive["updated_at"] = at
-    atomic_write_text(archive_path(conversations_dir), json.dumps(archive, indent=2))
-    return archive
+    with _ledger_lock(conversations_dir):
+        archive = read_archive(conversations_dir)
+        archive["unarchived"].append(
+            {"conversation_id": conversation_id, "reason": reason, "at": at}
+        )
+        archive["updated_at"] = at
+        atomic_write_text(
+            archive_path(conversations_dir), json.dumps(archive, indent=2)
+        )
+        return archive
 
 
 def purge(conversations_dir: str | Path) -> bool:
