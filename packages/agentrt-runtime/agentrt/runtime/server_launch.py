@@ -17,8 +17,115 @@ means to support.
 from __future__ import annotations
 
 import faulthandler
+import logging
 import runpy
 import signal
+import sys
+
+
+_TRANSIENT_ACCEPT_ERRORS = {64, 1236, 10053, 10054}
+
+
+def _install_windows_accept_loop_resilience() -> None:
+    if sys.platform != "win32":
+        return
+
+    # CPython closes the listener for any accept OSError; keep this private-API
+    # override local to the runtime rather than changing the vendored server.
+    from asyncio import exceptions, trsock
+    from asyncio.proactor_events import BaseProactorEventLoop
+
+    if getattr(BaseProactorEventLoop, "_agentrt_accept_resilience", False):
+        return
+
+    logger = logging.getLogger("asyncio")
+
+    def start_serving(
+        self,
+        protocol_factory,
+        sock,
+        sslcontext=None,
+        server=None,
+        backlog=100,  # noqa: ARG001
+        ssl_handshake_timeout=None,
+        ssl_shutdown_timeout=None,
+    ):
+        def report_failure(exc):
+            if sock.fileno() != -1:
+                self.call_exception_handler(
+                    {
+                        "message": "Accept failed on a socket",
+                        "exception": exc,
+                        "socket": trsock.TransportSocket(sock),
+                    }
+                )
+                sock.close()
+            elif self._debug:
+                logger.debug("Accept failed on socket %r", sock, exc_info=exc)
+
+        def loop(f=None):
+            if f is not None:
+                try:
+                    conn, addr = f.result()
+                except OSError as exc:
+                    if getattr(exc, "winerror", None) not in _TRANSIENT_ACCEPT_ERRORS:
+                        report_failure(exc)
+                        return
+                    logger.debug(
+                        "Dropping aborted incoming connection (WinError %s)",
+                        exc.winerror,
+                    )
+                else:
+                    if self._debug:
+                        logger.debug(
+                            "%r got a new connection from %r: %r", server, addr, conn
+                        )
+                    try:
+                        protocol = protocol_factory()
+                        if sslcontext is not None:
+                            self._make_ssl_transport(
+                                conn,
+                                protocol,
+                                sslcontext,
+                                server_side=True,
+                                extra={"peername": addr},
+                                server=server,
+                                ssl_handshake_timeout=ssl_handshake_timeout,
+                                ssl_shutdown_timeout=ssl_shutdown_timeout,
+                            )
+                        else:
+                            self._make_socket_transport(
+                                conn,
+                                protocol,
+                                extra={"peername": addr},
+                                server=server,
+                            )
+                    except OSError as exc:
+                        report_failure(exc)
+                        return
+            if self.is_closed():
+                return
+            try:
+                f = self._proactor.accept(sock)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) not in _TRANSIENT_ACCEPT_ERRORS:
+                    report_failure(exc)
+                    return
+                logger.debug(
+                    "Retrying accept after transient WinError %s", exc.winerror
+                )
+                self.call_soon(loop)
+                return
+            except exceptions.CancelledError:
+                sock.close()
+                return
+            self._accept_futures[sock.fileno()] = f
+            f.add_done_callback(loop)
+
+        self.call_soon(loop)
+
+    setattr(BaseProactorEventLoop, "_start_serving", start_serving)
+    setattr(BaseProactorEventLoop, "_agentrt_accept_resilience", True)
 
 
 def _register_workspace_kinds() -> list[str]:
@@ -95,6 +202,7 @@ def main() -> None:
         # Threads are half the picture: a request awaiting a lock or a queued
         # executor job is a coroutine, so `kill -USR2` dumps asyncio tasks too.
         signal.signal(signal.SIGUSR2, _dump_tasks)
+    _install_windows_accept_loop_resilience()
     _register_workspace_kinds()
     # run_name="__main__" so the server's own entry point runs exactly as it
     # does under `python -m agentrt.agent_server`; argv is untouched, so its
