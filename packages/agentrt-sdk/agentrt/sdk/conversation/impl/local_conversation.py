@@ -132,6 +132,8 @@ ACP_LAST_PROMPT_USER_MESSAGE_ID = "acp_last_prompt_user_message_id"
 ACP_INFLIGHT_PROMPT_USER_MESSAGE_ID = "acp_inflight_prompt_user_message_id"
 ACP_SUPERSEDE_INFLIGHT_PROMPT = "acp_supersede_inflight_prompt"
 _RUNTIME_MCP_TIMEOUT_SECS = 30
+# Longest the event loop waits for tools to be reaped after a run (#22).
+_REAP_DEADLINE_SECONDS = 30
 #: Steps before the per-run cap at which the agent is told to wrap up.
 ITERATION_BUDGET_WARNING_STEPS = 3
 
@@ -1516,6 +1518,23 @@ class LocalConversation(BaseConversation):
                     "Error reaping executor for tool '%s': %s", tool.name, exc
                 )
 
+    async def _areap_run_scoped_tools(self) -> None:
+        """Run :meth:`_reap_run_scoped_tools` off the event loop.
+
+        AgentRT fork (#22): closing a tool can block (a Windows terminal whose
+        pipe an orphaned process still held blocked ``close()`` forever), and
+        on the loop that froze the whole daemon. A reap still running after
+        ``_REAP_DEADLINE_SECONDS`` is left to finish in its thread.
+        """
+        reap = asyncio.ensure_future(asyncio.to_thread(self._reap_run_scoped_tools))
+        try:
+            await asyncio.wait_for(asyncio.shield(reap), _REAP_DEADLINE_SECONDS)
+        except TimeoutError:
+            logger.warning(
+                "Reaping run-scoped tools still blocked after %ss; continuing",
+                _REAP_DEADLINE_SECONDS,
+            )
+
     def load_plugin(self, plugin_ref: str) -> None:
         """Load a plugin from the conversation's registered marketplaces."""
         self._ensure_plugins_loaded()
@@ -2718,7 +2737,7 @@ class LocalConversation(BaseConversation):
             if self._cancel_token is not None and not self._cancel_token.is_cancelled:
                 self._cancel_token = None
             self._arun_task = None
-            self._reap_run_scoped_tools()
+            await self._areap_run_scoped_tools()
 
     def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
         """Set the confirmation policy and store it in conversation state."""

@@ -371,3 +371,35 @@ async def test_reap_after_run_can_be_turned_off(monkeypatch):
         assert first_process is not None
         assert first_process.poll() is None, "the shell was reaped despite the flag"
         executor.close()
+
+
+@pytest.mark.asyncio
+async def test_a_reap_that_blocks_does_not_hold_the_event_loop(monkeypatch):
+    """#22: a close() that never returns froze the daemon's event loop."""
+    import asyncio
+    import threading
+
+    monkeypatch.delenv("AGENTRT_TERMINAL_REAP_AFTER_RUN", raising=False)
+    monkeypatch.setattr(
+        "agentrt.sdk.conversation.impl.local_conversation._REAP_DEADLINE_SECONDS",
+        0.5,
+    )
+    release = threading.Event()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        conversation = Conversation(
+            agent=_scripted_agent([Tool(name=TerminalTool.name)]),
+            workspace=temp_dir,
+        )
+        conversation._ensure_agent_ready()
+        executor = conversation.agent.tools_map[TerminalTool.name].as_executable()
+        monkeypatch.setattr(
+            executor.executor, "reap", lambda: release.wait(10), raising=False
+        )
+
+        conversation.send_message("question one")
+        try:
+            await asyncio.wait_for(conversation.arun(), timeout=5)
+        finally:
+            release.set()
+            executor.executor.close()
