@@ -14,47 +14,48 @@ from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
 from agentrt.sdk.llm import LLM, Message, TextContent
 
 
-def _scripted_agent():
-    class _ScriptedAgent(AgentBase):
-        _replies: list[str] = PrivateAttr(default_factory=list)
-        _calls: int = PrivateAttr(default=0)
+class _ScriptedAgent(AgentBase):
+    _replies: list[str] = PrivateAttr(default_factory=list)
+    _calls: int = PrivateAttr(default=0)
 
-        def __init__(self, replies: list[str]) -> None:
-            super().__init__(
-                llm=LLM(
-                    model="gpt-4o-mini",
-                    api_key=SecretStr("test-key"),
-                    usage_id="test-llm",
+    def __init__(self, replies: list[str]) -> None:
+        super().__init__(
+            llm=LLM(
+                model="gpt-4o-mini",
+                api_key=SecretStr("test-key"),
+                usage_id="test-llm",
+            ),
+            tools=[],
+        )
+        self._replies = replies
+
+    def init_state(self, state, on_event: ConversationCallbackType) -> None:  # noqa: ARG002
+        on_event(
+            SystemPromptEvent(
+                source="agent", system_prompt=TextContent(text="dummy"), tools=[]
+            )
+        )
+
+    def step(
+        self,
+        conversation,
+        on_event: ConversationCallbackType,
+        on_token=None,
+    ) -> None:
+        reply = self._replies[min(self._calls, len(self._replies) - 1)]
+        self._calls += 1
+        on_event(
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant", content=[TextContent(text=reply)]
                 ),
-                tools=[],
             )
-            self._replies = replies
+        )
+        conversation.state.execution_status = ConversationExecutionStatus.FINISHED
 
-        def init_state(self, state, on_event: ConversationCallbackType) -> None:  # noqa: ARG002
-            on_event(
-                SystemPromptEvent(
-                    source="agent", system_prompt=TextContent(text="dummy"), tools=[]
-                )
-            )
 
-        def step(
-            self,
-            conversation,
-            on_event: ConversationCallbackType,
-            on_token=None,
-        ) -> None:
-            reply = self._replies[min(self._calls, len(self._replies) - 1)]
-            self._calls += 1
-            on_event(
-                MessageEvent(
-                    source="agent",
-                    llm_message=Message(
-                        role="assistant", content=[TextContent(text=reply)]
-                    ),
-                )
-            )
-            conversation.state.execution_status = ConversationExecutionStatus.FINISHED
-
+def _scripted_agent():
     return _ScriptedAgent(["done"])
 
 
