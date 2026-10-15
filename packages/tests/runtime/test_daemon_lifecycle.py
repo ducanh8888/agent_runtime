@@ -97,9 +97,29 @@ def test_stop_keeps_metadata_if_process_survives_signals(monkeypatch):
     monkeypatch.setattr(daemon.time, "sleep", lambda _: None)
     monkeypatch.setattr(daemon, "_terminate", lambda pid: None)
     monkeypatch.setattr(daemon.os, "kill", lambda pid, sig: None)
+    monkeypatch.setattr(daemon, "_kill", lambda pid: None)
     with pytest.raises(RuntimeError, match="daemon.json was retained"):
         daemon.stop(timeout=0)
     assert config.daemon_file().exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows command-line inspection")
+def test_is_agentrt_daemon_rejects_pytest_process_on_windows():
+    assert daemon._is_agentrt_daemon(os.getpid()) is False
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows command-line inspection")
+def test_stop_removes_metadata_for_live_non_daemon_process(monkeypatch):
+    daemon._write_daemon_file(
+        daemon.DaemonInfo(port=1234, token="token", pid=os.getpid())
+    )
+    calls = []
+    monkeypatch.setattr(daemon, "_terminate", calls.append)
+    monkeypatch.setattr(daemon, "_kill", calls.append)
+
+    assert daemon.stop() is False
+    assert not config.daemon_file().exists()
+    assert calls == []
 
 
 def test_ensure_running_adopts_discovered_daemon(monkeypatch):
@@ -121,7 +141,9 @@ def test_ensure_running_refuses_multiple_discovered_daemons(monkeypatch):
         daemon.ensure_running()
 
 
-def test_daemon_env_keeps_worktrees_in_the_state_dir():
+def test_daemon_env_keeps_worktrees_in_the_state_dir(monkeypatch):
+    monkeypatch.delenv("AGENTRT_CONVERSATION_WORKTREE_ROOT", raising=False)
+    monkeypatch.delenv("AGENTRT_WORKTREE_ROOT", raising=False)
     env = daemon._daemon_env("token")
     assert env["AGENTRT_CONVERSATION_WORKTREE_ROOT"] == str(
         config.state_dir() / "worktrees"

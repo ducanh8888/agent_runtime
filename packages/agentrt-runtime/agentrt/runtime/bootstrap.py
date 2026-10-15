@@ -15,8 +15,10 @@ files only it reads.
 
 from __future__ import annotations
 
+import logging
 import os
 import stat
+import subprocess
 from pathlib import Path
 from uuid import UUID
 
@@ -24,6 +26,8 @@ from pydantic import SecretStr
 
 from agentrt.runtime import config, permissions
 
+
+logger = logging.getLogger(__name__)
 
 LLM_PROFILE_NAME = "default"
 AGENT_PROFILE_NAME = "default"
@@ -387,16 +391,37 @@ def _refresh_llm_profile(state: Path) -> None:
 
 
 def _tighten(path: Path) -> None:
-    """Owner-only permissions on a file holding the credential.
-
-    Called for every such file, which is the point: an earlier version named
-    only the profile the daemon writes and left the operator's own .env at the
-    default umask.
-
-    A no-op on Windows, where the POSIX mode bits carry no meaning; the file is
-    inside the user profile there and inherits its ACL.
-    """
-    if os.name != "nt" and path.exists():
+    """Restrict files holding credentials to the current user."""
+    if not path.exists():
+        return
+    if os.name == "nt":
+        username = os.environ.get("USERNAME")
+        if not username:
+            logger.warning("Could not restrict ACL for %s: USERNAME is unset", path)
+            return
+        try:
+            result = subprocess.run(
+                [
+                    "icacls",
+                    str(path),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"{username}:(R,W)",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning("Could not restrict ACL for %s: %s", path, exc)
+            return
+        if result.returncode:
+            logger.warning(
+                "Could not restrict ACL for %s: %s", path, result.stderr.strip()
+            )
+    else:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
