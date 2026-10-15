@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import logging
 import os
-import stat
-import subprocess
 from pathlib import Path
 from uuid import UUID
 
@@ -391,38 +389,9 @@ def _refresh_llm_profile(state: Path) -> None:
 
 
 def _tighten(path: Path) -> None:
-    """Restrict files holding credentials to the current user."""
-    if not path.exists():
-        return
-    if os.name == "nt":
-        username = os.environ.get("USERNAME")
-        if not username:
-            logger.warning("Could not restrict ACL for %s: USERNAME is unset", path)
-            return
-        try:
-            result = subprocess.run(
-                [
-                    "icacls",
-                    str(path),
-                    "/inheritance:r",
-                    "/grant:r",
-                    f"{username}:(R,W)",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            logger.warning("Could not restrict ACL for %s: %s", path, exc)
-            return
-        if result.returncode:
-            logger.warning(
-                "Could not restrict ACL for %s: %s", path, result.stderr.strip()
-            )
-    else:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    """Restrict a file holding the credential to the current user."""
+    if path.exists():
+        config.restrict_to_owner(path)
 
 
 def allowed_llm_profiles() -> list[str]:

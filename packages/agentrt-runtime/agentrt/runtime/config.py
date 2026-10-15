@@ -91,6 +91,35 @@ def log_file() -> Path:
     return state_dir() / "daemon.log"
 
 
+def restrict_to_owner(path: Path) -> None:
+    """Make a credential file readable and writable by its owner only.
+
+    POSIX mode 0600. On Windows, ``icacls`` drops inherited entries and grants
+    only the current user; a failure there is logged, never raised.
+    """
+    if os.name != "nt":
+        os.chmod(path, 0o600)
+        return
+    username = os.environ.get("USERNAME")
+    if not username:
+        logger.warning("Could not restrict ACL for %s: USERNAME is unset", path)
+        return
+    try:
+        result = subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Could not restrict ACL for %s: %s", path, exc)
+        return
+    if result.returncode:
+        logger.warning("Could not restrict ACL for %s: %s", path, result.stderr.strip())
+
+
 def secret_key_file() -> Path:
     """Path to the daemon's persistent secret-encryption key."""
     return state_dir() / "secret.key"
@@ -136,35 +165,7 @@ def secret_key() -> str:
             fh.write(generated)
             fh.flush()
             os.fsync(fh.fileno())
-        if os.name == "nt":
-            username = os.environ.get("USERNAME")
-            if not username:
-                logger.warning("Could not restrict ACL for %s: USERNAME is unset", tmp)
-            else:
-                try:
-                    result = subprocess.run(
-                        [
-                            "icacls",
-                            tmp,
-                            "/inheritance:r",
-                            "/grant:r",
-                            f"{username}:(R,W)",
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        creationflags=subprocess.CREATE_NO_WINDOW,
-                        check=False,
-                    )
-                except (OSError, subprocess.SubprocessError) as exc:
-                    logger.warning("Could not restrict ACL for %s: %s", tmp, exc)
-                else:
-                    if result.returncode:
-                        logger.warning(
-                            "Could not restrict ACL for %s: %s", tmp, result.stderr.strip()
-                        )
-        else:
-            os.chmod(tmp, 0o600)
+        restrict_to_owner(Path(tmp))
         os.replace(tmp, path)
     except BaseException:
         try:
