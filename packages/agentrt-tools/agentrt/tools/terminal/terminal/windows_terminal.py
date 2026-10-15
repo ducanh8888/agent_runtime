@@ -185,7 +185,17 @@ class WindowsTerminal(TerminalInterface):
             self.output_buffer.append(prompt)
 
     def close(self) -> None:
-        """Stop the PowerShell process and background reader."""
+        """Stop the PowerShell process and background reader.
+
+        Order matters on Windows: the process is stopped first, so the
+        reader's blocked ``stdout.read()`` sees EOF and the thread exits;
+        only then are the pipes closed. Closing ``stdout`` while the reader
+        is still inside ``read()`` blocks on the buffer lock it holds, for as
+        long as anything keeps the pipe open -- and this runs on the
+        daemon's event loop at the end of every run (agent_runtime#22). If
+        the reader still has not exited, the pipe is left to the garbage
+        collector rather than risk that block.
+        """
         if self._closed:
             return
 
@@ -198,26 +208,34 @@ class WindowsTerminal(TerminalInterface):
                     self.process.stdin.close()
             except (OSError, ValueError) as exc:
                 logger.debug("Error closing PowerShell stdin: %s", exc)
-
-        if self.reader_thread and self.reader_thread.is_alive():
-            self.reader_thread.join(timeout=_READER_THREAD_TIMEOUT_SECONDS)
-
-        if self.process is not None:
-            try:
-                if self.process.stdout is not None:
-                    self.process.stdout.close()
-            except (OSError, ValueError) as exc:
-                logger.debug("Error closing PowerShell stdout: %s", exc)
             try:
                 self.process.terminate()
                 self.process.wait(timeout=5.0)
             except subprocess.TimeoutExpired:
                 logger.warning("PowerShell process did not terminate, forcing kill")
-                self.process.kill()
+                try:
+                    self.process.kill()
+                except OSError as exc:
+                    logger.debug("Error killing PowerShell process: %s", exc)
             except Exception as exc:
                 logger.debug("Error terminating PowerShell process: %s", exc)
-            finally:
-                self.process = None
+
+        if self.reader_thread and self.reader_thread.is_alive():
+            self.reader_thread.join(timeout=_READER_THREAD_TIMEOUT_SECONDS)
+
+        if self.process is not None:
+            if self.reader_thread and self.reader_thread.is_alive():
+                logger.warning(
+                    "PowerShell reader still blocked after the process was stopped "
+                    "(a child process may hold the pipe); leaving stdout open"
+                )
+            else:
+                try:
+                    if self.process.stdout is not None:
+                        self.process.stdout.close()
+                except (OSError, ValueError) as exc:
+                    logger.debug("Error closing PowerShell stdout: %s", exc)
+            self.process = None
 
         self._closed = True
 
