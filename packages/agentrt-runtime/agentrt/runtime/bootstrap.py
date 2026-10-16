@@ -376,6 +376,7 @@ def _sync_hard_profiles(agent_store) -> None:
     as they are: the default model keeps working.
     """
     from agentrt.agent_server.persistence import get_llm_profile_store
+    from agentrt.sdk.settings.model import LLMSummarizingCondenserSettings
 
     model = config.hard_model()
     if not model:
@@ -402,15 +403,17 @@ def _sync_hard_profiles(agent_store) -> None:
                 hard_id = agent_store.load(name).id
             except Exception:
                 hard_id = uuid4()
-            agent_store.save(
-                base.model_copy(
-                    update={
-                        "id": hard_id,
-                        "name": name,
-                        "llm_profile_ref": config.HARD_LLM_PROFILE,
-                    }
+            update: dict = {
+                "id": hard_id,
+                "name": name,
+                "llm_profile_ref": config.HARD_LLM_PROFILE,
+            }
+            cap = config.hard_condenser_max_tokens()
+            if cap and isinstance(base.condenser, LLMSummarizingCondenserSettings):
+                update["condenser"] = base.condenser.model_copy(
+                    update={"max_tokens": cap}
                 )
-            )
+            agent_store.save(base.model_copy(update=update))
     except Exception:
         logger.warning("Could not prepare the hard-model profiles", exc_info=True)
 

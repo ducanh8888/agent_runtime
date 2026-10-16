@@ -488,6 +488,20 @@ def hard_model() -> str | None:
     return _setting("AGENTRT_HARD_MODEL") or None
 
 
+def hard_condenser_max_tokens() -> int | None:
+    """History cap for hard-model sessions (``AGENTRT_HARD_CONDENSER_MAX_TOKENS``).
+
+    Unset: the same cap as every other session. A hard session works through
+    more material, and its model takes a far larger context than the cap the
+    default model was measured at, so an operator may raise it here.
+    """
+    raw = _setting("AGENTRT_HARD_CONDENSER_MAX_TOKENS")
+    try:
+        return int(raw) if raw and int(raw) > 0 else None
+    except ValueError:
+        return None
+
+
 # The vendored server's own run-pool cap (`agentrt-server`'s Config.
 # max_concurrent_runs, env var AGENTRT_MAX_CONCURRENT_RUNS) is a second,
 # independent limit from AGENTRT_MAX_SESSIONS above -- one is this client

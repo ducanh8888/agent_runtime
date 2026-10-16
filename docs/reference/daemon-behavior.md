@@ -170,6 +170,14 @@ it, on that model. The model is chosen per session and never per call, so the
 provider's prompt cache stays warm. Use it for planning, review, hard
 debugging and final synthesis; everything else stays on the default model.
 Unset, `hard` is refused like any other unknown LLM profile.
+`AGENTRT_HARD_CONDENSER_MAX_TOKENS` raises the history cap for hard sessions
+only. Unset, they use the same 40k cap as every other session.
+
+Each call's usage record (`agentrt usage <session>`) carries
+`provenance.router`, copied from OmniRoute's response headers. That records
+which upstream actually answered (`x-omniroute-model`) and the router's
+`x-correlation-id`. The combo fails over per call, so one session can be
+served by several upstreams.
 
 ## Usage and cost
 

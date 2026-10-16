@@ -375,3 +375,18 @@ def test_hard_profile_is_refused_when_no_hard_model_is_set(state) -> None:
     client = _StubClient(profiles)
     with pytest.raises(client_mod.ClientError, match="not allowed"):
         client.dispatch("plan it", state, permission="workspace", llm_profile="hard")
+
+
+def test_hard_sessions_may_keep_a_longer_history(
+    state, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_HARD_MODEL", "agentrt-hard")
+    monkeypatch.setenv("AGENTRT_HARD_CONDENSER_MAX_TOKENS", "150000")
+    bootstrap.ensure_profiles()
+
+    hard = get_agent_profile_store().load("workspace-hard").condenser
+    base = get_agent_profile_store().load("workspace").condenser
+    assert isinstance(hard, LLMSummarizingCondenserSettings)
+    assert isinstance(base, LLMSummarizingCondenserSettings)
+    assert hard.max_tokens == 150_000
+    assert base.max_tokens == bootstrap.CONDENSER_MAX_TOKENS
