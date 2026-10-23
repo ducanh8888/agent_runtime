@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import importlib
+import ipaddress
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -496,24 +498,40 @@ logger = logging.getLogger(__name__)
 _META_PERSIST_INTERVAL_SECONDS = 15.0
 
 
-def _force_stream() -> bool:
-    """Whether profile launches force token streaming. AgentRT fork: off by default.
+def _force_stream(base_url: str | None) -> bool:
+    """Whether profile launches force token streaming. AgentRT fork.
 
     Every streamed chunk is parsed by litellm and republished as a delta on
     the server's single event loop. Measured with a mock router (AgentRT #22):
     that per-chunk work was ~40% of the daemon's CPU; at 50 streaming sessions
     the daemon sat near one full core and /health took 5-9 s, against 0.01-0.8 s
-    with streaming off, and 50 dispatches took 190 s against 94 s. Nothing in AgentRT
-    consumes the deltas (its clients poll results over REST/MCP), so the
-    cost bought nothing. ``AGENTRT_LLM_STREAM=1`` restores the upstream
-    behaviour for a client that renders live tokens.
+    with streaming off. Nothing in AgentRT consumes the deltas, so for a router
+    on this machine or the LAN streaming stays off.
+
+    A router reached through a proxy is different (#32): Cloudflare cuts a
+    response that sends no byte for 120 s (524), and a long reasoning turn
+    produces none until it is done when not streamed. So an endpoint that is not
+    loopback or a private address streams by default. ``AGENTRT_LLM_STREAM``
+    (``1``/``0``) overrides either way.
     """
-    return os.environ.get("AGENTRT_LLM_STREAM", "0").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    raw = os.environ.get("AGENTRT_LLM_STREAM", "").strip().lower()
+    if raw:
+        return raw in {"1", "true", "yes", "on"}
+    return not _is_local_endpoint(base_url)
+
+
+def _is_local_endpoint(base_url: str | None) -> bool:
+    """Loopback, ``localhost`` or a private/link-local IP literal."""
+    if not base_url:
+        return True
+    host = urlsplit(base_url if "://" in base_url else f"//{base_url}").hostname
+    if not host or host == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # a DNS name: assume it may sit behind a proxy
+    return address.is_loopback or address.is_private or address.is_link_local
 
 
 class InvalidParentConversation(ValueError):
@@ -642,7 +660,9 @@ def _resolve_agent_from_profile(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Profile '{profile_name}' failed to resolve: {exc}") from exc
 
-    if isinstance(settings_config, OpenHandsAgentSettings) and _force_stream():
+    if isinstance(settings_config, OpenHandsAgentSettings) and _force_stream(
+        settings_config.llm.base_url
+    ):
         # Force streaming so this launch path wires on_token: a client can't set
         # llm.stream on a profile's referenced LLM ahead of time. Safe at this
         # layer (not the SDK resolver) because this server wires the token

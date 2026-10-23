@@ -1221,3 +1221,24 @@ class TestLaunchedAgentProfileRoundTrip:
         assert reloaded.launched_agent_profile is not None
         assert reloaded.launched_agent_profile.agent_profile_id == profile_id
         assert reloaded.launched_agent_profile.revision == 5
+
+
+@pytest.mark.parametrize(
+    ("base_url", "streams"),
+    [
+        ("http://127.0.0.1:20128/v1", False),
+        ("http://localhost:20128/v1", False),
+        ("http://192.168.1.154:20128/v1", False),
+        ("https://router.example.com/v1", True),
+    ],
+)
+def test_streaming_defaults_on_only_for_a_proxied_endpoint(
+    monkeypatch, base_url: str, streams: bool
+) -> None:
+    """#32: through Cloudflare a non-streamed long turn is cut at 120 s (524)."""
+    from agentrt.agent_server.conversation_service import _force_stream
+
+    monkeypatch.delenv("AGENTRT_LLM_STREAM", raising=False)
+    assert _force_stream(base_url) is streams
+    monkeypatch.setenv("AGENTRT_LLM_STREAM", "0")
+    assert _force_stream(base_url) is False
