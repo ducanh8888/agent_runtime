@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -478,15 +479,42 @@ def _setting(name: str) -> str:
 HARD_LLM_PROFILE = "hard"
 
 
-def hard_model() -> str | None:
-    """The router model for reasoning-heavy sessions (``AGENTRT_HARD_MODEL``).
+LLM_PROFILE_NAME_PATTERN = re.compile(r"[a-z0-9-]+\Z")
 
-    When set, the runtime saves a second LLM profile, ``hard``, at the same
-    endpoint and key, and a dispatch with ``llm_profile="hard"`` runs its whole
-    session on it. A session never changes model mid-way, so the provider's
-    prompt cache stays warm. Unset: every session uses the default model.
+
+def llm_profiles() -> dict[str, str]:
+    """Named router models from ``AGENTRT_LLM_PROFILES`` plus hard shorthand.
+
+    The setting is a comma-separated list of ``name=model`` pairs. The legacy
+    ``AGENTRT_HARD_MODEL`` setting fills in ``hard`` unless explicitly listed.
     """
-    return _setting("AGENTRT_HARD_MODEL") or None
+    profiles: dict[str, str] = {}
+    raw = _setting("AGENTRT_LLM_PROFILES")
+    for entry in raw.split(",") if raw else ():
+        name, separator, model = entry.partition("=")
+        name, model = name.strip(), model.strip()
+        if not separator or not model:
+            raise ValueError(
+                f"Invalid LLM profile entry {entry!r}; expected name=model"
+            )
+        if name == "default" or not LLM_PROFILE_NAME_PATTERN.fullmatch(name):
+            raise ValueError(
+                f"Invalid LLM profile name {name!r}; names must use lowercase "
+                "letters, digits, or hyphens and cannot be 'default'"
+            )
+        if name in profiles:
+            raise ValueError(f"Duplicate LLM profile name {name!r}")
+        profiles[name] = model
+
+    hard = _setting("AGENTRT_HARD_MODEL")
+    if hard:
+        profiles.setdefault(HARD_LLM_PROFILE, hard)
+    return profiles
+
+
+def hard_model() -> str | None:
+    """The router model for reasoning-heavy sessions, if configured."""
+    return llm_profiles().get(HARD_LLM_PROFILE)
 
 
 def hard_condenser_max_tokens() -> int | None:

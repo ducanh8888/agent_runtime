@@ -78,6 +78,17 @@ def test_daemon_env_sets_router_derived_deployment_policy(router_config) -> None
     assert policy.reasoning_effort is None
 
 
+def test_daemon_policy_allows_named_profile_models(router_config, monkeypatch) -> None:
+    monkeypatch.setenv("AGENTRT_LLM_PROFILES", "audit=agentrt-audit,hard=agentrt-hard")
+
+    env = daemon._daemon_env("test-token")
+
+    policy = DeploymentLLMPolicy.model_validate(
+        json.loads(env["AGENTRT_DEPLOYMENT_LLM_POLICY"])
+    )
+    assert policy.extra_models == ["agentrt-audit", "agentrt-hard"]
+
+
 def test_daemon_env_omits_the_policy_when_router_config_is_unresolvable(
     monkeypatch,
 ) -> None:

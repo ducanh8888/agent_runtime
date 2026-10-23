@@ -229,10 +229,13 @@ def dispatch(
     `profiles`. It is a reference, not a credential -- the key never leaves the
     daemon. Defaults to the permission preset's own profile. An unknown or
     unbound name is refused rather than silently falling back to a weaker
-    policy. When `profiles` lists `hard`, pass `llm_profile="hard"` for
-    reasoning-heavy work: planning, review, hard debugging, final synthesis.
-    The whole session (and its forks) runs on that model; it is the costlier,
-    quota-limited path, so use the default for everything else.
+    policy. Configure additional named models with `AGENTRT_LLM_PROFILES` as
+    comma-separated `name=model` pairs, for example
+    `audit=agentrt-audit,hard=agentrt-hard`; names use lowercase letters,
+    digits, and hyphens (except `default`). Pass `llm_profile="audit"` or
+    another configured name to select its model. `AGENTRT_HARD_MODEL` remains
+    shorthand for `hard=<model>`. The whole session and its forks use that
+    model, and are tagged `llm=<name>`.
 
     MAX_ITERATIONS is 100000 by default (override with
     AGENTRT_DEFAULT_MAX_ITERATIONS), so in practice a run ends when the work

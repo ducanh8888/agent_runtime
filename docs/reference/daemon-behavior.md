@@ -162,24 +162,32 @@ single-process daemon.
 - **Shared ledger.** Profiles, settings and the spend ledger stay shared in the
   state directory. Ledger updates take a file lock.
 
-## A second model for reasoning-heavy sessions (`AGENTRT_HARD_MODEL`)
+## Named models for specialized sessions (`AGENTRT_LLM_PROFILES`)
 
-Set `AGENTRT_HARD_MODEL` (process env or the state directory's `.env`) to a
-second model name at the same router, for example `agentrt-hard`. The runtime
-then does three things:
+Set `AGENTRT_LLM_PROFILES` (process env or the state directory's `.env`) to
+comma-separated `name=model` pairs at the same router, for example:
 
-- saves an LLM profile named `hard` for that model;
-- saves a copy of each permission preset bound to it (`workspace-hard` and so
-  on), with the same tools and guidance as the preset;
-- adds the model to the deployment policy.
+```bash
+AGENTRT_LLM_PROFILES="audit=agentrt-audit,hard=agentrt-hard"
+```
 
-A dispatch with `llm_profile="hard"` runs the whole session, and any fork of
-it, on that model. The model is chosen per session and never per call, so the
-provider's prompt cache stays warm. Use it for planning, review, hard
-debugging and final synthesis; everything else stays on the default model.
-Unset, `hard` is refused like any other unknown LLM profile.
-`AGENTRT_HARD_CONDENSER_MAX_TOKENS` raises the history cap for hard sessions
-only. Unset, they use the same 40k cap as every other session.
+Profile names must consist of lowercase letters, digits, or hyphens and cannot
+be `default`. `AGENTRT_HARD_MODEL` is still supported as shorthand for
+`hard=<model>`.
+
+For each configured name, the runtime:
+
+- saves an LLM profile named `<name>` for that model;
+- saves a copy of each permission preset bound to it (`<preset>-<name>`, such as
+  `workspace-audit`), with the same tools and guidance as the preset;
+- adds the model to the deployment policy's `extra_models`.
+
+A dispatch with `llm_profile="<name>"` (e.g. `llm_profile="audit"`) runs the
+whole session, and any fork of it, on that model, and tags the session with
+`llm=<name>`. The model is chosen per session and never per call, so the
+provider's prompt cache stays warm. Unset names are refused like any other
+unknown LLM profile. `AGENTRT_HARD_CONDENSER_MAX_TOKENS` raises the history cap
+for `hard` sessions only. Unset, sessions use the default cap.
 
 Each call's usage record (`agentrt usage <session>`) carries
 `provenance.router`, copied from OmniRoute's response headers. That records
