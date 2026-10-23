@@ -20,6 +20,7 @@ from agentrt.sdk.conversation.types import (
     ConversationCallbackType,
     ConversationTokenCallbackType,
 )
+from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 from agentrt.sdk.event.llm_convertible import MessageEvent, SystemPromptEvent
 from agentrt.sdk.llm import LLM, Message, TextContent
 from agentrt.sdk.skills import KeywordTrigger, Skill
@@ -558,6 +559,64 @@ async def test_acp_arun_sends_stop_hook_feedback_to_acp(tmp_path):
         "[Stop hook feedback] please continue",
     ]
     assert conversation.state.execution_status == ConversationExecutionStatus.FINISHED
+
+
+def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_path):
+    steps = 0
+
+    class AlwaysFinishingAgent(SendMessageDummyAgent):
+        def step(
+            self,
+            conversation: LocalConversation,
+            on_event: ConversationCallbackType,
+            on_token: ConversationTokenCallbackType | None = None,
+        ) -> None:
+            nonlocal steps
+            steps += 1
+            on_event(
+                MessageEvent(
+                    source="agent",
+                    llm_message=Message(
+                        role="assistant",
+                        content=[TextContent(text=f"answer {steps}")],
+                    ),
+                )
+            )
+            conversation.state.execution_status = ConversationExecutionStatus.FINISHED
+
+    hook = MagicMock()
+    hook.run_stop.return_value = (False, "commit is required")
+
+    agent = AlwaysFinishingAgent()
+    conversation = LocalConversation(
+        agent=agent,
+        workspace=tmp_path,
+        max_iteration_per_run=10,
+        stuck_detection=False,
+    )
+    conversation.send_message("make a change")
+    conversation._hook_processor = hook
+
+    conversation.run()
+
+    assert hook.run_stop.call_count == 3
+    assert steps == 3
+    assert conversation.state.execution_status == ConversationExecutionStatus.ERROR
+    errors = [
+        event
+        for event in conversation.state.events
+        if isinstance(event, ConversationErrorEvent) and event.code == "StopHookUnmet"
+    ]
+    assert len(errors) == 1
+    assert "3 consecutive" in errors[0].detail
+    agent_messages = [
+        event
+        for event in conversation.state.events
+        if isinstance(event, MessageEvent) and event.source == "agent"
+    ]
+    last_content = agent_messages[-1].llm_message.content[0]
+    assert isinstance(last_content, TextContent)
+    assert last_content.text == "answer 3"
 
 
 @pytest.mark.asyncio

@@ -138,6 +138,9 @@ _REAP_DEADLINE_SECONDS = 30
 ITERATION_BUDGET_WARNING_STEPS = 3
 
 ACP_STOP_HOOK_FEEDBACK_PREFIX = "[Stop hook feedback]"
+# AgentRT fork (#40): Cap consecutive stop hook denials to prevent endless loops.
+MAX_CONSECUTIVE_STOP_HOOK_DENIALS = 3
+
 
 ASK_AGENT_LLM_USAGE_ID: Final[str] = "ask-agent-llm"
 
@@ -2084,6 +2087,7 @@ class LocalConversation(BaseConversation):
             self._state.iterations_used = 0
 
         iteration = 0
+        consecutive_stop_hook_denials = 0
         _run_start_event_count = len(self._state.events)
         try:
             while True:
@@ -2108,7 +2112,30 @@ class LocalConversation(BaseConversation):
                                 reason="agent_finished"
                             )
                             if not should_stop:
+                                consecutive_stop_hook_denials += 1
                                 logger.info("Stop hook denied agent stopping")
+                                if (
+                                    consecutive_stop_hook_denials
+                                    >= MAX_CONSECUTIVE_STOP_HOOK_DENIALS
+                                ):
+                                    detail = (
+                                        "Stop hook denied agent stopping "
+                                        f"{consecutive_stop_hook_denials} "
+                                        "consecutive times."
+                                    )
+                                    if feedback:
+                                        detail += f" Last feedback: {feedback}"
+                                    self._state.execution_status = (
+                                        ConversationExecutionStatus.ERROR
+                                    )
+                                    self._on_event(
+                                        ConversationErrorEvent(
+                                            source="environment",
+                                            code="StopHookUnmet",
+                                            detail=detail,
+                                        )
+                                    )
+                                    break
                                 if feedback:
                                     prefixed = (
                                         f"{ACP_STOP_HOOK_FEEDBACK_PREFIX} {feedback}"
@@ -2307,6 +2334,7 @@ class LocalConversation(BaseConversation):
             self._state.iterations_used = 0
 
         iteration = 0
+        consecutive_stop_hook_denials = 0
         _run_start_event_count = len(self._state.events)
         try:
             await asyncio.to_thread(self._ensure_agent_ready)
@@ -2330,7 +2358,30 @@ class LocalConversation(BaseConversation):
                                 reason="agent_finished"
                             )
                             if not should_stop:
+                                consecutive_stop_hook_denials += 1
                                 logger.info("Stop hook denied agent stopping")
+                                if (
+                                    consecutive_stop_hook_denials
+                                    >= MAX_CONSECUTIVE_STOP_HOOK_DENIALS
+                                ):
+                                    detail = (
+                                        "Stop hook denied agent stopping "
+                                        f"{consecutive_stop_hook_denials} "
+                                        "consecutive times."
+                                    )
+                                    if feedback:
+                                        detail += f" Last feedback: {feedback}"
+                                    self._state.execution_status = (
+                                        ConversationExecutionStatus.ERROR
+                                    )
+                                    self._on_event(
+                                        ConversationErrorEvent(
+                                            source="environment",
+                                            code="StopHookUnmet",
+                                            detail=detail,
+                                        )
+                                    )
+                                    break
                                 if feedback:
                                     prefixed = (
                                         f"{ACP_STOP_HOOK_FEEDBACK_PREFIX} {feedback}"
