@@ -1493,12 +1493,10 @@ class Client:
                     "the LLM profiles its agent profiles reference."
                 )
             bound = bootstrap.agent_profile_llm_ref(preset)
-            if llm_profile == config.HARD_LLM_PROFILE and bound != llm_profile:
-                # The preset's copy bound to the hard model: same tools and
-                # guidance, the whole session on that model.
-                hard_id = bootstrap.hard_agent_profile_id(preset)
-                if hard_id is not None:
-                    return str(hard_id)
+            if bound != llm_profile:
+                named_id = bootstrap.named_agent_profile_id(preset, llm_profile)
+                if named_id is not None:
+                    return str(named_id)
             if bound != llm_profile:
                 raise ClientError(
                     f"permission {preset!r} is bound to LLM profile {bound!r}; "
@@ -1689,9 +1687,8 @@ class Client:
             }
         if title is not None:
             body["title"] = title
-        if resolved_llm == config.HARD_LLM_PROFILE:
-            # Countable with `list --tag llm=hard`: the costly path (#24).
-            tags = {**(tags or {}), "llm": config.HARD_LLM_PROFILE}
+        if resolved_llm != bootstrap.LLM_PROFILE_NAME:
+            tags = {**(tags or {}), "llm": resolved_llm}
         if tags:
             body["tags"] = _clean_tags(tags)
         body["idempotency_key"] = idempotency_key or str(uuid.uuid4())

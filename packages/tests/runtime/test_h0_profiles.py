@@ -28,6 +28,8 @@ def state(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         "AGENTRT_DEFAULT_MODEL",
         "AGENTRT_9ROUTER_API_KEY",
         "AGENTRT_9ROUTER_BASE_URL",
+        "AGENTRT_LLM_PROFILES",
+        "AGENTRT_HARD_MODEL",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
@@ -344,6 +346,29 @@ def test_guidance_is_added_once_and_keeps_an_operators_own_suffix(state) -> None
     assert "Operator note: run the tests twice." in suffix
     assert suffix.count("Working in this session") == 1
     assert reloaded.id == ids["workspace"], "rebuild must reuse the profile id"
+
+
+def test_named_profile_runs_a_whole_session_on_its_own_profile(
+    state, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_LLM_PROFILES", "audit=agentrt-audit,hard=agentrt-hard")
+    profiles = bootstrap.ensure_profiles()
+    assert bootstrap.allowed_llm_profiles() == ["audit", "default", "hard"]
+    assert get_llm_profile_store().load("audit").model == "openai/agentrt-audit"
+    assert get_llm_profile_store().load("hard").model == "openai/agentrt-hard"
+    audit = get_agent_profile_store().load("workspace-audit")
+    base = get_agent_profile_store().load("workspace")
+    assert audit.tools == base.tools
+    assert audit.system_message_suffix == base.system_message_suffix
+
+    client = _StubClient(profiles)
+    result = client.dispatch(
+        "review it", state, permission="workspace", llm_profile="audit"
+    )
+
+    assert result["llm_profile"] == "audit"
+    assert client.sent[0]["json"]["agent_profile_id"] == str(audit.id)
+    assert client.sent[0]["json"]["tags"]["llm"] == "audit"
 
 
 def test_hard_model_runs_a_whole_session_on_its_own_profile(

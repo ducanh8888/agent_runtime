@@ -57,8 +57,10 @@ def _deployment_llm_policy() -> dict | None:
         "base_url": router.base_url,
         "api_mode": "chat",
     }
-    if (hard := config.hard_model()) and hard != router.model:
-        policy["extra_models"] = [hard]
+    extra_models = list(dict.fromkeys(config.llm_profiles().values()))
+    extra_models = [model for model in extra_models if model != router.model]
+    if extra_models:
+        policy["extra_models"] = extra_models
     return policy
 
 

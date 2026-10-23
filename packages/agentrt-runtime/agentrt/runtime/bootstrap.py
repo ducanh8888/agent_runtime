@@ -300,7 +300,7 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
             pass
         else:
             _refresh_llm_profile(state)
-            _sync_hard_profiles(agent_store)
+            _sync_named_profiles(agent_store)
             return {
                 preset: _cap_condenser(
                     agent_store,
@@ -358,75 +358,77 @@ def ensure_profiles(*, force: bool = False) -> dict[str, UUID]:
         profile = _cap_condenser(agent_store, profile)
         agent_store.save(profile)
         ids[preset] = profile.id
-    _sync_hard_profiles(agent_store)
+    _sync_named_profiles(agent_store)
     return ids
 
 
-def hard_agent_profile_name(preset: str) -> str:
-    return f"{preset}-{config.HARD_LLM_PROFILE}"
+def named_agent_profile_name(preset: str, profile_name: str) -> str:
+    return f"{preset}-{profile_name}"
 
 
-def _sync_hard_profiles(agent_store) -> None:
-    """Save the ``hard`` LLM profile and a copy of each preset bound to it.
-
-    Only when ``AGENTRT_HARD_MODEL`` is set. Each copy is the preset's own
-    profile (same tools, guidance and condenser) with the LLM reference
-    changed, so choosing the hard model never changes what a session may do.
-    Ids are kept across restarts, like the presets'. Any failure leaves things
-    as they are: the default model keeps working.
-    """
-    from agentrt.agent_server.persistence import get_llm_profile_store
-    from agentrt.sdk.settings.model import LLMSummarizingCondenserSettings
-
-    model = config.hard_model()
-    if not model:
-        return
-    try:
-        router = config.load_router_config()
-        llm_store = get_llm_profile_store()
-        wanted = _build_llm(dataclasses.replace(router, model=model))
-        try:
-            current = llm_store.load(config.HARD_LLM_PROFILE)
-        except Exception:
-            current = None
-        if current is None or (current.model, current.base_url, current.api_key) != (
-            wanted.model,
-            wanted.base_url,
-            wanted.api_key,
-        ):
-            llm_store.save(config.HARD_LLM_PROFILE, wanted, include_secrets=True)
-            _tighten(_use_state_dir() / "profiles" / f"{config.HARD_LLM_PROFILE}.json")
-        for preset in permissions.PRESETS:
-            base = agent_store.load(preset)
-            name = hard_agent_profile_name(preset)
-            try:
-                hard_id = agent_store.load(name).id
-            except Exception:
-                hard_id = uuid4()
-            update: dict = {
-                "id": hard_id,
-                "name": name,
-                "llm_profile_ref": config.HARD_LLM_PROFILE,
-            }
-            cap = config.hard_condenser_max_tokens()
-            if cap and isinstance(base.condenser, LLMSummarizingCondenserSettings):
-                update["condenser"] = base.condenser.model_copy(
-                    update={"max_tokens": cap}
-                )
-            agent_store.save(base.model_copy(update=update))
-    except Exception:
-        logger.warning("Could not prepare the hard-model profiles", exc_info=True)
-
-
-def hard_agent_profile_id(preset: str) -> UUID | None:
-    """The id of a preset's hard-model profile, or None when there is none."""
+def named_agent_profile_id(preset: str, profile_name: str) -> UUID | None:
+    """The id of a preset's named-model profile, or None when absent."""
     from agentrt.agent_server.persistence import get_agent_profile_store
 
     _use_state_dir()
     try:
-        return get_agent_profile_store().load(hard_agent_profile_name(preset)).id
+        return (
+            get_agent_profile_store()
+            .load(named_agent_profile_name(preset, profile_name))
+            .id
+        )
     except Exception:
         return None
+
+
+def _sync_named_profiles(agent_store) -> None:
+    """Save configured LLM profiles and per-preset copies bound to each."""
+    from agentrt.agent_server.persistence import get_llm_profile_store
+    from agentrt.sdk.settings.model import LLMSummarizingCondenserSettings
+
+    try:
+        configured = config.llm_profiles()
+        if not configured:
+            return
+        router = config.load_router_config()
+        llm_store = get_llm_profile_store()
+        for profile_name, model in configured.items():
+            wanted = _build_llm(dataclasses.replace(router, model=model))
+            try:
+                current = llm_store.load(profile_name)
+            except Exception:
+                current = None
+            if current is None or (
+                current.model,
+                current.base_url,
+                current.api_key,
+            ) != (wanted.model, wanted.base_url, wanted.api_key):
+                llm_store.save(profile_name, wanted, include_secrets=True)
+                _tighten(_use_state_dir() / "profiles" / f"{profile_name}.json")
+            for preset in permissions.PRESETS:
+                base = agent_store.load(preset)
+                name = named_agent_profile_name(preset, profile_name)
+                try:
+                    profile_id = agent_store.load(name).id
+                except Exception:
+                    profile_id = uuid4()
+                update: dict = {
+                    "id": profile_id,
+                    "name": name,
+                    "llm_profile_ref": profile_name,
+                }
+                cap = config.hard_condenser_max_tokens()
+                if (
+                    profile_name == config.HARD_LLM_PROFILE
+                    and cap
+                    and isinstance(base.condenser, LLMSummarizingCondenserSettings)
+                ):
+                    update["condenser"] = base.condenser.model_copy(
+                        update={"max_tokens": cap}
+                    )
+                agent_store.save(base.model_copy(update=update))
+    except Exception:
+        logger.warning("Could not prepare the named-model profiles", exc_info=True)
 
 
 def _refresh_llm_profile(state: Path) -> None:
@@ -478,8 +480,10 @@ def allowed_llm_profiles() -> list[str]:
     refs: set[str] = set()
     for preset in permissions.PRESETS:
         names = [preset]
-        if config.hard_model():
-            names.append(hard_agent_profile_name(preset))
+        names.extend(
+            named_agent_profile_name(preset, profile_name)
+            for profile_name in config.llm_profiles()
+        )
         for name in names:
             try:
                 profile = store.load(name)
