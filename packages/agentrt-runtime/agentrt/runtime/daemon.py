@@ -221,6 +221,7 @@ def _terminate(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(
             ["taskkill", "/PID", str(pid), "/T"],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -232,6 +233,7 @@ def _kill(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(
             ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -482,6 +484,7 @@ def _is_agentrt_daemon(pid: int) -> bool:
                         f"'ProcessId={int(pid)}').CommandLine"
                     ),
                 ],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=30,
