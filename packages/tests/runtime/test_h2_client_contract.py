@@ -588,6 +588,21 @@ def test_artifacts_lists_reports_alongside_workspace_files(
     assert listing["outcome"] == client_mod.ARTIFACTS_UNAVAILABLE
 
 
+def test_artifacts_lists_reports_of_a_session_on_another_worker(
+    tmp_path, monkeypatch
+) -> None:
+    """#31: under AGENTRT_WORKERS > 1 the session lives in conversations-w<k>."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    reports_dir = tmp_path / "conversations-w3" / uuid.UUID(SESSION).hex / "reports"
+    reports_dir.mkdir(parents=True)
+    (reports_dir / "proposals.jsonl").write_bytes(b"{}\n")
+
+    client = _mock_client(lambda request: httpx.Response(200, json=_conversation()))
+    assert [r["path"] for r in client.artifacts(SESSION)["reports"]] == [
+        "proposals.jsonl"
+    ]
+
+
 def test_artifacts_no_reports_directory_is_empty_list(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
 

@@ -166,8 +166,14 @@ def _reports_dir(resolved: str) -> str:
     daemon runs on this machine -- the same reasoning `artifacts` already
     uses for the workspace scan itself. H8 item 7, 2026-09-17.
     """
-    conversation_dir = config.state_dir() / "conversations" / uuid.UUID(resolved).hex
-    return str(conversation_dir / "reports")
+    hex_id = uuid.UUID(resolved).hex
+    state = config.state_dir()
+    # With AGENTRT_WORKERS > 1 a session lives in its worker's directory,
+    # `conversations-w<k>` (#31); worker 0 keeps `conversations`.
+    for candidate in sorted(state.glob("conversations*")):
+        if (candidate / hex_id).is_dir():
+            return str(candidate / hex_id / "reports")
+    return str(state / "conversations" / hex_id / "reports")
 
 
 def _list_reports(resolved: str) -> list[dict]:
