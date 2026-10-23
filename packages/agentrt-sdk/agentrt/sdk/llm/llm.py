@@ -2383,39 +2383,63 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
     ) -> ModelResponse:
         """Async variant of :meth:`_transport_call`."""
         auth_values = await self._aget_litellm_auth_values()
-        ret = await litellm_acompletion(
-            **self._prepare_transport_kwargs(
-                messages=messages,
-                enable_streaming=enable_streaming,
-                auth_values=auth_values,
-                **kwargs,
-            )
+        ret: Any = None
+        # HTTP read timeouts do not bound a stream that keeps sending SSE
+        # keepalives. Bound the full request-and-drain lifecycle instead.
+        timeout_scope = asyncio.timeout(
+            self.timeout if enable_streaming and on_token is not None else None
         )
-        if enable_streaming and on_token is not None:
-            chunks: list[ModelResponseStream] = []
-            # Some litellm wrappers (lmnr 0.7.47's instrumentor) hand
-            # back a plain sync generator from ``litellm_acompletion``
-            if hasattr(ret, "__aiter__"):
-                stream = cast(AsyncIterable[ModelResponseStream], ret)
-                pending: set[bool] = {True, False}
-                async for chunk in stream:
-                    if pending:
-                        pending -= self._note_first_token(chunk)
-                    await _invoke_token_callback(on_token, chunk)
-                    chunks.append(chunk)
-            else:
-                loop = asyncio.get_running_loop()
-                synced_chunks: list[ModelResponseStream] = await loop.run_in_executor(
-                    None, list, cast(Iterable[ModelResponseStream], ret)
+        try:
+            async with timeout_scope:
+                ret = await litellm_acompletion(
+                    **self._prepare_transport_kwargs(
+                        messages=messages,
+                        enable_streaming=enable_streaming,
+                        auth_values=auth_values,
+                        **kwargs,
+                    )
                 )
-                # No first-token timing here: this branch drains the whole
-                # generator before the loop runs, so every chunk is stamped at
-                # stream end and the measurement would just restate the full
-                # latency. Null means unknown, which is the honest answer.
-                for chunk in synced_chunks:
-                    await _invoke_token_callback(on_token, chunk)
-                    chunks.append(chunk)
-            ret = litellm.stream_chunk_builder(chunks, messages=messages)
+                if enable_streaming and on_token is not None:
+                    chunks: list[ModelResponseStream] = []
+                    # Some litellm wrappers (lmnr 0.7.47's instrumentor) hand
+                    # back a plain sync generator from ``litellm_acompletion``
+                    if hasattr(ret, "__aiter__"):
+                        stream = cast(AsyncIterable[ModelResponseStream], ret)
+                        pending: set[bool] = {True, False}
+                        async for chunk in stream:
+                            if pending:
+                                pending -= self._note_first_token(chunk)
+                            await _invoke_token_callback(on_token, chunk)
+                            chunks.append(chunk)
+                    else:
+                        loop = asyncio.get_running_loop()
+                        synced_chunks: list[
+                            ModelResponseStream
+                        ] = await loop.run_in_executor(
+                            None, list, cast(Iterable[ModelResponseStream], ret)
+                        )
+                        # No first-token timing here: this branch drains the whole
+                        # generator before the loop runs, so every chunk is stamped at
+                        # stream end and the measurement would just restate the full
+                        # latency. Null means unknown, which is the honest answer.
+                        for chunk in synced_chunks:
+                            await _invoke_token_callback(on_token, chunk)
+                            chunks.append(chunk)
+                    ret = litellm.stream_chunk_builder(chunks, messages=messages)
+        except TimeoutError as error:
+            if not timeout_scope.expired():
+                raise
+            # AgentRT fork (#42): A streaming timeout must close the response
+            # and become LiteLLM's retryable timeout type for the SDK retry loop.
+            close = getattr(ret, "aclose", None)
+            if close is not None:
+                await close()
+            provider_info = self._provider_info
+            raise LiteLLMTimeout(
+                message=f"Streaming completion exceeded {self.timeout} seconds",
+                model=self.model,
+                llm_provider=provider_info.name if provider_info is not None else "",
+            ) from error
 
         assert isinstance(ret, ModelResponse), (
             f"Expected ModelResponse, got {type(ret)}"
