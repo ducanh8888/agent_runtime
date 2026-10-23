@@ -50,6 +50,7 @@ import regex as timeout_regex
 from pydantic import BaseModel, Field, model_validator
 
 from agentrt.runtime import permissions
+from agentrt.sdk.git.utils import protected_safe_directories
 from agentrt.sdk.llm import ImageContent, TextContent
 from agentrt.sdk.tool import (
     Action,
@@ -731,8 +732,19 @@ class InspectExecutor(ToolExecutor):
 
         A repository may set any of these to a command it controls. `git -c`
         wins over every file, so the flags below are what actually decide.
+
+        The user's own `safe.directory` entries are carried over (#36): global
+        config is dropped, and without them git refuses a repository owned by
+        another account -- on Windows, any repository created from an elevated
+        shell -- even though the user trusted it. Nothing else is carried.
         """
+        trusted = [
+            arg
+            for directory in protected_safe_directories()
+            for arg in ("-c", f"safe.directory={directory}")
+        ]
         return [
+            *trusted,
             "-c",
             "core.pager=cat",
             "-c",
