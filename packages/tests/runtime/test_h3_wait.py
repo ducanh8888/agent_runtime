@@ -174,10 +174,62 @@ def test_wait_missing_id_does_not_wait_forever() -> None:
     statuses = {A: {"execution_status": "finished", "result_state": "final"}}
     client = _mock_client(_handler(statuses))
 
-    out = client.wait([A, F], mode="all", timeout=1.0, poll_interval=0.5)
+    out = client.wait([A, F], mode="all", timeout=2.0, poll_interval=0.5)
 
     assert [item["id"] for item in out["missing"]] == [F]
     assert [item["id"] for item in out["completed"]] == [A]
+    assert out["timed_out"] is False
+
+
+def test_wait_retries_transient_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    outcomes = [
+        httpx.Response(503),
+        httpx.Response(200, json={"execution_status": "running"}),
+        httpx.Response(200, json={"execution_status": "running"}),
+        httpx.Response(200, json={"execution_status": "finished"}),
+        httpx.Response(200, json={"execution_status": "finished"}),
+        httpx.Response(200, json={"execution_status": "finished"}),
+    ]
+    calls = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        if request.url.path.endswith("/agent_final_response"):
+            return httpx.Response(200, json={"response": "done", "state": "final"})
+        calls += 1
+        response = outcomes[min(calls - 1, len(outcomes) - 1)]
+        if response.status_code == 200:
+            response.json().update({"id": A})
+        return response
+
+    monkeypatch.setattr(client_mod.time, "sleep", lambda _: None)
+    client = _mock_client(handle)
+
+    out = client.wait([A], timeout=5.0, poll_interval=0.5)
+
+    assert calls == 7
+    assert [item["id"] for item in out["completed"]] == [A]
+    assert out["missing"] == []
+    assert out["timed_out"] is False
+
+
+def test_wait_confirms_missing_after_repeated_404s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(404, json={"detail": "not found"})
+
+    monkeypatch.setattr(client_mod.time, "sleep", lambda _: None)
+    client = _mock_client(handle)
+
+    out = client.wait([A], timeout=5.0, poll_interval=0.5)
+
+    assert calls == 3
+    assert [item["id"] for item in out["missing"]] == [A]
     assert out["timed_out"] is False
 
 

@@ -1383,10 +1383,7 @@ class Client:
         The public ``status`` raises on an unknown id; a wait must classify it
         as missing and keep waiting for the others instead.
         """
-        try:
-            resolved = self._resolve_session(session)
-        except ClientError:
-            return None
+        resolved = self._resolve_session(session)
         response = self._send(
             "GET",
             f"/api/conversations/{quote(resolved, safe='')}",
@@ -2793,16 +2790,29 @@ class Client:
         settled: set[str] = set()
         missing: set[str] = set()
         terminal_prev: dict[str, bool] = {}
+        missing_reads: dict[str, int] = {}
         last_seen: dict[str, dict] = {}
         timed_out = False
 
         while True:
             for session in list(pending):
-                status = self._wait_status(session)
-                if status is None:
+                try:
+                    status = self._wait_status(session)
+                except SessionNotFound:
                     missing.add(session)
                     pending.discard(session)
                     continue
+                except ClientError:
+                    missing_reads.pop(session, None)
+                    terminal_prev.pop(session, None)
+                    continue
+                if status is None:
+                    missing_reads[session] = missing_reads.get(session, 0) + 1
+                    if missing_reads[session] >= 3:
+                        missing.add(session)
+                        pending.discard(session)
+                    continue
+                missing_reads.pop(session, None)
                 last_seen[session] = status
                 terminal = _is_settled(status)
                 if terminal and terminal_prev.get(session):
