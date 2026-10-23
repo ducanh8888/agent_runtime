@@ -100,7 +100,10 @@ def main() -> int:
 
     markdown = sorted(DOCS.rglob("*.md"))
     registered = {
-        str(path.relative_to(ROOT)) for path in markdown if path != DOCS / "README.md"
+        # as_posix: manifest paths use "/", and str() gives "\" on Windows.
+        path.relative_to(ROOT).as_posix()
+        for path in markdown
+        if path != DOCS / "README.md"
     }
     for missing in sorted(registered - paths):
         errors.append(f"Markdown document missing from manifest: {missing}")

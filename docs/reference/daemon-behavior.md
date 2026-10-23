@@ -151,6 +151,14 @@ single-process daemon.
 - **Restarts.** The front answers `/health` itself and restarts a worker that
   exits. That worker's in-flight runs come back as after a daemon restart; the
   other workers are unaffected.
+- **The front dies, its workers die.** Linux uses `PR_SET_PDEATHSIG`; Windows
+  puts each worker in a kill-on-close job object, so a front killed with
+  `taskkill /F` no longer leaves its workers serving their directories beside
+  the next front's (#24). Measured: two workers survived a hard kill before,
+  none after. A worker's own children (its PowerShell terminals) are in the
+  job too and end with it.
+- **Report files** of a `readonly`/`inspect` session live under the owning
+  worker's directory; `artifacts` looks there (#31).
 - **Shared ledger.** Profiles, settings and the spend ledger stay shared in the
   state directory. Ledger updates take a file lock.
 
@@ -190,13 +198,32 @@ reasoning tokens. Its current LiteLLM price table does not map
 `deepseek-flash`, so `accumulated_cost: 0.0` means that no positive cost was
 recorded, not that the call was free. H6 owns explicit unknown-cost semantics.
 
-## Two things that bite on Windows
+## Things that bite on Windows
 
 Session titles are agent-generated and routinely contain emoji. Printing one to
 a cp1252 console raises `UnicodeEncodeError`, so any front end that writes
-session data to stdout must reconfigure it to UTF-8 first.
+session data to stdout must reconfigure it to UTF-8 first. For the same reason
+every file the runtime reads back for a client (a report through `artifacts`)
+is read as UTF-8 explicitly; the platform default there is cp1252.
 
-A dispatched workspace gets a `.git` directory created in it.
+A child process started inside the stdio MCP server inherits its stdin, which
+is the JSON-RPC pipe. On Windows such a child blocks on it: `dispatch` with
+`require="commit"` spawned `git` and hung until the client's 1800 s idle
+timeout (#36). `agentrt-mcp` now moves the protocol onto a private descriptor
+and points stdin at the null device before serving, so a child reads EOF;
+the runtime's own children also pass `stdin=DEVNULL`. Measured through a real
+stdio client: the same call hung past 20 s before, answered in 0.03 s after.
+
+A repository created from an elevated shell is owned by
+`BUILTIN\Administrators`, and git refuses it to any other account unless it is
+in `safe.directory`. The server's readonly git runner drops global config, so
+it used to refuse such a repository even when the user had trusted it, and
+`snapshot`/`isolated_worktree` dispatch failed with "Not a git repository".
+The user's `safe.directory` entries are now honoured (see
+[security-permissions.md](security-permissions.md)).
+
+A dispatched `workspace`/`broad` session's workspace gets a `.git` directory
+created in it; a `readonly`/`inspect` one does not (next section).
 
 ## Event shapes
 
@@ -345,19 +372,25 @@ aliases to its protected state files. Clients should still reject absolute and
 escaping paths before constructing a URL so a normalising HTTP client cannot
 change what the caller intended to address.
 
-### The daemon runs `git init` in the workspace
+### The daemon runs `git init` in a writer's workspace
 
-Starting a conversation initialises the working directory as a git repository if
-it is not one already, and does nothing if it is. Observed, then confirmed in
-`event_service.py`: the `/api/git/changes` endpoint needs a real repository to
-compute against. No commit is made.
+Starting a new `workspace` or `broad` conversation initialises the working
+directory as a git repository if it is not one already, and does nothing if it
+is. Observed, then confirmed in `event_service.py`: the `/api/git/changes`
+endpoint needs a real repository to compute against. No commit is made.
 
-The runtime client no longer creates a missing workspace: `dispatch` refuses a
+A `readonly` or `inspect` conversation, and any resumed conversation (whose
+agent the server does not know at that point), no longer does this (#38): a
+read-only audit pointed at the parent of several repositories turned that
+parent into an empty repository. The git routes answer `[]` for a directory
+that is not a repository. This is an AgentRT edit in the vendored server; it
+keys on the `permission` tool parameter the runtime's presets carry.
+
+The runtime client does not create a missing workspace: `dispatch` refuses a
 path that does not exist unless `create_workspace` is set (shared mode only), so
-a typo is no longer turned into an empty repository (issue #3). This server
-behaviour for an existing non-git directory is unchanged.
+a typo is not turned into an empty repository (issue #3).
 
-Two consequences. A directory pointed at for the first time acquires a `.git`,
+Two consequences. A directory a writer is pointed at for the first time acquires a `.git`,
 which is why `artifacts` prunes that name. The current server exposes guarded
 `/api/git/changes`, `/api/git/diff` and archive routes; older installed builds
 may lack them, so `server_info`/version must be checked before relying on them.
