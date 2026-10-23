@@ -23,6 +23,18 @@ class EditorToolParameterMissingError(ToolError):
         self.message: str = (
             f"Parameter `{parameter}` is required for command: {command}."
         )
+        if parameter in _LONG_TEXT_PARAMETERS:
+            # AgentRT fork (#33): a long value can be lost before it reaches
+            # the tool, and the model then repeated the same call until stuck.
+            self.message += (
+                f" If you did send `{parameter}`, it was probably too long and"
+                " was cut off on the way: split the change into several smaller"
+                " edits (a few KB each), or write the content to a file with the"
+                " terminal instead of repeating this call."
+            )
+
+
+_LONG_TEXT_PARAMETERS = frozenset({"new_str", "file_text"})
 
 
 class EditorToolParameterInvalidError(ToolError):

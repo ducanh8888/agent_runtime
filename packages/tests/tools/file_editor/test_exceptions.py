@@ -28,6 +28,13 @@ def test_editor_tool_parameter_missing_error():
     )
 
 
+def test_missing_long_text_parameter_says_it_may_have_been_cut_off():
+    """#33: a model kept resending a large new_str it believed it had sent."""
+    message = EditorToolParameterMissingError("str_replace", "new_str").message
+    assert message.startswith("Parameter `new_str` is required")
+    assert "too long" in message and "smaller" in message
+
+
 def test_editor_tool_parameter_invalid_error_with_hint():
     """Test EditorToolParameterInvalidError with hint."""
     parameter = "timeout"
