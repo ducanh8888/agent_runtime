@@ -121,3 +121,13 @@ def test_mcp_tool_forwards_include_reasoning(monkeypatch) -> None:
 
     mcp_server.transcript(SESSION, include_reasoning=True)
     assert captured["include_reasoning"] is True
+
+
+def test_a_terminal_action_shows_its_command() -> None:
+    """#34: a hung terminal call showed an empty thought and nothing else."""
+    item = _action_item()
+    item["tool_name"] = "terminal"
+    item["action"] = {"command": "python -c 'print(1)"}
+    events = _client([item]).transcript(SESSION)["events"]
+
+    assert events[0]["command"] == "python -c 'print(1)"

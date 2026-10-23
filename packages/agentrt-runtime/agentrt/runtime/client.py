@@ -616,6 +616,14 @@ def _add_action_location(entry: dict, action: object) -> None:
         bounds = [value for value in view_range if isinstance(value, int)][:2]
         if bounds:
             entry["range"] = bounds
+    # A terminal action's command, bounded (#34): without it a call that hangs
+    # shows only an empty thought, and nobody can tell what it is waiting on.
+    command = action.get("command")
+    if isinstance(command, str) and command:
+        entry["command"] = _capped(command, _COMMAND_CAP)
+
+
+_COMMAND_CAP = 300
 
 
 #: Tool names whose observations can carry file-read evidence. Matches the
