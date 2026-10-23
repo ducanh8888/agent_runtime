@@ -29,6 +29,8 @@ TIMEOUT_MESSAGE_TEMPLATE: Final[str] = (
 
 # How long to wait with no new output before considering it a no-change timeout
 NO_CHANGE_TIMEOUT_SECONDS: Final[int] = 30
+# A command run with an explicit timeout still returns after this long silent.
+BLOCKING_NO_CHANGE_TIMEOUT_SECONDS: Final[int] = 300
 
 # How often to poll for new output in seconds
 POLL_INTERVAL: Final[float] = 0.5

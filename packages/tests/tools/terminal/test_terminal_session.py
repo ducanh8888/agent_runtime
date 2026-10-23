@@ -1155,3 +1155,24 @@ def test_pager_does_not_hijack_terminal(tmp_path, terminal_type):
         assert "diff --git" not in obs.text
     finally:
         session.close()
+
+
+@pytest.mark.timeout(60)
+def test_a_silent_blocking_command_returns_before_its_hard_timeout(monkeypatch):
+    """#34: a command waiting on stdin sat silent until its hard timeout."""
+    monkeypatch.setattr(
+        "agentrt.tools.terminal.terminal.terminal_session."
+        "BLOCKING_NO_CHANGE_TIMEOUT_SECONDS",
+        2,
+    )
+    session = create_terminal_session(work_dir=os.getcwd())
+    session.initialize()
+    started = time.time()
+
+    obs = session.execute(TerminalAction(command="cat", timeout=40))
+
+    assert time.time() - started < 20
+    assert session.prev_status == TerminalCommandStatus.NO_CHANGE_TIMEOUT
+    assert "no new output after 2 seconds" in obs.metadata.suffix
+    session.execute(TerminalAction(command="C-c", is_input=True))
+    session.close()

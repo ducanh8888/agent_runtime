@@ -7,6 +7,7 @@ from enum import Enum
 from agentrt.sdk.logger import get_logger
 from agentrt.sdk.utils import maybe_truncate
 from agentrt.tools.terminal.constants import (
+    BLOCKING_NO_CHANGE_TIMEOUT_SECONDS,
     CMD_OUTPUT_PS1_END,
     MAX_CMD_OUTPUT_SIZE,
     NO_CHANGE_TIMEOUT_SECONDS,
@@ -296,6 +297,7 @@ class TerminalSession(TerminalSessionBase):
         command: str,
         terminal_content: str,
         ps1_matches: list[re.Match],
+        action_timeout: float | None = None,
     ) -> TerminalObservation:
         """Handle a command that timed out due to no output change."""
         self.prev_status = TerminalCommandStatus.NO_CHANGE_TIMEOUT
@@ -310,9 +312,14 @@ class TerminalSession(TerminalSessionBase):
             terminal_content, ps1_matches
         )
         metadata = CmdOutputMetadata()  # No metadata available
+        quiet = (
+            BLOCKING_NO_CHANGE_TIMEOUT_SECONDS
+            if action_timeout is not None
+            else self.no_change_timeout_seconds
+        )
         metadata.suffix = (
             f"\n[The command has no new output after "
-            f"{self.no_change_timeout_seconds} seconds. {TIMEOUT_MESSAGE_TEMPLATE}]"
+            f"{quiet} seconds. {TIMEOUT_MESSAGE_TEMPLATE}]"
         )
         command_output = self._get_command_output(
             command,
@@ -605,15 +612,22 @@ class TerminalSession(TerminalSessionBase):
                 f"CHECKING NO CHANGE TIMEOUT ({self.no_change_timeout_seconds}s): "
                 f"elapsed {time_since_last_change}. Action blocking: {is_blocking}"
             )
-            if (
-                not is_blocking
-                and self.no_change_timeout_seconds is not None
-                and time_since_last_change >= self.no_change_timeout_seconds
-            ):
+            # AgentRT fork (#34): a blocking command still returns once it has
+            # printed nothing for BLOCKING_NO_CHANGE_TIMEOUT_SECONDS. One left
+            # waiting on stdin (an unbalanced quote) otherwise sat silent until
+            # its hard timeout, 7-17 minutes, with nothing telling it apart
+            # from a slow test run; the agent can still choose to keep waiting.
+            quiet_limit = (
+                BLOCKING_NO_CHANGE_TIMEOUT_SECONDS
+                if is_blocking
+                else self.no_change_timeout_seconds
+            )
+            if quiet_limit is not None and time_since_last_change >= quiet_limit:
                 obs = self._handle_nochange_timeout_command(
                     command,
                     terminal_content=cur_terminal_output,
                     ps1_matches=ps1_matches,
+                    action_timeout=action.timeout,
                 )
                 return obs
 
