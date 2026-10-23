@@ -30,6 +30,7 @@ def state(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         "AGENTRT_9ROUTER_BASE_URL",
         "AGENTRT_LLM_PROFILES",
         "AGENTRT_HARD_MODEL",
+        "AGENTRT_MAX_OUTPUT_TOKENS",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
@@ -79,6 +80,7 @@ def test_saved_llm_profile_carries_the_router_neutral_contract(state) -> None:
     assert dumped["model"] == "openai/agentrt-worker"
     assert dumped["usage_id"] == "agent"
     assert dumped["api_mode"] == "chat"
+    assert dumped["max_output_tokens"] == 32_000
     assert dumped["reasoning_effort"] == "high"
     assert dumped["capability_overrides"] == {}
     assert dumped["litellm_extra_body"] == {}
@@ -89,6 +91,26 @@ def test_saved_llm_profile_carries_the_router_neutral_contract(state) -> None:
     # name matches no known pattern, so the SDK's own capability detection
     # resolves conservatively.
     assert llm._model_features().supports_reasoning_effort is False
+
+
+def test_output_token_limit_override_refreshes_saved_profiles(
+    state, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_MAX_OUTPUT_TOKENS", "1234")
+    bootstrap.ensure_profiles()
+    llm_store = get_llm_profile_store()
+    saved = llm_store.load("default")
+    assert saved.max_output_tokens == 1234
+
+    llm_store.save(
+        "default",
+        saved.model_copy(update={"max_output_tokens": 5678}),
+        include_secrets=True,
+    )
+    monkeypatch.setenv("AGENTRT_MAX_OUTPUT_TOKENS", "2345")
+    bootstrap.ensure_profiles()
+
+    assert llm_store.load("default").max_output_tokens == 2345
 
 
 def test_fast_path_migrates_base_created_switch_llm_off(state) -> None:

@@ -123,6 +123,7 @@ def _build_llm(router: config.RouterConfig):
         api_key=SecretStr(router.api_key),
         usage_id=LLM_USAGE_ID,
         api_mode=LLM_API_MODE,
+        max_output_tokens=config.default_max_output_tokens(),
     )
 
 
@@ -402,7 +403,13 @@ def _sync_named_profiles(agent_store) -> None:
                 current.model,
                 current.base_url,
                 current.api_key,
-            ) != (wanted.model, wanted.base_url, wanted.api_key):
+                current.max_output_tokens,
+            ) != (
+                wanted.model,
+                wanted.base_url,
+                wanted.api_key,
+                wanted.max_output_tokens,
+            ):
                 llm_store.save(profile_name, wanted, include_secrets=True)
                 _tighten(_use_state_dir() / "profiles" / f"{profile_name}.json")
             for preset in permissions.PRESETS:
@@ -454,6 +461,7 @@ def _refresh_llm_profile(state: Path) -> None:
         current.model == wanted.model
         and current.base_url == wanted.base_url
         and current.api_key == wanted.api_key
+        and current.max_output_tokens == wanted.max_output_tokens
     ):
         return
     store.save(LLM_PROFILE_NAME, wanted, include_secrets=True)

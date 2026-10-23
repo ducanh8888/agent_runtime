@@ -14,6 +14,16 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ITERATIONS = 100_000
+DEFAULT_MAX_OUTPUT_TOKENS = 32_000
+
+
+def default_max_output_tokens() -> int:
+    """Default output-token budget, overrideable by the dispatcher environment."""
+    raw = os.environ.get("AGENTRT_MAX_OUTPUT_TOKENS", "").strip()
+    try:
+        return max(1, int(raw)) if raw else DEFAULT_MAX_OUTPUT_TOKENS
+    except ValueError:
+        return DEFAULT_MAX_OUTPUT_TOKENS
 
 
 def default_max_iterations() -> int:

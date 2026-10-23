@@ -535,10 +535,10 @@ def test_llm_completion_with_custom_params(mock_completion, default_config):
     # Create config with custom parameters
     custom_config = LLM(
         usage_id="test-llm",
-        model="gpt-4o",
+        model="openai/agentrt-worker",
         api_key=SecretStr("test_key"),
         temperature=0.8,
-        max_output_tokens=500,
+        max_output_tokens=32_000,
         top_p=0.9,
     )
 
@@ -559,7 +559,7 @@ def test_llm_completion_with_custom_params(mock_completion, default_config):
     # Verify that custom parameters were used in the call
     call_kwargs = mock_completion.call_args[1]
     assert call_kwargs.get("temperature") == 0.8
-    assert call_kwargs.get("max_completion_tokens") == 500
+    assert call_kwargs.get("max_completion_tokens") == 32_000
     assert call_kwargs.get("top_p") == 0.9
 
 
