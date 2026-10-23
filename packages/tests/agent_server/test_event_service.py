@@ -2323,6 +2323,50 @@ class TestEventServiceStartWithRunningStatus:
         assert marker.exists()
         assert marker.read_text() == "preexisting"
 
+    @pytest.mark.skipif(not shutil.which("git"), reason="git executable not found")
+    @pytest.mark.parametrize("permission", ["readonly", "inspect", None])
+    @pytest.mark.asyncio
+    async def test_start_does_not_git_init_for_read_only_or_resumed_sessions(
+        self, event_service, tmp_path, permission
+    ):
+        """AgentRT #38: a read-only session (or a resume, whose agent is not
+        known here) must not create a repository in the user's directory."""
+        from agentrt.sdk.tool import Tool
+
+        event_service.conversations_dir = tmp_path
+        (tmp_path / event_service.stored.id.hex).mkdir(parents=True, exist_ok=True)
+        workspace_dir = tmp_path / "not_a_repo"
+        workspace_dir.mkdir()
+        event_service.stored.workspace = LocalWorkspace(working_dir=str(workspace_dir))
+        if permission is None:
+            event_service.agent = None
+            (tmp_path / event_service.stored.id.hex / "base_state.json").write_text(
+                "{}"
+            )
+        else:
+            event_service.agent = event_service.agent.model_copy(
+                update={
+                    "tools": [
+                        Tool(name="file_editor", params={"permission": permission})
+                    ]
+                }
+            )
+
+        with patch(
+            "agentrt.agent_server.event_service.LocalConversation"
+        ) as MockConversation:
+            mock_conv = MagicMock()
+            mock_state = MagicMock()
+            mock_state.execution_status = ConversationExecutionStatus.IDLE
+            mock_state.events = []
+            mock_conv.agent.get_all_llms.return_value = []
+            mock_conv._state = mock_state
+            mock_conv.state = mock_state
+            MockConversation.return_value = mock_conv
+            await event_service.start()
+
+        assert not (workspace_dir / ".git").exists()
+
 
 class TestEventServiceConcurrentSubscriptions:
     """Test cases for concurrent subscription handling without deadlocks.

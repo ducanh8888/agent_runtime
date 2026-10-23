@@ -202,6 +202,14 @@ def _without_agent_context_secret(
     )
 
 
+def _is_read_only_agent(agent: AgentBase) -> bool:
+    """AgentRT fork (#38): the runtime's `readonly`/`inspect` presets carry
+    their permission as a tool parameter (see agentrt.runtime.bootstrap)."""
+    return any(
+        tool.params.get("permission") in ("readonly", "inspect") for tool in agent.tools
+    )
+
+
 @dataclass
 class EventService:
     """
@@ -1276,6 +1284,11 @@ class EventService:
 
     @staticmethod
     def _ensure_workspace_is_git_repo(working_dir: Path) -> None:
+        # AgentRT fork (#38): `start` calls this only for a new conversation
+        # whose agent may write. A read-only session must not leave a
+        # repository behind in the user's directory, and on resume the agent
+        # is not known here -- a writer's workspace was initialised when it
+        # was created. The git routes already answer [] for a non-repository.
         """Initialize the workspace as a git repo if it isn't already one.
 
         The /api/git/changes endpoint expects a real repository to compute
@@ -1327,7 +1340,8 @@ class EventService:
             self._verify_pinned_workspace(working_dir, pinned_sha)
         else:
             working_dir.mkdir(parents=True, exist_ok=True)
-            self._ensure_workspace_is_git_repo(working_dir)
+            if self.agent is not None and not _is_read_only_agent(self.agent):
+                self._ensure_workspace_is_git_repo(working_dir)
         # base_state.json is the single source of truth for the agent. On resume
         # (base_state exists) pass ``agent=None`` so LocalConversation keeps the
         # persisted agent. On a new conversation the creating caller supplied the
