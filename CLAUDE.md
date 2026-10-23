@@ -14,7 +14,9 @@ what is specific to running Claude Code against this checkout.
    worked on, what is done, and what was deliberately declined.
 4. `packages/AGENTS.md` and `packages/agentrt-server/AGENTS.md` before editing
    anything under those trees. Those are **upstream** guidance carried along by
-   the fork, not this project's conventions.
+   the fork, not this project's conventions. In particular, ignore their
+   "add `Co-authored-by: openhands`" commit rule: this repository's commits
+   never carry that trailer (see AGENTS.md, "Before committing").
 
 ## Two things about this checkout that bite
 

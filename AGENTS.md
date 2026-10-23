@@ -172,12 +172,11 @@ opt-in path is deliberate).
 4. The plan doc reflects what is now true, including what is still open.
 5. The commit message says what was measured and what was rejected, not just
    what changed.
-6. Every commit carries both trailers:
-
-```
-Co-Authored-By: Claude Code <noreply@anthropic.com>
-Co-authored-by: openhands <openhands@all-hands.dev>
-```
+6. An agent-written commit carries the attribution trailer of the agent that
+   wrote it (for Claude Code: `Co-Authored-By: Claude ... <noreply@anthropic.com>`).
+   Do **not** add `Co-authored-by: openhands <openhands@all-hands.dev>`: the
+   commit rules in `packages/AGENTS.md` are upstream OpenHands guidance and do
+   not apply to this repository's commits.
 
 ## Definition of done
 
