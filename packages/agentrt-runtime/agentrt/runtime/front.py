@@ -77,6 +77,74 @@ def _die_with_parent() -> None:
     ctypes.CDLL(None).prctl(pr_set_pdeathsig, signal.SIGTERM)
 
 
+def _kill_on_close_job() -> int | None:
+    """Windows: a job object whose workers die when the front does, even by kill.
+
+    The Windows counterpart of `_die_with_parent`. Windows does not end children
+    with their parent, so a hard-killed front left its workers serving their
+    conversations directories, and the next front started second owners beside
+    them. The handle is never closed: the front's exit closes it, and that kill
+    is the point. None if the job cannot be set up; the front still runs.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class BasicLimits(ctypes.Structure):
+        _fields_ = (
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        )
+
+    class ExtendedLimits(ctypes.Structure):
+        _fields_ = (
+            ("BasicLimitInformation", BasicLimits),
+            ("IoInfo", ctypes.c_uint64 * 6),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        )
+
+    job_object_limit_kill_on_job_close = 0x2000
+    job_object_extended_limit_information = 9
+    kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    limits = ExtendedLimits()
+    limits.BasicLimitInformation.LimitFlags = job_object_limit_kill_on_job_close
+    if not kernel32.SetInformationJobObject(
+        wintypes.HANDLE(job),
+        job_object_extended_limit_information,
+        ctypes.byref(limits),
+        ctypes.sizeof(limits),
+    ):
+        kernel32.CloseHandle(wintypes.HANDLE(job))
+        return None
+    return job
+
+
+def _assign_to_job(job: int, proc: subprocess.Popen) -> bool:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
+    handle = getattr(proc, "_handle")
+    return bool(
+        kernel32.AssignProcessToJobObject(
+            wintypes.HANDLE(job), wintypes.HANDLE(int(handle))
+        )
+    )
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -114,6 +182,7 @@ class Front:
     def __post_init__(self) -> None:
         self.workers = [Worker(index) for index in range(self.count)]
         self._next = itertools.cycle(range(self.count))
+        self._job = _kill_on_close_job() if os.name == "nt" else None
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0))
 
     # ----- worker processes -------------------------------------------------
@@ -149,6 +218,12 @@ class Front:
             env=env,
             **popen_kwargs,
         )
+        if self._job is not None and not _assign_to_job(self._job, worker.proc):
+            print(
+                f"front: worker {worker.index} is not in the kill-on-close job; "
+                "it will outlive a hard-killed front",
+                flush=True,
+            )
         print(
             f"front: worker {worker.index} pid={worker.proc.pid} port={worker.port}",
             flush=True,
