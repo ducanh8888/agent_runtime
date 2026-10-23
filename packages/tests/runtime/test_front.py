@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -137,3 +140,43 @@ def test_health_waits_for_every_worker(front) -> None:
     workers: list[Worker] = client.front.workers  # type: ignore[attr-defined]
     workers[1].ready = False
     assert client.get("/health").status_code == 503
+
+
+_JOB_PARENT = """
+import subprocess, sys, time
+from agentrt.runtime import front
+job = front._kill_on_close_job()
+child = subprocess.Popen(
+    [sys.executable, "-c", "import time; time.sleep(120)"],
+    stdin=subprocess.DEVNULL,
+)
+assert job is not None and front._assign_to_job(job, child)
+print(child.pid, flush=True)
+time.sleep(120)
+"""
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows job objects")
+def test_workers_die_when_the_front_is_hard_killed() -> None:
+    """Windows does not end children with their parent: without the job, a
+    `taskkill /F` of the front left every worker running (#24)."""
+    parent = subprocess.Popen(
+        [sys.executable, "-c", _JOB_PARENT],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert parent.stdout is not None
+    child_pid = int(parent.stdout.readline())
+    subprocess.run(["taskkill", "/PID", str(parent.pid), "/F"], capture_output=True)
+    parent.wait(timeout=30)
+
+    from agentrt.runtime import daemon
+
+    deadline = time.monotonic() + 15
+    while daemon._process_alive(child_pid) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    alive = daemon._process_alive(child_pid)
+    if alive:
+        subprocess.run(["taskkill", "/PID", str(child_pid), "/F"], capture_output=True)
+    assert not alive
