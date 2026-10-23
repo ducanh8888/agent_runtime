@@ -8,7 +8,8 @@ dependencies = [
   "aiosqlite>=0.19",
   "alembic>=1.13",
   "docker>=7.1,<8",
-  "fastapi>=0.104",
+  # AgentRT fork (#43): Keep the FastAPI range within a tested release.
+  "fastapi>=0.104,<0.163",
   "agentrt-sdk",
   # api.py imports libtmux directly. It was declared only by agentrt-tools,
   # which this package does not depend on, so installing the server without

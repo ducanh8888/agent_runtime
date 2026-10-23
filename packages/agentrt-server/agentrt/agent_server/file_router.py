@@ -966,7 +966,8 @@ async def search_subdirs(
     ] = None,
     limit: Annotated[
         int,
-        Query(title="The max number of results in the page", gt=0, lte=100),
+        # AgentRT fork (#43): FastAPI uses `le`, not `lte`.
+        Query(title="The max number of results in the page", gt=0, le=100),
     ] = 100,
     include_hidden: Annotated[
         bool,

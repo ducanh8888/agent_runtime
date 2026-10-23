@@ -212,10 +212,9 @@ def test_search_conversations_limit_validation(client, mock_conversation_service
         response = client.get("/api/conversations/search", params={"limit": 0})
         assert response.status_code == 422
 
-        # Test limit too high - endpoint has FastAPI validation (lte=100) and assertion
-        # The assertion in the endpoint will cause an AssertionError to be raised
-        with pytest.raises(AssertionError):
-            response = client.get("/api/conversations/search", params={"limit": 101})
+        # Test limit too high (le=100 means 101 should fail validation).
+        response = client.get("/api/conversations/search", params={"limit": 101})
+        assert response.status_code == 422
 
         # Test valid limit
         mock_conversation_service.search_conversations.return_value = ConversationPage(
@@ -2824,9 +2823,7 @@ def test_search_conversations_forwards_tag_and_id_prefix_filters(
             id_prefix="3fe7d863",
         )
 
-        bad = client.get(
-            "/api/conversations/search", params={"tag": "batch"}
-        )
+        bad = client.get("/api/conversations/search", params={"tag": "batch"})
         assert bad.status_code == 422
     finally:
         client.app.dependency_overrides.clear()
