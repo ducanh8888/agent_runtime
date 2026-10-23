@@ -302,6 +302,8 @@ def _git_head(workspace: str) -> str:
         result = subprocess.run(
             ["git", "-C", workspace, "rev-parse", "HEAD"],
             check=True,
+            # Inside the stdio MCP server, stdin is the protocol pipe (#36).
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
         )
