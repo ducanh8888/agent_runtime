@@ -353,6 +353,13 @@ def _daemon_env(token: str) -> dict[str, str]:
     process.
     """
     env = os.environ.copy()
+    try:
+        dotenv = config.read_dotenv(config.config_file())
+    except OSError:
+        dotenv = {}
+    for name, value in dotenv.items():
+        if name.startswith("AGENTRT_"):
+            env.setdefault(name, value)
     env["AGENTRT_SESSION_API_KEYS_0"] = token
     # The vendored SDK defaults its state directory to ~/.agentrt on every
     # platform, while config.state_dir() follows the Windows convention.

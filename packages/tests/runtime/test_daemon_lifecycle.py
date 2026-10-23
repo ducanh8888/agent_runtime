@@ -51,6 +51,21 @@ def test_daemon_env_sets_noninteractive_defaults(monkeypatch):
     assert {name: env[name] for name in names} == names
 
 
+def test_daemon_env_loads_state_dotenv_with_process_env_priority(monkeypatch):
+    config.config_file().write_text(
+        "AGENTRT_MAX_CONCURRENT_RUNS=23\nAGENTRT_WORKERS=4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("AGENTRT_MAX_CONCURRENT_RUNS", raising=False)
+    monkeypatch.delenv("AGENTRT_WORKERS", raising=False)
+    monkeypatch.setenv("AGENTRT_MAX_CONCURRENT_RUNS", "7")
+
+    env = daemon._daemon_env("token")
+
+    assert env["AGENTRT_MAX_CONCURRENT_RUNS"] == "7"
+    assert env["AGENTRT_WORKERS"] == "4"
+
+
 def test_daemon_env_preserves_operator_override(monkeypatch):
     monkeypatch.setenv("GIT_EDITOR", "vim")
     assert daemon._daemon_env("token")["GIT_EDITOR"] == "vim"
