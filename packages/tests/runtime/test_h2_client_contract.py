@@ -588,6 +588,26 @@ def test_artifacts_lists_reports_alongside_workspace_files(
     assert listing["outcome"] == client_mod.ARTIFACTS_UNAVAILABLE
 
 
+def test_artifacts_lists_reports_of_a_session_owned_by_another_worker(
+    tmp_path, monkeypatch
+) -> None:
+    """#31: under AGENTRT_WORKERS>1 worker k persists to `conversations-wk`."""
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+    reports_dir = tmp_path / "conversations-w4" / uuid.UUID(SESSION).hex / "reports"
+    reports_dir.mkdir(parents=True)
+    # Non-ASCII on purpose: Windows' default encoding is not UTF-8.
+    report = '{"note": "kiểm tra — ✓"}\n'
+    (reports_dir / "proposals.jsonl").write_text(report, encoding="utf-8")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_conversation())
+
+    listing = _mock_client(handler).artifacts(SESSION)
+    assert [entry["path"] for entry in listing["reports"]] == ["proposals.jsonl"]
+    content = _mock_client(handler).artifacts(SESSION, path="proposals.jsonl")
+    assert content.get("content") == report, content
+
+
 def test_artifacts_no_reports_directory_is_empty_list(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
 

@@ -165,9 +165,18 @@ def _reports_dir(resolved: str) -> str:
     directory), computed here rather than asked of the daemon because the
     daemon runs on this machine -- the same reasoning `artifacts` already
     uses for the workspace scan itself. H8 item 7, 2026-09-17.
+
+    Under ``AGENTRT_WORKERS`` > 1 worker k persists to ``conversations-wk``
+    (see ``front.conversations_dir``), so the owner is whichever directory
+    holds the conversation (#31).
     """
-    conversation_dir = config.state_dir() / "conversations" / uuid.UUID(resolved).hex
-    return str(conversation_dir / "reports")
+    state = config.state_dir()
+    hex_id = uuid.UUID(resolved).hex
+    candidates = [state / "conversations", *sorted(state.glob("conversations-w*"))]
+    owner = next(
+        (root for root in candidates if (root / hex_id).is_dir()), candidates[0]
+    )
+    return str(owner / hex_id / "reports")
 
 
 def _list_reports(resolved: str) -> list[dict]:
@@ -3488,7 +3497,7 @@ class Client:
                     approved = None
                 if approved is not None and approved.is_file():
                     try:
-                        content = approved.read_text()
+                        content = approved.read_text(encoding="utf-8")
                     except (OSError, UnicodeDecodeError) as exc:
                         raise ClientError(f"could not read {path!r}: {exc}") from exc
                     return {
