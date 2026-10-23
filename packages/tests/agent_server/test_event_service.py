@@ -2276,6 +2276,38 @@ class TestEventServiceStartWithRunningStatus:
 
     @pytest.mark.skipif(not shutil.which("git"), reason="git executable not found")
     @pytest.mark.asyncio
+    async def test_start_leaves_an_existing_non_repo_directory_alone(
+        self, event_service, tmp_path
+    ):
+        """#38: a user's existing directory must never be `git init`-ed."""
+        event_service.conversations_dir = tmp_path
+        (tmp_path / event_service.stored.id.hex).mkdir(parents=True, exist_ok=True)
+        workspace_dir = tmp_path / "users_projects"
+        (workspace_dir / "notes").mkdir(parents=True)
+        event_service.stored.workspace = LocalWorkspace(working_dir=str(workspace_dir))
+
+        with patch(
+            "agentrt.agent_server.event_service.LocalConversation"
+        ) as MockConversation:
+            mock_conv = MagicMock()
+            mock_state = MagicMock()
+            mock_agent = MagicMock()
+            mock_state.execution_status = ConversationExecutionStatus.IDLE
+            mock_state.events = []
+            mock_state.stats = MagicMock()
+            mock_agent.get_all_llms.return_value = []
+            mock_conv._state = mock_state
+            mock_conv.state = mock_state
+            mock_conv.agent = mock_agent
+            mock_conv._on_event = MagicMock()
+            MockConversation.return_value = mock_conv
+
+            await event_service.start()
+
+        assert not (workspace_dir / ".git").exists()
+
+    @pytest.mark.skipif(not shutil.which("git"), reason="git executable not found")
+    @pytest.mark.asyncio
     async def test_start_is_idempotent_for_already_initialized_repo(
         self, event_service, tmp_path
     ):

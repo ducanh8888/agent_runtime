@@ -1326,8 +1326,14 @@ class EventService:
         if self.stored.workspace_mode != "shared" and pinned_sha:
             self._verify_pinned_workspace(working_dir, pinned_sha)
         else:
+            # AgentRT fork (#38): only a workspace that is new (missing or
+            # empty) is made a repository. `git init` in an existing user
+            # directory turned it into a repo nobody asked for -- once in the
+            # parent of many separate repos, for a read-only inspect session.
+            fresh = not working_dir.exists() or not any(working_dir.iterdir())
             working_dir.mkdir(parents=True, exist_ok=True)
-            self._ensure_workspace_is_git_repo(working_dir)
+            if fresh:
+                self._ensure_workspace_is_git_repo(working_dir)
         # base_state.json is the single source of truth for the agent. On resume
         # (base_state exists) pass ``agent=None`` so LocalConversation keeps the
         # persisted agent. On a new conversation the creating caller supplied the
