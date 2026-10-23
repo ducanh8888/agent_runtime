@@ -99,6 +99,56 @@ def test_status_and_diff_and_log_and_show_all_work(repo: Path, state_dir: Path) 
     assert "hello" in (show.stdout or "")
 
 
+@pytest.fixture
+def foreign_owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Git treats every repository as owned by someone else (#36).
+
+    On Windows that is a repository created from an elevated shell, owned by
+    BUILTIN\\Administrators. Returns the global config file the user would add
+    `safe.directory` to.
+    """
+    from agentrt.sdk.git import utils as git_utils
+
+    global_config = tmp_path / "global.gitconfig"
+    global_config.write_text("", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.setattr(git_utils, "_safe_directories_cache", None, raising=False)
+    sanitized = inspect_tools.InspectExecutor._git_env
+    monkeypatch.setattr(
+        inspect_tools.InspectExecutor,
+        "_git_env",
+        lambda self, git: {
+            **sanitized(self, git),
+            "GIT_TEST_ASSUME_DIFFERENT_OWNER": "1",
+        },
+    )
+    return global_config
+
+
+def test_status_works_in_a_foreign_repo_the_user_trusted(
+    repo: Path, state_dir: Path, foreign_owner: Path
+) -> None:
+    _git(
+        "config",
+        "--file",
+        str(foreign_owner),
+        "--add",
+        "safe.directory",
+        repo.resolve().as_posix(),
+        cwd=repo,
+    )
+    status = _run(repo, git_command="status")
+    assert status.exit_code == 0, status.text
+
+
+def test_status_still_refuses_an_untrusted_foreign_repo(
+    repo: Path, state_dir: Path, foreign_owner: Path
+) -> None:
+    status = _run(repo, git_command="status")
+    assert status.is_error
+    assert "dubious ownership" in status.text
+
+
 def test_git_argv_disables_the_execution_surfaces(repo: Path, state_dir: Path) -> None:
     diff = _run(repo, git_command="diff")
     argv = diff.argv

@@ -581,3 +581,31 @@ executable, so it is documented rather than worked around in-process (#20), and 
 is inlined into the first message — its header now says so, because a task phrased as "read the
 attached file" was being answered *about* the attachment with zero tool calls (#8).
 Client-facing rule that came out of it: filter server-side, never page the catalog.
+
+## 16. Windows issues re-verified on a Windows 10 host (2026-10-24)
+
+Each open issue reported from a Windows host was reproduced on this machine
+(Windows 10, Python 3.13, git 2.47.0.windows.1) before it was changed, and each
+change has a test that fails without it.
+
+| Issue | Reproduced | Change | Measured after |
+|---|---|---|---|
+| #36 (hang) | A FastMCP stdio server whose tool runs `client._git_head` (what `require="commit"` does) never answered: 20 s client deadline, then the pipe broke. Cause: the child inherits stdin, which is the JSON-RPC pipe (CPython gh-78961; fixed upstream only in mcp 2.x, and we pin `<2`). | `agentrt-mcp` serves the protocol from a private duplicate and points fd 0 at the null device before `mcp.run()`; the runtime's own children (`git`, `icacls`, `taskkill`, PowerShell) pass `stdin=DEVNULL`. | Same harness: 0.03-0.11 s per call. Real `agentrt-mcp` against a source daemon: `dispatch(require="commit")` returned in 15.6 s, cold daemon included. |
+| #36 ("Not a git repository") | `validate_git_repository` on a repository owned by `BUILTIN\Administrators` that is in the user's global `safe.directory`: refused, "dubious ownership". The readonly runner sets `GIT_CONFIG_GLOBAL` to the null device and drops `safe.directory` with the rest. | Vendored `agentrt-sdk` git utils (operator-approved): the user's system/global `safe.directory` entries, and only those, are passed back as `-c` arguments; same in `inspect_tools`. | The same repository validates, resolves HEAD, and `inspect git log` works. An untrusted foreign repository is still refused (test). |
+| #38 | Shared-mode dispatch into a non-git directory created `.git` regardless of preset. | Vendored server (operator-approved): no auto `git init` for a `readonly`/`inspect` agent or on resume. | E2E: `readonly` dispatch into a plain directory, no `.git` after the session started. |
+| #31 | `artifacts` looked for reports under `conversations/` only. | It uses the directory that holds the conversation (`conversations-wk`). Found alongside: report content was read with the platform encoding (cp1252 on Windows), so UTF-8 came back as mojibake; now read as UTF-8. | E2E on a 2-worker daemon: a session on worker 1, its report listed and read back intact. |
+| #24 (Windows item) | A 2-worker front killed with `taskkill /F`: both workers kept running. | The front puts each worker in a kill-on-close job object. | Same probe: no worker survives. |
+
+Also fixed: `tools/check_docs.py` compared `str()` paths (backslashes on Windows)
+with the manifest's `/` paths and failed every document on Windows.
+
+Not verified end to end: a `snapshot` dispatch of an Administrators-owned
+repository, because that adds a worktree to a third-party repository on this
+host; the worktree itself is created with ambient git config, which already
+honoured `safe.directory`. Pre-existing on Windows, unchanged here: 17
+`tests/sdk/git` failures (paths and `/bin/sh` helpers) and
+`test_restart_resumes_conversations_after_non_graceful_shutdown` /
+`test_a_run_request_dropped_by_an_interrupt_is_recovered` fail identically on
+`main`. Still open: #35's client-side rejection is not transactional with
+session creation (not Windows-specific); its hung recurrences match the stdin
+inheritance above but were not re-run against the reporter's setup.

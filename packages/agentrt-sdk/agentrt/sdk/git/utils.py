@@ -3,6 +3,8 @@ import os
 import re
 import shlex
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -143,6 +145,57 @@ _READONLY_HARDENING_CONFIG: tuple[str, ...] = (
 
 _READONLY_GLOBAL_FLAGS = frozenset({"--no-pager", "--no-optional-locks"})
 
+_SAFE_DIRECTORIES_TTL_SECONDS = 60.0
+_safe_directories_cache: tuple[float, tuple[str, ...]] | None = None
+
+
+def protected_safe_directories() -> tuple[str, ...]:
+    """The user's ``safe.directory`` entries from system and global config.
+
+    AgentRT fork (AgentRT #36). The readonly runner drops global/system config,
+    and with it the user's ``safe.directory``. On Windows a repository created
+    from an elevated shell is owned by ``BUILTIN\\Administrators``, so git
+    refused a repository the user had explicitly trusted ("dubious ownership",
+    reported as "Not a git repository"). Only this key is carried over, as
+    ``-c`` arguments in the user's order (an empty entry resets the list, as it
+    does for git), so trust is exactly what plain git would grant; every other
+    global key stays dropped and the hardening ``-c`` overrides still apply.
+    Cached briefly: a readonly read must not cost two extra processes.
+    """
+    global _safe_directories_cache
+    now = time.monotonic()
+    if (
+        _safe_directories_cache is not None
+        and now - _safe_directories_cache[0] < _SAFE_DIRECTORIES_TTL_SECONDS
+    ):
+        return _safe_directories_cache[1]
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("GIT_")
+        or name in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM")
+    }
+    values: list[str] = []
+    for scope in ("--system", "--global"):
+        try:
+            result = subprocess.run(
+                ["git", "config", scope, "--includes", "--get-all", "safe.directory"],
+                cwd=tempfile.gettempdir(),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            values.extend(result.stdout.splitlines())
+    _safe_directories_cache = (now, tuple(values))
+    return _safe_directories_cache[1]
+
 
 def _readonly_git_env() -> dict[str, str]:
     """Environment for readonly git: no prompts, no pager, no ambient config.
@@ -248,6 +301,8 @@ def _build_readonly_argv(args: list[str]) -> list[str]:
     hardened: list[str] = []
     for key in _READONLY_HARDENING_CONFIG:
         hardened.extend(["-c", key])
+    for directory in protected_safe_directories():
+        hardened.extend(["-c", f"safe.directory={directory}"])
     hardened.append("--no-pager")
     hardened.append("--no-optional-locks")
     hardened.append(subcommand)

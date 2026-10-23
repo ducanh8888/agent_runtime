@@ -107,6 +107,7 @@ def restrict_to_owner(path: Path) -> None:
     try:
         result = subprocess.run(
             ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=30,

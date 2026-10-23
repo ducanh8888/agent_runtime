@@ -165,15 +165,18 @@ def _reports_dir(resolved: str) -> str:
     directory), computed here rather than asked of the daemon because the
     daemon runs on this machine -- the same reasoning `artifacts` already
     uses for the workspace scan itself. H8 item 7, 2026-09-17.
+
+    Under ``AGENTRT_WORKERS`` > 1 worker k persists to ``conversations-wk``
+    (see ``front.conversations_dir``), so the owner is whichever directory
+    holds the conversation (#31).
     """
-    hex_id = uuid.UUID(resolved).hex
     state = config.state_dir()
-    # With AGENTRT_WORKERS > 1 a session lives in its worker's directory,
-    # `conversations-w<k>` (#31); worker 0 keeps `conversations`.
-    for candidate in sorted(state.glob("conversations*")):
-        if (candidate / hex_id).is_dir():
-            return str(candidate / hex_id / "reports")
-    return str(state / "conversations" / hex_id / "reports")
+    hex_id = uuid.UUID(resolved).hex
+    candidates = [state / "conversations", *sorted(state.glob("conversations-w*"))]
+    owner = next(
+        (root for root in candidates if (root / hex_id).is_dir()), candidates[0]
+    )
+    return str(owner / hex_id / "reports")
 
 
 def _list_reports(resolved: str) -> list[dict]:
@@ -308,6 +311,8 @@ def _git_head(workspace: str) -> str:
         result = subprocess.run(
             ["git", "-C", workspace, "rev-parse", "HEAD"],
             check=True,
+            # Inside the stdio MCP server, stdin is the protocol pipe (#36).
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
         )
@@ -1218,6 +1223,7 @@ class Client:
         self._daemon_info = None
         self._profile_ref: object | None = None
         self._http: httpx.Client | None = None
+        self._http_lock = threading.Lock()
 
     @property
     def info(self):
@@ -1247,8 +1253,9 @@ class Client:
         """
         _ = self.info
 
-        if self._http is None:
-            self._http = httpx.Client(timeout=self._timeout, follow_redirects=True)
+        with self._http_lock:
+            if self._http is None:
+                self._http = httpx.Client(timeout=self._timeout, follow_redirects=True)
 
     def _ensure_profiles(self) -> dict:
         """Return the preset -> profile id map, bootstrapping it once."""
@@ -1342,11 +1349,12 @@ class Client:
             # orchestrator does -- would go on addressing a port nobody is
             # listening on, and every tool would fail until the orchestrator
             # itself was restarted. Re-read and try once more.
-            self._daemon_info = None
-            self._profile_ref = None
-            if self._http is not None:
-                self._http.close()
-                self._http = None
+            with self._http_lock:
+                self._daemon_info = None
+                self._profile_ref = None
+                if self._http is not None:
+                    self._http.close()
+                    self._http = None
             try:
                 self._ensure_ready()
                 response = attempt()
@@ -3500,7 +3508,7 @@ class Client:
                     approved = None
                 if approved is not None and approved.is_file():
                     try:
-                        content = approved.read_text()
+                        content = approved.read_text(encoding="utf-8")
                     except (OSError, UnicodeDecodeError) as exc:
                         raise ClientError(f"could not read {path!r}: {exc}") from exc
                     return {

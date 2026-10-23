@@ -521,11 +521,11 @@ def _force_stream(base_url: str | None) -> bool:
 
 
 def _is_local_endpoint(base_url: str | None) -> bool:
-    """Loopback, ``localhost`` or a private/link-local IP literal."""
+    """Loopback, ``localhost`` subdomains or a private/link-local IP literal."""
     if not base_url:
         return True
     host = urlsplit(base_url if "://" in base_url else f"//{base_url}").hostname
-    if not host or host == "localhost":
+    if not host or host == "localhost" or host.endswith(".localhost"):
         return True
     try:
         address = ipaddress.ip_address(host)

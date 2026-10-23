@@ -10,6 +10,9 @@ it. Whatever a tool's description does not say, the caller has to guess.
 """
 
 import functools
+import io
+import os
+import sys
 from collections.abc import Callable
 from threading import Lock
 from typing import Any
@@ -1011,7 +1014,26 @@ def profiles() -> dict:
     return _guard(_get_client().profiles)
 
 
+def _divert_stdin() -> None:
+    """Serve the protocol from a private copy of stdin; children get EOF (#36).
+
+    A child spawned with default stdin inherits the JSON-RPC pipe. On Windows
+    `_git_head` blocked on it and `dispatch(require="commit")` hung for the
+    client's 1800 s idle timeout; anywhere, a child that reads stdin swallows
+    the next protocol message. `stdio_server` reads `sys.stdin.buffer` when it
+    starts, so the wire moves to a non-inheritable duplicate and fd 0 becomes
+    the null device (on Windows `dup2` onto fd 0 also rebinds the standard
+    input handle that `subprocess` hands a child). mcp 2.x does the same.
+    """
+    wire = os.dup(0)
+    null = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(null, 0)
+    os.close(null)
+    sys.stdin = io.TextIOWrapper(open(wire, "rb"), encoding="utf-8")
+
+
 def main() -> None:
+    _divert_stdin()
     mcp.run()
 
 

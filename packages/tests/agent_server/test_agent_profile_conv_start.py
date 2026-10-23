@@ -1228,6 +1228,7 @@ class TestLaunchedAgentProfileRoundTrip:
     [
         ("http://127.0.0.1:20128/v1", False),
         ("http://localhost:20128/v1", False),
+        ("http://router.localhost:20128/v1", False),
         ("http://192.168.1.154:20128/v1", False),
         ("https://router.example.com/v1", True),
     ],
