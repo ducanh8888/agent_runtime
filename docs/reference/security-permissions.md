@@ -30,6 +30,15 @@ The `inspect` tool is a *guarded read runner*, not a sandbox: it refuses to read
 the runtime's own credential, and every path it touches goes through the same
 workspace guard. It does not widen the guard.
 
+Its git commands, like the server's readonly git runner, ignore the user's
+global and system git config, with one exception: the user's own
+`safe.directory` entries are passed back as `-c safe.directory=...` (#36).
+Without them git refused a repository owned by another account (on Windows, any
+repository created from an elevated shell) even though the user had trusted it.
+Trust is therefore exactly what plain git would grant; no other global key is
+carried, and the `-c` overrides that disable pagers, hooks, fsmonitor and
+external diff drivers still apply.
+
 ## What the file-editor guard does
 
 The vendored `FileEditorExecutor` takes a `workspace_root` that reads like a
