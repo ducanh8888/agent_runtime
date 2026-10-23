@@ -9,8 +9,12 @@ other repository, and an MCP resource is not loaded unless something asks for
 it. Whatever a tool's description does not say, the caller has to guess.
 """
 
+import functools
+from collections.abc import Callable
 from threading import Lock
+from typing import Any
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from agentrt.runtime import client as client_mod, config
@@ -103,6 +107,31 @@ mcp = FastMCP("agentrt", instructions=INSTRUCTIONS)
 # MCP SDK rather than AgentRT.
 mcp._mcp_server.version = config.runtime_version()
 
+
+def _tool(**kwargs: Any) -> Callable[[Callable[..., dict]], Callable[..., dict]]:
+    """Register a tool that runs in a worker thread, not on the server's loop.
+
+    FastMCP calls a plain function directly on its event loop, so every tool
+    call waited for the one before it. A `control stop` waiting out a long
+    terminal command held up a `dispatch` behind it until the client gave up
+    after 1800 s -- and the queued dispatch then still ran and created its
+    session (#35, #36). The module keeps the plain function, so it stays
+    callable directly.
+    """
+
+    def register(fn: Callable[..., dict]) -> Callable[..., dict]:
+        @functools.wraps(fn)
+        async def threaded(*args: Any, **kw: Any) -> dict:
+            return await anyio.to_thread.run_sync(
+                functools.partial(fn, *args, **kw), abandon_on_cancel=True
+            )
+
+        mcp.tool(**kwargs)(threaded)
+        return fn
+
+    return register
+
+
 _client: client_mod.Client | None = None
 _client_lock = Lock()
 
@@ -133,7 +162,7 @@ def _guard(fn, *args, **kwargs) -> dict:
         return {"error": type(exc).__name__, "message": str(exc)}
 
 
-@mcp.tool()
+@_tool()
 def dispatch(
     task: str,
     workspace: str,
@@ -338,7 +367,7 @@ def dispatch(
 
 # Named `list` for the orchestrator but not defined as `list` here: a
 # module-level rebinding of the builtin is a trap for anything added later.
-@mcp.tool(name="list")
+@_tool(name="list")
 def list_sessions(
     limit: int = 50,
     offset: int = 0,
@@ -393,7 +422,7 @@ def _parse_tag_argument(tags: str | None) -> dict[str, str] | None:
     return parsed or None
 
 
-@mcp.tool()
+@_tool()
 def status(session: str) -> dict:
     """Report one session's lifecycle state.
 
@@ -441,7 +470,7 @@ def status(session: str) -> dict:
     return _guard(_get_client().status, session)
 
 
-@mcp.tool()
+@_tool()
 def result(
     session: str, offset: int | None = None, max_chars: int | None = None
 ) -> dict:
@@ -504,7 +533,7 @@ def result(
     return _guard(_get_client().result, session, offset=offset, max_chars=max_chars)
 
 
-@mcp.tool()
+@_tool()
 def dispatch_from(
     session: str,
     task: str,
@@ -563,7 +592,7 @@ def dispatch_from(
     )
 
 
-@mcp.tool()
+@_tool()
 def dispatch_many(
     tasks: list[dict], defaults: dict | None = None, max_batch: int = 100
 ) -> dict:
@@ -594,7 +623,7 @@ def dispatch_many(
     )
 
 
-@mcp.tool()
+@_tool()
 def usage(session: str) -> dict:
     """Report what a session's model calls consumed.
 
@@ -614,7 +643,7 @@ def usage(session: str) -> dict:
     return _guard(_get_client().usage, session)
 
 
-@mcp.tool()
+@_tool()
 def capacity() -> dict:
     """Report how much work the daemon will admit right now.
 
@@ -655,7 +684,7 @@ def capacity() -> dict:
     return _guard(_get_client().capacity)
 
 
-@mcp.tool()
+@_tool()
 def finalize(session: str, summary: bool = False) -> dict:
     """Stop a session now and return the outcome it has.
 
@@ -684,7 +713,7 @@ def finalize(session: str, summary: bool = False) -> dict:
     return _guard(_get_client().finalize, session, summary=summary)
 
 
-@mcp.tool()
+@_tool()
 def transcript(
     session: str,
     limit: int = 30,
@@ -737,7 +766,7 @@ def transcript(
     )
 
 
-@mcp.tool()
+@_tool()
 def read_evidence(
     session: str,
     limit: int = 100,
@@ -793,7 +822,7 @@ def read_evidence(
     )
 
 
-@mcp.tool()
+@_tool()
 def control(session: str, action: str, message: str | None = None) -> dict:
     """Change a running session's state.
 
@@ -906,7 +935,7 @@ def control(session: str, action: str, message: str | None = None) -> dict:
     }
 
 
-@mcp.tool()
+@_tool()
 def artifacts(session: str, path: str | None = None) -> dict:
     """List or read the files a session produced.
 
@@ -958,7 +987,7 @@ def artifacts(session: str, path: str | None = None) -> dict:
     return _guard(_get_client().artifacts, session, path=path)
 
 
-@mcp.tool()
+@_tool()
 def profiles() -> dict:
     """List the permission presets and the LLM references dispatch accepts.
 
