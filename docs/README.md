@@ -27,6 +27,8 @@ immutable result records. Machine consumers should read
 
 - [Orchestration guide](guides/orchestration.md) — dispatching, verifying, and
   interrupting; why a thinking session and a stuck one look identical.
+- [OmniRoute models](guides/omniroute-models.md) — configure stable router
+  aliases, per-session profiles, streaming, and call provenance.
 - [MCP and REST surface](#mcp-and-rest-surface) — see below.
 
 **Permissions and security**

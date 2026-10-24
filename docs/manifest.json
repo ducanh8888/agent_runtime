@@ -14,6 +14,13 @@
       "authority": "normative"
     },
     {
+      "id": "guide.omniroute-models",
+      "path": "docs/guides/omniroute-models.md",
+      "type": "guide",
+      "lifecycle": "current",
+      "authority": "normative"
+    },
+    {
       "id": "guide.orchestration",
       "path": "docs/guides/orchestration.md",
       "type": "guide",
