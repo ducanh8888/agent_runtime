@@ -55,6 +55,32 @@ class SendMessageDummyAgent(AgentBase):
         )
 
 
+ALWAYS_FINISHING_STEPS: list[int] = []
+
+
+class AlwaysFinishingAgent(SendMessageDummyAgent):
+    """Module level: a class defined inside a test stays registered as a local
+    subclass and breaks later ConversationState validation (#40)."""
+
+    def step(
+        self,
+        conversation: LocalConversation,
+        on_event: ConversationCallbackType,
+        on_token: ConversationTokenCallbackType | None = None,
+    ) -> None:
+        ALWAYS_FINISHING_STEPS.append(1)
+        on_event(
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text=f"answer {len(ALWAYS_FINISHING_STEPS)}")],
+                ),
+            )
+        )
+        conversation.state.execution_status = ConversationExecutionStatus.FINISHED
+
+
 def test_send_message_with_string_creates_correct_message():
     """Test that send_message with string creates the correct Message structure."""
     agent = SendMessageDummyAgent()
@@ -562,27 +588,7 @@ async def test_acp_arun_sends_stop_hook_feedback_to_acp(tmp_path):
 
 
 def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_path):
-    steps = 0
-
-    class AlwaysFinishingAgent(SendMessageDummyAgent):
-        def step(
-            self,
-            conversation: LocalConversation,
-            on_event: ConversationCallbackType,
-            on_token: ConversationTokenCallbackType | None = None,
-        ) -> None:
-            nonlocal steps
-            steps += 1
-            on_event(
-                MessageEvent(
-                    source="agent",
-                    llm_message=Message(
-                        role="assistant",
-                        content=[TextContent(text=f"answer {steps}")],
-                    ),
-                )
-            )
-            conversation.state.execution_status = ConversationExecutionStatus.FINISHED
+    ALWAYS_FINISHING_STEPS.clear()
 
     hook = MagicMock()
     hook.run_stop.return_value = (False, "commit is required")
@@ -600,7 +606,7 @@ def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_pa
     conversation.run()
 
     assert hook.run_stop.call_count == 3
-    assert steps == 3
+    assert len(ALWAYS_FINISHING_STEPS) == 3
     assert conversation.state.execution_status == ConversationExecutionStatus.ERROR
     errors = [
         event
