@@ -183,7 +183,12 @@ def llm_policy_violations(llm: LLM | None, policy: DeploymentLLMPolicy) -> list[
 
     violations: list[str] = []
     actual_model = api_model_name(llm.model)
-    if actual_model != policy.model and actual_model not in policy.extra_models:
+    # AgentRT fork: a router model may itself contain a slash
+    # ("codex/gpt-6-sol-xhigh"); `api_model_name` keeps only the last segment,
+    # so also accept the full name after the "openai/" routing prefix.
+    full_name = llm.model.removeprefix("openai/")
+    allowed = {policy.model, *policy.extra_models}
+    if actual_model not in allowed and full_name not in allowed:
         allowed = " or ".join(repr(m) for m in (policy.model, *policy.extra_models))
         violations.append(f"model must be {allowed}")
 

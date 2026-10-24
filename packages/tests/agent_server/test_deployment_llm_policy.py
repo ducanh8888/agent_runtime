@@ -242,3 +242,12 @@ def test_extra_models_at_the_same_endpoint_are_allowed() -> None:
     assert llm_policy_violations(_direct_llm(model="openai/deepseek-pro"), policy) == []
     violations = llm_policy_violations(_direct_llm(model="openai/other"), policy)
     assert any("deepseek-pro" in v for v in violations)
+
+
+def test_extra_model_names_may_contain_a_slash() -> None:
+    """A router model such as codex/gpt-6-sol-xhigh must match as a whole."""
+    policy = _policy(extra_models=["codex/gpt-6-sol-xhigh"])
+    ok = _direct_llm(model="openai/codex/gpt-6-sol-xhigh")
+    assert llm_policy_violations(ok, policy) == []
+    other = _direct_llm(model="openai/antigravity/gpt-6-sol-xhigh")
+    assert llm_policy_violations(other, policy)
