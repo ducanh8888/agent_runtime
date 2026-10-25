@@ -191,7 +191,7 @@ and [SECURITY.md](SECURITY.md).
 
 AgentRT is open-source, pre-1.0 (`agentrt-runtime` 0.1.0), under active
 development and used in real multi-session workflows. Interfaces and operational
-behavior may change; check the [active plan](docs/plans/omniroute-migration.md)
+behavior may change; check the [active plan](docs/plans/iteration-budget.md)
 and [documentation index](docs/README.md) for current status. To work on it:
 
 ```bash

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "entrypoint": "docs/README.md",
-  "active_plan": "docs/plans/omniroute-migration.md",
+  "active_plan": "docs/plans/iteration-budget.md",
   "optional_link_roots": [
     "repos/"
   ],
@@ -49,10 +49,17 @@
       "authority": "informative"
     },
     {
+      "id": "plan.iteration-budget",
+      "path": "docs/plans/iteration-budget.md",
+      "type": "plan",
+      "lifecycle": "active",
+      "authority": "normative"
+    },
+    {
       "id": "plan.omniroute-migration",
       "path": "docs/plans/omniroute-migration.md",
       "type": "plan",
-      "lifecycle": "active",
+      "lifecycle": "complete",
       "authority": "normative"
     },
     {
