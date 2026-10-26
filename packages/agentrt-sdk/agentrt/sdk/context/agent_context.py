@@ -80,6 +80,8 @@ class AgentContext(BaseModel):
         description="List of available skills that can extend the user's input.",
         json_schema_extra={"acp_compatible": True},
     )
+    # AgentRT fork (preload): keep the selected skill names with the agent context.
+    preloaded_skills: list[str] = Field(default_factory=list)
     system_message_suffix: str | None = Field(
         default=None,
         description="Optional suffix to append to the system prompt.",
@@ -385,6 +387,11 @@ class AgentContext(BaseModel):
             now=data.formatted_datetime,
             repo_skills=tuple((s.name, s.content) for s in data.repo_skills),
             available_skills_prompt=data.available_skills_prompt or None,
+            preloaded_skills=tuple(
+                (skill.name, skill.content)
+                for skill in self.skills
+                if skill.name in self.preloaded_skills
+            ),
             custom_suffix=self.system_message_suffix or None,
             memory_context=self.memory_context or None,
             secret_infos=tuple(

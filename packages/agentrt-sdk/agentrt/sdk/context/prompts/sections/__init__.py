@@ -13,6 +13,7 @@ from agentrt.sdk.context.prompts.sections.dynamic import (
     CustomSuffixSection,
     DateTimeSection,
     MemoryContextSection,
+    PreloadedSkillsSection,  # AgentRT fork (preload): expose prompt section.
     RepoContextSection,
 )
 from agentrt.sdk.context.prompts.sections.planning import PlanningSection
@@ -54,6 +55,7 @@ __all__ = [
     "PlanningSection",
     "ProblemSolvingSection",
     "ProcessManagementSection",
+    "PreloadedSkillsSection",
     "PullRequestsSection",
     "RepoContextSection",
     "RoleSection",

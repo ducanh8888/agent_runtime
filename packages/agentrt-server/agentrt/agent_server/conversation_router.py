@@ -23,6 +23,7 @@ from agentrt.agent_server.conversation_service import (
     ConversationService,
     IdempotencyConflict,
     InvalidParentConversation,
+    UnknownPreloadedSkills,  # AgentRT fork (preload): map validation to 422
 )
 from agentrt.agent_server.dependencies import get_conversation_service
 from agentrt.agent_server.deployment_policy import (
@@ -439,7 +440,7 @@ async def start_conversation(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e
-    except InvalidParentConversation as e:
+    except (InvalidParentConversation, UnknownPreloadedSkills) as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e

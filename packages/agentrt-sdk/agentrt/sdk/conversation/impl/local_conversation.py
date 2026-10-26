@@ -403,6 +403,11 @@ class LocalConversation(BaseConversation):
             cipher=cipher,
             tags=tags,
         )
+        # AgentRT fork (preload): mark system-message skills as already loaded.
+        if agent is not None and agent.agent_context is not None:
+            for name in agent.agent_context.preloaded_skills:
+                if name not in self._state.invoked_skills:
+                    self._state.invoked_skills.append(name)
         # base_state.json is the source of truth for the agent. On resume with
         # ``agent=None`` the state holds the persisted agent; adopt it here so
         # ``self.agent`` and ``self._state.agent`` are the same object.

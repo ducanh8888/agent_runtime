@@ -72,6 +72,8 @@ class PromptContext(BaseModel):
     # consumed by the dynamic sections. ``repo_skills`` is (name, content) pairs;
     # ``secret_infos`` is (name, description) pairs.
     repo_skills: tuple[tuple[str, str], ...] = Field(default_factory=tuple)
+    # AgentRT fork (preload): frozen system-message content for selected skills.
+    preloaded_skills: tuple[tuple[str, str], ...] = Field(default_factory=tuple)
     available_skills_prompt: str | None = None
     custom_suffix: str | None = None
     memory_context: str | None = None

@@ -201,6 +201,48 @@ async def persisted_conversation(tmp_path) -> tuple[Path, UUID]:
 
 
 @pytest.mark.asyncio
+async def test_preloaded_skills_resolved_before_persistence(
+    conversation_service, tmp_path
+):
+    from agentrt.agent_server.conversation_service import UnknownPreloadedSkills
+    from agentrt.sdk.context.agent_context import AgentContext
+    from agentrt.sdk.skills import Skill
+
+    workspace = LocalWorkspace(working_dir=str(tmp_path))
+    agent = Agent(
+        llm=LLM(model="gpt-4o", usage_id="test-llm"),
+        tools=[],
+        agent_context=AgentContext(
+            skills=[
+                Skill(
+                    name="guide",
+                    content="Specific preload content",
+                    source="guide/SKILL.md",
+                    is_agentskills_format=True,
+                )
+            ]
+        ),
+    )
+    request = StartConversationRequest(
+        agent=agent,
+        workspace=workspace,
+        confirmation_policy=NeverConfirm(),
+        skills=["missing", "guide"],
+    )
+    with pytest.raises(UnknownPreloadedSkills, match="missing"):
+        await conversation_service.start_conversation(request)
+
+    request.skills = ["guide"]
+    info, _ = await conversation_service.start_conversation(request)
+    conversation = await conversation_service.get_conversation(info.id)
+    assert conversation is not None
+    assert "Specific preload content" in conversation.agent.dynamic_context
+    assert conversation_service._event_services is not None
+    state = await conversation_service._event_services[info.id].get_state()
+    assert "guide" in state.invoked_skills
+
+
+@pytest.mark.asyncio
 async def test_start_conversation_registers_and_injects_client_tools(
     conversation_service, tmp_path
 ):
@@ -4764,7 +4806,9 @@ async def test_search_filters_by_status_tag_and_id_prefix(
         ),
     )
     monkeypatch.setattr(
-        service, "_prewarm_conversation_infos", lambda *args, **kwargs: _nothing_prewarmed()
+        service,
+        "_prewarm_conversation_infos",
+        lambda *args, **kwargs: _nothing_prewarmed(),
     )
     service._conversation_records = {
         running_tagged: record(

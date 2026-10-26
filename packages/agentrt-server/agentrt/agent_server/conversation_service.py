@@ -534,6 +534,11 @@ def _is_local_endpoint(base_url: str | None) -> bool:
     return address.is_loopback or address.is_private or address.is_link_local
 
 
+# AgentRT fork (preload): reject unresolved names as a client error.
+class UnknownPreloadedSkills(ValueError):
+    """Requested skill names are absent from the resolved agent."""
+
+
 class InvalidParentConversation(ValueError):
     """``parent_conversation_id`` is unknown, self-referential, or in
     a different workspace."""
@@ -2477,6 +2482,22 @@ class ConversationService:
                 )
             }
         )
+
+        # AgentRT fork (preload): refuse unknown names before persisting a session.
+        if request.skills:
+            context = request.agent.agent_context or AgentContext()
+            available = {skill.name for skill in context.skills}
+            unknown = sorted(set(request.skills) - available)
+            if unknown:
+                raise UnknownPreloadedSkills(f"Unknown skills: {', '.join(unknown)}")
+            context = context.model_copy(
+                update={"preloaded_skills": list(dict.fromkeys(request.skills))}
+            )
+            request = request.model_copy(
+                update={
+                    "agent": request.agent.model_copy(update={"agent_context": context})
+                }
+            )
 
         additions = request.agent_launch_additions
         suffix = (
