@@ -8,7 +8,10 @@ active plan; that plan's open items are carried over in section 9.
 **Status: planned; nothing in sections 4-6 is implemented.** Section 2 is
 measured; section 3 lists defects found by reading `origin/main` and by the
 census, each marked with how it was established. Owner decisions already
-taken are in section 8.
+taken are in section 8. A pre-implementation audit of this plan against the
+code (2026-10-26) added D14-D19 and corrected the design where it assumed
+behaviour the vendored goal loop does not have; section 10 records what it
+changed.
 
 ## 1. Problem and objective
 
@@ -133,6 +136,12 @@ Established by reading code ("code") or by the census ("measured").
 | D11 | The vendored goal judge renders **every** event of the conversation (`list(conversation._state.events)` → `_render_transcript`), not the condensed view. A long session's judge prompt is unbounded and will exceed the model's context; the loop then records `interrupted`. | code | 4.C.2 |
 | D12 | Goal-loop follow-ups are sent as `source="user"` messages, which move `last_user_message_id`; `result` answers the newest user input, so after a follow-up the dispatch's own answer is scoped to the last round only. | code | 4.B.4 |
 | D13 | The runtime does not know the goal subsystem exists: `wait` settles on a terminal status sampled twice, and between goal rounds the status is `finished` (or `stuck`) while the judge runs, so `wait` can settle a session that is about to continue. | code | 4.F.2 |
+| D14 | The iteration cap is per run and `iterations_used` is reset at every run start (fork comment "H2"); the goal loop treats a run that ends `ERROR` — including `MaxIterationsReached` — as a stop signal and records the goal `interrupted`. So a goal of several rounds has no total bound, and the per-run cap kills the goal instead of being judged. | code (`arun()` line ~2334; `_run_goal_loop` PAUSED/ERROR branch) | 4.B.3, 4.C.6 |
+| D15 | The existing tools-disabled wrap-up (`_run_final_summary`) is skipped when `iterations_remaining(state) <= 0` and charges one iteration when it runs — so it can never run in exactly the case the plan needs it for, a run that hit its cap. | code | 4.D.1 |
+| D16 | Goal loops do not survive a daemon restart: `conversation_service` has no goal reference; restart recovery marks the cut run `ERROR`/`DaemonRestarted` and never calls `resume_goal_loop`, leaving the last persisted goal status at `active: true, status: running` with no task behind it. | code | 4.B.6, 4.F.1 |
+| D17 | The stuck detector's window and `send_message`'s FINISHED/STUCK → IDLE reset both key on a `MessageEvent` with `source="user"`; `mark_resumed` is only called when a run starts in `STUCK`. A follow-up that is not a user message (the D12 fix) would re-detect the same trailing loop before the agent takes a step. | code (`stuck_detector.py` line 88; `local_conversation.py` lines 1983, 2316) | 4.B.4 |
+| D18 | Any exception from the judge LLM propagates out of `_snapshot_and_judge` into `_run_goal_loop`'s `except Exception`, which ends the goal as `interrupted`. One provider error kills the whole goal. | code | 4.C.5 |
+| D19 | Goal status is read as "the most recent `key="goal"` state event on the active branch", so a `dispatch_from` fork inherits its parent's goal status and `resume_goal_loop` on the fork would resume the parent's objective. | code (`_last_goal_loop_status`) | 4.B.7 |
 
 Not defects, recorded so they are not re-opened: #41 (`wait` false
 `missing`) and #42 (streaming call without a total deadline) are fixed on
@@ -166,13 +175,17 @@ goal loop. Vendored edits carry `AgentRT fork (...)` comments.
    action in between (provisional `K = 3`) set `STUCK` with reason
    `context_loop`. This fills the stub
    `StuckDetector._is_stuck_context_window_error`.
-3. The condenser keeps the latest observation of every skill in
-   `ConversationState.invoked_skills` out of the forgotten range, bounded by a
-   pinned-token cap (provisional 12k; past it the least recently invoked
-   pinned skill becomes forgettable). Rejected: re-injecting skills into the
-   system prompt (breaks the prompt cache on every invocation); raising
-   `CONDENSER_MAX_TOKENS` (the 40k figure comes from router latency and error
-   data, OmniRoute plan section 10).
+3. The condenser keeps the latest `invoke_skill` action/observation pair of
+   every skill in `ConversationState.invoked_skills` out of
+   `Condensation.forgotten_event_ids` (a set, so individual events can be
+   excluded; the pair is kept whole because an observation without its
+   action is malformed tool history). Pinned content is bounded by a cap
+   (provisional 12k tokens, at most 60% of the post-condensation target;
+   past it the least recently invoked pinned skill becomes forgettable), and
+   the forgotten range is extended so the token target is still met.
+   Rejected: re-injecting skills into the system prompt (breaks the prompt
+   cache on every invocation); raising `CONDENSER_MAX_TOKENS` (the 40k figure
+   comes from router latency and error data, OmniRoute plan section 10).
 4. The once-per-streak nudge also fires for a repeated action whose
    observations are identical and `is_error`, before the action-observation
    pattern sets `STUCK`.
@@ -189,21 +202,32 @@ goal loop. Vendored edits carry `AgentRT fork (...)` comments.
 2. Runtime default: goal mode on for every dispatch (`AGENTRT_GOAL_MODE=1`);
    `dispatch(goal=False)` and `AGENTRT_GOAL_MODE=0` give a plain run.
    Ceilings come from `AGENTRT_GOAL_*` settings (env or state-dir `.env`).
-3. A dispatch's explicit `max_iterations` still works and becomes the hard
-   ceiling on work steps across all rounds; the MCP and CLI documentation stop
-   recommending one.
-4. Goal follow-ups and the resume prompt are emitted with
-   `source="environment"` (as stop-hook feedback already is), so
-   `last_user_message_id` stays on the dispatch message and `result` answers
-   the task, not the last round (D12). A real `send` from the operator still
-   supersedes the goal loop, as today.
+3. Work steps are counted across rounds by the goal loop, not by the per-run
+   counter (D14): after each run it adds that run's `iterations_used` to a
+   persisted `work_steps` total (in the goal status event), and before each
+   run sets the conversation's `max_iteration_per_run` to the remaining
+   allowance so a run can never exceed the ceiling on its own. A dispatch's
+   explicit `max_iterations` still works and becomes that ceiling; the MCP
+   and CLI documentation stop recommending one.
+4. Goal follow-ups and the resume prompt are emitted as `MessageEvent`s with
+   `source="environment"` (as stop-hook feedback already is), through a new
+   SDK method `LocalConversation.send_environment_message()` that does what
+   `send_message` does for a run boundary without being a user message: it
+   resets FINISHED/STUCK to IDLE, calls `StuckDetector.mark_resumed()` so the
+   next run gets a fresh window (D17), and does not touch
+   `last_user_message_id`, so `result` answers the dispatch (D12). A real
+   `send` from the operator still supersedes the goal loop, as today.
 5. Inside a run the agent sees no step budget: in goal mode
    `_maybe_warn_iteration_budget` is not called and the per-run iteration cap
    is the hard ceiling only. The three-step notice stays for plain runs.
-6. Sessions outlive the client and the daemon: a goal whose last persisted
-   status is `running` when the daemon restarts is continued by the server's
-   restart recovery through the existing `resume_goal_loop`, from the round
-   it had reached.
+6. Sessions outlive the client and the daemon (D16): the server's restart
+   recovery, after marking the cut run as it does today, calls
+   `resume_goal_loop` when the last persisted goal status is active; if that
+   fails (no judge LLM, closing) it persists `interrupted`, so a goal status
+   is never left active with no task behind it.
+7. A fork (`dispatch_from`) starts its own goal from the fork message; goal
+   status is read only from events after the fork point, so a fork never
+   resumes or reports its parent's goal (D19).
 
 ### C. Continue or stop is judged against the goal (SDK goal package + server)
 
@@ -215,29 +239,42 @@ goal loop. Vendored edits carry `AgentRT fork (...)` comments.
    condensed view (`state.view`: summary plus recent events), not every
    event, capped at a fixed token budget, and the objective.
 3. **Silent checkpoints:** every `checkpoint_steps` work steps (provisional
-   100) the loop takes a checkpoint without stopping the run and without
-   sending anything to the agent. The checkpoint asks the judge for a verdict
-   and computes the window's novelty (2.4) and file changes. The run is
-   marked **stalled** at a checkpoint when the judge's `score` is not higher
-   than the best score so far **and** the window is low (novelty < provisional
-   0.15 and no file changed). Either signal alone keeps it running.
+   100) the run loop calls an async checkpoint callback set by the server,
+   **with the state lock released** (the judge is a model call; the loop's
+   step body holds `with self._state`), without changing the execution
+   status and without sending anything to the agent. The callback asks the
+   judge for a verdict and computes the window's novelty (2.4) and file
+   changes from the event log. The run is marked **stalled** at a checkpoint
+   when the judge's `score` is not higher than the best score so far **and**
+   the window is low (novelty < provisional 0.15 and no file changed). Either
+   signal alone keeps it running. Rejected alternative: ending each round at
+   `checkpoint_steps` via the per-run cap and judging between runs — no SDK
+   callback needed, but it writes a `MaxIterationsReached` error event into
+   the history at every checkpoint, and events are history.
 4. `stall_checkpoints` consecutive stalled checkpoints (provisional 2) end the
    goal with reason `no_progress` through D. A judge verdict of complete at a
    checkpoint does not end the run on its own; the agent's own finish is
    still what triggers C.1.
-5. A judge call that fails or cannot be parsed counts as "not complete, no
-   improvement" (the vendored parser already returns score 0), never as
-   complete. The novelty veto in C.3 keeps a moving session running through
-   judge outages.
+5. A judge call that raises (D18) or cannot be parsed is caught at the call
+   site and counts as "not complete, no improvement" (the vendored parser
+   already returns score 0), never as complete and never as the end of the
+   goal; the exception is logged and recorded in the goal status. The
+   novelty veto in C.3 keeps a moving session running through judge outages;
+   on a finish attempt an unjudgeable verdict sends the generic follow-up.
 6. Safety ceilings, outside the agent's view: `max_rounds` (finish attempts
    judged incomplete, provisional 10, the existing default), `max_work_steps`
-   (provisional 1,000 across rounds) and `max_run_seconds` (provisional
-   14,400). Wall-clock rather than cost: usage through the router is not
-   reliable (Devin usage is misreported by the router, OmniRoute plan
-   section 10), so a cost bound would not hold.
+   (provisional 1,000 across rounds; enforced by the loop's own count, B.3,
+   and by the per-run cap it sets) and `max_run_seconds` (provisional
+   14,400, from the goal's first run). A run that ends `MaxIterationsReached`
+   in goal mode therefore means the ceiling, and goes to D rather than to
+   the `interrupted` branch (D14). Wall-clock rather than cost: usage through
+   the router is not reliable (Devin usage is misreported by the router,
+   OmniRoute plan section 10), so a cost bound would not hold.
 7. `STUCK` in goal mode keeps the vendored behaviour: the judge runs and a
    follow-up carries the agent out of the loop; a second `STUCK` in a row ends
-   the goal with reason `stuck`.
+   the goal with reason `stuck`. Other `ERROR` ends (provider failure,
+   `StopHookUnmet`, `DaemonRestarted`) and `PAUSED` still end the goal as
+   `interrupted`, as today.
 
 ### D. Every non-complete end lands
 
@@ -248,7 +285,9 @@ goal loop. Vendored edits carry `AgentRT fork (...)` comments.
    agent `MessageEvent` before the terminal `ConversationErrorEvent` with
    code `GoalNotMet` and the reason in its detail. One model call per such
    end, always, independent of `AGENTRT_FINALIZE_SUMMARY` (owner decision,
-   section 8).
+   section 8). Unlike `_run_final_summary`, it is not skipped when the run's
+   allowance is exhausted and is not charged to `iterations_used` (D15) — it
+   is accounted in the goal status as `wrapup_calls`.
 2. Status for these ends stays `error`, so existing clients read the same
    status; `result` now has text, so `wait` buckets it `partial`. A failed
    wrap-up call is recorded and does not change the code.
@@ -268,25 +307,38 @@ goal loop. Vendored edits carry `AgentRT fork (...)` comments.
 1. `status`, `result`, `wait` items and `capacity.running_sessions` gain
    `termination_reason` (`complete`, `no_progress`, `stuck`, `max_rounds`,
    `max_work_steps`, `max_run_seconds`, `stop_hook_unmet`, `paused`,
-   `error:<code>`), `goal` (`active`, `round`, last `score` and `missing`,
-   projected from the persisted `key="goal"` state events), `iterations_used`
-   (work steps) and `condensation_steps`. Additive; absent on an older
-   daemon, and the client checks that a field arrived before reading it.
-2. `wait` treats a session whose goal is `active` as not settled (D13), in
-   addition to the two-sample rule.
+   `error:<code>`), `goal` (`active`, `round`, `work_steps`, last `score`
+   and `missing`, projected from the `key="goal"` state events after the
+   fork point), `iterations_used` (this run's work steps) and
+   `condensation_steps`. `goal.active` comes from the server, which reports
+   the **live** goal task (as `is_idle_evictable` already does), not the
+   persisted flag alone — after D16 the two agree, but liveness is what
+   `wait` must not hang on. Additive; absent on an older daemon, and the
+   client checks that a field arrived before reading it.
+2. `wait` treats a session whose `goal.active` is true as not settled (D13),
+   in addition to the two-sample rule; a daemon that does not send the field
+   gets today's behaviour.
 
 ## 5. Interfaces, fixed before implementation
 
 - Server create request: optional `goal` object as in B.1; field names and
   defaults recorded in the OpenAPI schema; additive.
-- SDK `LocalConversation`: optional `checkpoint_steps: int | None` and a
-  checkpoint callback set by the server; `None` keeps today's loop.
-- SDK `GoalController`: gains the stall rule (C.3-C.4) and the bounded judge
-  input (C.2); `on_run_finished` keeps its signature; a new
-  `on_checkpoint(view, window_stats) -> GoalCheckpoint`.
+- SDK `LocalConversation`: optional `checkpoint_steps: int | None` and an
+  async checkpoint callback set by the server, awaited outside the state
+  lock; `None` keeps today's loop. New `send_environment_message(text)`
+  (B.4). `max_iteration_per_run` is settable between runs (B.3).
+- SDK `GoalController`: gains the stall rule (C.3-C.4), the bounded judge
+  input (C.2) and per-call judge error handling (C.5); `on_run_finished`
+  keeps its signature; a new `on_checkpoint(view, window_stats) ->
+  GoalCheckpoint`. `GoalStatus` gains `work_steps`, `best_score`,
+  `started_at`, `wrapup_calls`, `judge_errors`, `reason` (all optional, so
+  old events load).
 - SDK `ConversationState`: `condensation_steps: int = 0` (defaults load old
   state).
-- New error code `GoalNotMet`; no existing code changes meaning.
+- Server: `GET /api/conversations/{id}` (the status the runtime reads) gains
+  `goal_active` from the live task; restart recovery resumes active goals.
+- New error code `GoalNotMet`; `GoalOutcome.status` gains the new reasons;
+  no existing code changes meaning.
 - Runtime client/MCP: `dispatch(..., goal: bool | None = None)`; MCP
   docstrings for `dispatch`, `status`, `wait`, `result` describe goal mode,
   the reasons, and that `max_iterations` is not needed.
@@ -308,15 +360,21 @@ Each item lands with a test that fails without it.
    `commit_hook` that times out does not allow the stop; a non-stop hook error
    keeps today's behaviour.
 5. C.2 and C.5 in the goal package. Tests: a 4,000-event conversation's judge
-   prompt stays within the cap; an unparsable verdict never completes.
+   prompt stays within the cap; an unparsable verdict never completes; a
+   judge that raises leaves the goal running (D18).
 6. B, C.1, C.3, C.4, C.6, C.7 and D (server goal loop, SDK checkpoint,
    runtime dispatch and config). Tests: a finish judged incomplete gets a
-   follow-up with `source="environment"` and `result` still answers the
-   dispatch; checkpoints send nothing to the agent; two stalled checkpoints
-   end with `GoalNotMet`/`no_progress` and a wrap-up message; a moving window
-   with a flat score keeps running; each ceiling ends with a wrap-up; no
-   `goal` field gives today's behaviour; restart mid-goal resumes from the
-   persisted goal status.
+   follow-up with `source="environment"`, `result` still answers the
+   dispatch, and a run that was `STUCK` gets a fresh detection window (D17);
+   checkpoints send nothing to the agent and run with the state lock free;
+   two stalled checkpoints end with `GoalNotMet`/`no_progress` and a wrap-up
+   message; a moving window with a flat score keeps running; each ceiling
+   ends with a wrap-up even when the run's allowance is exhausted (D15);
+   `work_steps` accumulates across rounds and the per-run cap is the
+   remaining allowance (D14); no `goal` field gives today's behaviour;
+   restart mid-goal resumes the goal and never leaves `goal.active` true
+   without a task (D16); a fork of a goal session reports no inherited goal
+   (D19); an operator `send` still stops the goal.
 7. F and documentation (D9, D10): "Iteration limits" in `daemon-behavior.md`,
    the orchestration guide, the MCP docstrings, `architecture.md`'s lifecycle
    section.
@@ -363,6 +421,30 @@ Each item lands with a test that fails without it.
 Still open for the owner: goal mode on by default for every dispatch (B.2),
 and the judge's model calls (one per finish attempt and per checkpoint) — the
 default plan assumes both.
+
+## 10. Pre-implementation audit (2026-10-26)
+
+Checked against `origin/main` before any code change. Claims confirmed:
+D1 (`astep` returns after emitting the `Condensation`, the loop counts it),
+D4 (the `iteration >= max` + `FINISHED` break precedes `run_stop`), D11
+(`_snapshot_and_judge` passes every event), D12 (`last_user_message_id` is
+set only for `source="user"`), D13 (no goal reference anywhere in
+`agentrt-runtime`). Assumptions the first draft got wrong, now fixed:
+
+- "Resume after restart through the existing `resume_goal_loop`": nothing
+  calls it on restart; recovery marks the run `DaemonRestarted` (D16).
+- "`max_iterations` becomes the ceiling across rounds": the cap and the
+  counter are per run, and a per-run cap ends the goal as `interrupted`
+  (D14). The loop now counts and sets the cap itself (B.3).
+- "Follow-ups as environment messages" alone would have left the agent
+  re-detected as `STUCK` and the run not restarted (D17); hence
+  `send_environment_message` (B.4).
+- "The wrap-up reuses `_finalize_completion`": the function yes, the calling
+  path no — it skips at zero allowance (D15).
+- Pinning skill observations must pin the action/observation pair and keep
+  the token target (A.3), since `forgotten_event_ids` is a set but tool
+  history must stay paired.
+- Judge exceptions end the goal today (D18); forks inherit goal status (D19).
 
 ## 9. Carried over from the OmniRoute migration plan
 
