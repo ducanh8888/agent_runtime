@@ -75,10 +75,10 @@ The four 2026-09-25 runs, before the 40k condenser cap (`acef636`,
   previous invocation of the same skill; none without one.**
 - The invoked skills are 2-4k tokens each (median observation 6.8k-14.1k
   characters); an audit lane loads about five, ~13k tokens.
-- The condenser triggers at `CONDENSER_MAX_TOKENS = 40_000` and reduces to
-  half of it (`LLMSummarizingCondenser._get_forgotten_events`). With ~13k of
-  the 20k headroom taken by skills, the next few reads trigger another
-  condensation, which forgets the skills, which the model re-invokes.
+- At the measured 40k cap (`CONDENSER_MAX_TOKENS = 40_000`), the condenser
+  reduced history to half the cap (`LLMSummarizingCondenser._get_forgotten_events`).
+  With ~13k of the 20k headroom taken by skills, the next few reads triggered
+  another condensation, which forgot the skills, which the model re-invoked.
   Average: one condensation per 4.7 steps.
 - `ConversationState.invoked_skills` records the names, but nothing uses it
   to keep the content.
@@ -166,8 +166,9 @@ carry `AgentRT fork (...)` comments.
    (provisional 12k tokens, at most 60% of the post-condensation target;
    past it the least recently invoked pinned skill becomes forgettable), and
    the forgotten range is extended so the token target is still met.
-   Rejected: raising `CONDENSER_MAX_TOKENS` (the 40k figure comes from
-   router latency and error data, OmniRoute plan section 10).
+   The cap was raised separately to 150,000 (see `bootstrap.py`): router data
+   from 2026-10-26 (OMNI-Route) found no 40k error cliff for the models driving
+   current agentrt traffic. A.3's pinning still applies at the new cap.
 4. The once-per-streak nudge also fires for a repeated action whose
    observations are identical and `is_error`, before the action-observation
    pattern sets `STUCK` (D8).
