@@ -605,8 +605,8 @@ def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_pa
 
     conversation.run()
 
-    assert hook.run_stop.call_count == 3
-    assert len(ALWAYS_FINISHING_STEPS) == 3
+    assert hook.run_stop.call_count == 8
+    assert len(ALWAYS_FINISHING_STEPS) == 8
     assert conversation.state.execution_status == ConversationExecutionStatus.ERROR
     errors = [
         event
@@ -614,7 +614,7 @@ def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_pa
         if isinstance(event, ConversationErrorEvent) and event.code == "StopHookUnmet"
     ]
     assert len(errors) == 1
-    assert "3 consecutive" in errors[0].detail
+    assert "8 consecutive" in errors[0].detail
     agent_messages = [
         event
         for event in conversation.state.events
@@ -622,7 +622,7 @@ def test_stop_hook_denial_limit_ends_run_and_preserves_last_agent_message(tmp_pa
     ]
     last_content = agent_messages[-1].llm_message.content[0]
     assert isinstance(last_content, TextContent)
-    assert last_content.text == "answer 3"
+    assert last_content.text == "answer 8"
 
 
 @pytest.mark.asyncio
