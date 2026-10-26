@@ -351,13 +351,20 @@ class HookEventProcessor:
             if result.error:
                 logger.warning(f"SessionEnd hook error: {result.error}")
 
-    def run_stop(self, reason: str | None = None) -> tuple[bool, str | None]:
+    def run_stop(
+        self,
+        reason: str | None = None,
+        stop_hook_active: bool = False,
+    ) -> tuple[bool, str | None]:
         """Run Stop hooks. Returns (should_stop, feedback)."""
         if not self.hook_manager.has_hooks(HookEventType.STOP):
             return True, None
 
         hooks = self.hook_manager.config.get_hooks_for_event(HookEventType.STOP)
-        should_stop, results = self.hook_manager.run_stop(reason=reason)
+        should_stop, results = self.hook_manager.run_stop(
+            reason=reason,
+            stop_hook_active=stop_hook_active,
+        )
 
         # Emit events and log errors
         for hook, result in zip(hooks, results, strict=False):
@@ -365,7 +372,10 @@ class HookEventProcessor:
                 hook_event_type=HookEventType.STOP,
                 hook_command=hook.display_command,
                 result=result,
-                hook_input={"reason": reason} if reason else None,
+                hook_input={
+                    "reason": reason,
+                    "stop_hook_active": stop_hook_active,
+                },
             )
             if result.error:
                 logger.warning(f"Stop hook error: {result.error}")

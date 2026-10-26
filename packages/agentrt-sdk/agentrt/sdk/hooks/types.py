@@ -28,6 +28,8 @@ class HookEvent(BaseModel):
     session_id: str | None = None
     working_dir: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # AgentRT fork (stop-hook parity): expose repeated denial state to hooks.
+    stop_hook_active: bool = False
 
     model_config = {"use_enum_values": True}
 

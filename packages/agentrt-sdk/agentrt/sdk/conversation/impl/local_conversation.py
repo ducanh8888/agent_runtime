@@ -138,8 +138,8 @@ _REAP_DEADLINE_SECONDS = 30
 ITERATION_BUDGET_WARNING_STEPS = 3
 
 ACP_STOP_HOOK_FEEDBACK_PREFIX = "[Stop hook feedback]"
-# AgentRT fork (#40): Cap consecutive stop hook denials to prevent endless loops.
-MAX_CONSECUTIVE_STOP_HOOK_DENIALS = 3
+# AgentRT fork (stop-hook denial cap): bound retries and allow runtime override.
+MAX_CONSECUTIVE_STOP_HOOK_DENIALS = int(os.environ.get("AGENTRT_STOP_HOOK_BLOCK_CAP", "8"))
 
 
 ASK_AGENT_LLM_USAGE_ID: Final[str] = "ask-agent-llm"
@@ -2109,7 +2109,8 @@ class LocalConversation(BaseConversation):
                     ):
                         if self._hook_processor is not None:
                             should_stop, feedback = self._hook_processor.run_stop(
-                                reason="agent_finished"
+                                reason="agent_finished",
+                                stop_hook_active=consecutive_stop_hook_denials > 0,
                             )
                             if not should_stop:
                                 consecutive_stop_hook_denials += 1
@@ -2132,6 +2133,22 @@ class LocalConversation(BaseConversation):
                                         ConversationErrorEvent(
                                             source="environment",
                                             code="StopHookUnmet",
+                                            detail=detail,
+                                        )
+                                    )
+                                    break
+                                if iteration >= self.max_iteration_per_run:
+                                    detail = (
+                                        "Agent reached maximum iterations limit "
+                                        f"({self.max_iteration_per_run}) after stop-hook denial."
+                                    )
+                                    if feedback:
+                                        detail += f" Last feedback: {feedback}"
+                                    self._state.execution_status = ConversationExecutionStatus.ERROR
+                                    self._on_event(
+                                        ConversationErrorEvent(
+                                            source="environment",
+                                            code="MaxIterationsReached",
                                             detail=detail,
                                         )
                                     )
@@ -2175,12 +2192,19 @@ class LocalConversation(BaseConversation):
                     step_user_message_id = self._state.last_user_message_id
                     if step_user_message_id is not None:
                         self._state.consumed_user_message_id = step_user_message_id
+                    step_start_event_count = len(self._state.events)
                     try:
                         self.agent.step(
                             self, on_event=self._on_event, on_token=self._on_token
                         )
                     finally:
                         self._step_holds_state_lock = False
+                    # AgentRT fork (stop-hook streak): only completed tool calls reset denials.
+                    if any(
+                        isinstance(event, (ObservationEvent, AgentErrorEvent))
+                        for event in self._state.events[step_start_event_count:]
+                    ):
+                        consecutive_stop_hook_denials = 0
                     iteration += 1
                     self._state.iterations_used = iteration
                     self._maybe_warn_iteration_budget(iteration)
@@ -2208,14 +2232,12 @@ class LocalConversation(BaseConversation):
                         break
 
                     if iteration >= self.max_iteration_per_run:
-                        # If the agent finished on this final iteration,
-                        # preserve the FINISHED status rather than
-                        # overwriting it with ERROR.
+                        # AgentRT fork (final-step stop hook): revisit FINISHED before enforcing the cap.
                         if (
                             self._state.execution_status
                             == ConversationExecutionStatus.FINISHED
                         ):
-                            break
+                            continue
                         error_msg = (
                             f"Agent reached maximum iterations limit "
                             f"({self.max_iteration_per_run})."
@@ -2355,7 +2377,8 @@ class LocalConversation(BaseConversation):
                     ):
                         if self._hook_processor is not None:
                             should_stop, feedback = self._hook_processor.run_stop(
-                                reason="agent_finished"
+                                reason="agent_finished",
+                                stop_hook_active=consecutive_stop_hook_denials > 0,
                             )
                             if not should_stop:
                                 consecutive_stop_hook_denials += 1
@@ -2378,6 +2401,22 @@ class LocalConversation(BaseConversation):
                                         ConversationErrorEvent(
                                             source="environment",
                                             code="StopHookUnmet",
+                                            detail=detail,
+                                        )
+                                    )
+                                    break
+                                if iteration >= self.max_iteration_per_run:
+                                    detail = (
+                                        "Agent reached maximum iterations limit "
+                                        f"({self.max_iteration_per_run}) after stop-hook denial."
+                                    )
+                                    if feedback:
+                                        detail += f" Last feedback: {feedback}"
+                                    self._state.execution_status = ConversationExecutionStatus.ERROR
+                                    self._on_event(
+                                        ConversationErrorEvent(
+                                            source="environment",
+                                            code="MaxIterationsReached",
                                             detail=detail,
                                         )
                                     )
@@ -2481,6 +2520,7 @@ class LocalConversation(BaseConversation):
                         # answer can never be attributed across it.
                         if last_user_message_id is not None:
                             self._state.consumed_user_message_id = last_user_message_id
+                        step_start_event_count = len(self._state.events)
                         try:
                             await self.agent.astep(
                                 self,
@@ -2489,6 +2529,12 @@ class LocalConversation(BaseConversation):
                             )
                         finally:
                             self._step_holds_state_lock = False
+                        # AgentRT fork (stop-hook streak): only completed tool calls reset denials.
+                        if any(
+                            isinstance(event, (ObservationEvent, AgentErrorEvent))
+                            for event in self._state.events[step_start_event_count:]
+                        ):
+                            consecutive_stop_hook_denials = 0
                         iteration += 1
                         self._state.iterations_used = iteration
                         self._maybe_warn_iteration_budget(iteration)
@@ -2564,7 +2610,7 @@ class LocalConversation(BaseConversation):
                                 self._state.execution_status
                                 == ConversationExecutionStatus.FINISHED
                             ):
-                                break
+                                continue
                             error_msg = (
                                 f"Agent reached maximum iterations limit "
                                 f"({self.max_iteration_per_run})."
@@ -2651,6 +2697,12 @@ class LocalConversation(BaseConversation):
                     prompt_message=acp_step_user_message,
                 )
                 with self._state:
+                    # AgentRT fork (stop-hook streak): only completed tool calls reset denials.
+                    if any(
+                        isinstance(event, (ObservationEvent, AgentErrorEvent))
+                        for event in self._state.events[acp_step_start_event_count:]
+                    ):
+                        consecutive_stop_hook_denials = 0
                     iteration += 1
                     self._state.iterations_used = iteration
                     pause_requested_during_acp_step = any(
@@ -2737,7 +2789,7 @@ class LocalConversation(BaseConversation):
                             self._state.execution_status
                             == ConversationExecutionStatus.FINISHED
                         ):
-                            break
+                            continue
                         error_msg = (
                             f"Agent reached maximum iterations limit "
                             f"({self.max_iteration_per_run})."

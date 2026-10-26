@@ -799,10 +799,10 @@ class TestStopHookIntegration:
         assert should_stop is False
         assert feedback == "Please complete X"
 
-    def test_stop_hook_error_is_logged_and_allows_stop(
+    def test_stop_hook_error_is_logged_and_denies_stop(
         self, tmp_path, mock_conversation_state
     ):
-        """Test that hook errors are handled gracefully and stopping is allowed."""
+        """Test that STOP hook execution errors fail closed and deny stopping."""
         command = python_command("import sys; sys.exit(1)")
 
         config = HookConfig.from_dict(
@@ -815,9 +815,44 @@ class TestStopHookIntegration:
 
         should_stop, feedback = processor.run_stop(reason="finish_tool")
 
-        # Error exit (1) doesn't block, so stopping should proceed
-        assert should_stop is True
-        assert feedback is None
+        # Plan 4.C: STOP hook errors treat failure as denial.
+        assert should_stop is False
+        assert feedback is not None
+        assert "Hook exited with code 1" in feedback
+
+    def test_stop_hook_timeout_denies_stop_with_error(
+        self, tmp_path, mock_conversation_state
+    ):
+        """Test that STOP hook timeouts fail closed and deny stopping."""
+        command = python_command("import time; time.sleep(2)")
+
+        config = HookConfig.from_dict(
+            {
+                "hooks": {
+                    "Stop": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": command,
+                                    "timeout": 1,
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+
+        manager = HookManager(config=config, working_dir=str(tmp_path))
+        processor = HookEventProcessor(hook_manager=manager)
+        processor.set_conversation_state(mock_conversation_state)
+
+        should_stop, feedback = processor.run_stop(reason="finish_tool")
+
+        assert should_stop is False
+        assert feedback is not None
+        assert "Hook timed out after 1 seconds" in feedback
 
 
 class TestStopHookConversationIntegration:
@@ -1147,4 +1182,4 @@ class TestHookExecutionEventEmission:
         hook_event = hook_events[0]
         assert hook_event.hook_event_type == "Stop"
         assert hook_event.success is True
-        assert hook_event.hook_input == {"reason": "finish"}
+        assert hook_event.hook_input == {"reason": "finish", "stop_hook_active": False}
