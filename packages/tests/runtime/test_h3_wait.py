@@ -99,6 +99,47 @@ def test_wait_all_groups_outcomes() -> None:
     assert out["still_running"] == []
     assert out["timed_out"] is False
     assert out["completed"][0]["result"] == "done"
+    assert out["completed"][0]["termination_reason"] == "finished"
+
+
+def test_status_result_wait_project_stop_hook_and_condensations() -> None:
+    statuses = {
+        E: {
+            "execution_status": "error",
+            "result_state": "partial",
+            "error": {"code": "StopHookUnmet", "detail": "denied"},
+            "condensation_steps": 2,
+        }
+    }
+    results = {
+        E: {
+            "response": "Work in progress",
+            "state": "partial",
+            "error": {"code": "StopHookUnmet", "detail": "denied"},
+            "condensation_steps": 2,
+        }
+    }
+    client = _mock_client(_handler(statuses, results))
+
+    for payload in (
+        client.status(E),
+        client.result(E),
+        client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)["partial"][0],
+    ):
+        assert payload["termination_reason"] == "stop_hook_unmet"
+        assert payload["condensation_steps"] == 2
+        assert "resume_hint" not in payload
+
+
+def test_older_response_omits_unknown_fields() -> None:
+    statuses = {E: {"result_state": "unavailable"}}
+    results = {E: {"response": None, "state": "unavailable"}}
+    client = _mock_client(_handler(statuses, results))
+
+    for payload in (client.status(E), client.result(E)):
+        assert "termination_reason" not in payload
+        assert "condensation_steps" not in payload
+        assert "resume_hint" not in payload
 
 
 def test_wait_buckets_an_error_with_no_usable_output_as_failed() -> None:
@@ -119,11 +160,70 @@ def test_wait_buckets_an_error_with_no_usable_output_as_failed() -> None:
     statuses = {E: {"execution_status": "error", "result_state": "partial"}}
     results = {E: {"response": "", "state": "partial"}}
     client = _mock_client(_handler(statuses, results))
-
     out = client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)
-
     assert [item["id"] for item in out["failed"]] == [E]
     assert out["partial"] == []
+
+
+def test_cap_returns_last_usable_text_and_waits_as_partial() -> None:
+    statuses = {E: {"execution_status": "error", "result_state": "partial"}}
+    results = {
+        E: {
+            "response": "Progress so far",
+            "state": "partial",
+            "request_message_id": "u1",
+            "error": {"code": "MaxIterationsReached", "detail": "cap"},
+        }
+    }
+    client = _mock_client(_handler(statuses, results))
+
+    result = client.result(E)
+    assert result["status"] == "error"
+    assert result["state"] == "partial"
+    assert result["result"] == "Progress so far"
+    assert "send" in result["resume_hint"]
+    assert "resume" in result["resume_hint"]
+    assert result["termination_reason"] == "cap"
+    waited = client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)[
+        "partial"
+    ][0]
+    assert waited["result"] == "Progress so far"
+    assert waited["termination_reason"] == "cap"
+    assert waited["resume_hint"] == result["resume_hint"]
+
+
+def test_termination_reason_mapping() -> None:
+    from agentrt.runtime.client import _termination_reason
+
+    assert _termination_reason(None, None) is None
+    assert _termination_reason("finished", None) == "finished"
+    assert _termination_reason("error", {"code": "MaxIterationsReached"}) == "cap"
+    assert _termination_reason("error", {"code": "StopHookUnmet"}) == "stop_hook_unmet"
+    assert (
+        _termination_reason("error", {"code": "DaemonRestarted"})
+        == "daemon_restarted"
+    )
+    assert (
+        _termination_reason("error", {"code": "RateLimitError"})
+        == "error:RateLimitError"
+    )
+    assert _termination_reason("stuck", None) == "stuck"
+    assert _termination_reason("paused", None) == "paused"
+
+
+def test_cap_without_usable_text_stays_failed() -> None:
+    statuses = {E: {"execution_status": "error", "result_state": "partial"}}
+    results = {
+        E: {
+            "response": "  ",
+            "state": "partial",
+            "error": {"code": "MaxIterationsReached", "detail": "cap"},
+        }
+    }
+    client = _mock_client(_handler(statuses, results))
+    result = client.result(E)
+    assert result["bucket"] == "failed"
+    assert "resume_hint" not in result
 
 
 def test_wait_timeout_returns_still_running() -> None:

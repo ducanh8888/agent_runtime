@@ -24,6 +24,27 @@ class TestAgentContext:
         assert context.system_message_suffix is None
         assert context.user_message_suffix is None
 
+    def test_preloaded_skill_prompt_and_unset_parity(self):
+        skill = Skill(
+            name="guidance",
+            content="Follow the special guidance.",
+            description="Guidance",
+            source="guidance/SKILL.md",
+            is_agentskills_format=True,
+        )
+        baseline = AgentContext(skills=[skill], current_datetime="2025-01-01")
+        preloaded = baseline.model_copy(update={"preloaded_skills": ["guidance"]})
+        assert (
+            AgentContext(
+                skills=[skill], current_datetime="2025-01-01"
+            ).get_system_message_suffix()
+            == baseline.get_system_message_suffix()
+        )
+        assert (
+            "Follow the special guidance." not in baseline.get_system_message_suffix()
+        )
+        assert "Follow the special guidance." in preloaded.get_system_message_suffix()
+
     def test_agent_context_creation_with_suffix(self):
         """Test creating AgentContext with custom suffixes."""
         context = AgentContext(

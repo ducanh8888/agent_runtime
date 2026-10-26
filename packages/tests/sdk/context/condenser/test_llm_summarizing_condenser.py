@@ -10,6 +10,7 @@ from litellm.types.utils import (
 )
 from pydantic import SecretStr
 
+from agentrt.sdk.context.agent_context import AgentContext
 from agentrt.sdk.context.condenser.base import (
     CondensationRequirement,
     NoCondensationAvailableException,
@@ -21,13 +22,24 @@ from agentrt.sdk.context.condenser.llm_summarizing_condenser import (
 from agentrt.sdk.context.view import View
 from agentrt.sdk.event.base import Event
 from agentrt.sdk.event.condenser import Condensation, CondensationRequest
-from agentrt.sdk.event.llm_convertible import MessageEvent
+from agentrt.sdk.event.llm_convertible import (
+    ActionEvent,
+    MessageEvent,
+    ObservationEvent,
+    SystemPromptEvent,
+)
 from agentrt.sdk.llm import (
     LLM,
     LLMResponse,
     Message,
+    MessageToolCall,
     MetricsSnapshot,
     TextContent,
+)
+from agentrt.sdk.skills import Skill
+from agentrt.sdk.tool.builtins.invoke_skill import (
+    InvokeSkillAction,
+    InvokeSkillObservation,
 )
 
 
@@ -186,6 +198,31 @@ def test_condense_returns_condensation_when_needed(mock_llm: LLM) -> None:
 
     # LLM should be called once
     cast(MagicMock, mock_llm.completion).assert_called_once()
+
+
+def test_preloaded_skill_survives_condensation(mock_llm: LLM) -> None:
+    skill = Skill(
+        name="guide", content="Unique full skill content", source="guide/SKILL.md"
+    )
+    context = AgentContext(skills=[skill], preloaded_skills=["guide"])
+    system = SystemPromptEvent(
+        system_prompt=TextContent(text="System"),
+        dynamic_context=TextContent(text=context.get_system_message_suffix()),
+        tools=[],
+    )
+    events: list[Event] = [system, *[message_event(str(i)) for i in range(11)]]
+    condenser = LLMSummarizingCondenser(llm=mock_llm, max_size=10, keep_first=2)
+
+    condensation = condenser.condense(View.from_events(events))
+
+    assert isinstance(condensation, Condensation)
+    assert system.id not in condensation.forgotten_event_ids
+    remaining = View.from_events([*events, condensation])
+    assert remaining.events[0].id == system.id
+    assert (
+        "Unique full skill content"
+        in remaining.events[0].to_llm_message().content[1].text
+    )
 
 
 def test_condense_uses_responses_api_when_required(mock_llm: LLM) -> None:
@@ -367,6 +404,75 @@ def test_condense_with_token_limit_exceeded(mock_llm: LLM) -> None:
 
     # Verify forgotten events were calculated based on token reduction
     assert len(result.forgotten_event_ids) > 0
+
+
+def test_condense_pins_recent_skill_pairs_with_bounded_budget(mock_llm: LLM) -> None:
+    condenser = LLMSummarizingCondenser(
+        llm=mock_llm, max_size=1000, max_tokens=42_000, keep_first=2
+    )
+    agent_llm = MagicMock(spec=LLM)
+    agent_llm.model = "gpt-4"
+    agent_llm.effective_max_input_tokens = None
+
+    def count_tokens(messages: list[Message], **_kwargs: Any) -> int:
+        return (
+            sum(
+                len(content.text)
+                for message in messages
+                for content in message.content
+                if isinstance(content, TextContent)
+            )
+            // 6
+        )
+
+    cast(MagicMock, agent_llm.get_token_count).side_effect = count_tokens
+    events: list[Event] = [message_event("first"), message_event("second")]
+    pairs: list[tuple[ActionEvent, ObservationEvent]] = []
+    for index in range(6):
+        name = f"skill-{index}"
+        tool_call_id = f"call-{index}"
+        action = ActionEvent(
+            thought=[],
+            action=InvokeSkillAction(name=name),
+            tool_name="invoke_skill",
+            tool_call_id=tool_call_id,
+            tool_call=MessageToolCall(
+                id=tool_call_id,
+                name="invoke_skill",
+                arguments=f'{{"name": "{name}"}}',
+                origin="completion",
+            ),
+            llm_response_id=f"response-{index}",
+        )
+        observation = ObservationEvent(
+            observation=InvokeSkillObservation.from_text(
+                text="x" * 13_000, skill_name=name
+            ),
+            tool_name="invoke_skill",
+            tool_call_id=tool_call_id,
+            action_id=action.id,
+        )
+        pairs.append((action, observation))
+
+    for skill_count in (5, 6):
+        view = View.from_events(
+            [*events, *(event for pair in pairs[:skill_count] for event in pair)]
+            + [message_event("y" * 24_000) for _ in range(12)]
+        )
+        assert Reason.TOKENS in condenser.get_condensation_reasons(
+            view, agent_llm=agent_llm
+        )
+        result = condenser.condense(view, agent_llm=agent_llm)
+        assert isinstance(result, Condensation)
+        forgotten = result.forgotten_event_ids
+        for action, observation in pairs[:skill_count]:
+            assert (action.id in forgotten) == (observation.id in forgotten)
+        for action, observation in pairs[skill_count - 5 : skill_count]:
+            assert action.id not in forgotten
+            assert observation.id not in forgotten
+        if skill_count == 6:
+            assert pairs[0][0].id in forgotten
+            assert pairs[0][1].id in forgotten
 
 
 @pytest.mark.parametrize(

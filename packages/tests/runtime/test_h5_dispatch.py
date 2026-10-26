@@ -122,6 +122,24 @@ def test_dispatch_omits_workspace_mode_by_default() -> None:
     client.dispatch("task", _ws("ws"))
 
     assert "workspace_mode" not in seen["body"]
+    assert "skills" not in seen["body"]
+
+
+def test_dispatch_forwards_preloaded_skills_and_rejects_unknown_before_create() -> None:
+    bodies: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        if "not-present" in bodies[-1].get("skills", []):
+            return httpx.Response(422, json={"detail": "Unknown skills: not-present"})
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch("task", _ws("ws"), skills=["review"])
+    assert bodies[0]["skills"] == ["review"]
+    with pytest.raises(client_mod.ClientError, match="Unknown skills: not-present"):
+        client.dispatch("task", _ws("ws"), skills=["not-present"])
+    assert len(bodies) == 2
 
 
 def test_dispatch_sends_snapshot_workspace_mode() -> None:
@@ -224,9 +242,14 @@ def test_dispatch_many_applies_defaults_and_rejects_unknown_arguments() -> None:
     result = client.dispatch_many(
         [
             {"task": "one", "tags": {"lane": "a"}},
-            {"task": "two", "workspace": _ws("other"), "tags": {"lane": "b"}},
+            {
+                "task": "two",
+                "workspace": _ws("other"),
+                "tags": {"lane": "b"},
+                "skills": ["other"],
+            },
         ],
-        defaults={"workspace": _ws("w"), "tags": {"batch": "x"}},
+        defaults={"workspace": _ws("w"), "tags": {"batch": "x"}, "skills": ["review"]},
     )
 
     assert result["count"] == 2
@@ -234,6 +257,10 @@ def test_dispatch_many_applies_defaults_and_rejects_unknown_arguments() -> None:
     assert tags == [("x", "a"), ("x", "b")]
     workspaces = sorted(body["workspace"]["working_dir"] for body in bodies)
     assert workspaces == [_ws("other"), _ws("w")]
+    assert {body["workspace"]["working_dir"]: body["skills"] for body in bodies} == {
+        _ws("w"): ["review"],
+        _ws("other"): ["other"],
+    }
 
 
 def test_dispatch_many_submits_items_concurrently() -> None:

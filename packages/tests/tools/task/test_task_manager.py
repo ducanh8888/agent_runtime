@@ -775,6 +775,30 @@ class TestTaskMetrics:
     def teardown_method(self):
         _reset_registry_for_tests()
 
+    def test_sub_agent_inherits_preloaded_skills(self, tmp_path):
+        from agentrt.sdk.context.agent_context import AgentContext
+        from agentrt.sdk.skills import Skill
+
+        manager, parent = _manager_with_parent(tmp_path)
+        parent.agent = parent.agent.model_copy(
+            update={
+                "agent_context": AgentContext(
+                    skills=[
+                        Skill(
+                            name="guide", content="Full guide", source="guide/SKILL.md"
+                        )
+                    ],
+                    preloaded_skills=["guide"],
+                )
+            }
+        )
+        register_builtins_agents()
+
+        sub_agent = manager._get_sub_agent("general-purpose")
+        assert sub_agent.agent_context is not None
+        assert "Full guide" in sub_agent.dynamic_context
+        assert sub_agent.agent_context.preloaded_skills == ["guide"]
+
     def test_sub_agent_has_independent_metrics(self, tmp_path):
         """Sub-agent LLM must not share the parent's Metrics object."""
         manager, parent = _manager_with_parent(tmp_path)

@@ -239,6 +239,26 @@ def _status_of(data: object) -> str | None:
     return data.get("execution_status") or data.get("status")
 
 
+def _termination_reason(status: str | None, error: dict | None) -> str | None:
+    """Project lifecycle and error details into a stable stopping reason."""
+    if status is None:
+        return None
+    code = error.get("code") if isinstance(error, dict) else None
+    if code == "MaxIterationsReached":
+        return "cap"
+    if code == "StopHookUnmet":
+        return "stop_hook_unmet"
+    if code == "DaemonRestarted":
+        return "daemon_restarted"
+    if code:
+        return f"error:{code}"
+    return {
+        "finished": "finished",
+        "stuck": "stuck",
+        "paused": "paused",
+    }.get(status)
+
+
 _DISPATCH_ARGUMENTS = frozenset(
     {
         "task",
@@ -254,6 +274,7 @@ _DISPATCH_ARGUMENTS = frozenset(
         "context_files",
         "require",
         "create_workspace",
+        "skills",
     }
 )
 
@@ -356,6 +377,9 @@ _OPTIONAL_RESPONSE_KEYS = (
     "progress_age_seconds",
     "error",
     "summary",
+    "resume_hint",
+    "condensation_steps",
+    "termination_reason",
 )
 
 
@@ -445,6 +469,14 @@ def _wait_bucket(payload: dict) -> str:
     if status == "finished":
         return "completed"
     text = payload.get("result")
+    error = payload.get("error")
+    if (
+        isinstance(error, dict)
+        and error.get("code") == "MaxIterationsReached"
+        and isinstance(text, str)
+        and _looks_like_tool_call(text)
+    ):
+        return "failed"
     if isinstance(text, str) and text.strip():
         return "partial"
     return "failed"
@@ -1587,6 +1619,7 @@ class Client:
         context_files: list[str] | None = None,
         require: str | None = None,
         create_workspace: bool = False,
+        skills: list[str] | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1694,6 +1727,9 @@ class Client:
         body["idempotency_key"] = idempotency_key or str(uuid.uuid4())
         if workspace_mode:
             body["workspace_mode"] = workspace_mode
+        if skills is not None:
+            # AgentRT fork (preload): the server validates names before persistence.
+            body["skills"] = skills
         if attachments:
             body["initial_message"]["content"].extend(
                 self._attachment_blocks(attachments, workspace=workspace)
@@ -1969,6 +2005,16 @@ class Client:
         result["admission_status"] = data.get("admission_status")
         result["iterations_used"] = data.get("iterations_used")
         result["iterations_remaining"] = data.get("iterations_remaining")
+        error = data.get("error")
+        termination_reason = _termination_reason(
+            _status_of(data), error if isinstance(error, dict) else None
+        )
+        if termination_reason is not None:
+            result["termination_reason"] = termination_reason
+        if data.get("condensation_steps") is not None:
+            result["condensation_steps"] = data["condensation_steps"]
+        if data.get("resume_hint") is not None:
+            result["resume_hint"] = data["resume_hint"]
         # H8 item 8: a snapshot-mode session's pinned commit, so a caller can
         # check what a review actually ran against without a separate call --
         # absent for the default "shared" mode, which has nothing pinned.
@@ -2070,7 +2116,7 @@ class Client:
             payload["completed_cleanly"] = False
             payload["completed_cleanly_reason"] = "session_not_finished"
         if status == "error":
-            if not payload.get("result") and not payload.get("error"):
+            if not payload.get("error"):
                 try:
                     error = self._latest_transcript_error(
                         resolved, request_message_id=payload.get("request_message_id")
@@ -2079,6 +2125,20 @@ class Client:
                         payload["error"] = error
                 except (ClientError, json.JSONDecodeError):
                     pass
+            # AgentRT fork (cap hand-off): keep error status, but expose a
+            # request-scoped usable answer as partial and resumable.
+            if (
+                isinstance(payload.get("error"), dict)
+                and payload["error"].get("code") == "MaxIterationsReached"
+                and isinstance(payload.get("result"), str)
+                and payload["result"].strip()
+                and not _looks_like_tool_call(payload["result"])
+                and payload.get("state") == "partial"
+            ):
+                payload["resume_hint"] = (
+                    "The run reached its step limit. Continue it with control "
+                    "send '<instruction>' or control resume."
+                )
             try:
                 payload["progress_summary"] = self._progress_summary(
                     resolved,
@@ -2094,6 +2154,12 @@ class Client:
                 # take the whole result with it -- on every errored session,
                 # with nothing to opt out of.
                 pass
+        termination_reason = _termination_reason(
+            payload.get("status"),
+            payload.get("error") if isinstance(payload.get("error"), dict) else None,
+        )
+        if termination_reason is not None:
+            payload["termination_reason"] = termination_reason
         return payload
 
     def _progress_summary(

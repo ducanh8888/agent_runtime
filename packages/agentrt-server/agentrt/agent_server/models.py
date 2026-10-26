@@ -246,6 +246,9 @@ class _ConversationInfoBase(BaseModel):
         ge=0,
         description="Steps completed in the run answering the current request.",
     )
+    condensation_steps: int = Field(
+        default=0, ge=0, description="Condensations in the current run."
+    )
     iterations_remaining: int | None = Field(
         default=None,
         description=(
@@ -795,6 +798,9 @@ class AgentResponseResult(BaseModel):
     )
     iterations_used: int | None = Field(
         default=None, description="Steps completed in the answering run."
+    )
+    condensation_steps: int | None = Field(
+        default=None, description="Condensations in the answering run."
     )
     iterations_remaining: int | None = Field(
         default=None, description="Steps left in that run's allowance."

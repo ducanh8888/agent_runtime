@@ -7,7 +7,7 @@ from agentrt.sdk.agent import Agent
 from agentrt.sdk.conversation import Conversation
 from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 from agentrt.sdk.conversation.state import ConversationExecutionStatus
-from agentrt.sdk.event import AgentErrorEvent, MessageEvent
+from agentrt.sdk.event import AgentErrorEvent, MessageEvent, ObservationEvent
 from agentrt.sdk.llm import Message, MessageToolCall, TextContent
 from agentrt.sdk.testing import TestLLM
 from agentrt.sdk.tool import (
@@ -50,6 +50,15 @@ class _AlwaysErrorTool(ToolDefinition[_AlwaysErrorAction, _AlwaysErrorObservatio
                 executor=executor,
             )
         ]
+
+
+class _ErrorObservationExecutor(
+    ToolExecutor[_AlwaysErrorAction, _AlwaysErrorObservation]
+):
+    def __call__(self, action: _AlwaysErrorAction, conversation=None):
+        return _AlwaysErrorObservation(
+            result="`file_text` is required for command: create.", is_error=True
+        )
 
 
 def _bad_tool_call(call_id: str) -> MessageToolCall:
@@ -197,3 +206,34 @@ def test_run_does_not_renudge_action_error_while_streak_is_frozen():
     assert isinstance(empty_corrective_nudge, TextContent)
     assert "always_error_tool" in action_error_nudge.text
     assert "did not include a function call" in empty_corrective_nudge.text
+
+
+def test_run_nudges_error_observations_before_repeating_action_becomes_stuck():
+    register_tool(
+        "always_error_tool",
+        _AlwaysErrorTool.create(executor=_ErrorObservationExecutor())[0],
+    )
+    llm = TestLLM.from_messages([_bad_tool_call_message(f"call_{i}") for i in range(4)])
+    conversation = Conversation(
+        agent=Agent(llm=llm, tools=[Tool(name="always_error_tool")])
+    )
+    conversation.send_message(
+        Message(role="user", content=[TextContent(text="Create /tmp/foo.py")])
+    )
+    conversation.run()
+
+    assert conversation.state.execution_status == ConversationExecutionStatus.STUCK
+    events = list(conversation.state.events)
+    observations = [e for e in events if isinstance(e, ObservationEvent)]
+    nudges = [
+        e for e in events if isinstance(e, MessageEvent) and e.source == "environment"
+    ]
+    assert len(observations) == 4
+    assert all(e.observation.is_error for e in observations)
+    assert len(nudges) == 1
+    assert (
+        events.index(observations[2])
+        < events.index(nudges[0])
+        < events.index(observations[3])
+    )
+    assert "file_text" in nudges[0].llm_message.content[0].text

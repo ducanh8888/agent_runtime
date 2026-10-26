@@ -180,11 +180,19 @@ def dispatch(
     context_files: list[str] | None = None,
     require: str | None = None,
     create_workspace: bool = False,
+    skills: list[str] | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
     The session keeps running after this conversation ends. Returns a
     short_id -- how you refer to the session in every other tool here.
+
+    `skills` names skills to preload in the system message. Unknown names are
+    refused by the daemon before the conversation is persisted.
+
+    `max_iterations` is optional and defaults to 100,000 in runtime dispatch
+    (native parity: no turn limit by default). Capped runs land with partial
+    output, `termination_reason: "cap"`, and a `resume_hint`.
 
     FIRST CALL ON A FRESH INSTALL. The daemon starts lazily, on the first
     dispatch, and a cold start imports the whole model stack -- this can take
@@ -368,6 +376,7 @@ def dispatch(
         context_files=context_files,
         require=require,
         create_workspace=create_workspace,
+        skills=skills,
     )
 
 
@@ -457,6 +466,9 @@ def status(session: str) -> dict:
     - `iterations_used` / `iterations_remaining` count steps against
       `max_iterations` for the current run, so an `error` session that ran out
       of steps is distinguishable here without reading the transcript.
+    - `condensation_steps` tracks condensations separately from work steps.
+    - `termination_reason` classifies completion: `finished`, `cap`,
+      `stop_hook_unmet`, `stuck`, `paused`, `daemon_restarted`, or `error:<code>`.
 
     `execution_status` still carries no message for `error`; read `result` for
     the sanitized code/detail and `transcript` for where it stopped.
@@ -509,7 +521,9 @@ def result(
 
     To wait: one notification when done -> run `agentrt wait <ids>` as a
     background shell command; live stream -> run `agentrt watch <ids>` under a
-    monitor; quick check -> call `status` or `result` directly.
+    monitor; quick check -> call `status` or `result` directly. Settled wait
+    items and `result` payloads surface `termination_reason`, `resume_hint`,
+    and `condensation_steps` when available.
 
     `state` scopes the answer. `final` means the run answering the newest
     consumed input finished; `result` is its text, and an empty string is a

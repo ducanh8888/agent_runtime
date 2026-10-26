@@ -235,12 +235,13 @@ def _constrain_switch_llm(store, profile):
     return constrained
 
 
-#: Summarise history once a request's events exceed this many tokens. Nothing
-#: else caps a router alias: its input limit is unknown, so the SDK has no
-#: token trigger, and the 240-event trigger never fired in measured sessions
-#: (prompts reached 180k tokens). Router data, 2026-10-08, 2,079 Devin calls:
-#: failures rise from ~4% to 12% and p50 latency doubles past ~40k tokens.
-CONDENSER_MAX_TOKENS = 40_000
+#: Summarise history once a request's events exceed this many tokens. Router
+#: data, 2026-10-26 (OMNI-Route): Devin is failover-only in agentrt-worker/hard
+#: and absent from the other agentrt combos; codex and gemini drive traffic
+#: without a 40k error cliff. 150k avoids premature condensation. The 262k
+#: combo ceiling imposed by the swe-2-max failover member is why it is not
+#: raised further or removed.
+CONDENSER_MAX_TOKENS = 150_000
 
 
 def _cap_condenser(store, profile):

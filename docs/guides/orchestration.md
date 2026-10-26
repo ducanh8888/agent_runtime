@@ -62,6 +62,10 @@ The second sentence is the one that changes behaviour. Note that this is still
 optimising the input: it supplies a fact the agent lacked — that the reference
 is exhaustive — rather than instructing it to think less.
 
+A dispatch does not need a small `max_iterations` to return useful work. If a
+run hits a cap, `result` and settled `wait` items return usable partial output
+with `termination_reason: "cap"` and a `resume_hint` explaining how to continue.
+
 ## Interrupt early
 
 `interrupt` kills work in flight and keeps the history, so redirecting a session

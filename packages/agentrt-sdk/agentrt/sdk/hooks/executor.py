@@ -560,6 +560,11 @@ class HookExecutor:
                 exit_code=result.returncode,
                 stdout=result.stdout,
                 stderr=result.stderr,
+                error=(
+                    f"Hook exited with code {result.returncode}"
+                    if result.returncode not in (0, 2)
+                    else None
+                ),
             )
 
             # Try to parse JSON from stdout

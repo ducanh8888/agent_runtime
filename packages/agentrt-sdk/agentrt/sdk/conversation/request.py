@@ -326,6 +326,8 @@ class StartConversationRequest(ConversationConfig):
     ``base_state.json``.
     """
 
+    # AgentRT fork (preload): names resolved against the launch agent skills.
+    skills: list[str] | None = None
     agent_settings: dict[str, Any] | None = Field(
         default=None,
         exclude=True,

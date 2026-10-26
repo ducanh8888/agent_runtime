@@ -43,6 +43,14 @@ def test_public_openapi_export_is_deterministic() -> None:
     assert first.endswith("\n")
 
 
+def test_start_conversation_accepts_optional_preloaded_skills() -> None:
+    schema = build_public_openapi()["components"]["schemas"]["StartConversationRequest"]
+    assert "skills" not in schema.get("required", [])
+    assert {"type": "array", "items": {"type": "string"}} in schema["properties"][
+        "skills"
+    ]["anyOf"]
+
+
 def test_mcp_contract_has_named_maps_variants_and_discriminators() -> None:
     document = build_public_openapi()
     schemas = document["components"]["schemas"]

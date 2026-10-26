@@ -17,6 +17,7 @@ from agentrt.sdk.context.prompts.section import CacheTier, PromptContext
 
 __all__ = [
     "AvailableSkillsSection",
+    "PreloadedSkillsSection",
     "CustomSecretsSection",
     "CustomSuffixSection",
     "DateTimeSection",
@@ -70,6 +71,22 @@ class RepoContextSection:
             f"{blocks}\n"
             "</REPO_CONTEXT>"
         )
+
+
+# AgentRT fork (preload): full selected content belongs in the kept system prompt.
+class PreloadedSkillsSection:
+    name = "preloaded_skills"
+    cache_tier = CacheTier.DYNAMIC
+
+    def guard(self, ctx: PromptContext) -> bool:
+        return bool(ctx.preloaded_skills)
+
+    def render(self, ctx: PromptContext) -> str | None:
+        blocks = "".join(
+            f"\n[BEGIN skill {name}]\n{content}\n[END skill {name}]\n"
+            for name, content in ctx.preloaded_skills
+        )
+        return f"<PRELOADED_SKILLS>{blocks}</PRELOADED_SKILLS>"
 
 
 class MemoryContextSection:

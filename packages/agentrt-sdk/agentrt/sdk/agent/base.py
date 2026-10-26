@@ -444,6 +444,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         skill_names: tuple[str, ...] = ()
         secret_names: tuple[str, ...] = ()
         repo_skills: tuple[tuple[str, str], ...] = ()
+        preloaded_skills: tuple[tuple[str, str], ...] = ()
         available_skills_prompt: str | None = None
         custom_suffix: str | None = None
         memory_context: str | None = None
@@ -462,6 +463,11 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
             now = data.formatted_datetime
             skill_names = tuple(skill.name for skill in agent_context.skills)
             repo_skills = tuple((s.name, s.content) for s in data.repo_skills)
+            # AgentRT fork (preload): mirror the context renderer in the agent prompt.
+            preloaded_skills = tuple(
+                (s.name, s.content) for s in agent_context.skills
+                if s.name in agent_context.preloaded_skills
+            )
             available_skills_prompt = data.available_skills_prompt or None
             custom_suffix = agent_context.system_message_suffix or None
             memory_context = agent_context.memory_context or None
@@ -491,6 +497,7 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
             skill_names=skill_names,
             secret_names=secret_names,
             repo_skills=repo_skills,
+            preloaded_skills=preloaded_skills,
             available_skills_prompt=available_skills_prompt,
             custom_suffix=custom_suffix,
             memory_context=memory_context,

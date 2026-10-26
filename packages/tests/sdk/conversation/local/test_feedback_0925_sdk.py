@@ -86,9 +86,7 @@ def _budget_notices(conversation) -> list[MessageEvent]:
     ]
 
 
-def test_agent_is_told_once_to_wrap_up_before_the_iteration_cap() -> None:
-    """25/09 #4: a read-only session hit MaxIterationsReached with its
-    findings unwritten. It now gets one notice three steps before the cap."""
+def test_iteration_cap_does_not_emit_step_budget_notice() -> None:
     _register_tool()
     llm = TestLLM.from_messages([_tool_call(f"c{i}", f"cmd{i}") for i in range(8)])
     conversation = Conversation(
@@ -100,16 +98,12 @@ def test_agent_is_told_once_to_wrap_up_before_the_iteration_cap() -> None:
     )
     conversation.run()
 
-    notices = _budget_notices(conversation)
-    assert len(notices) == 1
-    text = notices[0].llm_message.content[0]
-    assert isinstance(text, TextContent)
-    assert "3 step(s)" in text.text
+    assert _budget_notices(conversation) == []
     # The cap itself is unchanged.
     assert conversation.state.execution_status == ConversationExecutionStatus.ERROR
 
 
-async def test_budget_notice_also_on_the_async_run_path() -> None:
+async def test_async_iteration_cap_does_not_emit_step_budget_notice() -> None:
     _register_tool()
     llm = TestLLM.from_messages([_tool_call(f"c{i}", f"cmd{i}") for i in range(8)])
     conversation = Conversation(
@@ -120,7 +114,7 @@ async def test_budget_notice_also_on_the_async_run_path() -> None:
         Message(role="user", content=[TextContent(text="investigate")])
     )
     await conversation.arun()
-    assert len(_budget_notices(conversation)) == 1
+    assert _budget_notices(conversation) == []
 
 
 def test_resuming_a_stuck_session_gives_the_agent_another_step() -> None:

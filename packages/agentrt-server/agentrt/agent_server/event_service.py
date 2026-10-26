@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -40,6 +41,7 @@ from agentrt.sdk.agent.acp_file_credentials import (
     CODEX_AUTH_SECRET_NAME,
     is_valid_codex_auth,
 )
+from agentrt.sdk.agent.utils import prepare_llm_messages
 from agentrt.sdk.conversation.base import BaseConversation
 from agentrt.sdk.conversation.events_list_base import EventsListBase
 from agentrt.sdk.conversation.exceptions import ConversationRunError
@@ -78,10 +80,12 @@ from agentrt.sdk.credential import (
 from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
+    MessageEvent,
     ObservationBaseEvent,
     ObservationEvent,
     StreamingDeltaEvent,
 )
+from agentrt.sdk.event.condenser import Condensation
 from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 from agentrt.sdk.event.conversation_state import ConversationStateUpdateEvent
 from agentrt.sdk.event.error_classification import (
@@ -96,6 +100,7 @@ from agentrt.sdk.git.utils import (
     run_git_command,
     validate_git_repository,
 )
+from agentrt.sdk.llm.message import content_to_str
 from agentrt.sdk.llm.streaming import LLMStreamChunk
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
@@ -116,6 +121,14 @@ FINALIZE_SUMMARY_PROMPT = (
     "was completed, what remains, and anything a follow-up run needs to know. "
     "Do not claim anything the recorded work does not support.\n\n"
     "Recorded answer:\n{answer}"
+)
+
+# AgentRT fork (cap hand-off): match the runtime's textual tool-call detector.
+_UNEXECUTED_TOOL_TEXT = re.compile(
+    r"(?:```[a-z]*\s*)?"
+    r"(?:<\s*(?:tool|tool_call|tool_use|function_call|invoke)\b"
+    r'|\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"(?:arguments|parameters|input)"\s*:)',
+    re.IGNORECASE,
 )
 
 
@@ -142,15 +155,14 @@ def _progress_age_seconds(last_progress_at: str | None) -> float | None:
     return max(0.0, (datetime.now(UTC) - parsed).total_seconds())
 
 
-def _finalize_completion(llm, prompt: str) -> str:
-    """One tools-disabled completion for the finalize summary.
-
-    No tools are passed, so none can be offered or executed. Streaming is off
-    because the text is consumed whole with no token callback.
-    """
+def _finalize_completion(
+    llm, prompt: str, *, context: list[Message] | None = None
+) -> str:
+    """One tools-disabled completion for a summary or cap hand-off."""
     if getattr(llm, "stream", False):
         llm = llm.model_copy(update={"stream": False})
-    messages = [Message(role="user", content=[TextContent(text=prompt)])]
+    messages = list(context or [])
+    messages.append(Message(role="user", content=[TextContent(text=prompt)]))
     response = llm.completion(messages)
     blocks = getattr(getattr(response, "message", None), "content", None) or []
     return "".join(
@@ -234,6 +246,9 @@ class EventService:
     # True when start() found this conversation persisted as RUNNING -- i.e.
     # a previous daemon died mid-run -- and moved it to ERROR.
     recovered_from_restart: bool = field(default=False, init=False)
+    # AgentRT fork (restart hand-off): queued recovery loses to explicit user action.
+    restart_resume_pending: bool = field(default=False, init=False)
+    resume_after_restart: bool = True
     # time.monotonic() of the last activity-driven meta.json write; 0 means
     # never, so the first event after start persists immediately.
     meta_saved_at: float = field(default=0.0, init=False)
@@ -1022,6 +1037,7 @@ class EventService:
         # conversation. The goal loop's own messages pass _from_goal_loop=True.
         if not _from_goal_loop:
             await self.stop_goal_loop()
+            self.restart_resume_pending = False
         explicit_interrupt_generation = self._explicit_interrupt_generation
         loop = asyncio.get_running_loop()
         # AgentRT fork: send_message takes the state lock, which a busy step
@@ -1544,12 +1560,17 @@ class EventService:
                     code="DaemonRestarted",
                     detail=(
                         "The runtime daemon restarted while this run was in "
-                        "flight, so the run was stopped. Its history is intact; "
-                        "send a message to continue it."
+                        "flight. Its history is intact; "
+                        + (
+                            "the run will resume automatically."
+                            if self.resume_after_restart
+                            else "send a message to continue it."
+                        )
                     ),
                 )
             )
             self.recovered_from_restart = True
+            self.restart_resume_pending = self.resume_after_restart
 
         # Publish initial state update
         await self._publish_state_update()
@@ -1686,6 +1707,9 @@ class EventService:
                         await loop.run_in_executor(
                             None, self._callback_wrapper.wait_for_pending, 30.0
                         )
+                    # AgentRT fork (cap hand-off): the SDK has already persisted
+                    # the cap error; append a best-effort answer before publishing.
+                    await self._wrap_up_capped_run(baseline_events)
 
                     # Clear task reference and publish state update
                     self._run_task = None
@@ -2023,6 +2047,7 @@ class EventService:
 
     async def pause(self):
         if self._conversation:
+            self.restart_resume_pending = False
             self._explicit_interrupt_generation += 1
             self._rerun_requested = False
             self._acp_internal_rerun_requested = False
@@ -2040,6 +2065,7 @@ class EventService:
         """
         if self._conversation:
             if not internal_acp_rerun:
+                self.restart_resume_pending = False
                 self._explicit_interrupt_generation += 1
                 self._rerun_requested = False
                 self._acp_internal_rerun_requested = False
@@ -2142,7 +2168,10 @@ class EventService:
 
         # Drain in-flight run before teardown so MCP close doesn't race
         # with a tool call mid-step.
-        if self._run_task is not None and not self._run_task.done():
+        # AgentRT fork (restart hand-off): hold the task across pause, which
+        # can finish the run and clear self._run_task before cancellation.
+        run_task = self._run_task
+        if run_task is not None and not run_task.done():
             if self._conversation is not None:
                 loop = asyncio.get_running_loop()
                 try:
@@ -2155,9 +2184,9 @@ class EventService:
             # transition to PAUSED cleanly.  For the legacy thread-pool
             # path the underlying thread keeps running but the wrapper
             # task still settles, unblocking the wait below.
-            self._run_task.cancel()
+            run_task.cancel()
             try:
-                await asyncio.wait_for(self._run_task, timeout=10.0)
+                await asyncio.wait_for(run_task, timeout=10.0)
             except asyncio.CancelledError:
                 pass  # Expected after cancel()
             except Exception as exc:
@@ -2338,6 +2367,20 @@ class EventService:
             last_tool, last_progress_at, error = self._scan_request_tail(
                 events, boundary_index
             )
+            # AgentRT fork (cap hand-off): an empty terminal agent message
+            # must not erase useful text earlier in the same request.
+            if (
+                error is not None
+                and error.code == "MaxIterationsReached"
+                and not response
+            ):
+                for event in reversed(events[(boundary_index or 0) + 1 :]):
+                    if isinstance(event, MessageEvent) and event.source == "agent":
+                        text = "".join(content_to_str(event.llm_message.content))
+                        if text.strip():
+                            response = text
+                            finish_reason = event.llm_message.finish_reason
+                            break
         else:
             # No answer means no provenance to report. A previous request's
             # error or tool must not be presented as this request's.
@@ -2363,6 +2406,7 @@ class EventService:
                 else None
             ),
             iterations_used=state.iterations_used,
+            condensation_steps=getattr(state, "condensation_steps", 0),
             iterations_remaining=iterations_remaining(state),
             last_completed_tool=last_tool,
             last_progress_at=last_progress_at,
@@ -2381,6 +2425,21 @@ class EventService:
         """Return the current request's answer, state, error and progress."""
         if not self._conversation:
             raise ValueError("inactive_service")
+        run_task = self._run_task
+        if run_task is not None and not run_task.done():
+            state = self._conversation._state
+            # The SDK records the cap error before this task completes its
+            # tools-disabled answer. Do not publish a provisional empty result.
+            if (
+                state.execution_status == ConversationExecutionStatus.ERROR
+                and any(
+                    isinstance(event, ConversationErrorEvent)
+                    and event.code == "MaxIterationsReached"
+                    for event in state.events
+                )
+                and run_task is not asyncio.current_task()
+            ):
+                await asyncio.shield(run_task)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_agent_response_result_sync)
 
@@ -2494,20 +2553,60 @@ class EventService:
             if attempt < 2:
                 await asyncio.sleep(0.2)
 
-    async def _run_final_summary(self, boundary: str) -> None:
-        """Run the opt-in tools-disabled wrap-up. Best-effort: never raises."""
+    async def _wrap_up_capped_run(self, baseline_events: int) -> None:
+        """Produce one request-scoped answer when a capped run left none usable."""
+        conversation = self._conversation
+        if conversation is None:
+            return
+        state = conversation._state
+        try:
+            tail = list(state.events[baseline_events:])
+            if not any(
+                isinstance(event, ConversationErrorEvent)
+                and event.code == "MaxIterationsReached"
+                for event in tail
+            ):
+                return
+            boundary = state.consumed_user_message_id
+            if boundary is None:
+                return
+            index = index_of_event(state.events, boundary)
+            if index is None:
+                return
+            request_events = state.events[index + 1 :]
+            last = next(
+                (
+                    event
+                    for event in reversed(request_events)
+                    if isinstance(event, (MessageEvent, ActionEvent))
+                    and event.source == "agent"
+                ),
+                None,
+            )
+            if isinstance(last, MessageEvent):
+                text = "".join(content_to_str(last.llm_message.content)).strip()
+                if text and not _UNEXECUTED_TOOL_TEXT.match(text):
+                    return
+            await self._run_final_summary(boundary, cap_wrap_up=True)
+        except Exception:
+            logger.warning("cap wrap-up failed for %s", self.stored.id, exc_info=True)
+
+    async def _run_final_summary(
+        self, boundary: str, *, cap_wrap_up: bool = False
+    ) -> None:
+        """Run the tools-disabled wrap-up. Best-effort: never raises."""
         conversation = self._conversation
         if conversation is None:
             return
         state = conversation._state
         remaining = iterations_remaining(state)
-        if remaining <= 0:
+        if not cap_wrap_up and remaining <= 0:
             logger.info(
                 "finalize summary skipped for %s: no iteration allowance left",
                 self.stored.id,
             )
             return
-        if remaining == 1:
+        if not cap_wrap_up and remaining == 1:
             logger.warning(
                 "finalize summary takes the last iteration of the run for %s",
                 self.stored.id,
@@ -2520,8 +2619,17 @@ class EventService:
             answer=(answer or "(none recorded)")[-4000:]
         )
         try:
+            context = None
+            if cap_wrap_up:
+                context = prepare_llm_messages(
+                    state.view, getattr(conversation.agent, "condenser", None), llm=llm
+                )
+                if isinstance(context, Condensation):
+                    return
             loop = asyncio.get_running_loop()
-            text = await loop.run_in_executor(None, _finalize_completion, llm, prompt)
+            text = await loop.run_in_executor(
+                None, lambda: _finalize_completion(llm, prompt, context=context)
+            )
         except Exception:
             logger.warning(
                 "finalize summary failed for %s", self.stored.id, exc_info=True
@@ -2530,9 +2638,22 @@ class EventService:
         if not text:
             return
         with state:
-            state.final_summary = text
-            # The call is charged to the same allowance the run was given.
-            state.iterations_used = min(state.max_iterations, state.iterations_used + 1)
+            if cap_wrap_up:
+                # AgentRT fork (cap hand-off): persist after the SDK cap error
+                # without charging a normal iteration.
+                conversation._on_event(
+                    MessageEvent(
+                        source="agent",
+                        llm_message=Message(
+                            role="assistant", content=[TextContent(text=text)]
+                        ),
+                    )
+                )
+            else:
+                state.final_summary = text
+                state.iterations_used = min(
+                    state.max_iterations, state.iterations_used + 1
+                )
 
     async def get_state(self) -> ConversationState:
         if not self._conversation:

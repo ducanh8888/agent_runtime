@@ -9,6 +9,7 @@ from agentrt.sdk.event import (
     ObservationBaseEvent,
     ObservationEvent,
 )
+from agentrt.sdk.llm import TextContent
 from agentrt.sdk.logger import get_logger
 
 
@@ -42,7 +43,7 @@ class StuckDetector:
     ):
         self.state = state
         self.thresholds = thresholds or StuckDetectionThresholds()
-        # Id of the AgentErrorEvent already nudged for, so a frozen streak
+        # Id of the error event already nudged for, so a frozen streak
         # (e.g. an empty/reasoning-only response that adds no new action)
         # doesn't re-emit the same nudge every iteration.
         self._last_nudged_error_event_id: str | None = None
@@ -217,11 +218,20 @@ class StuckDetector:
         if not last_actions or not last_observations:
             return 0
         reference = last_actions[0]
+        reference_observation = last_observations[0]
+        if not isinstance(reference_observation, AgentErrorEvent) and not (
+            isinstance(reference_observation, ObservationEvent)
+            and reference_observation.observation.is_error
+        ):
+            return 0
         streak = 0
         for action, observation in zip(last_actions, last_observations):
             if not self._event_eq(reference, action):
                 break
-            if not isinstance(observation, AgentErrorEvent):
+            if isinstance(reference_observation, ObservationEvent):
+                if not self._event_eq(reference_observation, observation):
+                    break
+            elif not isinstance(observation, AgentErrorEvent):
                 break
             streak += 1
         return streak
@@ -254,16 +264,25 @@ class StuckDetector:
         action = last_actions[0]
         error = last_observations[0]
         assert isinstance(action, ActionEvent)
-        assert isinstance(error, AgentErrorEvent)
+        assert isinstance(error, (AgentErrorEvent, ObservationEvent))
 
         if error.id == self._last_nudged_error_event_id:
             return None
         self._last_nudged_error_event_id = error.id
 
+        error_text = (
+            str(error.error)
+            if isinstance(error, AgentErrorEvent)
+            else " ".join(
+                content.text
+                for content in error.observation.to_llm_content
+                if isinstance(content, TextContent)
+            )
+        )
         return (
             f"You've called `{action.tool_name}` with the same arguments "
             f"{threshold} times in a row and gotten the same error each "
-            f"time: {error.error}. Repeating the exact same call again "
+            f"time: {error_text}. Repeating the exact same call again "
             "will not work — review the error message and either correct "
             "the arguments or try a different approach."
         )

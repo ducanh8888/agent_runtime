@@ -198,6 +198,8 @@ class ConversationState(OpenHandsModel):
         ),
     )
 
+    condensation_steps: int = Field(default=0, ge=0)
+
     # H3 finalization. The request is recorded against the input boundary it
     # finalized, so repeating it is a no-op rather than a second summary or a
     # replay of work already done.

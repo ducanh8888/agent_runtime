@@ -53,14 +53,23 @@ immutable result records. Machine consumers should read
 
 - [Testing](guides/testing.md) — which checks to run, narrow selections first,
   and the known environment-dependent failures.
-- [OmniRoute migration plan](plans/omniroute-migration.md) — the active plan:
-  which items are done, which are open, and which were deliberately declined.
-  This is the authority on project status, not any summary elsewhere.
+- [Iteration budget plan](plans/iteration-budget.md) — the active plan:
+  minimum operator effort with Claude Code native sub-agent semantics (a
+  cap returns a partial, resumable result; stop hooks like `SubagentStop`;
+  skills loaded once; a restart hands the run back); the defects the
+  research found; what is deferred and what was declined. This is the
+  authority on project status, not any summary elsewhere.
+- [Claude Code sub-agents](research/claude-code-subagents.md) — the
+  documented behaviour of Claude Code's native sub-agents, the parity target
+  for the active plan.
+- [OmniRoute migration plan](plans/omniroute-migration.md) — the completed
+  router-neutral LLM contract and the issue work up to 2026-10-24; its open
+  items are carried over in the active plan.
 - [Hardening plan](plans/deepseek-hardening.md) — the completed DeepSeek
   hardening plan.
 - [Initial runtime plan](plans/initial-runtime.md) — the historical P1–P4 plan.
 - [Self-audit and evidence](research/deepseek-hardening-audit.md) — the audit
-  the active plan was built from.
+  the hardening plan was built from.
 - [Result records](results/) — immutable phase and baseline evidence
   (`h0`–`h7`, `p1`–`p4`, Linux baseline).
 

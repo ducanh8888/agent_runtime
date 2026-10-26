@@ -21,6 +21,7 @@ from agentrt.sdk.context.prompts.sections.dynamic import (
     CustomSuffixSection,
     DateTimeSection,
     MemoryContextSection,
+    PreloadedSkillsSection,
     RepoContextSection,
 )
 from agentrt.sdk.context.prompts.sections.planning import PlanningSection
@@ -79,6 +80,7 @@ _PLANNING_STATIC_SECTIONS: Final[tuple[PromptSection, ...]] = (PlanningSection()
 
 _DYNAMIC_SECTIONS: Final[tuple[PromptSection, ...]] = (
     RepoContextSection(),  # guard: gated repo skills present
+    PreloadedSkillsSection(),  # AgentRT fork (preload): full skill content
     MemoryContextSection(),  # guard: resolved memory present
     AvailableSkillsSection(),  # guard: available_skills_prompt
     CustomSuffixSection(),  # guard: system_message_suffix
