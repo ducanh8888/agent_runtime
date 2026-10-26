@@ -578,3 +578,29 @@ def test_projection_defaults_to_whole_when_no_reason_was_recorded() -> None:
 
     assert result.finish_reason is None
     assert result.truncated is False
+
+
+def test_cap_returns_last_nonempty_text_after_consumed_input() -> None:
+    from agentrt.sdk.event.conversation_error import ConversationErrorEvent
+
+    service = _service(
+        [
+            _user("u0", "old"),
+            _agent("a0", "old answer"),
+            _user("u1", "new"),
+            _agent("a1", "work done"),
+            _agent("a2", ""),
+            ConversationErrorEvent(
+                source="environment", code="MaxIterationsReached", detail="cap"
+            ),
+        ],
+        last_user_message_id="u1",
+        consumed_user_message_id="u1",
+        execution_status=ConversationExecutionStatus.ERROR,
+    )
+    result = service._get_agent_response_result_sync()
+    assert result.state is AgentResponseState.PARTIAL
+    assert result.response == "work done"
+    assert result.error is not None
+    assert result.error.code == "MaxIterationsReached"
+

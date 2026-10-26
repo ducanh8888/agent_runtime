@@ -119,11 +119,47 @@ def test_wait_buckets_an_error_with_no_usable_output_as_failed() -> None:
     statuses = {E: {"execution_status": "error", "result_state": "partial"}}
     results = {E: {"response": "", "state": "partial"}}
     client = _mock_client(_handler(statuses, results))
-
     out = client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)
-
     assert [item["id"] for item in out["failed"]] == [E]
     assert out["partial"] == []
+
+
+def test_cap_returns_last_usable_text_and_waits_as_partial() -> None:
+    statuses = {E: {"execution_status": "error", "result_state": "partial"}}
+    results = {
+        E: {
+            "response": "Progress so far",
+            "state": "partial",
+            "request_message_id": "u1",
+            "error": {"code": "MaxIterationsReached", "detail": "cap"},
+        }
+    }
+    client = _mock_client(_handler(statuses, results))
+
+    result = client.result(E)
+    assert result["status"] == "error"
+    assert result["state"] == "partial"
+    assert result["result"] == "Progress so far"
+    assert "send" in result["resume_hint"]
+    assert "resume" in result["resume_hint"]
+    assert client.wait([E], mode="all", timeout=5.0, poll_interval=0.5)[
+        "partial"
+    ][0]["result"] == "Progress so far"
+
+
+def test_cap_without_usable_text_stays_failed() -> None:
+    statuses = {E: {"execution_status": "error", "result_state": "partial"}}
+    results = {
+        E: {
+            "response": "  ",
+            "state": "partial",
+            "error": {"code": "MaxIterationsReached", "detail": "cap"},
+        }
+    }
+    client = _mock_client(_handler(statuses, results))
+    result = client.result(E)
+    assert result["bucket"] == "failed"
+    assert "resume_hint" not in result
 
 
 def test_wait_timeout_returns_still_running() -> None:

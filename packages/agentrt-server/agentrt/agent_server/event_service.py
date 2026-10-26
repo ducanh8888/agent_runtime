@@ -78,6 +78,7 @@ from agentrt.sdk.credential import (
 from agentrt.sdk.event import (
     ActionEvent,
     AgentErrorEvent,
+    MessageEvent,
     ObservationBaseEvent,
     ObservationEvent,
     StreamingDeltaEvent,
@@ -96,6 +97,7 @@ from agentrt.sdk.git.utils import (
     run_git_command,
     validate_git_repository,
 )
+from agentrt.sdk.llm.message import content_to_str
 from agentrt.sdk.llm.streaming import LLMStreamChunk
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.security.analyzer import SecurityAnalyzerBase
@@ -2338,6 +2340,20 @@ class EventService:
             last_tool, last_progress_at, error = self._scan_request_tail(
                 events, boundary_index
             )
+            # AgentRT fork (cap hand-off): an empty terminal agent message
+            # must not erase useful text earlier in the same request.
+            if (
+                error is not None
+                and error.code == "MaxIterationsReached"
+                and not response
+            ):
+                for event in reversed(events[boundary_index + 1 :]):
+                    if isinstance(event, MessageEvent) and event.source == "agent":
+                        text = "".join(content_to_str(event.llm_message.content))
+                        if text.strip():
+                            response = text
+                            finish_reason = event.llm_message.finish_reason
+                            break
         else:
             # No answer means no provenance to report. A previous request's
             # error or tool must not be presented as this request's.
