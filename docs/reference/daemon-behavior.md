@@ -287,25 +287,25 @@ iteration. Each `run()` resets `iterations_used` to zero before looping, so a
 
 ## Iteration limits
 
-`max_iterations` on the conversation model **defaults to 500**. There is no
-unlimited session, only one whose ceiling nobody chose. Confirmed by reading it
-back off six sessions: the two dispatched with an explicit limit report it, the
-other four report 500.
+`max_iterations` is optional for `dispatch`: the runtime sends 100,000 by
+default (overridable with `AGENTRT_DEFAULT_MAX_ITERATIONS`), effectively no
+turn limit for ordinary work. The conversation model's own default is 500, but
+that is not the default used by a runtime dispatch. Set a smaller value only
+when you need a hard per-run budget.
 
-Running out lands the session in `execution_status: "error"` -- not `finished`
--- and the daemon carries **no message for it**: `ConversationInfo` has no
-`error` field, so the status alone does not say why. The *counter*, however, is
-in the payload, and `status` reports it: `iterations_used` and
-`iterations_remaining` (see `agentrt/runtime/client.py`). A session that
-exhausted a limit you set is therefore distinguishable from one that genuinely
-failed without reading the transcript -- compare `iterations_used` against the
-`max_iterations` you asked for. This section previously claimed the two were
-indistinguishable; that was wrong, and the MCP `status` docstring said the
-opposite all along.
+At the cap, `execution_status` is `"error"` with code
+`MaxIterationsReached`, but the run returns its last usable output as a
+`partial` result. You do not need to set `max_iterations` to get usable output:
+`termination_reason: "cap"` identifies the cut, and a `resume_hint` on a
+usable partial explains how to continue. `status`, `result`, and settled
+`wait` items surface `termination_reason` and `condensation_steps` when
+available; `iterations_used` counts work steps, not condensations. On older
+daemons missing fields stay absent, rather than being reported as null.
 
-The agent is not warned before the cut, and the budget is **per run**. A `send`
-after exhaustion starts a fresh allowance of the same size, so a limit of 5 with
-three follow-ups is up to twenty steps.
+There is no proactive warning before a cut: the former three-steps-before-cap
+notice was removed by design in favor of partial output on exhaustion. The
+budget is **per run**. A `send` after exhaustion starts a fresh allowance of
+the same size, so a limit of 5 with three follow-ups is up to twenty steps.
 
 ## Tags
 
