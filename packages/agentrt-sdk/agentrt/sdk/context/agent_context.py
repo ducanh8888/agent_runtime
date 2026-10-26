@@ -81,7 +81,10 @@ class AgentContext(BaseModel):
         json_schema_extra={"acp_compatible": True},
     )
     # AgentRT fork (preload): keep the selected skill names with the agent context.
-    preloaded_skills: list[str] = Field(default_factory=list)
+    preloaded_skills: list[str] = Field(
+        default_factory=list,
+        json_schema_extra={"acp_compatible": True},
+    )
     system_message_suffix: str | None = Field(
         default=None,
         description="Optional suffix to append to the system prompt.",
