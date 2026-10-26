@@ -49,6 +49,7 @@ from agentrt.sdk.event import (
     PauseEvent,
     UserRejectObservation,
 )
+from agentrt.sdk.event.condenser import Condensation
 from agentrt.sdk.event.conversation_error import ConversationErrorEvent
 from agentrt.sdk.event.error_classification import AGENT_OUTCOME
 from agentrt.sdk.hooks import HookConfig, HookEventProcessor, create_hook_callback
@@ -762,6 +763,23 @@ class LocalConversation(BaseConversation):
             return True
 
         return False
+
+    def _record_step(self, start: int, iteration: int, streak: int) -> tuple[int, int]:
+        events = self._state.events[start:]
+        if events and all(
+            isinstance(e, (Condensation, CondensationRequest)) for e in events
+        ):
+            self._state.condensation_steps += 1
+            streak += 1
+            if streak >= 3:
+                logger.warning(
+                    "Context-loop detected: three consecutive condensation-only steps."
+                )
+                self._state.execution_status = ConversationExecutionStatus.STUCK
+            return iteration, streak
+        iteration += 1
+        self._state.iterations_used = iteration
+        return iteration, 0
 
     @property
     def stuck_detector(self) -> StuckDetector | None:
@@ -2088,6 +2106,7 @@ class LocalConversation(BaseConversation):
 
         iteration = 0
         consecutive_stop_hook_denials = 0
+        condensation_streak = 0
         _run_start_event_count = len(self._state.events)
         try:
             while True:
@@ -2205,9 +2224,13 @@ class LocalConversation(BaseConversation):
                         for event in self._state.events[step_start_event_count:]
                     ):
                         consecutive_stop_hook_denials = 0
-                    iteration += 1
-                    self._state.iterations_used = iteration
-                    self._maybe_warn_iteration_budget(iteration)
+                    iteration, condensation_streak = self._record_step(
+                        step_start_event_count, iteration, condensation_streak
+                    )
+                    if self._state.execution_status == ConversationExecutionStatus.STUCK:
+                        break
+                    if condensation_streak == 0:
+                        self._maybe_warn_iteration_budget(iteration)
 
                     # Check for non-finished terminal conditions
                     # Note: We intentionally do NOT check for FINISHED status here.
@@ -2357,6 +2380,7 @@ class LocalConversation(BaseConversation):
 
         iteration = 0
         consecutive_stop_hook_denials = 0
+        condensation_streak = 0
         _run_start_event_count = len(self._state.events)
         try:
             await asyncio.to_thread(self._ensure_agent_ready)
@@ -2535,9 +2559,13 @@ class LocalConversation(BaseConversation):
                             for event in self._state.events[step_start_event_count:]
                         ):
                             consecutive_stop_hook_denials = 0
-                        iteration += 1
-                        self._state.iterations_used = iteration
-                        self._maybe_warn_iteration_budget(iteration)
+                        iteration, condensation_streak = self._record_step(
+                            step_start_event_count, iteration, condensation_streak
+                        )
+                        if self._state.execution_status == ConversationExecutionStatus.STUCK:
+                            break
+                        if condensation_streak == 0:
+                            self._maybe_warn_iteration_budget(iteration)
 
                         # astep releases the state lock for the LLM call, so a
                         # message can land mid-step with status still RUNNING and
@@ -2703,8 +2731,9 @@ class LocalConversation(BaseConversation):
                         for event in self._state.events[acp_step_start_event_count:]
                     ):
                         consecutive_stop_hook_denials = 0
-                    iteration += 1
-                    self._state.iterations_used = iteration
+                    iteration, condensation_streak = self._record_step(
+                        acp_step_start_event_count, iteration, condensation_streak
+                    )
                     pause_requested_during_acp_step = any(
                         isinstance(event, PauseEvent)
                         for event in self._state.events[acp_step_start_event_count:]
