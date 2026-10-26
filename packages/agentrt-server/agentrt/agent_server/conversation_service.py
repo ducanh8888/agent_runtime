@@ -958,6 +958,8 @@ class ConversationService:
     secrets_store: FileSecretsStore | None = None
     owner_instance_id: str = field(default_factory=lambda: uuid4().hex)
     max_concurrent_runs: int = 10
+    # AgentRT fork (restart hand-off): server policy controls recovery admission.
+    resume_after_restart: bool = True
     lease_ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS
     conversation_idle_ttl_seconds: float | None = None
     conversation_worktree_root: Path = field(
@@ -1210,7 +1212,10 @@ class ConversationService:
             if event_service.stored.admission_state == "queued":
                 # The admission queue owns it; starting it here would race it.
                 continue
-            if not event_service.has_pending_run_intent():
+            # AgentRT fork (restart hand-off): recovered ERROR runs share the
+            # admission scheduler with pending dispatches, never run on load.
+            restart_pending = event_service.restart_resume_pending
+            if not restart_pending and not event_service.has_pending_run_intent():
                 continue
             if not self._has_free_slot(
                 workspace_root=str(event_service.stored.workspace.working_dir),
@@ -1220,6 +1225,14 @@ class ConversationService:
             async with self._conversation_lifecycle(conversation_id):
                 if not event_service.is_open():
                     continue
+                if restart_pending:
+                    state = await event_service.get_state()
+                    if (
+                        not event_service.restart_resume_pending
+                        or state.execution_status != ConversationExecutionStatus.ERROR
+                    ):
+                        event_service.restart_resume_pending = False
+                        continue
                 try:
                     await event_service.run()
                 except ValueError as exc:
@@ -1231,6 +1244,7 @@ class ConversationService:
                         exc,
                     )
                 else:
+                    event_service.restart_resume_pending = False
                     logger.warning(
                         "started conversation %s, which had a pending run request",
                         conversation_id,
@@ -3470,6 +3484,7 @@ class ConversationService:
             mcp_tool_provider=create_settings_backed_mcp_tool_provider(config),
             secrets_store=get_secrets_store(config),
             max_concurrent_runs=config.max_concurrent_runs,
+            resume_after_restart=config.resume_after_restart,
             lease_ttl_seconds=config.lease_ttl_seconds,
             conversation_idle_ttl_seconds=config.conversation_idle_ttl_seconds,
             conversation_worktree_root=config.conversation_worktree_root,
@@ -3503,6 +3518,7 @@ class ConversationService:
             credential_bindings=credential_bindings,
             owner_instance_id=self.owner_instance_id,
             lease_ttl_seconds=self.lease_ttl_seconds,
+            resume_after_restart=self.resume_after_restart,
         )
         # Lease renewal is handled by the centralized
         # _renew_all_leases_loop task on ConversationService.
