@@ -2425,6 +2425,21 @@ class EventService:
         """Return the current request's answer, state, error and progress."""
         if not self._conversation:
             raise ValueError("inactive_service")
+        run_task = self._run_task
+        if run_task is not None and not run_task.done():
+            state = self._conversation._state
+            # The SDK records the cap error before this task completes its
+            # tools-disabled answer. Do not publish a provisional empty result.
+            if (
+                state.execution_status == ConversationExecutionStatus.ERROR
+                and any(
+                    isinstance(event, ConversationErrorEvent)
+                    and event.code == "MaxIterationsReached"
+                    for event in state.events
+                )
+                and run_task is not asyncio.current_task()
+            ):
+                await asyncio.shield(run_task)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_agent_response_result_sync)
 

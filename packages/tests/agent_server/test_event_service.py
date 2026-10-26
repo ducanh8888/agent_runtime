@@ -3798,6 +3798,49 @@ async def test_cap_wrap_up_only_when_last_text_empty(event_service, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_cap_result_waits_for_in_flight_wrap_up(event_service, tmp_path):
+    llm = SlowTestLLM.from_messages(
+        [text_message(""), text_message("Work remains after the cap")],
+        latency_s=0.4,
+    )
+    conversation = LocalConversation(
+        agent=Agent(llm=llm, tools=[]),
+        workspace=str(tmp_path),
+        max_iteration_per_run=1,
+        stuck_detection=False,
+    )
+    conversation.send_message("Complete this request")
+    event_service._conversation = conversation
+    event_service._publish_state_update = AsyncMock()
+    try:
+        await event_service.run()
+        await asyncio.wait_for(
+            _wait_for_cap_event(conversation), timeout=10
+        )
+        assert event_service._run_task is not None
+        assert not event_service._run_task.done()
+        result = await asyncio.wait_for(
+            event_service.get_agent_response_result(), timeout=10
+        )
+        assert result.state.value == "partial"
+        assert result.response == "Work remains after the cap"
+        assert result.error is not None
+        assert result.error.code == "MaxIterationsReached"
+        assert llm.call_count == 2
+    finally:
+        conversation.close()
+
+
+async def _wait_for_cap_event(conversation):
+    while not any(
+        isinstance(event, ConversationErrorEvent)
+        and event.code == "MaxIterationsReached"
+        for event in conversation._state.events
+    ):
+        await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
 async def test_cap_with_existing_answer_skips_wrap_up(event_service, tmp_path):
     llm = TestLLM.from_messages([text_message("Already answered")])
     conversation = LocalConversation(
