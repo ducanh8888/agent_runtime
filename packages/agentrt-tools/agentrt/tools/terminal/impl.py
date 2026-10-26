@@ -60,6 +60,7 @@ _REAP_RESET_NOTE = (
 _TMUX_RECOVERABLE_ERROR_MARKERS = (
     "no server running",
     "can't find session",
+    "no such session",
     "could not find window_id",
     "could not find pane_id",
 )
@@ -142,13 +143,19 @@ class TerminalExecutor(ToolExecutor[TerminalAction, TerminalObservation]):
         return self._pool is not None
 
     def _initialize_pool(self) -> None:
-        self._pool = TmuxPanePool(
+        pool = TmuxPanePool(
             self._working_dir,
             self._username,
             env=self._env,
             max_panes=self._max_panes,
         )
-        self._pool.initialize()
+        try:
+            pool.initialize()
+        except Exception:
+            with suppress(Exception):
+                pool.close()
+            raise
+        self._pool = pool
         logger.info(
             f"TerminalExecutor initialized (pool mode) "
             f"working_dir: {self._working_dir}, username: {self._username}, "
@@ -157,6 +164,10 @@ class TerminalExecutor(ToolExecutor[TerminalAction, TerminalObservation]):
 
     @staticmethod
     def _is_recoverable_tmux_pool_error(error: Exception) -> bool:
+        if isinstance(error, RuntimeError) and str(error) == (
+            "TmuxPanePool is not initialized or already closed"
+        ):
+            return True
         recoverable_types = (LibTmuxException, TmuxObjectDoesNotExist)
         if not isinstance(error, recoverable_types):
             return False
@@ -551,6 +562,14 @@ class TerminalExecutor(ToolExecutor[TerminalAction, TerminalObservation]):
         Returns whether a shell was created here, so the caller can tell the
         model its shell state did not survive the wait between runs.
         """
+        if self._pool is not None and not self._pool.is_usable:
+            failed_pool = self._pool
+            with suppress(Exception):
+                failed_pool.close()
+            self._pool = None
+            self._initialize_pool()
+            return True
+
         if self._pool is None and self._session is None:
             if self._terminal_type in (None, "tmux") and _is_tmux_available():
                 self._initialize_pool()

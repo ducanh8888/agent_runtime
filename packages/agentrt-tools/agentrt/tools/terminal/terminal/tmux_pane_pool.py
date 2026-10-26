@@ -112,6 +112,11 @@ class TmuxPanePool:
         self.env = normalize_terminal_env(self.env)
         self._semaphore = threading.Semaphore(self.max_panes)
 
+    @property
+    def is_usable(self) -> bool:
+        """Whether the pool is initialized and available for checkout."""
+        return self._initialized and not self._closed
+
     def initialize(self) -> None:
         """Create the tmux session (panes are lazily added on checkout)."""
         if self._initialized:
