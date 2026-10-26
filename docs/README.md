@@ -54,10 +54,11 @@ immutable result records. Machine consumers should read
 - [Testing](guides/testing.md) — which checks to run, narrow selections first,
   and the known environment-dependent failures.
 - [Iteration budget plan](plans/iteration-budget.md) — the active plan:
-  native sub-agent semantics by default (a cap returns a partial, resumable
-  result), an opt-in goal-driven tier, a budget that counts work; the
-  defects the research found; what is open and what was declined. This is
-  the authority on project status, not any summary elsewhere.
+  minimum operator effort with Claude Code native sub-agent semantics (a
+  cap returns a partial, resumable result; stop hooks like `SubagentStop`;
+  skills loaded once; a restart hands the run back); the defects the
+  research found; what is deferred and what was declined. This is the
+  authority on project status, not any summary elsewhere.
 - [Claude Code sub-agents](research/claude-code-subagents.md) — the
   documented behaviour of Claude Code's native sub-agents, the parity target
   for the active plan.
