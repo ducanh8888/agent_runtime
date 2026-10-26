@@ -54,6 +54,7 @@ class HookManager:
         tool_response: dict[str, Any] | None = None,
         message: str | None = None,
         metadata: dict[str, Any] | None = None,
+        stop_hook_active: bool = False,
     ) -> HookEvent:
         """Create a hook event with common fields populated."""
         return HookEvent(
@@ -65,6 +66,7 @@ class HookManager:
             session_id=self.session_id,
             working_dir=self.working_dir,
             metadata=metadata or {},
+            stop_hook_active=stop_hook_active,
         )
 
     def run_pre_tool_use(
@@ -177,6 +179,7 @@ class HookManager:
     def run_stop(
         self,
         reason: str | None = None,
+        stop_hook_active: bool = False,
     ) -> tuple[bool, list[HookResult]]:
         """Run Stop hooks. Returns (should_stop, results)."""
         hooks = self.config.get_hooks_for_event(HookEventType.STOP)
@@ -186,12 +189,15 @@ class HookManager:
         event = self._create_event(
             HookEventType.STOP,
             metadata={"reason": reason} if reason else {},
+            stop_hook_active=stop_hook_active,
         )
 
         results = self.executor.execute_all(hooks, event, stop_on_block=True)
 
-        # If a hook blocks, the agent should NOT stop (continue running)
-        should_stop = all(r.should_continue for r in results)
+        # AgentRT fork (stop-hook parity): fail closed only for STOP hook errors.
+        should_stop = all(
+            r.should_continue and not (not r.success and r.error) for r in results
+        )
 
         return should_stop, results
 
@@ -208,4 +214,6 @@ class HookManager:
                 if result.stderr:
                     return result.stderr.strip()
                 return "Blocked by hook"
+            if not result.success and result.error:
+                return result.error
         return None
