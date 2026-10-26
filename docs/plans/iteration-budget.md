@@ -1,4 +1,4 @@
-# AgentRT — goal-driven runs instead of an operator step budget
+# AgentRT — native sub-agent semantics instead of an operator step budget
 
 Date: 2026-10-26 (Asia/Bangkok). Basis: `origin/main` at `6b88f3a`, and a
 read-only census of the operator's state directory on the Windows host
@@ -25,9 +25,12 @@ money (#37: 370+ iterations, #40: 445 finish attempts).
 Objective: **a dispatch runs until its task is done, the operator never
 chooses or watches a step number, and a bound still holds.**
 
-1. **Goal-driven.** Whether a session continues or ends is decided against
-   its task — "is the objective met, and is the work still moving toward
-   it" — not against a step count.
+1. **Native sub-agent semantics by default; goal-driven on request.** The
+   parity target is Claude Code's native sub-agent (section 11): a run ends
+   when the model stops, a cap returns a partial and resumable result, stop
+   hooks enforce requirements. With `goal=True`, continuation is decided
+   against the task — "is the objective met, and is the work still moving
+   toward it" — never against a step count.
 2. **The agent does not adapt to a limit.** Nothing tells the agent how many
    steps remain or asks it to wrap up because of a budget. What it is told is
    about the goal: what is still outstanding.
@@ -418,9 +421,14 @@ Each item lands with a test that fails without it.
   continuation is preferred.
 - Every budget stop spends one model call on the wrap-up answer.
 
-Still open for the owner: goal mode on by default for every dispatch (B.2),
-and the judge's model calls (one per finish attempt and per checkpoint) — the
-default plan assumes both.
+- AgentRT should mimic the behaviour of Claude Code's native sub-agents
+  (section 11). Consequence: goal mode is **opt-in**, not the default
+  (11.3), which settles the question the first draft left open.
+
+Still open for the owner: the restructuring in 11.3 itself — in
+particular that the wrap-up model call in the default tier runs only when
+the agent left no usable text, and that the three-step budget notice is
+removed.
 
 ## 10. Pre-implementation audit (2026-10-26)
 
@@ -445,6 +453,115 @@ set only for `source="user"`), D13 (no goal reference anywhere in
   the token target (A.3), since `forgotten_event_ids` is a set but tool
   history must stay paired.
 - Judge exceptions end the goal today (D18); forks inherit goal status (D19).
+
+## 11. Parity target: Claude Code native sub-agents (2026-10-26)
+
+Owner requirement: AgentRT should mimic the behaviour of Claude Code's
+native sub-agents (the `Agent` tool). Researched from the official docs
+(`code.claude.com/docs/en/sub-agents`, `/hooks`, `/env-vars`,
+`/agent-sdk/subagents`, `/agent-sdk/agent-loop`, `/headless`, `/worktrees`,
+and the `anthropics/claude-code` CHANGELOG), fetched 2026-10-26; the full
+notes with verbatim quotes are the research record
+[`../research/claude-code-subagents.md`](../research/claude-code-subagents.md).
+An AgentRT `inspect` session
+(`8facc3c2`) was dispatched to inventory our own surface; it spent 152
+iterations reading, was cut by a daemon restart with an empty result, and
+produced a mostly "not inspected" report after a `send` — section 11.4.
+
+### 11.1 How a native sub-agent ends, and what the parent gets
+
+| Behaviour | Claude Code (documented) |
+|---|---|
+| Turn limit | None by default. `maxTurns` (frontmatter) is optional. |
+| On `maxTurns` | "Claude Code returns its output marked as partial, and Claude can resume it to continue" (v2.1.246+). No error, no extra model call. |
+| "Done" | The model stops calling tools and its final text is the report (auto mode: `SubagentHandback`). No judge, no second model. |
+| Stop enforcement | `SubagentStop`/`Stop` hooks block with a `reason` that "keeps the subagent running and delivers `reason` … as its next instruction"; `stop_hook_active` is passed so a hook can avoid blocking forever; **8 consecutive continuations** then forced end; "the count … resets each time Claude calls a tool" (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). |
+| Time/cost bounds | No wall-clock run cap. Stall timeout 10 min (`CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS`). Session-level `--max-budget-usd` counts sub-agent spend and stops running background sub-agents. |
+| Mid-stream API cut-off | If partial text and no tool call: "prompts the subagent to continue rather than ending the run"; ends on the error "only once those continuations are used up". |
+| Failure report | Foreground: partial output "with a note that the subagent was cut off", or `Agent terminated early due to an API error`. Background: "marked failed, and the message … names the API error and includes the subagent's last output, so partial work isn't lost". "An API error … is never delivered as its result." |
+| Return path | Only the final report; wrapped under a header marking it as sub-agent output; scanned for instruction-shaped text (never rewritten). Background: a completion notification in a later turn, with elapsed time. |
+| Follow-up | `SendMessage` to the agent id/name resumes it with full history, in the background, under the same id; model/effort overrides persist on resume. |
+| Context | Fresh context window; system prompt = agent's own prompt + environment; CLAUDE.md hierarchy; git status snapshot; `skills:` **preloaded in full at startup** (≤32); auto-compaction inside the sub-agent; `SubagentStart` context re-injected after compaction. Whether preloaded skills are re-injected after compaction is not documented. |
+| Isolation/limits | `isolation: worktree` (off the default branch; auto-removed if no changes); `tools`/`disallowedTools`; `permissionMode` with inheritance rules; 20 concurrent (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`); nesting depth 3; `memory:` directory per agent. |
+| Lifetime | "Subagents work within a single session." `claude -p` waits up to 10 min for background sub-agents at exit, then stops them and drops partial results. Background work is handed to a restarted session process (`CLAUDE_CODE_DISABLE_BG_EXIT_HANDOFF`). Transcripts persist on disk and are resumable with the session. |
+
+### 11.2 Where AgentRT stands against that (from the code read in section 10)
+
+| Behaviour | AgentRT on `main` | Gap |
+|---|---|---|
+| Turn limit default | 100,000 (effectively none) | none |
+| On cap | `error` + `MaxIterationsReached`, no answer, `wait` bucket `failed` (D3) | **partial + resumable** is the native behaviour |
+| "Done" | `finish` tool or plain message; `completed_cleanly`, `ended_with` | none |
+| Stop enforcement | `require="commit"` native stop hook; 3 denials per run, never reset (D6); timeout/crash allows the stop (D5); last-step finish skips the hook (D4) | cap 8, **reset on tool call**, hook sees a `stop_hook_active` equivalent; D4, D5 |
+| Time bounds | run-start deadline; per-attempt LLM timeout 300 s; streaming total deadline (#42) | no stall timeout as such; CC has no run cap either |
+| Mid-stream cut-off | retries at the LLM layer | no "continue" prompt on partial text |
+| Failure report | `result` with `error` code and `progress_summary`; text if any | matches in substance; no "cut off" note on partial text |
+| Return path | `result`/`wait`/`watch` polling; no header, no scan | header + scan is a hardening item, outside this plan |
+| Follow-up | `send` (moves the request boundary), `resume`, `dispatch_from` | native resume keeps one report; `send` re-scopes `result` (same mechanism as D12) |
+| Context | system prompt + task + context files; skills via `invoke_skill` on demand (progressive disclosure); condensation at 40k | **no startup preload of named skills**; D2 is the consequence |
+| Isolation/limits | `isolated_worktree` from HEAD, `snapshot`; presets; run pool + queue | base branch, auto-cleanup, nesting (no agentrt MCP inside a session), per-dispatch `effort`, memory: not in this plan |
+| Lifetime | sessions outlive the client and the daemon; restart marks the run `DaemonRestarted` and waits for a `send` (observed live, 11.4) | native hands background work to the restarted process; AgentRT should **resume the run**, not only the goal (B.6 extended) |
+
+### 11.3 What this changes in the plan
+
+The native model has **no judge**: continuation is the model's own decision
+plus stop hooks; a cap returns a partial, resumable result. The goal/judge
+loop of section 4.B-C is therefore *more* than native behaviour. To honour
+both owner requirements (goal-driven preferred; mimic native sub-agents)
+the plan is restructured into two tiers:
+
+1. **Default dispatch = native semantics** (no judge, no model call that the
+   agent did not make):
+   - No cap by default (as today). When an operator cap is hit: the run
+     ends with the agent's last text as a **partial** result, `result.state
+     = partial`, `wait` bucket `partial`, status stays `error` with
+     `MaxIterationsReached` for existing clients, plus a `resume_hint`
+     field; a `send` continues it (D3 reframed to the native behaviour).
+   - The owner-approved tools-disabled wrap-up call (section 4.D) runs
+     **only when the last text is empty or is an unexecuted tool call** —
+     the case where native would report "cut off" with nothing usable —
+     so the common case stays one-model-call-free like native.
+   - Stop hooks: cap raised to 8 consecutive denials, **reset whenever the
+     agent executes a tool** after a denial (D6), `AGENTRT_STOP_HOOK_BLOCK_CAP`
+     to tune; hook input carries `stop_hook_active`; timeout/crash is a
+     denial for the runtime's own hook (D5); hook runs on the last allowed
+     step (D4).
+   - Context: `dispatch(skills=[...])` preloads named skills into the
+     session's system prompt at start (native `skills:`), cache-friendly
+     because it is fixed for the session; the condenser pins
+     `invoke_skill` pairs for skills invoked later (A.3). Condensation does
+     not consume the budget (A.1-A.2).
+   - Daemon restart: a run that was `running` is **resumed** by recovery
+     (native hand-off), not parked as `DaemonRestarted`; the error event is
+     still written for the record (events are history).
+2. **`dispatch(goal=True)` = goal-driven tier** (sections 4.B-4.C, 4.D in
+   full): judge on every finish attempt and at checkpoints, follow-ups,
+   ceilings, mandatory wrap-up. Opt-in per dispatch or by
+   `AGENTRT_GOAL_MODE=1`; **off by default**, which answers the open
+   question in section 8.
+
+Dropped from the earlier draft as non-native: the three-step "[Step
+budget]" notice (D10) is removed in both tiers — native tells the agent
+nothing about turns. Kept although non-native: safety ceilings on total
+work steps and wall-clock in the goal tier (native has only a stall
+timeout and a session budget), because runaway sessions (#37, #40) are
+what made operators set caps.
+
+### 11.4 Live observation during this research
+
+Session `8facc3c2` (`inspect`, default cap): 152 iterations, 133
+`file_editor` views and 120 `inspect` calls, no report written; the daemon
+restarted at 09:05 (process `13196` started 09:05:03) and the run ended
+`error`/`DaemonRestarted` with an empty `result` (`bucket: failed`). One
+`send` ("write the report from what you have") finished it in 3 iterations.
+Two lessons for the plan: (a) recovery should resume the run (11.3 tier 1),
+and (b) a 150-step read-only audit with nothing written is exactly the
+"no file changed, score flat" stall the goal tier's checkpoint (4.C.3)
+targets — but it was *still reading new files*, so novelty alone would not
+have stopped it; the judge signal is needed for that case. Also observed:
+`artifacts(path="cc_parity_inventory.md")` returned "File not found" for a
+report that exists at the session's reports path after the restart — to
+reproduce and file separately.
 
 ## 9. Carried over from the OmniRoute migration plan
 

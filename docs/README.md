@@ -54,10 +54,13 @@ immutable result records. Machine consumers should read
 - [Testing](guides/testing.md) — which checks to run, narrow selections first,
   and the known environment-dependent failures.
 - [Iteration budget plan](plans/iteration-budget.md) — the active plan:
-  goal-driven runs instead of an operator step budget, a budget that counts
-  work, and a wrap-up answer on every non-complete end; the defects the
-  research found; what is open and what was declined. This is the authority on project status, not any summary
-  elsewhere.
+  native sub-agent semantics by default (a cap returns a partial, resumable
+  result), an opt-in goal-driven tier, a budget that counts work; the
+  defects the research found; what is open and what was declined. This is
+  the authority on project status, not any summary elsewhere.
+- [Claude Code sub-agents](research/claude-code-subagents.md) — the
+  documented behaviour of Claude Code's native sub-agents, the parity target
+  for the active plan.
 - [OmniRoute migration plan](plans/omniroute-migration.md) — the completed
   router-neutral LLM contract and the issue work up to 2026-10-24; its open
   items are carried over in the active plan.

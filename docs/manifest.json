@@ -84,6 +84,13 @@
       "authority": "reference"
     },
     {
+      "id": "research.claude-code-subagents",
+      "path": "docs/research/claude-code-subagents.md",
+      "type": "research",
+      "lifecycle": "current",
+      "authority": "evidence"
+    },
+    {
       "id": "research.deepseek-hardening-audit",
       "path": "docs/research/deepseek-hardening-audit.md",
       "type": "research",
