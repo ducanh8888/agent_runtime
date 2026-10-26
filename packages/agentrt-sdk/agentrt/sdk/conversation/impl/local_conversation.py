@@ -135,9 +135,6 @@ ACP_SUPERSEDE_INFLIGHT_PROMPT = "acp_supersede_inflight_prompt"
 _RUNTIME_MCP_TIMEOUT_SECS = 30
 # Longest the event loop waits for tools to be reaped after a run (#22).
 _REAP_DEADLINE_SECONDS = 30
-#: Steps before the per-run cap at which the agent is told to wrap up.
-ITERATION_BUDGET_WARNING_STEPS = 3
-
 ACP_STOP_HOOK_FEEDBACK_PREFIX = "[Stop hook feedback]"
 # AgentRT fork (stop-hook denial cap): bound retries and allow runtime override.
 MAX_CONSECUTIVE_STOP_HOOK_DENIALS = int(os.environ.get("AGENTRT_STOP_HOOK_BLOCK_CAP", "8"))
@@ -2229,8 +2226,6 @@ class LocalConversation(BaseConversation):
                     )
                     if self._state.execution_status == ConversationExecutionStatus.STUCK:
                         break
-                    if condensation_streak == 0:
-                        self._maybe_warn_iteration_budget(iteration)
 
                     # Check for non-finished terminal conditions
                     # Note: We intentionally do NOT check for FINISHED status here.
@@ -2564,8 +2559,6 @@ class LocalConversation(BaseConversation):
                         )
                         if self._state.execution_status == ConversationExecutionStatus.STUCK:
                             break
-                        if condensation_streak == 0:
-                            self._maybe_warn_iteration_budget(iteration)
 
                         # astep releases the state lock for the LLM call, so a
                         # message can land mid-step with status still RUNNING and
@@ -3054,34 +3047,6 @@ class LocalConversation(BaseConversation):
                 source="environment",
                 llm_message=Message(role="user", content=[TextContent(text=text)]),
             )
-        )
-
-    def _maybe_warn_iteration_budget(self, iteration: int) -> None:
-        """Tell the agent once, a few steps early, that its step budget is
-        nearly spent.
-
-        The cap cuts a run between steps with no warning, so a session that
-        spent its budget investigating ended with its findings only in its
-        own head -- measured: a read-only review hit MaxIterationsReached
-        without writing the report it was dispatched for. One notice at a
-        fixed distance from the cap gives it the chance to write up and
-        finish; the cap itself is unchanged.
-
-        Must be called while holding ``self._state``.
-        """
-        if self._state.execution_status == ConversationExecutionStatus.FINISHED:
-            return
-        remaining = self.max_iteration_per_run - iteration
-        if remaining <= 0:
-            return
-        warn_at = min(ITERATION_BUDGET_WARNING_STEPS, self.max_iteration_per_run - 1)
-        if remaining != warn_at:
-            return
-        self._emit_run_notice(
-            f"\n\n[Step budget] Only {remaining} step(s) remain in this run "
-            "before it is stopped. Stop exploring now: write down what you "
-            "have found or changed (in your final answer, or the report file "
-            "if you were asked for one) and finish.\n\n"
         )
 
     def _emit_interrupt_notice(self) -> None:
