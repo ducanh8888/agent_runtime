@@ -234,6 +234,9 @@ class EventService:
     # True when start() found this conversation persisted as RUNNING -- i.e.
     # a previous daemon died mid-run -- and moved it to ERROR.
     recovered_from_restart: bool = field(default=False, init=False)
+    # AgentRT fork (restart hand-off): queued recovery loses to explicit user action.
+    restart_resume_pending: bool = field(default=False, init=False)
+    resume_after_restart: bool = True
     # time.monotonic() of the last activity-driven meta.json write; 0 means
     # never, so the first event after start persists immediately.
     meta_saved_at: float = field(default=0.0, init=False)
@@ -1022,6 +1025,7 @@ class EventService:
         # conversation. The goal loop's own messages pass _from_goal_loop=True.
         if not _from_goal_loop:
             await self.stop_goal_loop()
+            self.restart_resume_pending = False
         explicit_interrupt_generation = self._explicit_interrupt_generation
         loop = asyncio.get_running_loop()
         # AgentRT fork: send_message takes the state lock, which a busy step
@@ -1544,12 +1548,17 @@ class EventService:
                     code="DaemonRestarted",
                     detail=(
                         "The runtime daemon restarted while this run was in "
-                        "flight, so the run was stopped. Its history is intact; "
-                        "send a message to continue it."
+                        "flight. Its history is intact; "
+                        + (
+                            "the run will resume automatically."
+                            if self.resume_after_restart
+                            else "send a message to continue it."
+                        )
                     ),
                 )
             )
             self.recovered_from_restart = True
+            self.restart_resume_pending = self.resume_after_restart
 
         # Publish initial state update
         await self._publish_state_update()
@@ -2023,6 +2032,7 @@ class EventService:
 
     async def pause(self):
         if self._conversation:
+            self.restart_resume_pending = False
             self._explicit_interrupt_generation += 1
             self._rerun_requested = False
             self._acp_internal_rerun_requested = False
@@ -2040,6 +2050,7 @@ class EventService:
         """
         if self._conversation:
             if not internal_acp_rerun:
+                self.restart_resume_pending = False
                 self._explicit_interrupt_generation += 1
                 self._rerun_requested = False
                 self._acp_internal_rerun_requested = False
@@ -2142,7 +2153,10 @@ class EventService:
 
         # Drain in-flight run before teardown so MCP close doesn't race
         # with a tool call mid-step.
-        if self._run_task is not None and not self._run_task.done():
+        # AgentRT fork (restart hand-off): hold the task across pause, which
+        # can finish the run and clear self._run_task before cancellation.
+        run_task = self._run_task
+        if run_task is not None and not run_task.done():
             if self._conversation is not None:
                 loop = asyncio.get_running_loop()
                 try:
@@ -2155,9 +2169,9 @@ class EventService:
             # transition to PAUSED cleanly.  For the legacy thread-pool
             # path the underlying thread keeps running but the wrapper
             # task still settles, unblocking the wait below.
-            self._run_task.cancel()
+            run_task.cancel()
             try:
-                await asyncio.wait_for(self._run_task, timeout=10.0)
+                await asyncio.wait_for(run_task, timeout=10.0)
             except asyncio.CancelledError:
                 pass  # Expected after cancel()
             except Exception as exc:

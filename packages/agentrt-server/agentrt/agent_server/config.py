@@ -456,6 +456,11 @@ class Config(BaseModel):
             "used for conversation.run() calls."
         ),
     )
+    # AgentRT fork (restart hand-off): policy is deployment config, not SDK state.
+    resume_after_restart: bool = Field(
+        default=True,
+        description="Automatically resume runs interrupted by a daemon restart",
+    )
     secret_key: SecretStr | None = Field(
         default_factory=_default_secret_key,
         description=(
