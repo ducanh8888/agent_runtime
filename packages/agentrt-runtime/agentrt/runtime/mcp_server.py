@@ -180,11 +180,15 @@ def dispatch(
     context_files: list[str] | None = None,
     require: str | None = None,
     create_workspace: bool = False,
+    skills: list[str] | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
     The session keeps running after this conversation ends. Returns a
     short_id -- how you refer to the session in every other tool here.
+
+    `skills` names skills to preload in the system message. Unknown names are
+    refused by the daemon before the conversation is persisted.
 
     FIRST CALL ON A FRESH INSTALL. The daemon starts lazily, on the first
     dispatch, and a cold start imports the whole model stack -- this can take
@@ -368,6 +372,7 @@ def dispatch(
         context_files=context_files,
         require=require,
         create_workspace=create_workspace,
+        skills=skills,
     )
 
 

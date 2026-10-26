@@ -254,6 +254,7 @@ _DISPATCH_ARGUMENTS = frozenset(
         "context_files",
         "require",
         "create_workspace",
+        "skills",
     }
 )
 
@@ -1587,6 +1588,7 @@ class Client:
         context_files: list[str] | None = None,
         require: str | None = None,
         create_workspace: bool = False,
+        skills: list[str] | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1694,6 +1696,9 @@ class Client:
         body["idempotency_key"] = idempotency_key or str(uuid.uuid4())
         if workspace_mode:
             body["workspace_mode"] = workspace_mode
+        if skills is not None:
+            # AgentRT fork (preload): the server validates names before persistence.
+            body["skills"] = skills
         if attachments:
             body["initial_message"]["content"].extend(
                 self._attachment_blocks(attachments, workspace=workspace)
