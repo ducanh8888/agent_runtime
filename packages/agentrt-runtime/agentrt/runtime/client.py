@@ -239,6 +239,26 @@ def _status_of(data: object) -> str | None:
     return data.get("execution_status") or data.get("status")
 
 
+def _termination_reason(status: str | None, error: dict | None) -> str | None:
+    """Project lifecycle and error details into a stable stopping reason."""
+    if status is None:
+        return None
+    code = error.get("code") if isinstance(error, dict) else None
+    if code == "MaxIterationsReached":
+        return "cap"
+    if code == "StopHookUnmet":
+        return "stop_hook_unmet"
+    if code == "DaemonRestarted":
+        return "daemon_restarted"
+    if code:
+        return f"error:{code}"
+    return {
+        "finished": "finished",
+        "stuck": "stuck",
+        "paused": "paused",
+    }.get(status)
+
+
 _DISPATCH_ARGUMENTS = frozenset(
     {
         "task",
@@ -357,6 +377,9 @@ _OPTIONAL_RESPONSE_KEYS = (
     "progress_age_seconds",
     "error",
     "summary",
+    "resume_hint",
+    "condensation_steps",
+    "termination_reason",
 )
 
 
@@ -1982,6 +2005,16 @@ class Client:
         result["admission_status"] = data.get("admission_status")
         result["iterations_used"] = data.get("iterations_used")
         result["iterations_remaining"] = data.get("iterations_remaining")
+        error = data.get("error")
+        termination_reason = _termination_reason(
+            _status_of(data), error if isinstance(error, dict) else None
+        )
+        if termination_reason is not None:
+            result["termination_reason"] = termination_reason
+        if data.get("condensation_steps") is not None:
+            result["condensation_steps"] = data["condensation_steps"]
+        if data.get("resume_hint") is not None:
+            result["resume_hint"] = data["resume_hint"]
         # H8 item 8: a snapshot-mode session's pinned commit, so a caller can
         # check what a review actually ran against without a separate call --
         # absent for the default "shared" mode, which has nothing pinned.
@@ -2121,6 +2154,12 @@ class Client:
                 # take the whole result with it -- on every errored session,
                 # with nothing to opt out of.
                 pass
+        termination_reason = _termination_reason(
+            payload.get("status"),
+            payload.get("error") if isinstance(payload.get("error"), dict) else None,
+        )
+        if termination_reason is not None:
+            payload["termination_reason"] = termination_reason
         return payload
 
     def _progress_summary(
