@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Final
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentrt.sdk import Agent
+from agentrt.sdk.context.agent_context import AgentContext
 from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 from agentrt.sdk.conversation.response_utils import get_agent_final_response
 from agentrt.sdk.conversation.state import (
@@ -370,6 +371,34 @@ class TaskManager:
         sub_agent_llm.reset_metrics()
 
         sub_agent = factory.factory_func(sub_agent_llm)
+
+        # AgentRT fork (preload): inherit selected skills, retain worker skills.
+        parent_context = parent.agent.agent_context
+        if parent_context and parent_context.preloaded_skills:
+            context = sub_agent.agent_context
+            if context is None:
+                context = AgentContext()
+            skills = {skill.name: skill for skill in context.skills}
+            skills.update(
+                (skill.name, skill)
+                for skill in parent_context.skills
+                if skill.name in parent_context.preloaded_skills
+            )
+            selected = list(
+                dict.fromkeys(
+                    [*context.preloaded_skills, *parent_context.preloaded_skills]
+                )
+            )
+            sub_agent = sub_agent.model_copy(
+                update={
+                    "agent_context": context.model_copy(
+                        update={
+                            "skills": list(skills.values()),
+                            "preloaded_skills": selected,
+                        }
+                    )
+                }
+            )
 
         # ensuring that the sub-agent LLM has stream deactivated
         sub_agent = sub_agent.model_copy(
