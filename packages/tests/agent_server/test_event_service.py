@@ -53,6 +53,7 @@ from agentrt.sdk.llm import MessageToolCall, TextContent
 from agentrt.sdk.mcp.config import coerce_mcp_config
 from agentrt.sdk.security.confirmation_policy import NeverConfirm
 from agentrt.sdk.subagent.schema import AgentDefinition
+from agentrt.sdk.testing import TestLLM
 from agentrt.sdk.utils.cipher import Cipher
 from agentrt.sdk.workspace import LocalWorkspace
 from agentrt.tools.terminal import TerminalAction, TerminalObservation
@@ -3755,3 +3756,116 @@ async def test_the_scheduler_does_not_run_a_deliberate_run_false_append(
 
     assert parent_llm._call_count == 0
     assert es._run_task is None
+
+
+@pytest.mark.asyncio
+async def test_cap_wrap_up_only_when_last_text_empty(event_service, tmp_path):
+    llm = TestLLM.from_messages([text_message(""), text_message("Wrap-up answer")])
+    conversation = LocalConversation(
+        agent=Agent(llm=llm, tools=[]),
+        workspace=str(tmp_path),
+        max_iteration_per_run=1,
+        stuck_detection=False,
+    )
+    conversation.send_message("Complete this request")
+    event_service._conversation = conversation
+    event_service._publish_state_update = AsyncMock()
+
+    try:
+        await event_service.run()
+        assert event_service._run_task is not None
+        await event_service._run_task
+
+        result = await event_service.get_agent_response_result()
+        assert result.state.value == "partial"
+        assert result.response == "Wrap-up answer"
+        assert result.error is not None
+        assert result.error.code == "MaxIterationsReached"
+        assert conversation._state.execution_status == ConversationExecutionStatus.ERROR
+        assert conversation._state.iterations_used == 1
+        assert llm.call_count == 2
+        assert (
+            sum(
+                isinstance(event, ConversationErrorEvent)
+                and event.code == "MaxIterationsReached"
+                for event in conversation._state.events
+            )
+            == 1
+        )
+        assert isinstance(conversation._state.events[-1], MessageEvent)
+    finally:
+        conversation.close()
+
+
+@pytest.mark.asyncio
+async def test_cap_with_existing_answer_skips_wrap_up(event_service, tmp_path):
+    llm = TestLLM.from_messages([text_message("Already answered")])
+    conversation = LocalConversation(
+        agent=Agent(llm=llm, tools=[]),
+        workspace=str(tmp_path),
+        max_iteration_per_run=1,
+        stuck_detection=False,
+    )
+    conversation.send_message("Complete this request")
+    event_service._conversation = conversation
+    event_service._publish_state_update = AsyncMock()
+    try:
+        await event_service.run()
+        assert event_service._run_task is not None
+        await event_service._run_task
+        # A plain text completion normally finishes before the SDK can cap it.
+        # Simulate a cap emitted by another agent implementation after that text.
+        conversation._on_event(
+            ConversationErrorEvent(
+                source="environment", code="MaxIterationsReached", detail="Run capped"
+            )
+        )
+        conversation._state.execution_status = ConversationExecutionStatus.ERROR
+        await event_service._wrap_up_capped_run(0)
+        result = await event_service.get_agent_response_result()
+        assert result.state.value == "partial"
+        assert result.response == "Already answered"
+        assert result.error is not None
+        assert result.error.code == "MaxIterationsReached"
+        assert llm.call_count == 1
+    finally:
+        conversation.close()
+
+
+@pytest.mark.asyncio
+async def test_cap_with_unexecuted_tool_text_gets_wrap_up(event_service, tmp_path):
+    llm = TestLLM.from_messages(
+        [
+            text_message('<tool_call name="terminal">'),
+            text_message("The task needs another run"),
+        ]
+    )
+    conversation = LocalConversation(
+        agent=Agent(llm=llm, tools=[]),
+        workspace=str(tmp_path),
+        max_iteration_per_run=1,
+        stuck_detection=False,
+    )
+    conversation.send_message("Complete this request")
+    event_service._conversation = conversation
+    event_service._publish_state_update = AsyncMock()
+    try:
+        await event_service.run()
+        assert event_service._run_task is not None
+        await event_service._run_task
+        conversation._on_event(
+            ConversationErrorEvent(
+                source="environment", code="MaxIterationsReached", detail="Run capped"
+            )
+        )
+        conversation._state.execution_status = ConversationExecutionStatus.ERROR
+        await event_service._wrap_up_capped_run(0)
+        result = await event_service.get_agent_response_result()
+        assert result.response == "The task needs another run"
+        assert result.state.value == "partial"
+        assert result.error is not None
+        assert result.error.code == "MaxIterationsReached"
+        assert llm.call_count == 2
+        assert conversation._state.iterations_used == 1
+    finally:
+        conversation.close()

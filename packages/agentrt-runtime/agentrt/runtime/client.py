@@ -446,6 +446,14 @@ def _wait_bucket(payload: dict) -> str:
     if status == "finished":
         return "completed"
     text = payload.get("result")
+    error = payload.get("error")
+    if (
+        isinstance(error, dict)
+        and error.get("code") == "MaxIterationsReached"
+        and isinstance(text, str)
+        and _looks_like_tool_call(text)
+    ):
+        return "failed"
     if isinstance(text, str) and text.strip():
         return "partial"
     return "failed"
@@ -2075,7 +2083,7 @@ class Client:
             payload["completed_cleanly"] = False
             payload["completed_cleanly_reason"] = "session_not_finished"
         if status == "error":
-            if not payload.get("result") and not payload.get("error"):
+            if not payload.get("error"):
                 try:
                     error = self._latest_transcript_error(
                         resolved, request_message_id=payload.get("request_message_id")
@@ -2084,6 +2092,20 @@ class Client:
                         payload["error"] = error
                 except (ClientError, json.JSONDecodeError):
                     pass
+            # AgentRT fork (cap hand-off): keep error status, but expose a
+            # request-scoped usable answer as partial and resumable.
+            if (
+                isinstance(payload.get("error"), dict)
+                and payload["error"].get("code") == "MaxIterationsReached"
+                and isinstance(payload.get("result"), str)
+                and payload["result"].strip()
+                and not _looks_like_tool_call(payload["result"])
+                and payload.get("state") == "partial"
+            ):
+                payload["resume_hint"] = (
+                    "The run reached its step limit. Continue it with control "
+                    "send '<instruction>' or control resume."
+                )
             try:
                 payload["progress_summary"] = self._progress_summary(
                     resolved,
