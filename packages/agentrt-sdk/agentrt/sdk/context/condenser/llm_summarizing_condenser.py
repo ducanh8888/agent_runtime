@@ -18,9 +18,14 @@ from agentrt.sdk.context.prompts import render_template
 from agentrt.sdk.context.view import View
 from agentrt.sdk.event.base import LLMConvertibleEvent
 from agentrt.sdk.event.condenser import Condensation
+from agentrt.sdk.event.llm_convertible import ActionEvent, ObservationEvent
 from agentrt.sdk.llm import LLM, Message, TextContent
 from agentrt.sdk.logger import get_logger
 from agentrt.sdk.observability.laminar import observe
+from agentrt.sdk.tool.builtins.invoke_skill import (
+    InvokeSkillAction,
+    InvokeSkillObservation,
+)
 from agentrt.sdk.utils import maybe_truncate
 
 
@@ -28,6 +33,9 @@ logger = get_logger(__name__)
 
 # Recount tokens exactly at least once per this many new events (#22).
 _EXACT_EVERY: Final = 40
+# AgentRT fork (D2): bound retained skill content so it cannot consume the context.
+_PINNED_SKILL_MAX_TOKENS: Final[int] = 12_000
+_PINNED_SKILL_TARGET_FRACTION: Final[float] = 0.6
 
 
 class Reason(Enum):
@@ -291,7 +299,7 @@ class LLMSummarizingCondenser(RollingCondenser):
 
         Args:
             view: The current view from which to identify forgotten events.
-            agent_llm: The LLM used by the agent, required for token-based calculations.
+            agent_llm: The LLM used for token-based calculations, if available.
 
         Returns:
             A tuple of (events to forget, summary_offset).
@@ -300,7 +308,6 @@ class LLMSummarizingCondenser(RollingCondenser):
         assert reasons != set(), "No condensation reasons found."
 
         suffix_events_to_keep: set[int] = set()
-
         if Reason.REQUEST in reasons:
             target_size = len(view) // 2
             suffix_events_to_keep.add(target_size - self.keep_first - 1)
@@ -309,16 +316,15 @@ class LLMSummarizingCondenser(RollingCondenser):
             target_size = self.max_size // 2
             suffix_events_to_keep.add(target_size - self.keep_first - 1)
 
+        max_tokens = self._effective_max_tokens(agent_llm)
+        token_target = max_tokens // 2 if max_tokens is not None else None
         if Reason.TOKENS in reasons:
-            # Compute the number of tokens we need to eliminate to be under half the
-            # effective max_tokens value. We know both are not None here because we
-            # cannot have Reason.TOKENS without them.
-            max_tokens = self._effective_max_tokens(agent_llm)
             assert max_tokens is not None
             assert agent_llm is not None
+            assert token_target is not None
 
             total_tokens = get_total_token_count(view.events, agent_llm)
-            tokens_to_reduce = total_tokens - (max_tokens // 2)
+            tokens_to_reduce = total_tokens - token_target
 
             suffix_events_to_keep.add(
                 get_suffix_length_for_token_reduction(
@@ -329,23 +335,76 @@ class LLMSummarizingCondenser(RollingCondenser):
                 )
             )
 
-        # We might have multiple reasons to condense, so pick the strictest condensation
-        # to ensure all resource constraints are met.
         events_from_tail = min(suffix_events_to_keep)
-
-        # Calculate naive forgetting end (without considering atomic boundaries)
         naive_end = len(view) - events_from_tail
+        manipulation_indices = view.manipulation_indices
+        forgetting_start = manipulation_indices.find_next(self.keep_first)
+        forgetting_end = manipulation_indices.find_next(naive_end)
 
-        # Find actual forgetting_start: smallest manipulation index >= keep_first
-        forgetting_start = view.manipulation_indices.find_next(self.keep_first)
+        # AgentRT fork (D2): the condenser has no ConversationState, so derive the
+        # latest complete invoke_skill pair per skill from the current view.
+        observations_by_action_id = {
+            event.action_id: (index, event)
+            for index, event in enumerate(view.events)
+            if isinstance(event, ObservationEvent)
+            and isinstance(event.observation, InvokeSkillObservation)
+        }
+        latest_pairs: dict[str, tuple[int, int]] = {}
+        for action_index, event in enumerate(view.events):
+            if not isinstance(event, ActionEvent) or not isinstance(
+                event.action, InvokeSkillAction
+            ):
+                continue
+            paired_observation = observations_by_action_id.get(event.id)
+            if paired_observation is None:
+                continue
+            observation_index, observation = paired_observation
+            skill_name = event.action.name.strip()
+            if observation.observation.skill_name != skill_name:
+                continue
+            latest_pairs[skill_name] = (action_index, observation_index)
 
-        # Find actual forgetting_end: smallest manipulation index >= naive_end
-        forgetting_end = view.manipulation_indices.find_next(naive_end)
+        pinned_indices: set[int] = set()
+        pinned_tokens = 0
+        pin_limit = _PINNED_SKILL_MAX_TOKENS
+        if token_target is not None:
+            pin_limit = min(
+                pin_limit, int(token_target * _PINNED_SKILL_TARGET_FRACTION)
+            )
+        for pair in sorted(latest_pairs.values(), reverse=True):
+            pair_events = [view.events[index] for index in pair]
+            pair_tokens = (
+                get_total_token_count(pair_events, agent_llm)
+                if agent_llm is not None
+                else sum(len(event.model_dump_json()) // 3 for event in pair_events)
+            )
+            if pinned_tokens + pair_tokens <= pin_limit:
+                pinned_indices.update(pair)
+                pinned_tokens += pair_tokens
 
-        # Extract events to forget using boundary-aware indices
-        forgotten_events = view[forgetting_start:forgetting_end]
+        # AgentRT fork (D2): extend the forgotten range until its remaining events,
+        # including bounded pinned pairs, meet the post-condensation token target.
+        if Reason.TOKENS in reasons and token_target is not None:
+            for candidate_end in sorted(
+                index for index in manipulation_indices if index >= naive_end
+            ):
+                forgetting_end = candidate_end
+                forgotten_ids = {
+                    view.events[index].id
+                    for index in range(forgetting_start, forgetting_end)
+                    if index not in pinned_indices
+                }
+                survivors = [
+                    event for event in view.events if event.id not in forgotten_ids
+                ]
+                if get_total_token_count(survivors, agent_llm) <= token_target:
+                    break
 
-        # Summary offset is the same as forgetting_start
+        forgotten_events = [
+            view.events[index]
+            for index in range(forgetting_start, forgetting_end)
+            if index not in pinned_indices
+        ]
         return forgotten_events, forgetting_start
 
     @observe(ignore_inputs=["view", "agent_llm"])
