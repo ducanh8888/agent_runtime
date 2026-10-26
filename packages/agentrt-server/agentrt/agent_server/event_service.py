@@ -2406,6 +2406,7 @@ class EventService:
                 else None
             ),
             iterations_used=state.iterations_used,
+            condensation_steps=getattr(state, "condensation_steps", 0),
             iterations_remaining=iterations_remaining(state),
             last_completed_tool=last_tool,
             last_progress_at=last_progress_at,

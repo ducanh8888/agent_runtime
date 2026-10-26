@@ -444,6 +444,13 @@ def test_legacy_response_payload_still_parses() -> None:
     assert result.state is AgentResponseState.UNAVAILABLE
 
 
+def test_agent_response_result_condensation_steps() -> None:
+    result = AgentResponseResult.model_validate(
+        {"response": "test", "iterations_used": 3, "condensation_steps": 2}
+    )
+    assert result.condensation_steps == 2
+
+
 # --- explicit title at create --------------------------------------------
 
 
