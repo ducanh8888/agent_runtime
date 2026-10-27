@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -55,6 +56,8 @@ def _is_pid_alive(pid: int) -> bool:
     """
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        return _is_pid_alive_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -66,6 +69,44 @@ def _is_pid_alive(pid: int) -> bool:
         # Unknown error - be conservative and assume the process is alive.
         return True
     return True
+
+
+def _is_pid_alive_windows(pid: int) -> bool:
+    """Query the process handle instead of ``os.kill(pid, 0)``.
+
+    AgentRT fork (Windows lease takeover): on Windows ``os.kill`` with signal
+    0 sends ``CTRL_C_EVENT`` rather than probing, and for a PID that no
+    longer exists it raises ``OSError`` (WinError 87), which the generic
+    branch above read as alive. A daemon that died without releasing its
+    leases then blocked its own restart from hydrating them until the TTL
+    elapsed. Same conservative rule: only a definite answer counts as dead.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    process_query_limited_information = 0x1000
+    still_active = 259
+    error_invalid_parameter = 87
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetExitCodeProcess.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    if pid > 0xFFFFFFFF:
+        return False
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        return ctypes.get_last_error() != error_invalid_parameter
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 class ConversationLeaseHeldError(RuntimeError):

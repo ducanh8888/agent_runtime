@@ -1,7 +1,9 @@
 """Focused tests for terminal pool initialization and recovery."""
 
+import shutil
 import tempfile
 
+import pytest
 from libtmux.exc import LibTmuxException
 
 from agentrt.tools.terminal.definition import TerminalAction
@@ -9,6 +11,7 @@ from agentrt.tools.terminal.impl import TerminalExecutor
 from agentrt.tools.terminal.terminal.tmux_pane_pool import TmuxPanePool
 
 
+@pytest.mark.skipif(shutil.which("tmux") is None, reason="requires tmux")
 def test_failed_pool_initialize_does_not_leave_pool_and_next_call_recovers(monkeypatch):
     with tempfile.TemporaryDirectory() as work_dir:
         executor = TerminalExecutor(working_dir=work_dir, terminal_type="tmux")

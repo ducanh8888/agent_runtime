@@ -1,6 +1,8 @@
 import json
 import os
 import socket
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import cast
@@ -149,6 +151,18 @@ def test_claim_writes_owner_host_and_pid(tmp_path: Path) -> None:
 
     assert payload.get("owner_host") == socket.gethostname()
     assert payload.get("owner_pid") == os.getpid()
+
+
+def test_pid_liveness_tracks_a_real_child_process() -> None:
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert conversation_lease_module._is_pid_alive(child.pid) is True
+        assert child.poll() is None
+    finally:
+        child.kill()
+        child.wait(timeout=10)
+    assert conversation_lease_module._is_pid_alive(child.pid) is False
+    assert conversation_lease_module._is_pid_alive(2**31 - 1) is False
 
 
 def test_claim_takes_over_when_previous_owner_pid_is_dead(
