@@ -119,6 +119,13 @@
       "authority": "evidence"
     },
     {
+      "id": "research.iteration-budget-e2e-windows",
+      "path": "docs/research/iteration-budget-e2e-windows.md",
+      "type": "research",
+      "lifecycle": "complete",
+      "authority": "evidence"
+    },
+    {
       "id": "research.oss-gap-reassessment",
       "path": "docs/research/oss-gap-reassessment.md",
       "type": "research",

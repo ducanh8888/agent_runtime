@@ -133,6 +133,8 @@ fixed here.
 | D17 | The stuck window and the FINISHED/STUCK → IDLE reset key on `source="user"`; a non-user follow-up would re-detect the same trailing loop before a step. | code | deferred (7) — needed by the goal tier's follow-ups; not by `send` |
 | D18 | Any exception from the judge LLM ends the goal as `interrupted`. | code | deferred (7) |
 | D19 | A `dispatch_from` fork inherits its parent's goal status; `resume_goal_loop` on the fork would resume the parent's objective. | code | deferred (7) |
+| D20 | The cap wrap-up persists whatever text the model returns. With tools disabled and a tool-heavy view, a router model answered with a tool call written as markup (`<tool>{"name":"proxy_terminal",...}`); `result` is then partial but unusable, no `resume_hint`, `wait` bucket `failed`. Model-dependent, not platform-specific. | measured (Windows E2E, lane C) | open — owner decision (vendored wrap-up; a retry spends a model call) |
+| D21 | On Windows the lease's dead-owner check never fires: `os.kill(dead_pid, 0)` raises `OSError` (WinError 87), read as "alive", so a daemon restarted within the 45 s lease TTL after a crash cannot hydrate its own running conversations; lane D depends on it. | measured (Windows test gate) | fixed on `win/lease-pid-liveness`, pending owner approval (vendored server) |
 
 Not defects, recorded so they are not re-opened: #41 (`wait` false
 `missing`) and #42 (streaming call without a total deadline) are fixed on
@@ -311,6 +313,11 @@ Each item lands with a test that fails without it.
    with 2.2-2.3; restart the daemon mid-run and confirm the run resumes and
    `wait` collects it; dispatch one capped run and confirm the partial
    result and `resume_hint`. Bounded: the runs listed here only.
+   Results: Linux in `../research/iteration-budget-e2e-linux.md`; Windows
+   (2026-10-27, `ed244d1`) in `../research/iteration-budget-e2e-windows.md`
+   — the audit and restart lanes pass, restart after a hard kill depends on
+   D21's fix, and the capped lane fails on D20. The `require="commit"` code
+   fix was not dispatched on either host.
 
 ## 7. Deferred — not in this plan
 

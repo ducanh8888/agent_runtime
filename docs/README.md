@@ -59,6 +59,9 @@ immutable result records. Machine consumers should read
   skills loaded once; a restart hands the run back); the defects the
   research found; what is deferred and what was declined. This is the
   authority on project status, not any summary elsewhere.
+- [Iteration-budget E2E, Windows](research/iteration-budget-e2e-windows.md)
+  — the Windows test gate and end-to-end check of the active plan, with the
+  lease takeover defect and the capped-wrap-up finding.
 - [Claude Code sub-agents](research/claude-code-subagents.md) — the
   documented behaviour of Claude Code's native sub-agents, the parity target
   for the active plan.
