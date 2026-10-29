@@ -205,8 +205,7 @@ def system_prompt_suffix() -> str | None:
 
 
 def set_system_prompt_suffix(value: str) -> None:
-    """Save the legacy unnamed dispatch suffix and clear named selection."""
-    active_system_prompt_suffix_file().unlink(missing_ok=True)
+    """Save the legacy unnamed dispatch suffix as an implicit default."""
     system_prompt_suffix_file().write_text(value, encoding="utf-8")
 
 

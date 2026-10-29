@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from agentrt.runtime import bootstrap, client as client_mod, config
+from agentrt.runtime import bootstrap, client as client_mod, config, mcp_server
 
 
 _ROOT = Path("/nonexistent")
@@ -725,3 +725,18 @@ def test_cli_dispatch_flag_and_saved_suffix_commands(tmp_path, monkeypatch) -> N
     assert calls[-1]["system_prompt_suffix"] is None
     assert main(["config", "clear-system-prompt-suffix"]) == 0
     assert config.system_prompt_suffix() is None
+
+
+def test_mcp_dispatch_passes_named_suffix(monkeypatch) -> None:
+    captured: dict = {}
+
+    class FakeClient:
+        def dispatch(self, task, workspace, **kwargs):
+            captured.update({"task": task, "workspace": workspace, **kwargs})
+            return {"id": CREATED}
+
+    monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
+    result = mcp_server.dispatch("task", _ws("ws"), system_prompt_suffix_name="review")
+
+    assert captured["system_prompt_suffix_name"] == "review"
+    assert result["id"] == CREATED
