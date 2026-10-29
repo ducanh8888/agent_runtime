@@ -21,10 +21,11 @@ def _ws(name: str) -> str:
 
 
 @pytest.fixture(autouse=True)
-def _workspaces(tmp_path: Path):
+def _workspaces(tmp_path: Path, monkeypatch):
     """Dispatch refuses a workspace that does not exist (#3)."""
     global _ROOT
     _ROOT = tmp_path
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path / "state"))
     for name in ("ws", "w", "other", "w0", "w1", "w2"):
         (tmp_path / name).mkdir()
 
@@ -576,3 +577,87 @@ def test_commit_hook_command_is_quoted_for_cmd_exe_on_windows(monkeypatch) -> No
     )
     assert "'" not in command
     assert command.startswith('"C:\\Program Files\\uv\\python.exe" -m ')
+
+
+def test_dispatch_suffix_precedence_and_omission(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path / "state"))
+    config.set_system_prompt_suffix("saved suffix")
+    bodies: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch("explicit", _ws("ws"), system_prompt_suffix="explicit suffix")
+    client.dispatch("saved", _ws("ws"))
+    client.dispatch("none", _ws("ws"), system_prompt_suffix="")
+
+    assert bodies[0]["agent_profile_id"] == "00000000-0000-0000-0000-000000000001"
+    assert bodies[0]["agent_launch_additions"] == {
+        "system_message_suffix_append": "explicit suffix"
+    }
+    assert bodies[1]["agent_launch_additions"] == {
+        "system_message_suffix_append": "saved suffix"
+    }
+    assert "agent_launch_additions" not in bodies[2]
+
+
+def test_dispatch_many_accepts_suffix_for_each_item_and_defaults() -> None:
+    bodies: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch_many(
+        [
+            {"task": "one", "workspace": _ws("w"), "system_prompt_suffix": "one"},
+            {"task": "two", "workspace": _ws("other")},
+        ],
+        defaults={"system_prompt_suffix": "shared"},
+    )
+
+    suffixes = {
+        body["initial_message"]["content"][0]["text"]: body["agent_launch_additions"][
+            "system_message_suffix_append"
+        ]
+        for body in bodies
+    }
+    assert suffixes == {"one": "one", "two": "shared"}
+
+
+def test_cli_dispatch_flag_and_saved_suffix_commands(tmp_path, monkeypatch) -> None:
+    from agentrt.runtime.cli import main
+
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path / "state"))
+    workspace = _ws("ws")
+    calls: list[dict] = []
+
+    def dispatch(self, task, workspace, **kwargs):
+        calls.append({"task": task, **kwargs})
+        return {"ok": True}
+
+    monkeypatch.setattr(client_mod.Client, "dispatch", dispatch)
+
+    assert (
+        main(
+            [
+                "dispatch",
+                "first",
+                "--workspace",
+                workspace,
+                "--system-prompt-suffix",
+                "explicit",
+            ]
+        )
+        == 0
+    )
+    assert calls[-1]["system_prompt_suffix"] == "explicit"
+    assert main(["config", "set-system-prompt-suffix", "saved value"]) == 0
+    assert config.system_prompt_suffix() == "saved value"
+    assert main(["dispatch", "second", "--workspace", workspace]) == 0
+    assert calls[-1]["system_prompt_suffix"] is None
+    assert main(["config", "clear-system-prompt-suffix"]) == 0
+    assert config.system_prompt_suffix() is None

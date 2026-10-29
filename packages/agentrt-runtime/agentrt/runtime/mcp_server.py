@@ -181,6 +181,7 @@ def dispatch(
     require: str | None = None,
     create_workspace: bool = False,
     skills: list[str] | None = None,
+    system_prompt_suffix: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -189,6 +190,11 @@ def dispatch(
 
     `skills` names skills to preload in the system message. Unknown names are
     refused by the daemon before the conversation is persisted.
+
+    `system_prompt_suffix` appends text to the system prompt for this call. If
+    omitted, the locally saved default is used when configured; manage that
+    default with `agentrt config set-system-prompt-suffix` or
+    `agentrt config clear-system-prompt-suffix`.
 
     `max_iterations` is optional and defaults to 100,000 in runtime dispatch
     (native parity: no turn limit by default). Capped runs land with partial
@@ -377,6 +383,7 @@ def dispatch(
         require=require,
         create_workspace=create_workspace,
         skills=skills,
+        system_prompt_suffix=system_prompt_suffix,
     )
 
 
@@ -621,8 +628,9 @@ def dispatch_many(
     Each item is a dict of `dispatch`'s arguments (`task` and `workspace`
     required, the rest optional). `defaults` holds arguments shared by every
     item -- typically `workspace`, `permission`, `workspace_mode`,
-    `context_files`, `require` and `tags` -- and an item's own value wins;
-    `tags` are merged, so `defaults={"tags": {"batch": "b1"}}` plus a per-item
+    `context_files`, `require`, `tags` and `system_prompt_suffix` -- and an
+    item's own value wins; `tags` are merged, so
+    `defaults={"tags": {"batch": "b1"}}` plus a per-item
     `{"lane": "api"}` gives both.
 
     Every item is validated (including unknown argument names and a

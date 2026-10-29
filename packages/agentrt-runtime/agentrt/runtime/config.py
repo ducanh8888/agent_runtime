@@ -102,6 +102,30 @@ def log_file() -> Path:
     return state_dir() / "daemon.log"
 
 
+def system_prompt_suffix_file() -> Path:
+    """Path to the locally saved dispatch system-prompt suffix."""
+    return state_dir() / "system-prompt-suffix.txt"
+
+
+def system_prompt_suffix() -> str | None:
+    """Return the saved dispatch system-prompt suffix, if configured."""
+    try:
+        value = system_prompt_suffix_file().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    return value or None
+
+
+def set_system_prompt_suffix(value: str) -> None:
+    """Save the local dispatch system-prompt suffix."""
+    system_prompt_suffix_file().write_text(value, encoding="utf-8")
+
+
+def clear_system_prompt_suffix() -> None:
+    """Remove the locally saved dispatch system-prompt suffix."""
+    system_prompt_suffix_file().unlink(missing_ok=True)
+
+
 def restrict_to_owner(path: Path) -> None:
     """Make a credential file readable and writable by its owner only.
 

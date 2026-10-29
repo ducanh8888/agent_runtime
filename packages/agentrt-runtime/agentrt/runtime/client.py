@@ -275,6 +275,7 @@ _DISPATCH_ARGUMENTS = frozenset(
         "require",
         "create_workspace",
         "skills",
+        "system_prompt_suffix",
     }
 )
 
@@ -1620,12 +1621,16 @@ class Client:
         require: str | None = None,
         create_workspace: bool = False,
         skills: list[str] | None = None,
+        system_prompt_suffix: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
         ``llm_profile`` names the allowed LLM profile to run under. It is a
         reference the daemon resolves against its own stores, so no credential
         crosses this boundary; an unknown or unbound name is refused.
+
+        ``system_prompt_suffix`` appends text to the system prompt. When omitted,
+        the locally saved suffix is used if present.
 
         ``workspace_mode`` is ``"shared"`` (default -- the session reads and
         writes ``workspace`` directly, coordinating with anything else in it
@@ -1709,6 +1714,15 @@ class Client:
             if max_iterations is not None
             else config.default_max_iterations()
         )
+        effective_suffix = (
+            system_prompt_suffix
+            if system_prompt_suffix is not None
+            else config.system_prompt_suffix()
+        )
+        if effective_suffix and effective_suffix.strip():
+            body["agent_launch_additions"] = {
+                "system_message_suffix_append": effective_suffix
+            }
         if require == "commit":
             command = _command_line(
                 [sys.executable, "-m", "agentrt.runtime.commit_hook", start_head or ""]

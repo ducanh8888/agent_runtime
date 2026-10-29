@@ -224,3 +224,20 @@ def test_secret_key_respects_an_existing_file(tmp_path, monkeypatch) -> None:
     config.secret_key_file().write_text("restored-from-backup")
 
     assert config.secret_key() == "restored-from-backup"
+
+
+def test_system_prompt_suffix_can_be_saved_loaded_and_cleared(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    assert config.system_prompt_suffix() is None
+    config.set_system_prompt_suffix("Follow the local conventions.")
+    assert config.system_prompt_suffix() == "Follow the local conventions."
+    assert config.system_prompt_suffix_file().read_text(encoding="utf-8") == (
+        "Follow the local conventions."
+    )
+
+    config.clear_system_prompt_suffix()
+    assert config.system_prompt_suffix() is None
+    config.clear_system_prompt_suffix()

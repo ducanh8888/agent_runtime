@@ -83,6 +83,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         context_files=args.context_file or None,
         require=args.require,
         create_workspace=args.create_workspace,
+        system_prompt_suffix=args.system_prompt_suffix,
     )
 
 
@@ -342,6 +343,16 @@ def _cmd_config(_args: argparse.Namespace) -> dict:
     return bootstrap.summary()
 
 
+def _cmd_config_set_system_prompt_suffix(args: argparse.Namespace) -> dict:
+    config.set_system_prompt_suffix(args.text)
+    return {"saved": True}
+
+
+def _cmd_config_clear_system_prompt_suffix(_args: argparse.Namespace) -> dict:
+    config.clear_system_prompt_suffix()
+    return {"saved": False}
+
+
 def _cmd_llm_profile(args: argparse.Namespace) -> dict:
     """Preview or apply the selected LLM profile from resolved configuration."""
     if args.apply:
@@ -383,6 +394,10 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("task")
     dispatch_parser.add_argument("--workspace", required=True)
     dispatch_parser.add_argument("--title")
+    dispatch_parser.add_argument(
+        "--system-prompt-suffix",
+        help="append text to the system prompt (defaults to the saved suffix)",
+    )
     dispatch_parser.add_argument(
         "--permission",
         choices=list(permissions.PRESETS),
@@ -672,8 +687,22 @@ def _build_parser() -> argparse.ArgumentParser:
     mcp_remove_parser.set_defaults(func=_cmd_mcp_remove)
 
     config_parser = _add_subparser(
-        subparsers, "config", help="print runtime configuration summary"
+        subparsers, "config", help="inspect or update local runtime configuration"
     )
+    config_subparsers = config_parser.add_subparsers(dest="config_command")
+    config_set_prompt_parser = _add_subparser(
+        config_subparsers,
+        "set-system-prompt-suffix",
+        help="save a default suffix for future dispatches",
+    )
+    config_set_prompt_parser.add_argument("text")
+    config_set_prompt_parser.set_defaults(func=_cmd_config_set_system_prompt_suffix)
+    config_clear_prompt_parser = _add_subparser(
+        config_subparsers,
+        "clear-system-prompt-suffix",
+        help="remove the saved dispatch system-prompt suffix",
+    )
+    config_clear_prompt_parser.set_defaults(func=_cmd_config_clear_system_prompt_suffix)
     config_parser.set_defaults(func=_cmd_config)
 
     llm_parser = _add_subparser(
