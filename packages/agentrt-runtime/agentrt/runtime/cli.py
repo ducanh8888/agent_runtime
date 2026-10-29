@@ -85,6 +85,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> dict:
         require=args.require,
         create_workspace=args.create_workspace,
         system_prompt_suffix=args.system_prompt_suffix,
+        system_prompt_suffix_name=args.system_prompt_suffix_name,
     )
 
 

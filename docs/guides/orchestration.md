@@ -43,6 +43,33 @@ convergence is. The second session above spent its hour re-reading the vendored
 server to confirm facts it had already been handed in writing, and produced
 nothing. What it wasted was an hour, not a budget.
 
+
+## Reusable system-prompt suffixes
+
+Dispatch calls can append a one-off `system_prompt_suffix` or select a saved
+named suffix with `system_prompt_suffix_name`. A literal suffix takes precedence
+over an explicit name, which takes precedence over the active named suffix. When
+no named set is selected, the legacy unnamed saved suffix remains the fallback.
+If nothing resolves to non-empty text, no launch addition is sent. These values
+append to AgentRT's existing session guidance; they do not replace the base
+system prompt. Forks inherit the source agent and permission as-is, with the
+selected suffix appended only to the new fork's system message.
+
+Save/select from the CLI:
+
+```sh
+agentrt config save-system-prompt-suffix review @./review-guidance.txt
+agentrt config use-system-prompt-suffix review
+agentrt config list-system-prompt-suffixes
+agentrt dispatch "Review this change" --workspace ./repo
+```
+
+For one dispatch, use `--system-prompt-suffix "..."` or
+`--system-prompt-suffix-name review`. Named suffixes can also be saved, listed,
+read, selected and deleted using the `system_prompt_suffix_*` MCP tools. Stored
+prompt text lives under the local AgentRT state directory; it is separate from
+the daemon's LLM credential/profile stores.
+
 ## Pointing at a document is not enough
 
 The obvious economy is to put reference material in the repository and name the

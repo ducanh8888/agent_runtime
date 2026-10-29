@@ -631,6 +631,23 @@ def test_dispatch_suffix_precedence_and_omission(tmp_path, monkeypatch) -> None:
     assert "agent_launch_additions" not in bodies[2]
 
 
+def test_dispatch_explicit_named_suffix_overrides_active_named_suffix() -> None:
+    config.save_system_prompt_suffix("active", "active suffix")
+    config.save_system_prompt_suffix("review", "review suffix")
+    config.use_system_prompt_suffix("active")
+    seen: dict = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(201, json=_created_body(request))
+
+    _mock_client(handle).dispatch("task", _ws("ws"), system_prompt_suffix_name="review")
+
+    assert seen["body"]["agent_launch_additions"] == {
+        "system_message_suffix_append": "review suffix"
+    }
+
+
 def test_dispatch_many_accepts_suffix_for_each_item_and_defaults() -> None:
     bodies: list[dict] = []
 
@@ -683,6 +700,25 @@ def test_cli_dispatch_flag_and_saved_suffix_commands(tmp_path, monkeypatch) -> N
         == 0
     )
     assert calls[-1]["system_prompt_suffix"] == "explicit"
+    assert calls[-1]["system_prompt_suffix_name"] is None
+    assert main(["config", "save-system-prompt-suffix", "review", "review prompt"]) == 0
+    assert main(["config", "use-system-prompt-suffix", "review"]) == 0
+    assert main(["config", "list-system-prompt-suffixes"]) == 0
+    assert (
+        main(
+            [
+                "dispatch",
+                "named",
+                "--workspace",
+                workspace,
+                "--system-prompt-suffix-name",
+                "review",
+            ]
+        )
+        == 0
+    )
+    assert calls[-1]["system_prompt_suffix_name"] == "review"
+    assert main(["config", "delete-system-prompt-suffix", "review"]) == 0
     assert main(["config", "set-system-prompt-suffix", "saved value"]) == 0
     assert config.system_prompt_suffix() == "saved value"
     assert main(["dispatch", "second", "--workspace", workspace]) == 0
