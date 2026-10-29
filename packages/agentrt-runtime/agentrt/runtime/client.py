@@ -276,6 +276,7 @@ _DISPATCH_ARGUMENTS = frozenset(
         "create_workspace",
         "skills",
         "system_prompt_suffix",
+        "system_prompt_suffix_name",
     }
 )
 
@@ -1622,6 +1623,7 @@ class Client:
         create_workspace: bool = False,
         skills: list[str] | None = None,
         system_prompt_suffix: str | None = None,
+        system_prompt_suffix_name: str | None = None,
     ) -> dict:
         """Start a new conversation in a workspace for a text task.
 
@@ -1629,8 +1631,10 @@ class Client:
         reference the daemon resolves against its own stores, so no credential
         crosses this boundary; an unknown or unbound name is refused.
 
-        ``system_prompt_suffix`` appends text to the system prompt. When omitted,
-        the locally saved suffix is used if present.
+        ``system_prompt_suffix`` appends literal text and wins over
+        ``system_prompt_suffix_name``. A named suffix wins over the active named
+        selection. When neither is given, the active named suffix is used; when
+        none is active, the legacy unnamed saved suffix is used if present.
 
         ``workspace_mode`` is ``"shared"`` (default -- the session reads and
         writes ``workspace`` directly, coordinating with anything else in it
@@ -1714,10 +1718,8 @@ class Client:
             if max_iterations is not None
             else config.default_max_iterations()
         )
-        effective_suffix = (
-            system_prompt_suffix
-            if system_prompt_suffix is not None
-            else config.system_prompt_suffix()
+        effective_suffix = config.resolve_system_prompt_suffix(
+            system_prompt_suffix, system_prompt_suffix_name
         )
         if effective_suffix and effective_suffix.strip():
             body["agent_launch_additions"] = {
@@ -2368,6 +2370,7 @@ class Client:
         from_event_id: str | None = None,
         max_iterations: int | None = None,
         system_prompt_suffix: str | None = None,
+        system_prompt_suffix_name: str | None = None,
     ) -> dict:
         """Fork a session and give the fork the task.
 
@@ -2389,9 +2392,10 @@ class Client:
         whole budget with it is rarely what is wanted. `None` (default)
         inherits the source's budget unchanged.
 
-        ``system_prompt_suffix`` appends text to the fork's system prompt. When
-        omitted, the locally saved suffix is used if present. The source's
-        agent and permission remain inherited as-is.
+        ``system_prompt_suffix`` appends literal text and wins over
+        ``system_prompt_suffix_name``. A named suffix wins over the active
+        selection; when neither is given, the active selection or legacy saved
+        suffix is used. The source's agent and permission remain inherited as-is.
 
         ``from_event_id`` bounds *how much* of that history is inherited: the
         fork copies only the branch up to and including that event -- that event
@@ -2436,10 +2440,8 @@ class Client:
             body["from_event_id"] = from_event_id
         if max_iterations is not None:
             body["max_iterations"] = max_iterations
-        effective_suffix = (
-            system_prompt_suffix
-            if system_prompt_suffix is not None
-            else config.system_prompt_suffix()
+        effective_suffix = config.resolve_system_prompt_suffix(
+            system_prompt_suffix, system_prompt_suffix_name
         )
         if effective_suffix and effective_suffix.strip():
             body["agent_launch_additions"] = {

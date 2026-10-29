@@ -88,6 +88,21 @@ def test_from_event_id_reaches_the_fork_body_and_back() -> None:
     assert out["id"] == CREATED
 
 
+def test_fork_named_suffix_beats_active_and_keeps_inherited_agent() -> None:
+    config.save_system_prompt_suffix("active", "active suffix")
+    config.save_system_prompt_suffix("review", "review suffix")
+    config.use_system_prompt_suffix("active")
+    seen: dict = {}
+    client = _fork_client(seen)
+
+    client.dispatch_from(SOURCE, "review", system_prompt_suffix_name="review")
+
+    assert seen["body"]["agent_launch_additions"] == {
+        "system_message_suffix_append": "review suffix"
+    }
+    assert not {"agent", "agent_settings", "agent_profile_id"} & seen["body"].keys()
+
+
 def test_fork_system_prompt_suffix_explicit_beats_saved_default(monkeypatch) -> None:
     seen: dict = {}
     client = _fork_client(seen)
@@ -414,6 +429,23 @@ def test_every_transcript_entry_type_carries_an_id() -> None:
         "error",
     }
     assert all(e.get("id") for e in events), events
+
+
+def test_mcp_dispatch_from_passes_named_suffix(monkeypatch) -> None:
+    captured: dict = {}
+
+    class FakeClient:
+        def dispatch_from(self, session, task, **kwargs):
+            captured.update({"session": session, "task": task, **kwargs})
+            return {"id": CREATED}
+
+    monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
+    result = mcp_server.dispatch_from(
+        SOURCE, "review", system_prompt_suffix_name="review"
+    )
+
+    assert captured["system_prompt_suffix_name"] == "review"
+    assert result["id"] == CREATED
 
 
 def test_an_id_from_transcript_is_accepted_as_a_branch_point() -> None:

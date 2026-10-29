@@ -166,6 +166,70 @@ def _guard(fn, *args, **kwargs) -> dict:
 
 
 @_tool()
+def system_prompt_suffix_save(name: str, text: str) -> dict:
+    """Save or replace a named system-prompt suffix for reuse.
+
+    Names use lowercase letters, digits, hyphens and underscores (max 64
+    characters). This is local prompt text in the AgentRT state directory, not
+    a credential.
+    """
+    return _guard(_save_system_prompt_suffix, name, text)
+
+
+def _save_system_prompt_suffix(name: str, text: str) -> dict:
+    config.save_system_prompt_suffix(name, text)
+    return {"saved": True, "name": name}
+
+
+@_tool()
+def system_prompt_suffix_list() -> dict:
+    """List saved named system-prompt suffixes and the active default name."""
+    return {
+        "suffixes": config.list_system_prompt_suffixes(),
+        "active": config.active_system_prompt_suffix_name(),
+    }
+
+
+@_tool()
+def system_prompt_suffix_get(name: str) -> dict:
+    """Get the text of one saved named system-prompt suffix."""
+    return _guard(_get_system_prompt_suffix, name)
+
+
+def _get_system_prompt_suffix(name: str) -> dict:
+    return {"name": name, "text": config.get_system_prompt_suffix(name)}
+
+
+@_tool()
+def system_prompt_suffix_use(name: str) -> dict:
+    """Select a saved named suffix as the default for future dispatches."""
+    return _guard(_use_system_prompt_suffix, name)
+
+
+def _use_system_prompt_suffix(name: str) -> dict:
+    config.use_system_prompt_suffix(name)
+    return {"active": name}
+
+
+@_tool()
+def system_prompt_suffix_delete(name: str) -> dict:
+    """Delete a saved named suffix; deleting the active one clears selection."""
+    return _guard(_delete_system_prompt_suffix, name)
+
+
+def _delete_system_prompt_suffix(name: str) -> dict:
+    config.delete_system_prompt_suffix(name)
+    return {"deleted": name}
+
+
+@_tool()
+def system_prompt_suffix_clear_active() -> dict:
+    """Clear the active named selection without deleting saved suffixes."""
+    config.clear_active_system_prompt_suffix()
+    return {"active": None}
+
+
+@_tool()
 def dispatch(
     task: str,
     workspace: str,
@@ -182,6 +246,7 @@ def dispatch(
     create_workspace: bool = False,
     skills: list[str] | None = None,
     system_prompt_suffix: str | None = None,
+    system_prompt_suffix_name: str | None = None,
 ) -> dict:
     """Start a background agent session and return immediately.
 
@@ -191,10 +256,14 @@ def dispatch(
     `skills` names skills to preload in the system message. Unknown names are
     refused by the daemon before the conversation is persisted.
 
-    `system_prompt_suffix` appends text to the system prompt for this call. If
-    omitted, the locally saved default is used when configured; manage that
-    default with `agentrt config set-system-prompt-suffix` or
-    `agentrt config clear-system-prompt-suffix`.
+    `system_prompt_suffix` appends literal text and wins over
+    `system_prompt_suffix_name`. A named suffix wins over the active selection;
+    if both are omitted, the active named suffix is used, falling back to the
+    legacy unnamed default. Manage named sets with the
+    `system_prompt_suffix_save`, `system_prompt_suffix_list`,
+    `system_prompt_suffix_get`, `system_prompt_suffix_use`,
+    `system_prompt_suffix_delete` and `system_prompt_suffix_clear_active` tools,
+    or the matching `agentrt config` commands.
 
     `max_iterations` is optional and defaults to 100,000 in runtime dispatch
     (native parity: no turn limit by default). Capped runs land with partial
@@ -384,6 +453,7 @@ def dispatch(
         create_workspace=create_workspace,
         skills=skills,
         system_prompt_suffix=system_prompt_suffix,
+        system_prompt_suffix_name=system_prompt_suffix_name,
     )
 
 
@@ -569,17 +639,19 @@ def dispatch_from(
     from_event_id: str | None = None,
     max_iterations: int | None = None,
     system_prompt_suffix: str | None = None,
+    system_prompt_suffix_name: str | None = None,
 ) -> dict:
     """Fork a session and give the fork the task.
 
     `session` is the session to inherit from -- the fork gets its history, agent,
     workspace and permission, so a reviewer can start from the writer's
     conversation instead of from a summary of it. The fork's agent and
-    permission are inherited as-is; `system_prompt_suffix` only appends text to
-    the new fork's system message, and does not modify the source. If omitted,
-    the locally saved suffix is used when configured. Manage that default with
-    `agentrt config set-system-prompt-suffix` or
-    `agentrt config clear-system-prompt-suffix`.
+    permission are inherited as-is. `system_prompt_suffix` appends literal text
+    to the fork's system message and wins over `system_prompt_suffix_name`; the
+    fork's agent and permission remain inherited unchanged. If neither option
+    is given, the active named suffix is used, falling back to the legacy
+    unnamed default. Manage named suffixes with the corresponding
+    `system_prompt_suffix_*` tools or `agentrt config` commands.
 
     Permission is not something you can override here: the source's tools,
     including the guard baked into
@@ -625,6 +697,7 @@ def dispatch_from(
         from_event_id=from_event_id,
         max_iterations=max_iterations,
         system_prompt_suffix=system_prompt_suffix,
+        system_prompt_suffix_name=system_prompt_suffix_name,
     )
 
 
@@ -637,8 +710,9 @@ def dispatch_many(
     Each item is a dict of `dispatch`'s arguments (`task` and `workspace`
     required, the rest optional). `defaults` holds arguments shared by every
     item -- typically `workspace`, `permission`, `workspace_mode`,
-    `context_files`, `require`, `tags` and `system_prompt_suffix` -- and an
-    item's own value wins; `tags` are merged, so
+    `context_files`, `require`, `tags`, `system_prompt_suffix` and
+    `system_prompt_suffix_name` -- and an item's own value wins; `tags` are
+    merged, so
     `defaults={"tags": {"batch": "b1"}}` plus a per-item
     `{"lane": "api"}` gives both.
 

@@ -143,6 +143,34 @@ def test_dispatch_forwards_preloaded_skills_and_rejects_unknown_before_create() 
     assert len(bodies) == 2
 
 
+def test_dispatch_named_suffix_precedence_and_profile_id_boundary() -> None:
+    config.save_system_prompt_suffix("active", "active suffix")
+    config.save_system_prompt_suffix("review", "review suffix")
+    config.use_system_prompt_suffix("active")
+    bodies: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json=_created_body(request))
+
+    client = _mock_client(handle)
+    client.dispatch("active", _ws("ws"))
+    client.dispatch("named", _ws("ws"), system_prompt_suffix_name="review")
+    client.dispatch(
+        "literal",
+        _ws("ws"),
+        system_prompt_suffix="literal suffix",
+        system_prompt_suffix_name="review",
+    )
+
+    assert [
+        body.get("agent_launch_additions", {}).get("system_message_suffix_append")
+        for body in bodies
+    ] == ["active suffix", "review suffix", "literal suffix"]
+    assert all("agent_profile_id" in body for body in bodies)
+    assert all(not {"agent", "agent_settings"} & body.keys() for body in bodies)
+
+
 def test_dispatch_sends_snapshot_workspace_mode() -> None:
     seen: dict = {}
 

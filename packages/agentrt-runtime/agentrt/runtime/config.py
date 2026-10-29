@@ -221,6 +221,17 @@ def clear_system_prompt_suffix() -> None:
     system_prompt_suffix_file().unlink(missing_ok=True)
 
 
+def resolve_system_prompt_suffix(
+    literal: str | None = None, name: str | None = None
+) -> str | None:
+    """Resolve literal, explicitly named, then active/default suffix precedence."""
+    if literal is not None:
+        return literal or None
+    if name is not None:
+        return get_system_prompt_suffix(name) or None
+    return system_prompt_suffix()
+
+
 def restrict_to_owner(path: Path) -> None:
     """Make a credential file readable and writable by its owner only.
 
