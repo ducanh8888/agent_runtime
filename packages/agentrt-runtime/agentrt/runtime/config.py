@@ -103,12 +103,100 @@ def log_file() -> Path:
 
 
 def system_prompt_suffix_file() -> Path:
-    """Path to the locally saved dispatch system-prompt suffix."""
+    """Path to the locally saved unnamed dispatch system-prompt suffix."""
     return state_dir() / "system-prompt-suffix.txt"
 
 
+def system_prompt_suffixes_dir() -> Path:
+    """Directory containing named dispatch system-prompt suffixes."""
+    return state_dir() / "system-prompt-suffixes"
+
+
+def active_system_prompt_suffix_file() -> Path:
+    """Path storing the active named suffix selection."""
+    return state_dir() / "system-prompt-suffix-active.txt"
+
+
+def _validate_system_prompt_suffix_name(name: str) -> str:
+    if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", name):
+        raise ValueError(
+            "suffix name must begin with a lowercase letter or digit and contain "
+            "only lowercase letters, digits, '-' or '_' (maximum 64 characters)"
+        )
+    return name
+
+
+def named_system_prompt_suffix_file(name: str) -> Path:
+    """Path to a named suffix after validating its name."""
+    validated_name = _validate_system_prompt_suffix_name(name)
+    return system_prompt_suffixes_dir() / f"{validated_name}.txt"
+
+
+def save_system_prompt_suffix(name: str, text: str) -> None:
+    """Save or replace a named suffix."""
+    path = named_system_prompt_suffix_file(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def get_system_prompt_suffix(name: str) -> str:
+    """Read a named suffix, raising when the name is not saved."""
+    path = named_system_prompt_suffix_file(name)
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ValueError(f"system prompt suffix {name!r} is not saved") from exc
+
+
+def list_system_prompt_suffixes() -> list[str]:
+    """List saved suffix names in stable sorted order."""
+    directory = system_prompt_suffixes_dir()
+    if not directory.is_dir():
+        return []
+    return sorted(path.stem for path in directory.glob("*.txt") if path.is_file())
+
+
+def active_system_prompt_suffix_name() -> str | None:
+    """Return the active named suffix if one is selected."""
+    try:
+        name = active_system_prompt_suffix_file().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    try:
+        return _validate_system_prompt_suffix_name(name) if name else None
+    except ValueError:
+        return None
+
+
+def use_system_prompt_suffix(name: str) -> None:
+    """Select a saved named suffix as the default for future dispatches."""
+    name = _validate_system_prompt_suffix_name(name)
+    get_system_prompt_suffix(name)
+    active_system_prompt_suffix_file().write_text(name, encoding="utf-8")
+
+
+def delete_system_prompt_suffix(name: str) -> None:
+    """Delete a saved suffix and clear it if selected as active."""
+    path = named_system_prompt_suffix_file(name)
+    if not path.exists():
+        raise ValueError(f"system prompt suffix {name!r} is not saved")
+    path.unlink()
+    if active_system_prompt_suffix_name() == name:
+        active_system_prompt_suffix_file().unlink(missing_ok=True)
+
+
 def system_prompt_suffix() -> str | None:
-    """Return the saved dispatch system-prompt suffix, if configured."""
+    """Return active named suffix, falling back to the legacy unnamed suffix.
+
+    The old single-suffix file and API remain compatible. When a named set is
+    active it takes precedence; otherwise the legacy suffix remains the default.
+    """
+    name = active_system_prompt_suffix_name()
+    if name is not None:
+        try:
+            return get_system_prompt_suffix(name) or None
+        except ValueError:
+            return None
     try:
         value = system_prompt_suffix_file().read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -117,12 +205,19 @@ def system_prompt_suffix() -> str | None:
 
 
 def set_system_prompt_suffix(value: str) -> None:
-    """Save the local dispatch system-prompt suffix."""
+    """Save the legacy unnamed dispatch suffix and clear named selection."""
+    active_system_prompt_suffix_file().unlink(missing_ok=True)
     system_prompt_suffix_file().write_text(value, encoding="utf-8")
 
 
+def clear_active_system_prompt_suffix() -> None:
+    """Clear the active named suffix while preserving all saved sets."""
+    active_system_prompt_suffix_file().unlink(missing_ok=True)
+
+
 def clear_system_prompt_suffix() -> None:
-    """Remove the locally saved dispatch system-prompt suffix."""
+    """Clear both the legacy suffix and active named default."""
+    active_system_prompt_suffix_file().unlink(missing_ok=True)
     system_prompt_suffix_file().unlink(missing_ok=True)
 
 

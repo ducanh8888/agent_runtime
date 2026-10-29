@@ -237,7 +237,44 @@ def test_system_prompt_suffix_can_be_saved_loaded_and_cleared(
     assert config.system_prompt_suffix_file().read_text(encoding="utf-8") == (
         "Follow the local conventions."
     )
-
     config.clear_system_prompt_suffix()
     assert config.system_prompt_suffix() is None
     config.clear_system_prompt_suffix()
+
+
+def test_named_system_prompt_suffixes_and_legacy_default_coexist(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    assert config.list_system_prompt_suffixes() == []
+    config.save_system_prompt_suffix("review", "Review carefully.")
+    config.save_system_prompt_suffix("implementation", "Implement narrowly.")
+    assert config.list_system_prompt_suffixes() == ["implementation", "review"]
+    assert config.get_system_prompt_suffix("review") == "Review carefully."
+    assert config.system_prompt_suffix() is None
+
+    config.set_system_prompt_suffix("legacy default")
+    assert config.system_prompt_suffix() == "legacy default"
+    config.use_system_prompt_suffix("review")
+    assert config.system_prompt_suffix() == "Review carefully."
+
+    config.delete_system_prompt_suffix("review")
+    assert config.active_system_prompt_suffix_name() is None
+    assert config.system_prompt_suffix() == "legacy default"
+    config.clear_system_prompt_suffix()
+    assert config.system_prompt_suffix() is None
+
+
+def test_named_system_prompt_suffix_name_validation_and_unknown_names(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AGENTRT_STATE_DIR", str(tmp_path))
+
+    for name in ("../outside", "Upper", "", "x" * 65):
+        with pytest.raises(ValueError):
+            config.save_system_prompt_suffix(name, "text")
+    with pytest.raises(ValueError, match="not saved"):
+        config.use_system_prompt_suffix("missing")
+    with pytest.raises(ValueError, match="not saved"):
+        config.delete_system_prompt_suffix("missing")

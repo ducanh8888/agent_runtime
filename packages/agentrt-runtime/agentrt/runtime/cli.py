@@ -13,6 +13,7 @@ import os
 import re
 import sys
 from collections import deque
+from pathlib import Path
 
 from agentrt.runtime import bootstrap, client as client_mod, config, daemon, permissions
 
@@ -353,6 +354,45 @@ def _cmd_config_clear_system_prompt_suffix(_args: argparse.Namespace) -> dict:
     return {"saved": False}
 
 
+def _suffix_text(text: str) -> str:
+    if not text.startswith("@"):
+        return text
+    path = Path(text[1:]).expanduser()
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ValueError(f"suffix file {str(path)!r} does not exist") from exc
+
+
+def _cmd_config_save_system_prompt_suffix(args: argparse.Namespace) -> dict:
+    config.save_system_prompt_suffix(args.name, _suffix_text(args.text))
+    return {"saved": True, "name": args.name}
+
+
+def _cmd_config_list_system_prompt_suffixes(_args: argparse.Namespace) -> dict:
+    return {
+        "suffixes": config.list_system_prompt_suffixes(),
+        "active": config.active_system_prompt_suffix_name(),
+    }
+
+
+def _cmd_config_use_system_prompt_suffix(args: argparse.Namespace) -> dict:
+    config.use_system_prompt_suffix(args.name)
+    return {"active": args.name}
+
+
+def _cmd_config_delete_system_prompt_suffix(args: argparse.Namespace) -> dict:
+    config.delete_system_prompt_suffix(args.name)
+    return {"deleted": args.name}
+
+
+def _cmd_config_clear_active_system_prompt_suffix(
+    _args: argparse.Namespace,
+) -> dict:
+    config.clear_active_system_prompt_suffix()
+    return {"active": None}
+
+
 def _cmd_llm_profile(args: argparse.Namespace) -> dict:
     """Preview or apply the selected LLM profile from resolved configuration."""
     if args.apply:
@@ -396,7 +436,11 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--title")
     dispatch_parser.add_argument(
         "--system-prompt-suffix",
-        help="append text to the system prompt (defaults to the saved suffix)",
+        help="append literal text to the system prompt (wins over named suffix)",
+    )
+    dispatch_parser.add_argument(
+        "--system-prompt-suffix-name",
+        help="select a saved suffix by name (defaults to the active selection)",
     )
     dispatch_parser.add_argument(
         "--permission",
@@ -703,6 +747,44 @@ def _build_parser() -> argparse.ArgumentParser:
         help="remove the saved dispatch system-prompt suffix",
     )
     config_clear_prompt_parser.set_defaults(func=_cmd_config_clear_system_prompt_suffix)
+    config_save_named_parser = _add_subparser(
+        config_subparsers,
+        "save-system-prompt-suffix",
+        help="save or replace a named suffix (text or @file)",
+    )
+    config_save_named_parser.add_argument("name")
+    config_save_named_parser.add_argument("text")
+    config_save_named_parser.set_defaults(func=_cmd_config_save_system_prompt_suffix)
+    config_list_named_parser = _add_subparser(
+        config_subparsers,
+        "list-system-prompt-suffixes",
+        help="list saved suffix names and the active selection",
+    )
+    config_list_named_parser.set_defaults(func=_cmd_config_list_system_prompt_suffixes)
+    config_use_named_parser = _add_subparser(
+        config_subparsers,
+        "use-system-prompt-suffix",
+        help="select a saved suffix as the default",
+    )
+    config_use_named_parser.add_argument("name")
+    config_use_named_parser.set_defaults(func=_cmd_config_use_system_prompt_suffix)
+    config_delete_named_parser = _add_subparser(
+        config_subparsers,
+        "delete-system-prompt-suffix",
+        help="delete a named suffix",
+    )
+    config_delete_named_parser.add_argument("name")
+    config_delete_named_parser.set_defaults(
+        func=_cmd_config_delete_system_prompt_suffix
+    )
+    config_clear_active_parser = _add_subparser(
+        config_subparsers,
+        "clear-active-system-prompt-suffix",
+        help="clear the active named selection, keeping saved suffixes",
+    )
+    config_clear_active_parser.set_defaults(
+        func=_cmd_config_clear_active_system_prompt_suffix
+    )
     config_parser.set_defaults(func=_cmd_config)
 
     llm_parser = _add_subparser(
