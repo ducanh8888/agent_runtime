@@ -14,6 +14,7 @@ from agentrt.sdk.agent.base import AgentBase
 from agentrt.sdk.conversation.conversation_stats import ConversationStats
 from agentrt.sdk.conversation.request import (  # re-export for backward compat
     ACPEnabledAgent as ACPEnabledAgent,
+    AgentLaunchAdditions as AgentLaunchAdditions,
     ConversationConfig as ConversationConfig,
     SendMessageRequest as SendMessageRequest,
     StartConversationRequest as StartConversationRequest,
@@ -672,6 +673,13 @@ class ForkConversationRequest(BaseModel):
         description=(
             "If set, the fork's own iteration budget for its next run. If "
             "null (default), the fork inherits the source's max_iterations."
+        ),
+    )
+    agent_launch_additions: AgentLaunchAdditions | None = Field(
+        default=None,
+        description=(
+            "Deployment context appended to the fork's resolved agent after "
+            "inheriting it from the source. The source is not modified."
         ),
     )
 

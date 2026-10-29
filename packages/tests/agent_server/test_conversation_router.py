@@ -2619,6 +2619,33 @@ def test_fork_conversation_duplicate_id_returns_409(
         client.app.dependency_overrides.clear()
 
 
+def test_fork_conversation_passes_agent_launch_additions(
+    client, mock_conversation_service, sample_conversation_info, sample_conversation_id
+):
+    mock_conversation_service.fork_conversation.return_value = sample_conversation_info
+    client.app.dependency_overrides[get_conversation_service] = lambda: (
+        mock_conversation_service
+    )
+
+    try:
+        response = client.post(
+            f"/api/conversations/{sample_conversation_id}/fork",
+            json={
+                "agent_launch_additions": {
+                    "system_message_suffix_append": "fork guidance"
+                }
+            },
+        )
+
+        assert response.status_code == 201
+        _, kwargs = mock_conversation_service.fork_conversation.call_args
+        assert kwargs["agent_launch_additions"].system_message_suffix_append == (
+            "fork guidance"
+        )
+    finally:
+        client.app.dependency_overrides.clear()
+
+
 def test_fork_conversation_from_event_id_passed_through(
     client, mock_conversation_service, sample_conversation_info, sample_conversation_id
 ):

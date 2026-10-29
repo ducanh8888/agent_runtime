@@ -30,6 +30,7 @@ Handler = Callable[[httpx.Request], httpx.Response]
 @pytest.fixture(autouse=True)
 def _no_client_side_cap(monkeypatch):
     monkeypatch.setattr(config, "max_running_sessions", lambda: 0)
+    monkeypatch.setattr(config, "system_prompt_suffix", lambda: None)
     monkeypatch.setattr(
         bootstrap, "agent_profile_llm_ref", lambda preset: "deepseek-high"
     )
@@ -85,6 +86,50 @@ def test_from_event_id_reaches_the_fork_body_and_back() -> None:
     assert out["forked_from_event_id"] == BRANCH_POINT
     assert out["forked_from"] == SOURCE
     assert out["id"] == CREATED
+
+
+def test_fork_system_prompt_suffix_explicit_beats_saved_default(monkeypatch) -> None:
+    seen: dict = {}
+    client = _fork_client(seen)
+    monkeypatch.setattr(config, "system_prompt_suffix", lambda: "saved suffix")
+
+    client.dispatch_from(SOURCE, "review", system_prompt_suffix="explicit suffix")
+
+    assert seen["body"]["agent_launch_additions"] == {
+        "system_message_suffix_append": "explicit suffix"
+    }
+    assert not {"agent", "agent_settings", "agent_profile_id"} & seen["body"].keys()
+
+
+def test_fork_explicit_empty_suffix_disables_saved_default(monkeypatch) -> None:
+    seen: dict = {}
+    client = _fork_client(seen)
+    monkeypatch.setattr(config, "system_prompt_suffix", lambda: "saved suffix")
+
+    client.dispatch_from(SOURCE, "review", system_prompt_suffix="")
+
+    assert "agent_launch_additions" not in seen["body"]
+
+
+def test_fork_system_prompt_suffix_uses_saved_default(monkeypatch) -> None:
+    seen: dict = {}
+    client = _fork_client(seen)
+    monkeypatch.setattr(config, "system_prompt_suffix", lambda: "saved suffix")
+
+    client.dispatch_from(SOURCE, "review")
+
+    assert seen["body"]["agent_launch_additions"] == {
+        "system_message_suffix_append": "saved suffix"
+    }
+
+
+def test_fork_without_suffix_sends_no_launch_additions() -> None:
+    seen: dict = {}
+    client = _fork_client(seen)
+
+    client.dispatch_from(SOURCE, "review")
+
+    assert "agent_launch_additions" not in seen["body"]
 
 
 def test_omitting_from_event_id_sends_no_key_and_still_forks() -> None:
@@ -264,10 +309,15 @@ def test_mcp_tool_passes_from_event_id_through(monkeypatch) -> None:
     monkeypatch.setattr(mcp_server, "_get_client", lambda: FakeClient())
 
     out = mcp_server.dispatch_from(
-        SOURCE, "review", title="t", from_event_id=BRANCH_POINT
+        SOURCE,
+        "review",
+        title="t",
+        from_event_id=BRANCH_POINT,
+        system_prompt_suffix="fork guidance",
     )
     assert captured["from_event_id"] == BRANCH_POINT
     assert captured["title"] == "t"
+    assert captured["system_prompt_suffix"] == "fork guidance"
     assert out["id"] == CREATED
 
     class FailingClient:

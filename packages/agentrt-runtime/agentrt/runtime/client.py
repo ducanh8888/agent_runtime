@@ -2367,6 +2367,7 @@ class Client:
         tags: dict[str, str] | None = None,
         from_event_id: str | None = None,
         max_iterations: int | None = None,
+        system_prompt_suffix: str | None = None,
     ) -> dict:
         """Fork a session and give the fork the task.
 
@@ -2387,6 +2388,10 @@ class Client:
         exists because the task got narrower, and inheriting the source's
         whole budget with it is rarely what is wanted. `None` (default)
         inherits the source's budget unchanged.
+
+        ``system_prompt_suffix`` appends text to the fork's system prompt. When
+        omitted, the locally saved suffix is used if present. The source's
+        agent and permission remain inherited as-is.
 
         ``from_event_id`` bounds *how much* of that history is inherited: the
         fork copies only the branch up to and including that event -- that event
@@ -2431,6 +2436,15 @@ class Client:
             body["from_event_id"] = from_event_id
         if max_iterations is not None:
             body["max_iterations"] = max_iterations
+        effective_suffix = (
+            system_prompt_suffix
+            if system_prompt_suffix is not None
+            else config.system_prompt_suffix()
+        )
+        if effective_suffix and effective_suffix.strip():
+            body["agent_launch_additions"] = {
+                "system_message_suffix_append": effective_suffix
+            }
         forked = self._send(
             "POST",
             f"/api/conversations/{quote(resolved, safe='')}/fork",

@@ -82,6 +82,7 @@ from agentrt.sdk.agent.acp_file_credentials import CODEX_AUTH_SECRET_NAME
 from agentrt.sdk.agent.base import AgentBase
 from agentrt.sdk.conversation.impl.local_conversation import LocalConversation
 from agentrt.sdk.conversation.persistence_const import BASE_STATE
+from agentrt.sdk.conversation.request import AgentLaunchAdditions
 from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
@@ -3062,6 +3063,7 @@ class ConversationService:
         reset_metrics: bool = True,
         from_event_id: str | None = None,
         max_iterations: int | None = None,
+        agent_launch_additions: AgentLaunchAdditions | None = None,
     ) -> ConversationInfo | None:
         """Fork an existing conversation, deep-copying its event history.
 
@@ -3101,10 +3103,22 @@ class ConversationService:
 
         source_conversation = source_service.get_conversation()
 
+        suffix = (
+            agent_launch_additions.system_message_suffix_append.strip()
+            if agent_launch_additions
+            and agent_launch_additions.system_message_suffix_append
+            else ""
+        )
+        fork_agent = (
+            _append_system_message_suffix(source_conversation.agent, suffix)
+            if suffix
+            else None
+        )
         # fork() deep-copies events, state, and writes to a new persistence dir.
         fork_conv = await asyncio.to_thread(
             source_conversation.fork,
             conversation_id=fork_id,
+            agent=fork_agent,
             title=title,
             tags=tags,
             reset_metrics=reset_metrics,

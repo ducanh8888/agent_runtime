@@ -39,6 +39,7 @@ from agentrt.agent_server.models import (
 from agentrt.agent_server.utils import safe_rmtree as _safe_rmtree
 from agentrt.sdk import LLM, Agent, AgentBase, Message
 from agentrt.sdk.agent.acp_agent import ACPAgent
+from agentrt.sdk.conversation.request import AgentLaunchAdditions
 from agentrt.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
@@ -3962,6 +3963,44 @@ class TestConversationTreeForkAndNavigate:
             assert fork_service is not None
             assert fork_service.stored.parent_conversation_id == info.id
             assert fork_info.id in svc._children_of(info.id)
+
+    @pytest.mark.asyncio
+    async def test_fork_appends_launch_suffix_without_changing_source(self, tmp_path):
+        workspace_dir = tmp_path / "workspace"
+        workspace_dir.mkdir()
+        async with ConversationService(
+            conversations_dir=tmp_path / "conversations"
+        ) as svc:
+            info, source_service, _ = await self._start_with_events(
+                svc, workspace_dir, ["first"]
+            )
+            source_agent = source_service.get_conversation().agent
+            source_suffix = (
+                source_agent.agent_context.system_message_suffix
+                if source_agent.agent_context
+                else None
+            )
+
+            fork_info = await svc.fork_conversation(
+                info.id,
+                agent_launch_additions=AgentLaunchAdditions(
+                    system_message_suffix_append="fork-only guidance"
+                ),
+            )
+
+            assert fork_info is not None
+            fork_service = await svc.get_event_service(fork_info.id)
+            assert fork_service is not None
+            fork_agent = fork_service.get_conversation().agent
+            assert fork_agent.agent_context is not None
+            assert "fork-only guidance" in (
+                fork_agent.agent_context.system_message_suffix or ""
+            )
+            assert source_agent.agent_context is None or (
+                source_agent.agent_context.system_message_suffix == source_suffix
+                and "fork-only guidance"
+                not in source_agent.agent_context.system_message_suffix
+            )
 
     @pytest.mark.asyncio
     async def test_fork_max_iterations_override_replaces_the_source_budget(

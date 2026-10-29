@@ -568,13 +568,21 @@ def dispatch_from(
     tags: dict[str, str] | None = None,
     from_event_id: str | None = None,
     max_iterations: int | None = None,
+    system_prompt_suffix: str | None = None,
 ) -> dict:
     """Fork a session and give the fork the task.
 
     `session` is the session to inherit from -- the fork gets its history, agent,
     workspace and permission, so a reviewer can start from the writer's
-    conversation instead of from a summary of it. Permission is not something
-    you can override here: the source's tools, including the guard baked into
+    conversation instead of from a summary of it. The fork's agent and
+    permission are inherited as-is; `system_prompt_suffix` only appends text to
+    the new fork's system message, and does not modify the source. If omitted,
+    the locally saved suffix is used when configured. Manage that default with
+    `agentrt config set-system-prompt-suffix` or
+    `agentrt config clear-system-prompt-suffix`.
+
+    Permission is not something you can override here: the source's tools,
+    including the guard baked into
     `file_editor` at the preset it was created under, are copied as-is, so
     changing it on the fork would need those tools rebuilt, not one field
     changed.
@@ -616,6 +624,7 @@ def dispatch_from(
         tags=tags,
         from_event_id=from_event_id,
         max_iterations=max_iterations,
+        system_prompt_suffix=system_prompt_suffix,
     )
 
 
