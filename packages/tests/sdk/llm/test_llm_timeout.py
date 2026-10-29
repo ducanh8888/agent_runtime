@@ -8,15 +8,15 @@ from pydantic import SecretStr
 from agentrt.sdk.llm import LLM, Message, TextContent
 
 
-# Default timeout in seconds (5 minutes)
-DEFAULT_LLM_TIMEOUT_SECONDS = 300
+# Default timeout in seconds (10 minutes)
+DEFAULT_LLM_TIMEOUT_SECONDS = 600
 
 
 class TestLLMTimeoutDefaults:
     """Tests for default LLM timeout behavior."""
 
-    def test_default_timeout_is_5_minutes(self):
-        """Test that the default LLM timeout is 300 seconds (5 minutes).
+    def test_default_timeout_is_10_minutes(self):
+        """Test that the default LLM timeout is 600 seconds (10 minutes).
 
         This test ensures that LLM requests have a reasonable default timeout
         to prevent indefinitely hanging requests that could cause runtime
@@ -27,7 +27,7 @@ class TestLLMTimeoutDefaults:
         llm = LLM(model="gpt-4o-mini", usage_id="test-llm")
 
         assert llm.timeout == DEFAULT_LLM_TIMEOUT_SECONDS, (
-            f"Expected default timeout of {DEFAULT_LLM_TIMEOUT_SECONDS}s (5 minutes), "
+            f"Expected default timeout of {DEFAULT_LLM_TIMEOUT_SECONDS}s (10 minutes), "
             f"but got {llm.timeout}. "
             "A reasonable default timeout is needed to prevent LLM calls from "
             "hanging indefinitely and causing runtime idle detection issues."

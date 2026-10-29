@@ -1,7 +1,13 @@
 from unittest.mock import patch
 
+import httpx
 import pytest
-from litellm.exceptions import APIConnectionError
+import tenacity
+from litellm.exceptions import (
+    APIConnectionError,
+    BadGatewayError,
+    ServiceUnavailableError,
+)
 from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse, Usage
 from pydantic import SecretStr
 
@@ -40,6 +46,19 @@ def default_config():
     )
 
 
+def capture_retry_sleeps(monkeypatch):
+    sleeps = []
+    tenacity_retry = tenacity.retry
+
+    def retry_with_fake_sleep(**kwargs):
+        return tenacity_retry(sleep=sleeps.append, **kwargs)
+
+    monkeypatch.setattr(
+        "agentrt.sdk.llm.utils.retry_mixin.retry", retry_with_fake_sleep
+    )
+    return sleeps
+
+
 @patch("agentrt.sdk.llm.llm.litellm_completion")
 def test_completion_retries_api_connection_error(
     mock_litellm_completion, default_config
@@ -75,6 +94,129 @@ def test_completion_retries_api_connection_error(
     assert isinstance(response, LLMResponse)
     assert response.raw_response == mock_response
     assert mock_litellm_completion.call_count == 2  # Initial call + 1 retry
+
+
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+def test_completion_retries_bad_gateway_error(mock_litellm_completion, default_config):
+    mock_response = create_mock_response("Gateway retry successful")
+    mock_litellm_completion.side_effect = [
+        BadGatewayError(
+            message="Provider returned empty content",
+            llm_provider="test_provider",
+            model="test_model",
+        ),
+        mock_response,
+    ]
+
+    response = default_config.completion(
+        messages=[Message(role="user", content=[TextContent(text="Hello!")])],
+    )
+
+    assert response.raw_response == mock_response
+    assert mock_litellm_completion.call_count == 2
+
+
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+def test_completion_honors_retry_after_header(
+    mock_litellm_completion, monkeypatch, default_config
+):
+    sleeps = capture_retry_sleeps(monkeypatch)
+    mock_response = create_mock_response("Service retry successful")
+    response = httpx.Response(
+        503,
+        headers={"Retry-After": "23", "X-OmniRoute-Combo-Pool-Empty": "1"},
+        request=httpx.Request("POST", "https://router.invalid"),
+    )
+    mock_litellm_completion.side_effect = [
+        ServiceUnavailableError(
+            message="all_targets_cooling_down",
+            llm_provider="test_provider",
+            model="test_model",
+            response=response,
+        ),
+        mock_response,
+    ]
+
+    response = default_config.completion(
+        messages=[Message(role="user", content=[TextContent(text="Hello!")])],
+    )
+
+    assert response.raw_response == mock_response
+    assert sleeps == [23.0]
+    assert mock_litellm_completion.call_count == 2
+
+
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+def test_completion_caps_retry_after_header(mock_litellm_completion, monkeypatch):
+    sleeps = capture_retry_sleeps(monkeypatch)
+    mock_response = create_mock_response("Service retry successful")
+    response = httpx.Response(
+        503,
+        headers={"Retry-After": "3600"},
+        request=httpx.Request("POST", "https://router.invalid"),
+    )
+    mock_litellm_completion.side_effect = [
+        ServiceUnavailableError(
+            message="all_targets_cooling_down",
+            llm_provider="test_provider",
+            model="test_model",
+            response=response,
+        ),
+        mock_response,
+    ]
+
+    llm = LLM(
+        usage_id="test-service",
+        model="gpt-4o",
+        api_key=SecretStr("test_key"),
+        num_retries=2,
+        retry_min_wait=1,
+        retry_max_wait=2,
+    )
+    response = llm.completion(
+        messages=[Message(role="user", content=[TextContent(text="Hello!")])],
+    )
+
+    assert response.raw_response == mock_response
+    assert sleeps == [300.0]
+
+
+@patch("agentrt.sdk.llm.llm.litellm_completion")
+def test_completion_falls_back_when_retry_after_is_unparseable(
+    mock_litellm_completion, monkeypatch
+):
+    sleeps = capture_retry_sleeps(monkeypatch)
+    mock_response = create_mock_response("Service retry successful")
+    response = httpx.Response(
+        503,
+        headers={"Retry-After": "not-a-duration"},
+        request=httpx.Request("POST", "https://router.invalid"),
+    )
+    mock_litellm_completion.side_effect = [
+        ServiceUnavailableError(
+            message="all_targets_cooling_down",
+            llm_provider="test_provider",
+            model="test_model",
+            response=response,
+        ),
+        mock_response,
+    ]
+    llm = LLM(
+        usage_id="test-service",
+        model="gpt-4o",
+        api_key=SecretStr("test_key"),
+        num_retries=2,
+        retry_min_wait=1,
+        retry_max_wait=2,
+        retry_multiplier=1,
+    )
+
+    result = llm.completion(
+        messages=[Message(role="user", content=[TextContent(text="Hello!")])],
+    )
+
+    assert result.raw_response == mock_response
+    assert sleeps == [1]
 
 
 @patch("agentrt.sdk.llm.llm.litellm_completion")

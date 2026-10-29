@@ -81,6 +81,7 @@ class RetryMixin:
         retry_max_wait: int = 64,
         retry_multiplier: float = 2.0,
         retry_listener: RetryListener | None = None,
+        retry_wait: Callable[[RetryCallState], float] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """
         Create a LLM retry decorator with customizable parameters.
@@ -93,7 +94,8 @@ class RetryMixin:
             stop=stop_after_attempt(num_retries),
             reraise=True,
             retry=retry_if_exception_type(retry_exceptions),
-            wait=wait_exponential(
+            wait=retry_wait
+            or wait_exponential(
                 multiplier=retry_multiplier,
                 min=retry_min_wait,
                 max=retry_max_wait,

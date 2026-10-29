@@ -4,12 +4,15 @@ import asyncio
 import copy
 import importlib
 import json
+import math
 import os
 import threading
 import warnings
 from collections.abc import AsyncIterable, Callable, Iterable, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, get_args, get_origin
 
 from pydantic import (
@@ -24,6 +27,7 @@ from pydantic import (
     model_validator,
 )
 from pydantic.json_schema import SkipJsonSchema
+from tenacity import RetryCallState, wait_exponential
 
 from agentrt.sdk.llm.fallback_strategy import FallbackStrategy
 from agentrt.sdk.llm.utils.model_info import get_litellm_model_info
@@ -63,6 +67,7 @@ from litellm import (
 )
 from litellm.exceptions import (
     APIConnectionError,
+    BadGatewayError,
     InternalServerError,
     RateLimitError,
     ServiceUnavailableError,
@@ -153,12 +158,41 @@ __all__ = ["LLM"]
 # Exceptions we retry on
 LLM_RETRY_EXCEPTIONS: Final[tuple[type[Exception], ...]] = (
     APIConnectionError,
+    BadGatewayError,
     RateLimitError,
     ServiceUnavailableError,
     LiteLLMTimeout,
     InternalServerError,
     LLMNoResponseError,
 )
+
+RETRY_AFTER_MAX_WAIT_SECONDS: Final[int] = 300
+
+
+def _retry_after_wait(retry_state: RetryCallState) -> float | None:
+    error = retry_state.outcome.exception() if retry_state.outcome else None
+    if not isinstance(error, ServiceUnavailableError):
+        return None
+
+    retry_after = error.response.headers.get("Retry-After")
+    if retry_after is None:
+        return None
+
+    try:
+        delay = float(retry_after)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(retry_after)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=UTC)
+            delay = (retry_at - datetime.now(UTC)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    if not math.isfinite(delay) or delay < 0:
+        return None
+    return min(delay, RETRY_AFTER_MAX_WAIT_SECONDS)
+
 
 # Minimum context window size required for the agent to function properly.
 # Based on typical usage: system prompt (~2k) + conversation history (~4k)
@@ -357,9 +391,9 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
     retry_max_wait: int = Field(default=64, ge=0, json_schema_extra=field_meta())
 
     timeout: int | None = Field(
-        default=300,
+        default=600,
         ge=0,
-        description="HTTP timeout in seconds. Default is 300s (5 minutes). "
+        description="HTTP timeout in seconds. Default is 600s (10 minutes). "
         "Set to None to disable timeout (not recommended for production).",
         json_schema_extra=field_meta(),
     )
@@ -1056,6 +1090,18 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         self,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Return a configured retry decorator using this LLM's retry settings."""
+        exponential_wait = wait_exponential(
+            multiplier=self.retry_multiplier,
+            min=self.retry_min_wait,
+            max=self.retry_max_wait,
+        )
+
+        def wait(retry_state: RetryCallState) -> float:
+            retry_after = _retry_after_wait(retry_state)
+            if retry_after is not None:
+                return retry_after
+            return exponential_wait(retry_state)
+
         return self.retry_decorator(
             num_retries=self.num_retries,
             retry_exceptions=LLM_RETRY_EXCEPTIONS,
@@ -1063,6 +1109,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             retry_max_wait=self.retry_max_wait,
             retry_multiplier=self.retry_multiplier,
             retry_listener=self._retry_listener_fn,
+            retry_wait=wait,
         )
 
     def _build_call_provenance(self, sent_kwargs: dict[str, Any]) -> CallProvenance:
