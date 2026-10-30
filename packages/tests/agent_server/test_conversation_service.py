@@ -244,6 +244,40 @@ async def test_preloaded_skills_resolved_before_persistence(
 
 
 @pytest.mark.asyncio
+async def test_preloaded_skills_resolved_against_workspace_project_skills(
+    conversation_service, tmp_path
+):
+    """Issue #50: ``skills=[...]`` must accept names only discoverable in the
+    dispatch workspace's own skill directories (e.g. ``.claude/skills/``),
+    not just the daemon-global registry already on ``agent_context.skills``.
+    """
+    from agentrt.agent_server.conversation_service import UnknownPreloadedSkills
+
+    workspace_dir = tmp_path / "workspace"
+    skill_dir = workspace_dir / ".claude" / "skills" / "workspace-only"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: workspace-only\ndescription: d\n---\nWorkspace-only body\n",
+        encoding="utf-8",
+    )
+
+    workspace = LocalWorkspace(working_dir=str(workspace_dir))
+    agent = Agent(llm=LLM(model="gpt-4o", usage_id="test-llm"), tools=[])
+    request = StartConversationRequest(
+        agent=agent,
+        workspace=workspace,
+        confirmation_policy=NeverConfirm(),
+        skills=["missing", "workspace-only"],
+    )
+    with pytest.raises(UnknownPreloadedSkills, match="missing"):
+        await conversation_service.start_conversation(request)
+
+    request.skills = ["workspace-only"]
+    info, _ = await conversation_service.start_conversation(request)
+    assert info is not None
+
+
+@pytest.mark.asyncio
 async def test_start_conversation_registers_and_injects_client_tools(
     conversation_service, tmp_path
 ):
