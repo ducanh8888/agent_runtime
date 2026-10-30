@@ -103,6 +103,7 @@ from agentrt.sdk.git.utils import (
 )
 from agentrt.sdk.mcp.utils import MCPToolProvider
 from agentrt.sdk.observability import OPERATION_METADATA_KEY, observe
+from agentrt.sdk.skills import load_project_skills
 from agentrt.sdk.tool import BROWSER_TOOL_NAME, Tool, is_tool_usable
 from agentrt.sdk.tool.client_tool import register_client_tools
 from agentrt.sdk.utils.cipher import Cipher
@@ -2503,6 +2504,23 @@ class ConversationService:
             context = request.agent.agent_context or AgentContext()
             available = {skill.name for skill in context.skills}
             unknown = sorted(set(request.skills) - available)
+            if unknown:
+                # The daemon-global registry above doesn't see skills that live
+                # only in the dispatch workspace (e.g. a repo's .claude/skills),
+                # which the session discovers itself at runtime. Check there
+                # too before refusing a name the session could actually run.
+                try:
+                    workspace_skills = load_project_skills(
+                        request.workspace.working_dir
+                    )
+                except OSError as exc:
+                    logger.warning(
+                        f"Failed to load project skills from "
+                        f"{request.workspace.working_dir}: {exc}"
+                    )
+                    workspace_skills = []
+                available |= {skill.name for skill in workspace_skills}
+                unknown = sorted(set(request.skills) - available)
             if unknown:
                 raise UnknownPreloadedSkills(f"Unknown skills: {', '.join(unknown)}")
             context = context.model_copy(
