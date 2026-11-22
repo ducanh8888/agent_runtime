@@ -397,8 +397,8 @@ def _cmd_config_clear_active_system_prompt_suffix(
 def _cmd_llm_profile(args: argparse.Namespace) -> dict:
     """Preview or apply the selected LLM profile from resolved configuration."""
     if args.apply:
-        return bootstrap.apply_llm_profile()
-    return bootstrap.preview_llm_profile()
+        return bootstrap.apply_llm_profile(name=args.name)
+    return bootstrap.preview_llm_profile(name=args.name)
 
 
 def _add_subparser(
@@ -797,6 +797,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="write the change; without it this only reports what would change",
+    )
+    llm_parser.add_argument(
+        "--name",
+        default=bootstrap.LLM_PROFILE_NAME,
+        help="LLM profile to target: 'default' or a name from AGENTRT_LLM_PROFILES",
     )
     llm_parser.set_defaults(func=_cmd_llm_profile)
 

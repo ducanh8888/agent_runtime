@@ -98,6 +98,36 @@ def test_chat_serializes_images_when_vision_supported(model):
     assert len(parts) >= 1
 
 
+def test_capability_override_keeps_image_url_for_an_unrecognized_model_alias():
+    # An opaque virtual model name behind a router (e.g. "agentrt-worker")
+    # matches no known LiteLLM pattern, so vision resolves False by default
+    # and ImageContent would otherwise be stripped before the request is
+    # ever sent -- see
+    # test_message_with_image_does_not_enable_vision_for_text_only_model.
+    # capability_overrides takes precedence over that fallback.
+    llm = LLM(
+        model="openai/agentrt-worker",
+        api_key=SecretStr("k"),
+        usage_id="t",
+        capability_overrides={"supports_vision": True},
+    )
+    assert llm.vision_is_active() is True
+
+    formatted = llm.format_messages_for_llm(
+        [
+            Message(
+                role="user",
+                content=[
+                    TextContent(text="see image"),
+                    ImageContent(image_urls=["https://example.com/image.png"]),
+                ],
+            )
+        ]
+    )
+    assert isinstance(formatted, list) and len(formatted) == 1
+    assert len(_collect_image_url_parts(formatted[0])) >= 1
+
+
 @patch(
     "agentrt.sdk.llm.llm.get_litellm_model_info",
     return_value={"supports_vision": False},
