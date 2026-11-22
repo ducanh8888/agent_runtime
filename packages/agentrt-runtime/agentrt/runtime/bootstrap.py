@@ -38,15 +38,26 @@ AGENT_PROFILE_NAME = "default"
 #: does not pin a reasoning/thinking contract any more, because behind a
 #: router such as OmniRoute the real backend model -- and therefore whether
 #: it thinks at all -- is chosen per-request by the router, not by AgentRT.
-#: No capability_overrides and no litellm_extra_body are set here either: an
-#: opaque virtual model name (e.g. "agentrt-worker") will not match any known
-#: model pattern, so the SDK's own capability detection safely resolves
-#: supports_reasoning_effort=False / thinking_mode="none" for it, and
-#: reasoning_effort is simply never sent (see
-#: agentrt.sdk.llm.options.chat_options.select_chat_options) -- rather than
-#: this runtime falsely asserting a reasoning capability it cannot verify.
+#: No litellm_extra_body is set here: an opaque virtual model name (e.g.
+#: "agentrt-worker") will not match any known model pattern, so the SDK's
+#: own capability detection safely resolves supports_reasoning_effort=False /
+#: thinking_mode="none" for it, and reasoning_effort is simply never sent
+#: (see agentrt.sdk.llm.options.chat_options.select_chat_options) -- rather
+#: than this runtime falsely asserting a reasoning capability it cannot
+#: verify.
+#:
+#: ``supports_vision`` is the one capability asserted anyway, via
+#: ``LLM_CAPABILITY_OVERRIDES`` below: unlike the backend model behind an
+#: opaque virtual name, whether OmniRoute's own transport passes image
+#: content through is a property of the router deployment, not of whichever
+#: backend it picks per request, and the operator has verified every
+#: OmniRoute-routed combo accepts it. Without the override, the SDK's own
+#: detection resolves supports_vision=False for an unrecognized model name
+#: and silently drops image content before it reaches OmniRoute at all (see
+#: agentrt.sdk.llm.llm.LLM.vision_is_active).
 LLM_USAGE_ID = "agent"
 LLM_API_MODE = "chat"
+LLM_CAPABILITY_OVERRIDES: dict[str, bool | str] = {"supports_vision": True}
 
 
 class ProviderLinkedProfileError(RuntimeError):
@@ -96,15 +107,23 @@ def _build_llm(router: config.RouterConfig):
     is a real provider model name or an opaque virtual one such as
     ``agentrt-worker``. ``api_mode`` pins that path explicitly.
 
-    No ``capability_overrides`` and no ``litellm_extra_body`` are set, and
-    ``reasoning_effort`` is left unset (the SDK's own class default, ``"high"``,
-    applies): a router-neutral deployment does not know, and must not claim,
-    what its virtual model can actually do, and dropping the overrides is what
-    actually prevents that claim from reaching the wire. An unrecognized model
-    name resolves conservatively (``supports_reasoning_effort=False``), which
-    silently drops ``reasoning_effort`` from the outgoing request regardless of
-    what value the field holds -- see
+    No ``litellm_extra_body`` is set, and ``reasoning_effort`` is left unset
+    (the SDK's own class default, ``"high"``, applies): a router-neutral
+    deployment does not know, and must not claim, what its virtual model can
+    actually do, and dropping those overrides is what actually prevents that
+    claim from reaching the wire. An unrecognized model name resolves
+    conservatively (``supports_reasoning_effort=False``), which silently drops
+    ``reasoning_effort`` from the outgoing request regardless of what value
+    the field holds -- see
     ``agentrt.sdk.llm.options.chat_options.select_chat_options``.
+
+    ``capability_overrides`` is the one exception: it is set to
+    ``LLM_CAPABILITY_OVERRIDES`` (``{"supports_vision": True}``), because the
+    operator has verified every OmniRoute-routed backend accepts image
+    content, and without the override an unrecognized model name resolves
+    ``supports_vision=False`` and ``Message`` silently strips ``ImageContent``
+    before the request ever reaches OmniRoute -- see
+    ``agentrt.sdk.llm.llm.LLM.vision_is_active``.
 
     Deliberately not passed as ``reasoning_effort=None`` here, even though
     that would read as more honest: ``LLM.to_persisted()`` serializes with
@@ -124,6 +143,7 @@ def _build_llm(router: config.RouterConfig):
         usage_id=LLM_USAGE_ID,
         api_mode=LLM_API_MODE,
         max_output_tokens=config.default_max_output_tokens(),
+        capability_overrides=dict(LLM_CAPABILITY_OVERRIDES),
     )
 
 
@@ -583,6 +603,29 @@ def _merge_llm(current, proposed):
     return current.model_copy(update=update)
 
 
+def _resolve_named_router(
+    router: config.RouterConfig, name: str
+) -> config.RouterConfig:
+    """Substitute the model for a named ``AGENTRT_LLM_PROFILES`` profile.
+
+    ``router.model`` is always the "default" profile's model. Building a
+    proposed LLM for "audit"/"sol-high"/etc. without substituting the right
+    model here would compare that profile's real model against the wrong
+    proposed one, reporting -- and, on apply, writing -- a spurious model
+    change.
+    """
+    if name == LLM_PROFILE_NAME:
+        return router
+    model = config.llm_profiles().get(name)
+    if model is None:
+        raise ValueError(
+            f"LLM profile {name!r} is not {LLM_PROFILE_NAME!r} and is not "
+            "listed in AGENTRT_LLM_PROFILES; its intended model cannot be "
+            "resolved."
+        )
+    return dataclasses.replace(router, model=model)
+
+
 def preview_llm_profile(
     router: config.RouterConfig | None = None,
     *,
@@ -591,7 +634,7 @@ def preview_llm_profile(
     """Describe what applying the resolved config would change, writing nothing."""
     from agentrt.agent_server.persistence import get_llm_profile_store
 
-    router = router or config.load_router_config()
+    router = _resolve_named_router(router or config.load_router_config(), name)
     _use_state_dir()
     store = get_llm_profile_store()
     proposed = _build_llm(router)
@@ -630,7 +673,7 @@ def apply_llm_profile(
     """
     from agentrt.agent_server.persistence import get_llm_profile_store
 
-    router = router or config.load_router_config()
+    router = _resolve_named_router(router or config.load_router_config(), name)
     state = _use_state_dir()
     store = get_llm_profile_store()
     proposed = _build_llm(router)

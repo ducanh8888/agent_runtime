@@ -62,14 +62,19 @@ def test_new_profiles_are_constrained_and_ids_reused(state) -> None:
 
 
 def test_saved_llm_profile_carries_the_router_neutral_contract(state) -> None:
-    """Since the OmniRoute migration: no capability_overrides and no
-    litellm_extra_body -- this runtime does not claim a reasoning capability
-    it cannot verify for an opaque virtual model resolved per-request by a
-    router. ``reasoning_effort`` stays at the SDK's own default ("high"):
-    inert on its own, since dropping the overrides above is what actually
-    stops it reaching the wire for an unrecognized model (get_features()
-    resolves supports_reasoning_effort=False, and select_chat_options only
-    sends reasoning_effort when that is True). docs/plans/omniroute-migration.md.
+    """Since the OmniRoute migration: no litellm_extra_body -- this runtime
+    does not claim a reasoning capability it cannot verify for an opaque
+    virtual model resolved per-request by a router. ``reasoning_effort``
+    stays at the SDK's own default ("high"): inert on its own, since
+    dropping litellm_extra_body is what actually stops it reaching the wire
+    for an unrecognized model (get_features() resolves
+    supports_reasoning_effort=False, and select_chat_options only sends
+    reasoning_effort when that is True). docs/plans/omniroute-migration.md.
+
+    ``supports_vision`` is the one capability asserted anyway: the operator
+    has verified every OmniRoute-routed backend accepts image content, so
+    unlike reasoning_effort this is not something the deployment cannot
+    verify.
     """
     bootstrap.ensure_profiles()
     llm = get_llm_profile_store().load("default")
@@ -82,15 +87,16 @@ def test_saved_llm_profile_carries_the_router_neutral_contract(state) -> None:
     assert dumped["api_mode"] == "chat"
     assert dumped["max_output_tokens"] == 32_000
     assert dumped["reasoning_effort"] == "high"
-    assert dumped["capability_overrides"] == {}
+    assert dumped["capability_overrides"] == {"supports_vision": True}
     assert dumped["litellm_extra_body"] == {}
     assert dumped["base_url"] == "http://127.0.0.1:20128/v1"
     assert llm.api_key is not None
     assert "test-key" not in repr(dumped)
-    # And the deployment cannot actually send it: an opaque virtual model
-    # name matches no known pattern, so the SDK's own capability detection
-    # resolves conservatively.
+    # An opaque virtual model name matches no known pattern, so the SDK's
+    # own capability detection resolves conservatively for reasoning...
     assert llm._model_features().supports_reasoning_effort is False
+    # ...but the override still gets vision past that same conservatism.
+    assert llm.vision_is_active() is True
 
 
 def test_output_token_limit_override_refreshes_saved_profiles(
@@ -182,8 +188,9 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
     # A stale, inconsistent policy plus an unrelated field the operator set.
     # Each policy field is set to something that actually differs from the
     # router-neutral baseline (reasoning_effort="high" -- the SDK's own
-    # default, api_mode="chat", capability_overrides={}, litellm_extra_body={},
-    # usage_id="agent"), so apply has real drift to correct.
+    # default, api_mode="chat", capability_overrides={"supports_vision": True},
+    # litellm_extra_body={}, usage_id="agent"), so apply has real drift to
+    # correct.
     llm_store.save(
         "default",
         llm.model_copy(
@@ -218,7 +225,7 @@ def test_preview_writes_nothing_and_apply_preserves_unrelated_settings(
     reloaded = llm_store.load("default")
     assert reloaded.model_dump()["reasoning_effort"] == "high"
     assert reloaded.api_mode == "chat"
-    assert reloaded.capability_overrides == {}
+    assert reloaded.capability_overrides == {"supports_vision": True}
     assert reloaded.litellm_extra_body == {}
     assert reloaded.usage_id == "agent"
     assert reloaded.temperature == 0.25  # unrelated field preserved
@@ -251,6 +258,47 @@ def test_provider_linked_target_refuses_preview_and_apply(state) -> None:
     assert _digest(profile_path) == before
     stored = llm_store.load("default", resolve_provider=False)
     assert stored.provider_connection_id == "9router-shared"
+
+
+def test_apply_by_name_targets_a_named_profile_with_its_own_model(
+    state, monkeypatch
+) -> None:
+    """``--name`` must resolve each named profile's own model, not the
+    default's: comparing "audit"'s saved LLM against a proposed one built
+    from the default model would report (and on apply, write) a spurious
+    model change -- see ``_resolve_named_router``.
+    """
+    monkeypatch.setenv("AGENTRT_LLM_PROFILES", "audit=agentrt-audit")
+    bootstrap.ensure_profiles()
+    llm_store = get_llm_profile_store()
+
+    saved = llm_store.load("audit")
+    assert saved.model == "openai/agentrt-audit"
+
+    # No drift yet: ensure_profiles() already synced it via _build_llm().
+    assert bootstrap.preview_llm_profile(name="audit")["changes"] == []
+
+    llm_store.save(
+        "audit",
+        saved.model_copy(update={"capability_overrides": {}}),
+        include_secrets=True,
+    )
+    preview = bootstrap.preview_llm_profile(name="audit")
+    changed = {change["field"] for change in preview["changes"]}
+    assert "capability_overrides" in changed
+    assert not any(change["field"] == "model" for change in preview["changes"])
+
+    applied = bootstrap.apply_llm_profile(name="audit")
+    assert applied["applied"] is True
+    reloaded = llm_store.load("audit")
+    assert reloaded.model == "openai/agentrt-audit"
+    assert reloaded.capability_overrides == {"supports_vision": True}
+
+
+def test_apply_by_name_refuses_an_unconfigured_profile_name(state) -> None:
+    bootstrap.ensure_profiles()
+    with pytest.raises(ValueError, match="not listed in AGENTRT_LLM_PROFILES"):
+        bootstrap.preview_llm_profile(name="audit")
 
 
 class _StubClient(client_mod.Client):
